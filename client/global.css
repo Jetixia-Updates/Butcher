@@ -1,0 +1,149 @@
+/** @import must precede all other statements */
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /**
+   * Tailwind CSS theme - Premium Butcher Shop Colors
+   * tailwind.config.ts expects the following color variables to be expressed as HSL values.
+  */
+  :root {
+    --background: 0 0% 99%;
+    --foreground: 10 14% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 10 14% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 10 14% 8%;
+
+    --primary: 0 58% 40%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 42 85% 60%;
+    --secondary-foreground: 10 14% 8%;
+
+    --muted: 210 13% 92%;
+    --muted-foreground: 215 13% 34%;
+
+    --accent: 10 14% 18%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 210 13% 89%;
+    --input: 210 13% 95%;
+    --ring: 0 58% 40%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 10 14% 8%;
+    --sidebar-primary: 0 58% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 42 85% 60%;
+    --sidebar-accent-foreground: 10 14% 8%;
+    --sidebar-border: 210 13% 89%;
+    --sidebar-ring: 0 58% 40%;
+  }
+
+  .dark {
+    --background: 10 14% 10%;
+    --foreground: 0 0% 98%;
+
+    --card: 10 14% 15%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 10 14% 15%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 65% 48%;
+    --primary-foreground: 10 14% 8%;
+
+    --secondary: 42 85% 50%;
+    --secondary-foreground: 10 14% 8%;
+
+    --muted: 210 13% 28%;
+    --muted-foreground: 215 13% 65%;
+
+    --accent: 0 65% 48%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 74% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 13% 20%;
+    --input: 210 13% 18%;
+    --ring: 0 65% 48%;
+
+    --sidebar-background: 10 14% 12%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 0 65% 48%;
+    --sidebar-primary-foreground: 10 14% 8%;
+    --sidebar-accent: 42 85% 50%;
+    --sidebar-accent-foreground: 10 14% 8%;
+    --sidebar-border: 210 13% 20%;
+    --sidebar-ring: 0 65% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Playfair Display", serif;
+    font-weight: 700;
+  }
+
+  :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  pre,
+  code {
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  input, textarea, select {
+    @apply rounded-md border border-input bg-white px-3 py-2 text-foreground placeholder-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary;
+  }
+
+  input:disabled, textarea:disabled, select:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 font-semibold px-6 py-2 rounded-md transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/90 font-semibold px-6 py-2 rounded-md transition-all duration-200;
+  }
+
+  .btn-outline {
+    @apply border border-primary text-primary hover:bg-primary/10 font-semibold px-6 py-2 rounded-md transition-all duration-200;
+  }
+
+  .card-premium {
+    @apply bg-card rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+}
