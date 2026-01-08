@@ -5,6 +5,7 @@ import { Footer } from "@/components/Footer";
 import { useBasket } from "@/context/BasketContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useNotifications, createOrderNotification } from "@/context/NotificationContext";
 import { PriceDisplay } from "@/components/CurrencySymbol";
 import { ordersApi, deliveryApi } from "@/lib/api";
 import type { Address } from "@shared/api";
@@ -466,6 +467,7 @@ export default function CheckoutPage() {
   const { items, subtotal, vat, total, clearBasket } = useBasket();
   const { user } = useAuth();
   const { language } = useLanguage();
+  const { addNotification } = useNotifications();
   
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
@@ -724,6 +726,9 @@ export default function CheckoutPage() {
       });
 
       if (response.success && response.data) {
+        // Add notification for the admin
+        addNotification(createOrderNotification(response.data.orderNumber, "new"));
+        
         // Clear basket after successful order
         clearBasket();
         alert(
