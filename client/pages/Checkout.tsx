@@ -266,6 +266,159 @@ function MapPicker({
   );
 }
 
+// Static Map Preview for saved addresses
+function AddressMapPreview({ latitude, longitude }: { latitude?: number; longitude?: number }) {
+  if (!latitude || !longitude) {
+    return null;
+  }
+  
+  // Using Google Static Maps API for a simple preview
+  const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${latitude},${longitude}&zoom=15&size=200x100&scale=2&markers=color:red%7C${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`;
+  
+  return (
+    <div className="mt-2 rounded-lg overflow-hidden border border-border">
+      <img 
+        src={staticMapUrl} 
+        alt="Delivery location" 
+        className="w-full h-20 object-cover"
+        loading="lazy"
+      />
+    </div>
+  );
+}
+
+// Interactive map for viewing a specific address location
+function AddressLocationViewer({ 
+  address, 
+  onClose 
+}: { 
+  address: Address; 
+  onClose: () => void;
+}) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const isLoaded = useGoogleMaps();
+  const [formattedAddress, setFormattedAddress] = useState<string>("");
+
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current || !address.latitude || !address.longitude) return;
+    
+    const position = { lat: address.latitude, lng: address.longitude };
+    
+    const map = new google.maps.Map(mapRef.current, {
+      center: position,
+      zoom: 16,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: true,
+    });
+    
+    new google.maps.Marker({
+      position,
+      map,
+      title: address.label,
+      animation: google.maps.Animation.DROP,
+    });
+    
+    // Reverse geocode to get formatted address
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ location: position }, (results, status) => {
+      if (status === "OK" && results?.[0]) {
+        setFormattedAddress(results[0].formatted_address);
+      }
+    });
+  }, [isLoaded, address]);
+
+  if (!address.latitude || !address.longitude) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-background rounded-2xl shadow-xl max-w-lg w-full p-6">
+          <div className="text-center">
+            <p className="text-muted-foreground">No location data available for this address.</p>
+            <button
+              onClick={onClose}
+              className="mt-4 px-6 py-2 bg-primary text-primary-foreground rounded-lg font-medium"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-background rounded-2xl shadow-xl max-w-2xl w-full overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-foreground text-lg">{address.label}</h3>
+            <p className="text-sm text-muted-foreground">{address.fullName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        {/* Map */}
+        <div ref={mapRef} className="w-full h-80" />
+        
+        {/* Address Details */}
+        <div className="p-4 bg-muted/30 space-y-2">
+          <div className="flex items-start gap-2">
+            <span className="text-lg">📍</span>
+            <div>
+              <p className="font-medium text-foreground">
+                {address.building}, {address.street}
+                {address.floor && `, Floor ${address.floor}`}
+                {address.apartment && `, Apt ${address.apartment}`}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {address.area}, {address.emirate}
+              </p>
+              {formattedAddress && (
+                <p className="text-xs text-muted-foreground mt-1 italic">
+                  Google Maps: {formattedAddress}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>📞</span>
+            <span>{address.mobile}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>🌐</span>
+            <span>Lat: {address.latitude.toFixed(6)}, Lng: {address.longitude.toFixed(6)}</span>
+          </div>
+        </div>
+        
+        {/* Actions */}
+        <div className="p-4 border-t border-border flex gap-3">
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&destination=${address.latitude},${address.longitude}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-center hover:bg-blue-700 transition-colors"
+          >
+            🗺️ Open in Google Maps
+          </a>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { items, subtotal, vat, total, clearBasket } = useBasket();
@@ -287,6 +440,9 @@ export default function CheckoutPage() {
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
   const [addressForm, setAddressForm] = useState<AddressFormData>(EMPTY_ADDRESS_FORM);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
+  
+  // View location modal
+  const [viewingAddress, setViewingAddress] = useState<Address | null>(null);
 
   // Helper function to get localized item name
   const getItemName = (item: typeof items[0]) => {
@@ -651,6 +807,11 @@ export default function CheckoutPage() {
                                   Default
                                 </span>
                               )}
+                              {address.latitude && address.longitude && (
+                                <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full font-medium flex items-center gap-1">
+                                  📍 Located
+                                </span>
+                              )}
                             </div>
                             <p className="text-sm text-foreground">{address.fullName}</p>
                             <p className="text-sm text-muted-foreground">
@@ -662,8 +823,26 @@ export default function CheckoutPage() {
                               {address.area}, {address.emirate}
                             </p>
                             <p className="text-sm text-muted-foreground">{address.mobile}</p>
+                            
+                            {/* Mini Map Preview */}
+                            <AddressMapPreview latitude={address.latitude} longitude={address.longitude} />
                           </div>
-                          <div className="flex items-center gap-1">
+                          <div className="flex flex-col items-center gap-1">
+                            {/* View on Map button */}
+                            {address.latitude && address.longitude && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewingAddress(address);
+                                }}
+                                className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                title="View on Map"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                </svg>
+                              </button>
+                            )}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1114,6 +1293,14 @@ export default function CheckoutPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* View Location Modal */}
+      {viewingAddress && (
+        <AddressLocationViewer
+          address={viewingAddress}
+          onClose={() => setViewingAddress(null)}
+        />
       )}
     </div>
   );
