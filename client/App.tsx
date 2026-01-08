@@ -12,6 +12,7 @@ import { LanguageProvider } from "@/context/LanguageContext";
 import { ProductsProvider } from "@/context/ProductsContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { useCapacitorInit } from "@/hooks/useCapacitor";
+import { Layout } from "@/components/Layout";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -44,28 +45,28 @@ const App = () => {
                   <Sonner />
                   <BrowserRouter>
                     <Routes>
-                      {/* Auth Routes */}
+                      {/* Auth Routes - No header/footer */}
                       <Route path="/" element={<Login />} />
                       <Route path="/login" element={<Login />} />
                       <Route path="/register" element={<Register />} />
                       <Route path="/forgot-password" element={<ForgotPassword />} />
                       <Route path="/reset-password" element={<ResetPassword />} />
 
-                      {/* Visitor & Shopping Routes */}
-                      <Route path="/visitor" element={<Visitor />} />
-                      <Route path="/products" element={<Products />} />
+                      {/* Visitor & Shopping Routes - With header/footer */}
+                      <Route path="/visitor" element={<Layout><Visitor /></Layout>} />
+                      <Route path="/products" element={<Layout><Products /></Layout>} />
 
-                      {/* Checkout Flow */}
-                      <Route path="/basket" element={<Basket />} />
-                      <Route path="/checkout" element={<Checkout />} />
-                      <Route path="/payment/card" element={<PaymentCard />} />
+                      {/* Checkout Flow - With header/footer */}
+                      <Route path="/basket" element={<Layout><Basket /></Layout>} />
+                      <Route path="/checkout" element={<Layout><Checkout /></Layout>} />
+                      <Route path="/payment/card" element={<Layout><PaymentCard /></Layout>} />
 
-                      {/* Admin Routes */}
+                      {/* Admin Routes - No header/footer for login, custom layout for dashboard */}
                       <Route path="/admin/login" element={<AdminLogin />} />
                       <Route path="/admin/dashboard" element={<AdminDashboard />} />
 
-                      {/* Catch All */}
-                      <Route path="*" element={<NotFound />} />
+                      {/* Catch All - With header/footer */}
+                      <Route path="*" element={<Layout><NotFound /></Layout>} />
                     </Routes>
                   </BrowserRouter>
                 </TooltipProvider>
