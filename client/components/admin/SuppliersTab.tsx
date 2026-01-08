@@ -156,7 +156,11 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
       suppliersApi.getAll({ status: filters.status === "all" ? undefined : filters.status, category: filters.category === "all" ? undefined : filters.category, search: filters.search || undefined }),
       suppliersApi.getStats(),
     ]);
-    if (listRes.success && listRes.data) setSuppliers(listRes.data);
+    let list: Supplier[] = [];
+    if (listRes.success && listRes.data) {
+      list = listRes.data;
+      setSuppliers(listRes.data);
+    }
     if (statsRes.success && statsRes.data) {
       setStats({
         totalSuppliers: statsRes.data.totalSuppliers,
@@ -167,6 +171,13 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
       });
     }
     setLoading(false);
+    return list;
+  };
+
+  const refreshSelection = async (supplierId: string) => {
+    const list = await fetchSuppliers();
+    const updated = list.find((s) => s.id === supplierId);
+    if (updated) setSelected(updated);
   };
 
   const loadSupplierRelations = async (supplierId: string) => {
@@ -247,8 +258,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     if (!selected) return;
     const res = await suppliersApi.updateStatus(selected.id, status);
     if (res.success && res.data) {
-      setSelected(res.data);
-      await fetchSuppliers();
+      await refreshSelection(selected.id);
     }
   };
 
@@ -267,8 +277,8 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     if (!selected) return;
     const res = await suppliersApi.addContact(selected.id, contact);
     if (res.success) {
-      await fetchSuppliers();
-      await handleSelect(selected);
+      await refreshSelection(selected.id);
+      await loadSupplierRelations(selected.id);
     }
   };
 
@@ -285,6 +295,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     if (!selected) return;
     const res = await suppliersApi.addProduct(selected.id, product);
     if (res.success) {
+      await refreshSelection(selected.id);
       await loadSupplierRelations(selected.id);
     }
   };
@@ -306,8 +317,37 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     if (res.success) {
       setShowPoForm(false);
       setPoItems([{ productId: "", quantity: 0, unitCost: 0 }]);
+      await refreshSelection(selected.id);
       await loadSupplierRelations(selected.id);
     }
+  };
+
+  const promptAddContact = async () => {
+    const name = window.prompt("Contact name");
+    if (!name) return;
+    const position = window.prompt("Contact position", "Sales");
+    const email = window.prompt("Contact email", selected?.email || "");
+    const phone = window.prompt("Contact phone", selected?.phone || "");
+    await handleAddContact({ name, position: position || "", email: email || "", phone: phone || "", isPrimary: false });
+  };
+
+  const promptQuickAddProduct = async () => {
+    const productName = window.prompt("Product name", "New Item");
+    if (!productName) return;
+    const unitCost = Number(window.prompt("Unit cost (per kg)", "10"));
+    if (!unitCost || Number.isNaN(unitCost)) return;
+    const minimumOrderQuantity = Number(window.prompt("MOQ (grams)", "1000")) || 1000;
+    const leadTimeDays = Number(window.prompt("Lead time (days)", "3")) || 3;
+    await handleAddProduct({
+      productId: `custom-${Date.now()}`,
+      productName,
+      supplierSku: "SKU",
+      unitCost,
+      minimumOrderQuantity,
+      leadTimeDays,
+      isPreferred: false,
+      notes: "",
+    });
   };
 
   return (
@@ -468,8 +508,8 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
                 </div>
                 <div className="flex flex-col gap-2 items-end">
                   <div className="flex gap-2">
-                    <button onClick={() => handleStatusChange("active")} className="px-3 py-1 text-xs rounded-lg bg-green-100 text-green-700">Activate</button>
-                    <button onClick={() => handleStatusChange("suspended")} className="px-3 py-1 text-xs rounded-lg bg-red-100 text-red-700">Suspend</button>
+                    <button disabled={selected.status === "active"} onClick={() => handleStatusChange("active")} className={cn("px-3 py-1 text-xs rounded-lg", selected.status === "active" ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-green-100 text-green-700")}>Activate</button>
+                    <button disabled={selected.status === "suspended"} onClick={() => handleStatusChange("suspended")} className={cn("px-3 py-1 text-xs rounded-lg", selected.status === "suspended" ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-red-100 text-red-700")}>Suspend</button>
                   </div>
                   <button onClick={handleDelete} className="px-3 py-1 text-xs rounded-lg bg-slate-100 text-slate-600 hover:bg-red-50">Delete</button>
                 </div>
@@ -484,10 +524,10 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2 font-semibold text-slate-900"><ShieldCheck className="w-4 h-4" /> Contacts</div>
                 <button
-                  onClick={() => handleAddContact({ name: "New Contact", position: "Sales", email: selected.email, phone: selected.phone, isPrimary: false })}
+                  onClick={() => promptAddContact()}
                   className="text-sm text-primary flex items-center gap-1"
                 >
                   <Plus className="w-4 h-4" /> Add Contact
@@ -558,16 +598,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
                 {products.length === 0 && <p className="text-sm text-slate-500">No supplier products</p>}
               </div>
               <button
-                onClick={() => handleAddProduct({
-                  productId: `custom-${Date.now()}`,
-                  productName: "New Item",
-                  supplierSku: "SKU",
-                  unitCost: 10,
-                  minimumOrderQuantity: 1000,
-                  leadTimeDays: 3,
-                  isPreferred: false,
-                  notes: "",
-                })}
+                onClick={() => promptQuickAddProduct()}
                 className="mt-3 text-sm text-primary flex items-center gap-1"
               >
                 <Plus className="w-4 h-4" /> Quick add product
