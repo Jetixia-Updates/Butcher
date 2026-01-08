@@ -19,6 +19,26 @@ import { stockApi } from "@/lib/api";
 import type { StockItem, StockMovement, LowStockAlert } from "@shared/api";
 import { cn } from "@/lib/utils";
 
+/**
+ * Format weight with automatic unit conversion
+ * Shows grams for < 1000g, kilograms for >= 1000g
+ */
+function formatWeight(grams: number): { value: string; unit: string } {
+  if (grams >= 1000) {
+    return { value: (grams / 1000).toFixed(3), unit: "kg" };
+  }
+  return { value: grams.toFixed(3), unit: "g" };
+}
+
+function WeightDisplay({ grams, className }: { grams: number; className?: string }) {
+  const { value, unit } = formatWeight(grams);
+  return (
+    <span className={className}>
+      {value} <span className="text-xs text-slate-400">{unit}</span>
+    </span>
+  );
+}
+
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
 }
@@ -221,16 +241,16 @@ function InventoryTable({
               Product
             </th>
             <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">
-              Quantity (g)
+              Quantity
             </th>
             <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">
-              Reserved (g)
+              Reserved
             </th>
             <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">
-              Available (g)
+              Available
             </th>
             <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">
-              Threshold (g)
+              Threshold
             </th>
             <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">
               Status
@@ -250,21 +270,22 @@ function InventoryTable({
                   <span className="font-mono text-sm">{item.productId}</span>
                 </td>
                 <td className="px-4 py-3 text-center font-medium">
-                  {item.quantity.toFixed(3)} <span className="text-xs text-slate-400">g</span>
+                  <WeightDisplay grams={item.quantity} />
                 </td>
                 <td className="px-4 py-3 text-center text-slate-500">
-                  {item.reservedQuantity.toFixed(3)} <span className="text-xs text-slate-400">g</span>
+                  <WeightDisplay grams={item.reservedQuantity} />
                 </td>
                 <td className="px-4 py-3 text-center">
-                  <span className={cn(
-                    "font-semibold",
-                    isOut ? "text-red-600" : isLow ? "text-orange-600" : "text-green-600"
-                  )}>
-                    {item.availableQuantity.toFixed(3)} <span className="text-xs text-slate-400">g</span>
-                  </span>
+                  <WeightDisplay 
+                    grams={item.availableQuantity} 
+                    className={cn(
+                      "font-semibold",
+                      isOut ? "text-red-600" : isLow ? "text-orange-600" : "text-green-600"
+                    )}
+                  />
                 </td>
                 <td className="px-4 py-3 text-center text-slate-500">
-                  {item.lowStockThreshold.toFixed(3)} <span className="text-xs text-slate-400">g</span>
+                  <WeightDisplay grams={item.lowStockThreshold} />
                 </td>
                 <td className="px-4 py-3 text-center">
                   {isOut ? (
@@ -338,14 +359,14 @@ function AlertsList({
             <div>
               <p className="font-medium text-slate-900">{alert.productName}</p>
               <p className="text-sm text-slate-500">
-                Current: {alert.currentQuantity.toFixed(3)}g • Threshold: {alert.threshold.toFixed(3)}g
+                Current: {formatWeight(alert.currentQuantity).value}{formatWeight(alert.currentQuantity).unit} • Threshold: {formatWeight(alert.threshold).value}{formatWeight(alert.threshold).unit}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-sm text-slate-500">Suggested reorder</p>
-              <p className="font-semibold text-slate-900">{alert.suggestedReorderQuantity.toFixed(3)}g</p>
+              <p className="font-semibold text-slate-900">{formatWeight(alert.suggestedReorderQuantity).value}{formatWeight(alert.suggestedReorderQuantity).unit}</p>
             </div>
             <button
               onClick={() => onRestock(alert)}
@@ -402,7 +423,7 @@ function MovementHistory({ movements }: { movements: StockMovement[] }) {
             </div>
             <div className="text-right">
               <p className={cn("font-semibold", style.text)}>
-                {movement.type === "out" ? "-" : "+"}{movement.quantity.toFixed(3)}g
+                {movement.type === "out" ? "-" : "+"}{formatWeight(movement.quantity).value}{formatWeight(movement.quantity).unit}
               </p>
               <p className="text-xs text-slate-500">
                 {new Date(movement.createdAt).toLocaleString()}
@@ -454,7 +475,7 @@ function RestockModal({
           <div>
             <p className="text-sm text-slate-500">Current Stock</p>
             <p className="font-medium">
-              {item.availableQuantity.toFixed(3)}g available ({item.reservedQuantity.toFixed(3)}g reserved)
+              {formatWeight(item.availableQuantity).value}{formatWeight(item.availableQuantity).unit} available ({formatWeight(item.reservedQuantity).value}{formatWeight(item.reservedQuantity).unit} reserved)
             </p>
           </div>
 
