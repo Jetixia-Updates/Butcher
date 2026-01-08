@@ -64,8 +64,30 @@ async function fetchApi<T>(
       headers,
     });
 
-    const data = await response.json();
-    return data;
+    // Handle empty responses (204 No Content, or empty body)
+    const text = await response.text();
+    
+    if (!text) {
+      // Empty response - return success/failure based on status code
+      if (response.ok) {
+        return { success: true, data: null as T };
+      } else {
+        return { success: false, error: `Request failed with status ${response.status}` };
+      }
+    }
+
+    // Try to parse as JSON
+    try {
+      const data = JSON.parse(text);
+      return data;
+    } catch {
+      // Response is not JSON
+      if (response.ok) {
+        return { success: true, data: text as T };
+      } else {
+        return { success: false, error: text || `Request failed with status ${response.status}` };
+      }
+    }
   } catch (error) {
     return {
       success: false,
