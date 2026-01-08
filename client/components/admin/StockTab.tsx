@@ -20,14 +20,11 @@ import type { StockItem, StockMovement, LowStockAlert } from "@shared/api";
 import { cn } from "@/lib/utils";
 
 /**
- * Format weight with automatic unit conversion
- * Shows grams for < 1000g, kilograms for >= 1000g
+ * Format weight - always display in kg
+ * Converts grams to kilograms with 3 decimal precision
  */
 function formatWeight(grams: number): { value: string; unit: string } {
-  if (grams >= 1000) {
-    return { value: (grams / 1000).toFixed(3), unit: "kg" };
-  }
-  return { value: grams.toFixed(3), unit: "g" };
+  return { value: (grams / 1000).toFixed(3), unit: "kg" };
 }
 
 function WeightDisplay({ grams, className }: { grams: number; className?: string }) {
