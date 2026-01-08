@@ -568,6 +568,7 @@ function createApp() {
     }));
     
     res.json({ success: true, data });
+  });
 
   // =====================================================
   // ORDERS API
