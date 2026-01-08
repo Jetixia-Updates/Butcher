@@ -874,6 +874,422 @@ function createApp() {
   });
 
   // =====================================================
+  // SUPPLIERS API (serverless mock)
+  // =====================================================
+
+  type SupplierStatus = 'active' | 'inactive' | 'pending' | 'suspended';
+  type PaymentTerms = 'net_7' | 'net_15' | 'net_30' | 'net_60' | 'cod' | 'prepaid';
+
+  interface SupplierContact {
+    id: string;
+    name: string;
+    position: string;
+    email: string;
+    phone: string;
+    isPrimary: boolean;
+  }
+
+  interface Supplier {
+    id: string;
+    code: string;
+    name: string;
+    nameAr?: string;
+    email: string;
+    phone: string;
+    website?: string;
+    taxNumber?: string;
+    address: { street: string; city: string; state: string; country: string; postalCode: string };
+    contacts: SupplierContact[];
+    paymentTerms: PaymentTerms;
+    currency: 'AED' | 'USD' | 'EUR';
+    creditLimit: number;
+    currentBalance: number;
+    categories: string[];
+    rating: number;
+    onTimeDeliveryRate: number;
+    qualityScore: number;
+    totalOrders: number;
+    totalSpent: number;
+    status: SupplierStatus;
+    notes?: string;
+    createdAt: string;
+    updatedAt: string;
+    lastOrderAt?: string;
+  }
+
+  interface SupplierProduct {
+    id: string;
+    supplierId: string;
+    productId: string;
+    productName: string;
+    supplierSku: string;
+    unitCost: number;
+    minimumOrderQuantity: number;
+    leadTimeDays: number;
+    isPreferred: boolean;
+    lastPurchasePrice: number;
+    lastPurchaseDate?: string;
+    notes?: string;
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  interface PurchaseOrderItem {
+    id: string;
+    productId: string;
+    productName: string;
+    supplierSku?: string;
+    quantity: number;
+    unitCost: number;
+    totalCost: number;
+    receivedQuantity: number;
+    notes?: string;
+  }
+
+  type PurchaseOrderStatus = 'draft' | 'pending' | 'approved' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
+
+  interface PurchaseOrder {
+    id: string;
+    orderNumber: string;
+    supplierId: string;
+    supplierName: string;
+    items: PurchaseOrderItem[];
+    subtotal: number;
+    taxAmount: number;
+    taxRate: number;
+    shippingCost: number;
+    discount: number;
+    total: number;
+    status: PurchaseOrderStatus;
+    paymentStatus: 'pending' | 'partial' | 'paid';
+    orderDate: string;
+    expectedDeliveryDate: string;
+    actualDeliveryDate?: string;
+    deliveryAddress: string;
+    deliveryNotes?: string;
+    trackingNumber?: string;
+    createdBy: string;
+    approvedBy?: string;
+    approvedAt?: string;
+    internalNotes?: string;
+    supplierNotes?: string;
+    statusHistory: { status: PurchaseOrderStatus; changedBy: string; changedAt: string; notes?: string }[];
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  const supplierList: Supplier[] = [
+    {
+      id: 'sup-001',
+      code: 'SUP-001',
+      name: 'Premium Meat Suppliers LLC',
+      email: 'orders@premiummeat.ae',
+      phone: '+971501234567',
+      website: 'https://premiummeat.ae',
+      taxNumber: '100123456700001',
+      address: { street: 'Industrial Area 5, Warehouse 23', city: 'Dubai', state: 'Dubai', country: 'UAE', postalCode: '00000' },
+      contacts: [
+        { id: 'contact-001', name: 'Ahmed Al Maktoum', position: 'Sales Manager', email: 'ahmed@premiummeat.ae', phone: '+971501234567', isPrimary: true },
+      ],
+      paymentTerms: 'net_30',
+      currency: 'AED',
+      creditLimit: 100000,
+      currentBalance: 25000,
+      categories: ['beef', 'lamb'],
+      rating: 4.5,
+      onTimeDeliveryRate: 95,
+      qualityScore: 98,
+      totalOrders: 156,
+      totalSpent: 450000,
+      status: 'active',
+      notes: 'Premium supplier with excellent quality beef and lamb products.',
+      createdAt: '2024-01-15T10:00:00Z',
+      updatedAt: new Date().toISOString(),
+      lastOrderAt: '2026-01-05T14:30:00Z',
+    },
+  ];
+
+  const supplierProducts: SupplierProduct[] = [
+    {
+      id: 'sp-001',
+      supplierId: 'sup-001',
+      productId: 'beef-ribeye',
+      productName: 'Premium Ribeye Steak',
+      supplierSku: 'PMS-RIB-001',
+      unitCost: 85,
+      minimumOrderQuantity: 5000,
+      leadTimeDays: 2,
+      isPreferred: true,
+      lastPurchasePrice: 85,
+      lastPurchaseDate: '2026-01-05T14:30:00Z',
+      createdAt: '2024-01-15T10:00:00Z',
+      updatedAt: '2026-01-05T14:30:00Z',
+    },
+  ];
+
+  const supplierPOs: PurchaseOrder[] = [];
+
+  const genId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const genCode = (prefix: string, items: { code: string }[]) => {
+    const last = items.map(i => i.code).sort().pop();
+    const lastNum = last ? parseInt(last.split('-')[1]) : 0;
+    return `${prefix}-${String(lastNum + 1).padStart(3, '0')}`;
+  };
+  const genPoNumber = () => {
+    const year = new Date().getFullYear();
+    const yearOrders = supplierPOs.filter(o => o.orderNumber.startsWith(`PO-${year}`));
+    const lastNum = yearOrders.length ? Math.max(...yearOrders.map(o => parseInt(o.orderNumber.split('-')[2]))) : 0;
+    return `PO-${year}-${String(lastNum + 1).padStart(4, '0')}`;
+  };
+
+  // List suppliers
+  app.get('/api/suppliers', (req, res) => {
+    const { status, category, search } = req.query;
+    let data = [...supplierList];
+    if (status && status !== 'all') data = data.filter(s => s.status === status);
+    if (category && category !== 'all') data = data.filter(s => s.categories.includes(category as string));
+    if (search) {
+      const q = (search as string).toLowerCase();
+      data = data.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.code.toLowerCase().includes(q) ||
+        s.email.toLowerCase().includes(q) ||
+        s.phone.includes(q)
+      );
+    }
+    data.sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ success: true, data });
+  });
+
+  // Supplier stats
+  app.get('/api/suppliers/stats', (_req, res) => {
+    const stats = {
+      totalSuppliers: supplierList.length,
+      activeSuppliers: supplierList.filter(s => s.status === 'active').length,
+      pendingSuppliers: supplierList.filter(s => s.status === 'pending').length,
+      totalPurchaseOrders: supplierPOs.length,
+      pendingOrders: supplierPOs.filter(po => ['pending', 'ordered'].includes(po.status)).length,
+      totalSpent: supplierList.reduce((sum, s) => sum + s.totalSpent, 0),
+      averageLeadTime: supplierProducts.length ? supplierProducts.reduce((sum, sp) => sum + sp.leadTimeDays, 0) / supplierProducts.length : 0,
+      topCategories: Array.from(new Set(supplierList.flatMap(s => s.categories))).map(cat => ({ category: cat, count: supplierList.filter(s => s.categories.includes(cat)).length })),
+    };
+    res.json({ success: true, data: stats });
+  });
+
+  // Create supplier
+  app.post('/api/suppliers', (req, res) => {
+    const body = req.body as Partial<Supplier>;
+    if (!body.name || !body.email || !body.phone) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+    const newSupplier: Supplier = {
+      id: genId(),
+      code: genCode('SUP', supplierList),
+      name: body.name,
+      nameAr: body.nameAr,
+      email: body.email,
+      phone: body.phone,
+      website: body.website,
+      taxNumber: body.taxNumber,
+      address: body.address || { street: '', city: '', state: '', country: 'UAE', postalCode: '' },
+      contacts: (body.contacts || []).map(c => ({ ...c, id: genId() } as SupplierContact)),
+      paymentTerms: (body.paymentTerms as PaymentTerms) || 'net_30',
+      currency: (body.currency as Supplier['currency']) || 'AED',
+      creditLimit: body.creditLimit ?? 0,
+      currentBalance: 0,
+      categories: body.categories || ['general'],
+      rating: 0,
+      onTimeDeliveryRate: 0,
+      qualityScore: 0,
+      totalOrders: 0,
+      totalSpent: 0,
+      status: 'pending',
+      notes: body.notes,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    supplierList.push(newSupplier);
+    res.status(201).json({ success: true, data: newSupplier });
+  });
+
+  // Update supplier status
+  app.patch('/api/suppliers/:id/status', (req, res) => {
+    const sup = supplierList.find(s => s.id === req.params.id);
+    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
+    sup.status = req.body.status as SupplierStatus;
+    sup.updatedAt = new Date().toISOString();
+    res.json({ success: true, data: sup });
+  });
+
+  // Delete supplier
+  app.delete('/api/suppliers/:id', (req, res) => {
+    const idx = supplierList.findIndex(s => s.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'Supplier not found' });
+    const hasPending = supplierPOs.some(po => po.supplierId === req.params.id && !['received', 'cancelled'].includes(po.status));
+    if (hasPending) return res.status(400).json({ success: false, error: 'Cannot delete supplier with pending purchase orders' });
+    supplierList.splice(idx, 1);
+    res.json({ success: true, data: null });
+  });
+
+  // Contacts
+  app.post('/api/suppliers/:id/contacts', (req, res) => {
+    const sup = supplierList.find(s => s.id === req.params.id);
+    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
+    const contact: SupplierContact = { id: genId(), ...req.body };
+    sup.contacts.push(contact);
+    sup.updatedAt = new Date().toISOString();
+    res.status(201).json({ success: true, data: contact });
+  });
+
+  app.delete('/api/suppliers/:id/contacts/:contactId', (req, res) => {
+    const sup = supplierList.find(s => s.id === req.params.id);
+    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
+    const idx = sup.contacts.findIndex(c => c.id === req.params.contactId);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'Contact not found' });
+    sup.contacts.splice(idx, 1);
+    sup.updatedAt = new Date().toISOString();
+    res.json({ success: true, data: null });
+  });
+
+  // Supplier products
+  app.get('/api/suppliers/:id/products', (req, res) => {
+    const products = supplierProducts.filter(p => p.supplierId === req.params.id);
+    res.json({ success: true, data: products });
+  });
+
+  app.post('/api/suppliers/:id/products', (req, res) => {
+    const sup = supplierList.find(s => s.id === req.params.id);
+    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
+    const body = req.body as Partial<SupplierProduct>;
+    const product: SupplierProduct = {
+      id: genId(),
+      supplierId: sup.id,
+      productId: body.productId || genId(),
+      productName: body.productName || 'New Product',
+      supplierSku: body.supplierSku || '',
+      unitCost: body.unitCost || 0,
+      minimumOrderQuantity: body.minimumOrderQuantity || 1000,
+      leadTimeDays: body.leadTimeDays || 3,
+      isPreferred: !!body.isPreferred,
+      lastPurchasePrice: body.unitCost || 0,
+      lastPurchaseDate: new Date().toISOString(),
+      notes: body.notes,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    supplierProducts.push(product);
+    res.status(201).json({ success: true, data: product });
+  });
+
+  app.delete('/api/suppliers/products/:productId', (req, res) => {
+    const idx = supplierProducts.findIndex(p => p.id === req.params.productId);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'Supplier product not found' });
+    supplierProducts.splice(idx, 1);
+    res.json({ success: true, data: null });
+  });
+
+  // Purchase orders
+  app.get('/api/suppliers/purchase-orders/list', (req, res) => {
+    const { status, supplierId } = req.query;
+    let data = [...supplierPOs];
+    if (status && status !== 'all') data = data.filter(po => po.status === status);
+    if (supplierId) data = data.filter(po => po.supplierId === supplierId);
+    data.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+    res.json({ success: true, data });
+  });
+
+  app.post('/api/suppliers/purchase-orders', (req, res) => {
+    const body = req.body as { supplierId: string; items: { productId: string; quantity: number; unitCost: number; notes?: string }[]; expectedDeliveryDate: string; deliveryAddress: string; deliveryNotes?: string; shippingCost?: number; discount?: number; };
+    const sup = supplierList.find(s => s.id === body.supplierId);
+    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
+    const items: PurchaseOrderItem[] = body.items.map(it => {
+      const sp = supplierProducts.find(p => p.productId === it.productId && p.supplierId === body.supplierId);
+      return {
+        id: genId(),
+        productId: it.productId,
+        productName: sp?.productName || it.productId,
+        supplierSku: sp?.supplierSku,
+        quantity: it.quantity,
+        unitCost: it.unitCost,
+        totalCost: (it.quantity / 1000) * it.unitCost,
+        receivedQuantity: 0,
+        notes: it.notes,
+      };
+    });
+    const subtotal = items.reduce((sum, i) => sum + i.totalCost, 0);
+    const taxRate = 5;
+    const taxAmount = subtotal * (taxRate / 100);
+    const shippingCost = body.shippingCost || 0;
+    const discount = body.discount || 0;
+    const total = subtotal + taxAmount + shippingCost - discount;
+    const po: PurchaseOrder = {
+      id: genId(),
+      orderNumber: genPoNumber(),
+      supplierId: sup.id,
+      supplierName: sup.name,
+      items,
+      subtotal,
+      taxAmount,
+      taxRate,
+      shippingCost,
+      discount,
+      total,
+      status: 'draft',
+      paymentStatus: 'pending',
+      orderDate: new Date().toISOString(),
+      expectedDeliveryDate: body.expectedDeliveryDate,
+      deliveryAddress: body.deliveryAddress,
+      deliveryNotes: body.deliveryNotes,
+      createdBy: 'admin',
+      statusHistory: [{ status: 'draft', changedBy: 'admin', changedAt: new Date().toISOString() }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    supplierPOs.push(po);
+    res.status(201).json({ success: true, data: po });
+  });
+
+  app.patch('/api/suppliers/purchase-orders/:id/status', (req, res) => {
+    const po = supplierPOs.find(p => p.id === req.params.id);
+    if (!po) return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    const { status, notes } = req.body as { status: PurchaseOrderStatus; notes?: string };
+    po.status = status;
+    po.statusHistory.push({ status, changedBy: 'admin', changedAt: new Date().toISOString(), notes });
+    if (status === 'received') po.actualDeliveryDate = new Date().toISOString();
+    po.updatedAt = new Date().toISOString();
+    res.json({ success: true, data: po });
+  });
+
+  app.put('/api/suppliers/purchase-orders/:id/receive', (req, res) => {
+    const po = supplierPOs.find(p => p.id === req.params.id);
+    if (!po) return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    const { items } = req.body as { items: { itemId: string; receivedQuantity: number }[] };
+    po.items = po.items.map(it => {
+      const recv = items.find(i => i.itemId === it.id);
+      return recv ? { ...it, receivedQuantity: it.receivedQuantity + recv.receivedQuantity } : it;
+    });
+    const allReceived = po.items.every(i => i.receivedQuantity >= i.quantity);
+    const anyReceived = po.items.some(i => i.receivedQuantity > 0);
+    po.status = allReceived ? 'received' : anyReceived ? 'partially_received' : po.status;
+    if (po.status === 'received') po.actualDeliveryDate = new Date().toISOString();
+    po.statusHistory.push({ status: po.status, changedBy: 'admin', changedAt: new Date().toISOString() });
+    po.updatedAt = new Date().toISOString();
+    res.json({ success: true, data: po });
+  });
+
+  app.delete('/api/suppliers/purchase-orders/:id', (req, res) => {
+    const po = supplierPOs.find(p => p.id === req.params.id);
+    if (!po) return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    if (['received', 'partially_received'].includes(po.status)) {
+      return res.status(400).json({ success: false, error: 'Cannot delete received or partially received orders' });
+    }
+    po.status = 'cancelled';
+    po.statusHistory.push({ status: 'cancelled', changedBy: 'admin', changedAt: new Date().toISOString() });
+    po.updatedAt = new Date().toISOString();
+    res.json({ success: true, data: po });
+  });
+
+  // =====================================================
   // USERS API
   // =====================================================
 
