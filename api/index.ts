@@ -99,6 +99,26 @@ interface Payment {
   updatedAt: string;
 }
 
+interface Address {
+  id: string;
+  userId: string;
+  label: string;
+  fullName: string;
+  mobile: string;
+  emirate: string;
+  area: string;
+  street: string;
+  building: string;
+  floor?: string;
+  apartment?: string;
+  landmark?: string;
+  latitude?: number;
+  longitude?: number;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // In-memory storage (note: resets on cold starts)
 const users = new Map<string, User>();
 const sessions = new Map<string, Session>();
@@ -106,6 +126,7 @@ const orders = new Map<string, Order>();
 const stockItems = new Map<string, StockItem>();
 const stockMovements: StockMovement[] = [];
 const payments = new Map<string, Payment>();
+const addresses = new Map<string, Address>();
 
 // Demo products data
 const demoProducts = [
@@ -784,7 +805,97 @@ function createApp() {
   });
 
   app.get('/api/delivery/addresses', (req, res) => {
-    res.json({ success: true, data: [] });
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.json({ success: true, data: [] });
+    }
+    const session = sessions.get(token);
+    if (!session) {
+      return res.json({ success: true, data: [] });
+    }
+    const userAddresses = Array.from(addresses.values()).filter(a => a.userId === session.userId);
+    res.json({ success: true, data: userAddresses });
+  });
+
+  app.post('/api/delivery/addresses', (req, res) => {
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      let userId = 'guest';
+      if (token) {
+        const session = sessions.get(token);
+        if (session) userId = session.userId;
+      }
+
+      const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, isDefault } = req.body;
+      
+      if (!fullName || !mobile || !emirate || !area || !street || !building) {
+        return res.status(400).json({ success: false, error: 'Missing required fields' });
+      }
+
+      const addressId = `addr_${Date.now()}`;
+      const newAddress: Address = {
+        id: addressId,
+        userId,
+        label: label || 'Home',
+        fullName,
+        mobile,
+        emirate,
+        area,
+        street,
+        building,
+        floor,
+        apartment,
+        landmark,
+        latitude,
+        longitude,
+        isDefault: isDefault || false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // If this is default, unset other defaults for this user
+      if (newAddress.isDefault) {
+        addresses.forEach(addr => {
+          if (addr.userId === userId) addr.isDefault = false;
+        });
+      }
+
+      addresses.set(addressId, newAddress);
+      res.status(201).json({ success: true, data: newAddress });
+    } catch (error) {
+      console.error('[Create Address Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create address' });
+    }
+  });
+
+  app.put('/api/delivery/addresses/:id', (req, res) => {
+    const address = addresses.get(req.params.id);
+    if (!address) {
+      return res.status(404).json({ success: false, error: 'Address not found' });
+    }
+    
+    const updates = req.body;
+    Object.assign(address, updates, { updatedAt: new Date().toISOString() });
+    
+    // If setting as default, unset others
+    if (updates.isDefault) {
+      addresses.forEach(addr => {
+        if (addr.id !== address.id && addr.userId === address.userId) {
+          addr.isDefault = false;
+        }
+      });
+    }
+    
+    res.json({ success: true, data: address });
+  });
+
+  app.delete('/api/delivery/addresses/:id', (req, res) => {
+    const address = addresses.get(req.params.id);
+    if (!address) {
+      return res.status(404).json({ success: false, error: 'Address not found' });
+    }
+    addresses.delete(req.params.id);
+    res.json({ success: true, message: 'Address deleted' });
   });
 
   app.post('/api/delivery/tracking/:orderId/assign', (req, res) => {
