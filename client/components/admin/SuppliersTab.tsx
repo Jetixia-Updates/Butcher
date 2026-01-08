@@ -35,6 +35,7 @@ import type {
   CreateSupplierRequest,
   PaymentTerms,
   CreatePurchaseOrderRequest,
+  Currency,
 } from "@shared/api";
 import { cn } from "@/lib/utils";
 
@@ -207,6 +208,12 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
 
   const handleCreateSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creating) return;
+    // Basic client-side validation for required fields
+    if (!form.name || !form.email || !form.phone || form.contacts[0].name === "") {
+      alert("Please fill in supplier name, email, phone, and primary contact name.");
+      return;
+    }
     setCreating(true);
     const payload: CreateSupplierRequest = {
       name: form.name,
@@ -218,16 +225,20 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
       paymentTerms: form.paymentTerms,
       currency: form.currency,
       creditLimit: form.creditLimit,
-      categories: form.categories,
+      categories: form.categories.length ? form.categories : ["general"],
       notes: form.notes || undefined,
       address: form.address,
       contacts: form.contacts,
     };
     const res = await suppliersApi.create(payload);
-    if (res.success) {
+    if (res.success && res.data) {
       setShowForm(false);
       resetForm();
       await fetchSuppliers();
+      setSelected(res.data);
+      await loadSupplierRelations(res.data.id);
+    } else if (!res.success && res.error) {
+      alert(res.error);
     }
     setCreating(false);
   };
@@ -599,7 +610,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
                 options={Object.entries(paymentLabels).map(([value, label]) => ({ value, label }))}
               />
               <Input label="Credit Limit (AED)" type="number" value={form.creditLimit?.toString() ?? "0"} onChange={(v) => setForm((f) => ({ ...f, creditLimit: Number(v) }))} />
-              <Input label="Currency" value={form.currency} onChange={(v) => setForm((f) => ({ ...f, currency: v }))} />
+              <Input label="Currency" value={form.currency} onChange={(v) => setForm((f) => ({ ...f, currency: v as Currency }))} />
               <Input label="Categories (comma separated)" value={form.categories.join(", ")} onChange={(v) => setForm((f) => ({ ...f, categories: v.split(",").map((c) => c.trim()).filter(Boolean) }))} />
               <div className="md:col-span-2">
                 <label className="text-sm font-medium text-slate-700">Address</label>
