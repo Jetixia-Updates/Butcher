@@ -86,10 +86,17 @@ interface Payment {
   orderId: string;
   orderNumber: string;
   amount: number;
+  currency: string;
   method: string;
   status: string;
   customerName: string;
+  gatewayTransactionId: string;
+  cardBrand?: string;
+  cardLast4?: string;
+  refundedAmount: number;
+  refunds: { id: string; amount: number; reason: string; createdAt: string }[];
   createdAt: string;
+  updatedAt: string;
 }
 
 // In-memory storage (note: resets on cold starts)
@@ -227,10 +234,17 @@ function seedData() {
       orderId: order.id,
       orderNumber: order.orderNumber,
       amount: total,
+      currency: 'AED',
       method: order.paymentMethod,
       status: paymentStatus,
       customerName: order.customerName,
+      gatewayTransactionId: `txn_${Date.now()}_${i}`,
+      cardBrand: order.paymentMethod === 'card' ? 'Visa' : undefined,
+      cardLast4: order.paymentMethod === 'card' ? '4242' : undefined,
+      refundedAmount: 0,
+      refunds: [],
       createdAt: orderDate.toISOString(),
+      updatedAt: orderDate.toISOString(),
     });
   }
 
@@ -530,6 +544,31 @@ function createApp() {
     });
   });
 
+  // Revenue chart for analytics
+  app.get('/api/analytics/charts/revenue', (req, res) => {
+    const period = (req.query.period as string) || 'week';
+    const days = period === 'today' ? 1 : period === 'week' ? 7 : period === 'month' ? 30 : 365;
+    
+    const data = Array.from({ length: Math.min(days, 14) }, (_, i) => ({
+      date: new Date(Date.now() - (days - 1 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      revenue: 800 + Math.random() * 400,
+      orders: 3 + Math.floor(Math.random() * 5),
+    }));
+    
+    res.json({ success: true, data });
+  });
+
+  // Top products for analytics
+  app.get('/api/analytics/charts/top-products', (req, res) => {
+    const data = demoProducts.slice(0, 10).map((p, i) => ({
+      productId: p.id,
+      productName: p.name,
+      sales: (5000 - i * 500) + Math.random() * 200,
+      quantity: 50 - i * 5,
+    }));
+    
+    res.json({ success: true, data });
+
   // =====================================================
   // ORDERS API
   // =====================================================
@@ -706,22 +745,59 @@ function createApp() {
     res.json({ success: true, data: userWithoutPassword });
   });
 
+  app.delete('/api/users/:id', (req, res) => {
+    const user = users.get(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    users.delete(req.params.id);
+    res.json({ success: true, message: 'User deleted' });
+  });
+
   // =====================================================
   // DELIVERY API
   // =====================================================
 
   app.get('/api/delivery/zones', (req, res) => {
     const zones = [
-      { id: 'zone_1', name: 'Dubai Downtown', emirate: 'Dubai', baseFee: 15, minOrder: 50, estimatedMinutes: 45, isActive: true },
-      { id: 'zone_2', name: 'Dubai Marina', emirate: 'Dubai', baseFee: 20, minOrder: 75, estimatedMinutes: 60, isActive: true },
-      { id: 'zone_3', name: 'Abu Dhabi Central', emirate: 'Abu Dhabi', baseFee: 25, minOrder: 100, estimatedMinutes: 90, isActive: true },
-      { id: 'zone_4', name: 'Sharjah', emirate: 'Sharjah', baseFee: 30, minOrder: 100, estimatedMinutes: 75, isActive: true },
+      { id: 'zone_1', name: 'Dubai Downtown', nameAr: 'وسط دبي', emirate: 'Dubai', deliveryFee: 15, minimumOrder: 50, estimatedMinutes: 45, isActive: true, areas: ['Downtown', 'Business Bay', 'DIFC'] },
+      { id: 'zone_2', name: 'Dubai Marina', nameAr: 'مرسى دبي', emirate: 'Dubai', deliveryFee: 20, minimumOrder: 75, estimatedMinutes: 60, isActive: true, areas: ['Marina', 'JBR', 'JLT'] },
+      { id: 'zone_3', name: 'Abu Dhabi Central', nameAr: 'وسط أبوظبي', emirate: 'Abu Dhabi', deliveryFee: 25, minimumOrder: 100, estimatedMinutes: 90, isActive: true, areas: ['Corniche', 'Tourist Club', 'Hamdan Street'] },
+      { id: 'zone_4', name: 'Sharjah', nameAr: 'الشارقة', emirate: 'Sharjah', deliveryFee: 30, minimumOrder: 100, estimatedMinutes: 75, isActive: true, areas: ['Al Majaz', 'Rolla', 'Industrial Area'] },
     ];
     res.json({ success: true, data: zones });
   });
 
+  app.post('/api/delivery/zones', (req, res) => {
+    const zone = { id: `zone_${Date.now()}`, ...req.body };
+    res.json({ success: true, data: zone });
+  });
+
+  app.put('/api/delivery/zones/:id', (req, res) => {
+    const zone = { id: req.params.id, ...req.body };
+    res.json({ success: true, data: zone });
+  });
+
+  app.delete('/api/delivery/zones/:id', (req, res) => {
+    res.json({ success: true, message: 'Zone deleted' });
+  });
+
   app.get('/api/delivery/addresses', (req, res) => {
     res.json({ success: true, data: [] });
+  });
+
+  app.post('/api/delivery/tracking/:orderId/assign', (req, res) => {
+    const { driverId, estimatedArrival } = req.body;
+    res.json({
+      success: true,
+      data: {
+        orderId: req.params.orderId,
+        driverId,
+        status: 'assigned',
+        estimatedArrival: estimatedArrival || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    });
   });
 
   // =====================================================
@@ -775,6 +851,26 @@ function createApp() {
     });
   });
 
+  app.post('/api/payments/:id/refund', (req, res) => {
+    const payment = payments.get(req.params.id);
+    if (!payment) {
+      return res.status(404).json({ success: false, error: 'Payment not found' });
+    }
+    
+    const { amount, reason } = req.body;
+    payment.status = amount >= payment.amount ? 'refunded' : 'partially_refunded';
+    payment.refundedAmount = (payment.refundedAmount || 0) + amount;
+    payment.refunds.push({
+      id: `refund_${Date.now()}`,
+      amount,
+      reason,
+      createdAt: new Date().toISOString(),
+    });
+    payment.updatedAt = new Date().toISOString();
+    
+    res.json({ success: true, data: payment });
+  });
+
   // =====================================================
   // REPORTS API
   // =====================================================
@@ -783,6 +879,8 @@ function createApp() {
     const allOrders = Array.from(orders.values());
     const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
     const totalOrders = allOrders.length;
+    const totalVat = allOrders.reduce((sum, o) => sum + o.vatAmount, 0);
+    const totalDiscount = allOrders.reduce((sum, o) => sum + o.discount, 0);
     
     res.json({
       success: true,
@@ -791,7 +889,10 @@ function createApp() {
         startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
         endDate: new Date().toISOString(),
         totalRevenue,
+        totalSales: totalRevenue,
         totalOrders,
+        totalVat,
+        totalDiscount,
         averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
         revenueGrowth: 15.2,
         ordersGrowth: 10.5,
@@ -814,10 +915,10 @@ function createApp() {
     res.json({
       success: true,
       data: [
-        { category: 'Beef', revenue: 4500, orders: 45, percentage: 40 },
-        { category: 'Lamb', revenue: 2800, orders: 28, percentage: 25 },
-        { category: 'Chicken', revenue: 2200, orders: 35, percentage: 20 },
-        { category: 'Sheep', revenue: 1700, orders: 12, percentage: 15 },
+        { category: 'Beef', totalSales: 4500, revenue: 4500, orders: 45, percentage: 40 },
+        { category: 'Lamb', totalSales: 2800, revenue: 2800, orders: 28, percentage: 25 },
+        { category: 'Chicken', totalSales: 2200, revenue: 2200, orders: 35, percentage: 20 },
+        { category: 'Sheep', totalSales: 1700, revenue: 1700, orders: 12, percentage: 15 },
       ],
     });
   });
