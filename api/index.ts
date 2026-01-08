@@ -665,6 +665,129 @@ function createApp() {
     res.json({ success: true, data: order });
   });
 
+  // Create new order
+  app.post('/api/orders', (req, res) => {
+    try {
+      const { userId, items, addressId, paymentMethod, deliveryNotes, discountCode } = req.body;
+
+      if (!userId || !items || !items.length || !addressId || !paymentMethod) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Missing required fields: userId, items, addressId, paymentMethod' 
+        });
+      }
+
+      // Get user
+      const user = users.get(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      // Get address
+      const address = addresses.get(addressId);
+      if (!address) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+
+      // Calculate order items with prices from products
+      const orderItems: Order['items'] = [];
+      let subtotal = 0;
+
+      for (const item of items) {
+        const product = demoProducts.find(p => p.id === item.productId);
+        if (!product) {
+          return res.status(404).json({ success: false, error: `Product ${item.productId} not found` });
+        }
+
+        const totalPrice = product.price * item.quantity;
+        orderItems.push({
+          id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          productId: product.id,
+          productName: product.name,
+          quantity: item.quantity,
+          unitPrice: product.price,
+          totalPrice,
+        });
+        subtotal += totalPrice;
+      }
+
+      // Calculate totals
+      const discount = 0; // Apply discount code logic here if needed
+      const deliveryFee = subtotal > 200 ? 0 : 15; // Free delivery over 200 AED
+      const vatRate = 0.05; // 5% VAT
+      const vatAmount = (subtotal - discount) * vatRate;
+      const total = subtotal - discount + deliveryFee + vatAmount;
+
+      // Generate order number
+      const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
+      const orderId = `order_${Date.now()}`;
+
+      const newOrder: Order = {
+        id: orderId,
+        orderNumber,
+        userId,
+        customerName: `${user.firstName} ${user.familyName}`,
+        customerEmail: user.email,
+        customerMobile: user.mobile,
+        items: orderItems,
+        subtotal,
+        discount,
+        deliveryFee,
+        vatRate,
+        vatAmount,
+        total,
+        status: 'pending',
+        paymentStatus: paymentMethod === 'cod' ? 'pending' : 'paid',
+        paymentMethod,
+        deliveryAddress: {
+          building: address.building,
+          street: address.street,
+          area: address.area,
+          emirate: address.emirate,
+          landmark: address.landmark,
+        },
+        deliveryNotes,
+        statusHistory: [{
+          status: 'pending',
+          changedAt: new Date().toISOString(),
+          changedBy: 'customer',
+        }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      orders.set(orderId, newOrder);
+
+      // Create payment record
+      const paymentId = `pay_${Date.now()}`;
+      const payment: Payment = {
+        id: paymentId,
+        orderId,
+        orderNumber,
+        amount: total,
+        currency: 'AED',
+        method: paymentMethod,
+        status: paymentMethod === 'cod' ? 'pending' : 'completed',
+        customerName: `${user.firstName} ${user.familyName}`,
+        gatewayTransactionId: paymentMethod === 'cod' ? '' : `TXN-${Date.now()}`,
+        refundedAmount: 0,
+        refunds: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      payments.set(paymentId, payment);
+
+      res.status(201).json({
+        success: true,
+        data: newOrder,
+        message: 'Order created successfully',
+      });
+    } catch (error) {
+      console.error('[Create Order Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create order' });
+    }
+  });
+
   app.patch('/api/orders/:id/status', (req, res) => {
     const order = orders.get(req.params.id);
     if (!order) {
