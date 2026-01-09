@@ -257,3 +257,125 @@ export const createDeliveryNotification = (orderNumber: string, driverName: stri
     linkTab: "delivery",
   };
 };
+
+// =====================================================
+// USER-FACING NOTIFICATION HELPERS
+// =====================================================
+
+export const createUserOrderNotification = (orderNumber: string, status: "placed" | "confirmed" | "preparing" | "ready" | "outForDelivery" | "delivered" | "cancelled") => {
+  const notifications: Record<string, { title: string; titleAr: string; message: string; messageAr: string; link?: string }> = {
+    placed: {
+      title: "Order Placed Successfully",
+      titleAr: "تم تقديم الطلب بنجاح",
+      message: `Your order ${orderNumber} has been placed and is being processed`,
+      messageAr: `تم تقديم طلبك ${orderNumber} وجاري معالجته`,
+      link: "/basket",
+    },
+    confirmed: {
+      title: "Order Confirmed",
+      titleAr: "تم تأكيد الطلب",
+      message: `Great news! Your order ${orderNumber} has been confirmed`,
+      messageAr: `أخبار سارة! تم تأكيد طلبك ${orderNumber}`,
+    },
+    preparing: {
+      title: "Order Being Prepared",
+      titleAr: "جاري تحضير الطلب",
+      message: `Your order ${orderNumber} is now being prepared`,
+      messageAr: `جاري تحضير طلبك ${orderNumber} الآن`,
+    },
+    ready: {
+      title: "Order Ready",
+      titleAr: "الطلب جاهز",
+      message: `Your order ${orderNumber} is ready for pickup/delivery`,
+      messageAr: `طلبك ${orderNumber} جاهز للاستلام/التوصيل`,
+    },
+    outForDelivery: {
+      title: "Out for Delivery",
+      titleAr: "في الطريق إليك",
+      message: `Your order ${orderNumber} is on its way to you!`,
+      messageAr: `طلبك ${orderNumber} في الطريق إليك!`,
+    },
+    delivered: {
+      title: "Order Delivered",
+      titleAr: "تم تسليم الطلب",
+      message: `Your order ${orderNumber} has been delivered. Enjoy!`,
+      messageAr: `تم تسليم طلبك ${orderNumber}. بالهناء والشفاء!`,
+    },
+    cancelled: {
+      title: "Order Cancelled",
+      titleAr: "تم إلغاء الطلب",
+      message: `Your order ${orderNumber} has been cancelled`,
+      messageAr: `تم إلغاء طلبك ${orderNumber}`,
+    },
+  };
+
+  return {
+    type: "order" as NotificationType,
+    ...notifications[status],
+  };
+};
+
+export const createUserPaymentNotification = (orderNumber: string, amount: number, status: "success" | "failed" | "refunded") => {
+  const notifications: Record<string, { title: string; titleAr: string; message: string; messageAr: string }> = {
+    success: {
+      title: "Payment Successful",
+      titleAr: "تم الدفع بنجاح",
+      message: `Payment of ${amount} AED for order ${orderNumber} was successful`,
+      messageAr: `تم دفع ${amount} درهم للطلب ${orderNumber} بنجاح`,
+    },
+    failed: {
+      title: "Payment Failed",
+      titleAr: "فشل الدفع",
+      message: `Payment for order ${orderNumber} failed. Please try again`,
+      messageAr: `فشل الدفع للطلب ${orderNumber}. يرجى المحاولة مرة أخرى`,
+    },
+    refunded: {
+      title: "Refund Processed",
+      titleAr: "تم الاسترداد",
+      message: `${amount} AED has been refunded for order ${orderNumber}`,
+      messageAr: `تم استرداد ${amount} درهم للطلب ${orderNumber}`,
+    },
+  };
+
+  return {
+    type: "payment" as NotificationType,
+    ...notifications[status],
+  };
+};
+
+export const createUserDeliveryNotification = (orderNumber: string, driverName: string, action: "assigned" | "arriving" | "arrived") => {
+  const notifications: Record<string, { title: string; titleAr: string; message: string; messageAr: string }> = {
+    assigned: {
+      title: "Driver Assigned",
+      titleAr: "تم تعيين السائق",
+      message: `${driverName} will deliver your order ${orderNumber}`,
+      messageAr: `${driverName} سيقوم بتوصيل طلبك ${orderNumber}`,
+    },
+    arriving: {
+      title: "Driver Arriving Soon",
+      titleAr: "السائق في الطريق",
+      message: `${driverName} is nearby with your order ${orderNumber}`,
+      messageAr: `${driverName} قريب منك مع طلبك ${orderNumber}`,
+    },
+    arrived: {
+      title: "Driver Has Arrived",
+      titleAr: "وصل السائق",
+      message: `${driverName} has arrived with your order ${orderNumber}`,
+      messageAr: `وصل ${driverName} مع طلبك ${orderNumber}`,
+    },
+  };
+
+  return {
+    type: "delivery" as NotificationType,
+    ...notifications[action],
+  };
+};
+
+export const createPromoNotification = (title: string, titleAr: string, message: string, messageAr: string, link?: string) => ({
+  type: "system" as NotificationType,
+  title,
+  titleAr,
+  message,
+  messageAr,
+  link,
+});
