@@ -11,6 +11,7 @@ export default function BasketPage() {
   const { items, subtotal, vat, total, removeItem, updateQuantity, saveBasket, clearBasket } =
     useBasket();
   const { t, language } = useLanguage();
+  const isRTL = language === 'ar';
   const [savedBasketName, setSavedBasketName] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
 
@@ -35,7 +36,7 @@ export default function BasketPage() {
 
   if (items.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-8 sm:py-12">
+      <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-8 sm:py-12" dir={isRTL ? 'rtl' : 'ltr'}>
         <div className="max-w-md w-full text-center">
           <div className="text-5xl sm:text-6xl mb-4">🛒</div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground mb-2">
@@ -56,7 +57,7 @@ export default function BasketPage() {
   }
 
   return (
-    <div className="py-6 sm:py-12 px-3 sm:px-4">
+    <div className="py-6 sm:py-12 px-3 sm:px-4" dir={isRTL ? 'rtl' : 'ltr'}>
         <div className="max-w-7xl mx-auto">
           {/* Page Header */}
           <div className="mb-4 sm:mb-8">

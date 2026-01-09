@@ -21,12 +21,117 @@ import { deliveryApi, ordersApi, usersApi } from "@/lib/api";
 import type { DeliveryZone, DeliveryTracking, Order, User as UserType } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
 }
 
+// Translations object
+const translations = {
+  en: {
+    deliveryManagement: "Delivery Management",
+    zones: "zones",
+    activeDeliveries: "active deliveries",
+    drivers: "drivers",
+    refresh: "Refresh",
+    activeDeliveriesTab: "Active Deliveries",
+    deliveryZonesTab: "Delivery Zones",
+    noActiveDeliveries: "No active deliveries",
+    items: "items",
+    assignDriver: "Assign Driver",
+    addZone: "Add Zone",
+    noDeliveryZones: "No delivery zones configured",
+    active: "Active",
+    inactive: "Inactive",
+    emirate: "Emirate",
+    deliveryFee: "Delivery Fee",
+    minOrder: "Min. Order",
+    estTime: "Est. Time",
+    mins: "mins",
+    edit: "Edit",
+    delete: "Delete",
+    editDeliveryZone: "Edit Delivery Zone",
+    createDeliveryZone: "Create Delivery Zone",
+    zoneNameEnglish: "Zone Name (English)",
+    zoneNameArabic: "Zone Name (Arabic)",
+    areasCommaSeparated: "Areas (comma-separated)",
+    areasPlaceholder: "Downtown, Marina, JBR",
+    estTimeLabel: "Est. Time (mins)",
+    zoneIsActive: "Zone is active",
+    cancel: "Cancel",
+    saving: "Saving...",
+    saveChanges: "Save Changes",
+    createZone: "Create Zone",
+    order: "Order",
+    deliveryTo: "Delivery to",
+    selectDriver: "Select Driver",
+    noDriversAvailable: "No drivers available",
+    assigning: "Assigning...",
+    confirmDeleteZone: "Are you sure you want to delete this zone?",
+    dubai: "Dubai",
+    abuDhabi: "Abu Dhabi",
+    sharjah: "Sharjah",
+    ajman: "Ajman",
+    fujairah: "Fujairah",
+    rasAlKhaimah: "Ras Al Khaimah",
+    ummAlQuwain: "Umm Al Quwain",
+  },
+  ar: {
+    deliveryManagement: "إدارة التوصيل",
+    zones: "مناطق",
+    activeDeliveries: "توصيلات نشطة",
+    drivers: "سائقين",
+    refresh: "تحديث",
+    activeDeliveriesTab: "التوصيلات النشطة",
+    deliveryZonesTab: "مناطق التوصيل",
+    noActiveDeliveries: "لا توجد توصيلات نشطة",
+    items: "عناصر",
+    assignDriver: "تعيين سائق",
+    addZone: "إضافة منطقة",
+    noDeliveryZones: "لم يتم تكوين مناطق توصيل",
+    active: "نشط",
+    inactive: "غير نشط",
+    emirate: "الإمارة",
+    deliveryFee: "رسوم التوصيل",
+    minOrder: "الحد الأدنى",
+    estTime: "الوقت المقدر",
+    mins: "دقيقة",
+    edit: "تعديل",
+    delete: "حذف",
+    editDeliveryZone: "تعديل منطقة التوصيل",
+    createDeliveryZone: "إنشاء منطقة توصيل",
+    zoneNameEnglish: "اسم المنطقة (إنجليزي)",
+    zoneNameArabic: "اسم المنطقة (عربي)",
+    areasCommaSeparated: "المناطق (مفصولة بفواصل)",
+    areasPlaceholder: "وسط المدينة، المارينا، جي بي آر",
+    estTimeLabel: "الوقت المقدر (دقائق)",
+    zoneIsActive: "المنطقة نشطة",
+    cancel: "إلغاء",
+    saving: "جاري الحفظ...",
+    saveChanges: "حفظ التغييرات",
+    createZone: "إنشاء منطقة",
+    order: "الطلب",
+    deliveryTo: "التوصيل إلى",
+    selectDriver: "اختر سائق",
+    noDriversAvailable: "لا يوجد سائقين متاحين",
+    assigning: "جاري التعيين...",
+    confirmDeleteZone: "هل أنت متأكد من حذف هذه المنطقة؟",
+    dubai: "دبي",
+    abuDhabi: "أبوظبي",
+    sharjah: "الشارقة",
+    ajman: "عجمان",
+    fujairah: "الفجيرة",
+    rasAlKhaimah: "رأس الخيمة",
+    ummAlQuwain: "أم القيوين",
+  },
+};
+
 export function DeliveryTab({ onNavigate }: AdminTabProps) {
+  const { language } = useLanguage();
+  const isRTL = language === 'ar';
+  const t = translations[language] || translations.en;
+
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [pendingDeliveries, setPendingDeliveries] = useState<Order[]>([]);
   const [drivers, setDrivers] = useState<UserType[]>([]);
@@ -71,7 +176,7 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
   };
 
   const handleDeleteZone = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this zone?")) return;
+    if (!confirm(t.confirmDeleteZone)) return;
     await deliveryApi.deleteZone(id);
     await fetchData();
   };
@@ -85,13 +190,13 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">Delivery Management</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{t.deliveryManagement}</h3>
           <p className="text-sm text-slate-500">
-            {zones.length} zones • {pendingDeliveries.length} active deliveries • {drivers.length} drivers
+            {zones.length} {t.zones} • {pendingDeliveries.length} {t.activeDeliveries} • {drivers.length} {t.drivers}
           </p>
         </div>
         <button
@@ -99,7 +204,7 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
           className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
         >
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          Refresh
+          {t.refresh}
         </button>
       </div>
 
@@ -108,8 +213,8 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
         <div className="border-b border-slate-200">
           <div className="flex gap-1 p-1">
             {[
-              { id: "deliveries", label: "Active Deliveries", icon: Truck },
-              { id: "zones", label: "Delivery Zones", icon: MapPin },
+              { id: "deliveries", label: t.activeDeliveriesTab, icon: Truck },
+              { id: "zones", label: t.deliveryZonesTab, icon: MapPin },
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -141,6 +246,8 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
               deliveries={pendingDeliveries}
               drivers={drivers}
               onAssign={(order) => setAssignModal(order)}
+              isRTL={isRTL}
+              t={t}
             />
           ) : (
             <ZonesList
@@ -148,6 +255,8 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
               onEdit={(zone) => setZoneModal(zone)}
               onDelete={handleDeleteZone}
               onCreate={() => setCreateZoneModal(true)}
+              isRTL={isRTL}
+              t={t}
             />
           )}
         </div>
@@ -158,6 +267,8 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
         <ZoneFormModal
           onClose={() => setCreateZoneModal(false)}
           onSave={handleCreateZone}
+          isRTL={isRTL}
+          t={t}
         />
       )}
 
@@ -167,6 +278,8 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
           zone={zoneModal}
           onClose={() => setZoneModal(null)}
           onSave={(data) => handleUpdateZone(zoneModal.id, data)}
+          isRTL={isRTL}
+          t={t}
         />
       )}
 
@@ -177,6 +290,8 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
           drivers={drivers}
           onClose={() => setAssignModal(null)}
           onAssign={handleAssignDriver}
+          isRTL={isRTL}
+          t={t}
         />
       )}
     </div>
@@ -187,16 +302,20 @@ function DeliveriesList({
   deliveries,
   drivers,
   onAssign,
+  isRTL,
+  t,
 }: {
   deliveries: Order[];
   drivers: UserType[];
   onAssign: (order: Order) => void;
+  isRTL: boolean;
+  t: typeof translations.en;
 }) {
   if (deliveries.length === 0) {
     return (
       <div className="text-center py-12">
         <Truck className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-        <p className="text-slate-500">No active deliveries</p>
+        <p className="text-slate-500">{t.noActiveDeliveries}</p>
       </div>
     );
   }
@@ -221,12 +340,12 @@ function DeliveriesList({
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-slate-900 flex items-center justify-end gap-1">
+            <div className={cn(isRTL ? "text-left" : "text-right")}>
+              <p className={cn("text-sm font-medium text-slate-900 flex items-center gap-1", isRTL ? "justify-start" : "justify-end")}>
                 <CurrencySymbol size="sm" /> {order.total.toFixed(2)}
               </p>
               <p className="text-xs text-slate-500">
-                {order.items.length} items
+                {order.items.length} {t.items}
               </p>
             </div>
             <button
@@ -234,7 +353,7 @@ function DeliveriesList({
               className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary/90"
             >
               <User className="w-4 h-4" />
-              Assign Driver
+              {t.assignDriver}
             </button>
           </div>
         </div>
@@ -248,28 +367,32 @@ function ZonesList({
   onEdit,
   onDelete,
   onCreate,
+  isRTL,
+  t,
 }: {
   zones: DeliveryZone[];
   onEdit: (zone: DeliveryZone) => void;
   onDelete: (id: string) => void;
   onCreate: () => void;
+  isRTL: boolean;
+  t: typeof translations.en;
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className={cn("flex", isRTL ? "justify-start" : "justify-end")}>
         <button
           onClick={onCreate}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary/90"
         >
           <Plus className="w-4 h-4" />
-          Add Zone
+          {t.addZone}
         </button>
       </div>
 
       {zones.length === 0 ? (
         <div className="text-center py-12">
           <MapPin className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-          <p className="text-slate-500">No delivery zones configured</p>
+          <p className="text-slate-500">{t.noDeliveryZones}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -285,8 +408,8 @@ function ZonesList({
             >
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h4 className="font-medium text-slate-900">{zone.name}</h4>
-                  <p className="text-sm text-slate-500">{zone.nameAr}</p>
+                  <h4 className="font-medium text-slate-900">{isRTL ? zone.nameAr || zone.name : zone.name}</h4>
+                  <p className="text-sm text-slate-500">{isRTL ? zone.name : zone.nameAr}</p>
                 </div>
                 <span
                   className={cn(
@@ -296,26 +419,26 @@ function ZonesList({
                       : "bg-slate-200 text-slate-500"
                   )}
                 >
-                  {zone.isActive ? "Active" : "Inactive"}
+                  {zone.isActive ? t.active : t.inactive}
                 </span>
               </div>
 
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Emirate</span>
+                  <span className="text-slate-500">{t.emirate}</span>
                   <span className="font-medium">{zone.emirate}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Delivery Fee</span>
+                  <span className="text-slate-500">{t.deliveryFee}</span>
                   <span className="font-medium flex items-center gap-1"><CurrencySymbol size="sm" /> {zone.deliveryFee}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Min. Order</span>
+                  <span className="text-slate-500">{t.minOrder}</span>
                   <span className="font-medium flex items-center gap-1"><CurrencySymbol size="sm" /> {zone.minimumOrder}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Est. Time</span>
-                  <span className="font-medium">{zone.estimatedMinutes} mins</span>
+                  <span className="text-slate-500">{t.estTime}</span>
+                  <span className="font-medium">{zone.estimatedMinutes} {t.mins}</span>
                 </div>
               </div>
 
@@ -325,14 +448,14 @@ function ZonesList({
                   className="flex-1 flex items-center justify-center gap-1 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg"
                 >
                   <Edit2 className="w-4 h-4" />
-                  Edit
+                  {t.edit}
                 </button>
                 <button
                   onClick={() => onDelete(zone.id)}
                   className="flex-1 flex items-center justify-center gap-1 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Delete
+                  {t.delete}
                 </button>
               </div>
             </div>
@@ -347,10 +470,14 @@ function ZoneFormModal({
   zone,
   onClose,
   onSave,
+  isRTL,
+  t,
 }: {
   zone?: DeliveryZone;
   onClose: () => void;
   onSave: (data: any) => void;
+  isRTL: boolean;
+  t: typeof translations.en;
 }) {
   const [formData, setFormData] = useState({
     name: zone?.name || "",
@@ -383,14 +510,22 @@ function ZoneFormModal({
     setSubmitting(false);
   };
 
-  const emirates = ["Dubai", "Abu Dhabi", "Sharjah", "Ajman", "Fujairah", "Ras Al Khaimah", "Umm Al Quwain"];
+  const emirates = [
+    { value: "Dubai", label: t.dubai },
+    { value: "Abu Dhabi", label: t.abuDhabi },
+    { value: "Sharjah", label: t.sharjah },
+    { value: "Ajman", label: t.ajman },
+    { value: "Fujairah", label: t.fujairah },
+    { value: "Ras Al Khaimah", label: t.rasAlKhaimah },
+    { value: "Umm Al Quwain", label: t.ummAlQuwain },
+  ];
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" dir={isRTL ? 'rtl' : 'ltr'}>
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-xl font-bold text-slate-900">
-            {zone ? "Edit Delivery Zone" : "Create Delivery Zone"}
+            {zone ? t.editDeliveryZone : t.createDeliveryZone}
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg">
             <X className="w-5 h-5" />
@@ -401,7 +536,7 @@ function ZoneFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Zone Name (English) *
+                {t.zoneNameEnglish} *
               </label>
               <input
                 type="text"
@@ -413,7 +548,7 @@ function ZoneFormModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Zone Name (Arabic)
+                {t.zoneNameArabic}
               </label>
               <input
                 type="text"
@@ -427,7 +562,7 @@ function ZoneFormModal({
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Emirate *
+              {t.emirate} *
             </label>
             <select
               value={formData.emirate}
@@ -435,8 +570,8 @@ function ZoneFormModal({
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
             >
               {emirates.map((emirate) => (
-                <option key={emirate} value={emirate}>
-                  {emirate}
+                <option key={emirate.value} value={emirate.value}>
+                  {emirate.label}
                 </option>
               ))}
             </select>
@@ -444,13 +579,13 @@ function ZoneFormModal({
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Areas (comma-separated)
+              {t.areasCommaSeparated}
             </label>
             <input
               type="text"
               value={formData.areas}
               onChange={(e) => setFormData({ ...formData, areas: e.target.value })}
-              placeholder="Downtown, Marina, JBR"
+              placeholder={t.areasPlaceholder}
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
             />
           </div>
@@ -458,10 +593,10 @@ function ZoneFormModal({
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Delivery Fee
+                {t.deliveryFee}
               </label>
               <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                <div className={cn("absolute top-1/2 -translate-y-1/2", isRTL ? "right-3" : "left-3")}>
                   <CurrencySymbol size="sm" />
                 </div>
                 <input
@@ -470,16 +605,19 @@ function ZoneFormModal({
                   onChange={(e) => setFormData({ ...formData, deliveryFee: e.target.value })}
                   min="0"
                   step="0.01"
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  className={cn(
+                    "w-full py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none",
+                    isRTL ? "pr-10 pl-4" : "pl-10 pr-4"
+                  )}
                 />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Min. Order
+                {t.minOrder}
               </label>
               <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                <div className={cn("absolute top-1/2 -translate-y-1/2", isRTL ? "right-3" : "left-3")}>
                   <CurrencySymbol size="sm" />
                 </div>
                 <input
@@ -488,13 +626,16 @@ function ZoneFormModal({
                   onChange={(e) => setFormData({ ...formData, minimumOrder: e.target.value })}
                   min="0"
                   step="0.01"
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  className={cn(
+                    "w-full py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none",
+                    isRTL ? "pr-10 pl-4" : "pl-10 pr-4"
+                  )}
                 />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Est. Time (mins)
+                {t.estTimeLabel}
               </label>
               <input
                 type="number"
@@ -515,7 +656,7 @@ function ZoneFormModal({
               className="w-5 h-5 text-primary border-slate-300 rounded focus:ring-primary"
             />
             <label htmlFor="isActive" className="text-sm font-medium text-slate-700">
-              Zone is active
+              {t.zoneIsActive}
             </label>
           </div>
 
@@ -525,14 +666,14 @@ function ZoneFormModal({
               onClick={onClose}
               className="flex-1 py-2 border border-slate-300 rounded-lg font-medium hover:bg-slate-50"
             >
-              Cancel
+              {t.cancel}
             </button>
             <button
               type="submit"
               disabled={submitting}
               className="flex-1 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
             >
-              {submitting ? "Saving..." : zone ? "Save Changes" : "Create Zone"}
+              {submitting ? t.saving : zone ? t.saveChanges : t.createZone}
             </button>
           </div>
         </form>
@@ -546,11 +687,15 @@ function AssignDriverModal({
   drivers,
   onClose,
   onAssign,
+  isRTL,
+  t,
 }: {
   order: Order;
   drivers: UserType[];
   onClose: () => void;
   onAssign: (orderId: string, driverId: string) => void;
+  isRTL: boolean;
+  t: typeof translations.en;
 }) {
   const [selectedDriver, setSelectedDriver] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -565,9 +710,9 @@ function AssignDriverModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full" dir={isRTL ? 'rtl' : 'ltr'}>
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-900">Assign Driver</h2>
+          <h2 className="text-xl font-bold text-slate-900">{t.assignDriver}</h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg">
             <X className="w-5 h-5" />
           </button>
@@ -575,9 +720,9 @@ function AssignDriverModal({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="bg-slate-50 rounded-lg p-4">
-            <p className="text-sm text-slate-500">Order</p>
+            <p className="text-sm text-slate-500">{t.order}</p>
             <p className="font-medium">{order.orderNumber}</p>
-            <p className="text-sm text-slate-500 mt-2">Delivery to</p>
+            <p className="text-sm text-slate-500 mt-2">{t.deliveryTo}</p>
             <p className="font-medium">{order.customerName}</p>
             <p className="text-sm text-slate-500">
               {order.deliveryAddress.area}, {order.deliveryAddress.emirate}
@@ -586,11 +731,11 @@ function AssignDriverModal({
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Select Driver *
+              {t.selectDriver} *
             </label>
             {drivers.length === 0 ? (
               <p className="text-sm text-slate-500 py-4 text-center">
-                No drivers available
+                {t.noDriversAvailable}
               </p>
             ) : (
               <div className="space-y-2">
@@ -636,14 +781,14 @@ function AssignDriverModal({
               onClick={onClose}
               className="flex-1 py-2 border border-slate-300 rounded-lg font-medium hover:bg-slate-50"
             >
-              Cancel
+              {t.cancel}
             </button>
             <button
               type="submit"
               disabled={submitting || !selectedDriver}
               className="flex-1 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
             >
-              {submitting ? "Assigning..." : "Assign Driver"}
+              {submitting ? t.assigning : t.assignDriver}
             </button>
           </div>
         </form>

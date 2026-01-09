@@ -10,7 +10,8 @@ export default function ProductsPage() {
   const navigate = useNavigate();
   const { user, isLoggedIn } = useAuth();
   const { addItem } = useBasket();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const isRTL = language === 'ar';
   const { products } = useProducts();
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
@@ -43,7 +44,7 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="py-6 sm:py-12 px-3 sm:px-4">
+    <div className="py-6 sm:py-12 px-3 sm:px-4" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="max-w-7xl mx-auto">
         {/* Page Header */}
         <div className="mb-6 sm:mb-8">

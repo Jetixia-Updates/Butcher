@@ -21,6 +21,7 @@ import { reportsApi, analyticsApi } from "@/lib/api";
 import type { SalesReportData, SalesByCategory, SalesByProduct } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -48,6 +49,43 @@ interface SalesReport {
 }
 
 export function ReportsTab({ onNavigate }: AdminTabProps) {
+  const { language } = useLanguage();
+  const isRTL = language === 'ar';
+
+  const t = {
+    salesReports: isRTL ? "تقارير المبيعات" : "Sales Reports",
+    comprehensiveAnalytics: isRTL ? "تحليلات وتقارير المبيعات الشاملة" : "Comprehensive sales analytics and reporting",
+    refresh: isRTL ? "تحديث" : "Refresh",
+    export: isRTL ? "تصدير" : "Export",
+    exportCsv: isRTL ? "تصدير كـ CSV" : "Export as CSV",
+    exportPdf: isRTL ? "تصدير كـ PDF" : "Export as PDF",
+    today: isRTL ? "اليوم" : "Today",
+    lastWeek: isRTL ? "آخر 7 أيام" : "Last 7 Days",
+    lastMonth: isRTL ? "آخر 30 يوم" : "Last 30 Days",
+    lastYear: isRTL ? "السنة الماضية" : "Last Year",
+    totalRevenue: isRTL ? "إجمالي الإيرادات" : "Total Revenue",
+    totalOrders: isRTL ? "إجمالي الطلبات" : "Total Orders",
+    itemsSold: isRTL ? "العناصر المباعة" : "Items Sold",
+    avgOrderValue: isRTL ? "متوسط قيمة الطلب" : "Avg. Order Value",
+    topSellingProducts: isRTL ? "المنتجات الأكثر مبيعاً" : "Top Selling Products",
+    noSalesData: isRTL ? "لا تتوفر بيانات مبيعات" : "No sales data available",
+    sold: isRTL ? "مباع" : "sold",
+    salesByCategory: isRTL ? "المبيعات حسب الفئة" : "Sales by Category",
+    noCategoryData: isRTL ? "لا تتوفر بيانات الفئات" : "No category data available",
+    revenueTrend: isRTL ? "اتجاه الإيرادات" : "Revenue Trend",
+    noDailySalesData: isRTL ? "لا تتوفر بيانات مبيعات يومية لهذه الفترة" : "No daily sales data available for this period",
+    detailedBreakdown: isRTL ? "التفاصيل" : "Detailed Breakdown",
+    metric: isRTL ? "المقياس" : "Metric",
+    value: isRTL ? "القيمة" : "Value",
+    change: isRTL ? "التغيير" : "Change",
+    grossRevenue: isRTL ? "إجمالي الإيرادات" : "Gross Revenue",
+    totalTaxCollected: isRTL ? "إجمالي الضرائب المحصلة" : "Total Tax Collected",
+    totalDiscounts: isRTL ? "إجمالي الخصومات" : "Total Discounts",
+    netRevenue: isRTL ? "صافي الإيرادات" : "Net Revenue",
+    totalRefunds: isRTL ? "إجمالي المبالغ المستردة" : "Total Refunds",
+    vsPreviousPeriod: isRTL ? "مقارنة بالفترة السابقة" : "vs previous period",
+  };
+
   const [period, setPeriod] = useState<ReportPeriod>("month");
   const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
@@ -139,20 +177,20 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
   };
 
   const periodLabels: Record<ReportPeriod, string> = {
-    today: "Today",
-    week: "Last 7 Days",
-    month: "Last 30 Days",
-    year: "Last Year",
+    today: t.today,
+    week: t.lastWeek,
+    month: t.lastMonth,
+    year: t.lastYear,
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">Sales Reports</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{t.salesReports}</h3>
           <p className="text-sm text-slate-500">
-            Comprehensive sales analytics and reporting
+            {t.comprehensiveAnalytics}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -161,25 +199,34 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
           >
             <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-            Refresh
+            {t.refresh}
           </button>
           <div className="relative group">
             <button className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90">
               <Download className="w-4 h-4" />
-              Export
+              {t.export}
             </button>
-            <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-slate-200 hidden group-hover:block z-10">
+            <div className={cn(
+              "absolute mt-2 w-40 bg-white rounded-lg shadow-lg border border-slate-200 hidden group-hover:block z-10",
+              isRTL ? "left-0" : "right-0"
+            )}>
               <button
                 onClick={() => handleExport("csv")}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 rounded-t-lg"
+                className={cn(
+                  "w-full px-4 py-2 text-sm hover:bg-slate-50 rounded-t-lg",
+                  isRTL ? "text-right" : "text-left"
+                )}
               >
-                Export as CSV
+                {t.exportCsv}
               </button>
               <button
                 onClick={() => handleExport("pdf")}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 rounded-b-lg"
+                className={cn(
+                  "w-full px-4 py-2 text-sm hover:bg-slate-50 rounded-b-lg",
+                  isRTL ? "text-right" : "text-left"
+                )}
               >
-                Export as PDF
+                {t.exportPdf}
               </button>
             </div>
           </div>
@@ -214,31 +261,35 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <SummaryCard
               icon={DollarSign}
-              label="Total Revenue"
+              label={t.totalRevenue}
               value={<span className="flex items-center gap-1"><CurrencySymbol size="md" /> {salesReport?.totalRevenue?.toFixed(2) || "0.00"}</span>}
               change={12.5}
               color="green"
+              vsPreviousPeriod={t.vsPreviousPeriod}
             />
             <SummaryCard
               icon={ShoppingCart}
-              label="Total Orders"
+              label={t.totalOrders}
               value={salesReport?.totalOrders?.toString() || "0"}
               change={8.2}
               color="blue"
+              vsPreviousPeriod={t.vsPreviousPeriod}
             />
             <SummaryCard
               icon={Package}
-              label="Items Sold"
+              label={t.itemsSold}
               value={salesReport?.itemsSold?.toString() || "0"}
               change={-3.1}
               color="purple"
+              vsPreviousPeriod={t.vsPreviousPeriod}
             />
             <SummaryCard
               icon={TrendingUp}
-              label="Avg. Order Value"
+              label={t.avgOrderValue}
               value={<span className="flex items-center gap-1"><CurrencySymbol size="md" /> {salesReport?.averageOrderValue?.toFixed(2) || "0.00"}</span>}
               change={5.7}
               color="orange"
+              vsPreviousPeriod={t.vsPreviousPeriod}
             />
           </div>
 
@@ -246,13 +297,13 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
             {/* Top Products */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-slate-900">Top Selling Products</h4>
+                <h4 className="font-semibold text-slate-900">{t.topSellingProducts}</h4>
                 <BarChart3 className="w-5 h-5 text-slate-400" />
               </div>
 
               {topProducts.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">
-                  No sales data available
+                  {t.noSalesData}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -267,7 +318,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                       <div className="flex-1">
                         <p className="font-medium text-slate-900">{product.productName}</p>
                         <div className="flex items-center gap-4 text-sm text-slate-500">
-                          <span>{product.quantity} sold</span>
+                          <span>{product.quantity} {t.sold}</span>
                           <span className="flex items-center gap-1"><CurrencySymbol size="xs" /> {product.sales.toFixed(2)}</span>
                         </div>
                       </div>
@@ -288,13 +339,13 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
             {/* Sales by Category */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-slate-900">Sales by Category</h4>
+                <h4 className="font-semibold text-slate-900">{t.salesByCategory}</h4>
                 <PieChart className="w-5 h-5 text-slate-400" />
               </div>
 
               {categorySales.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">
-                  No category data available
+                  {t.noCategoryData}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -358,7 +409,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
           {/* Daily Sales Chart Placeholder */}
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
-              <h4 className="font-semibold text-slate-900">Revenue Trend</h4>
+              <h4 className="font-semibold text-slate-900">{t.revenueTrend}</h4>
               <div className="flex items-center gap-2 text-sm text-slate-500">
                 <Calendar className="w-4 h-4" />
                 {periodLabels[period]}
@@ -381,7 +432,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                       title={`${day.date}: AED ${day.revenue.toFixed(2)}`}
                     />
                     <span className="text-xs text-slate-500 truncate w-full text-center">
-                      {new Date(day.date).toLocaleDateString("en-US", {
+                      {new Date(day.date).toLocaleDateString(isRTL ? "ar-AE" : "en-US", {
                         month: "short",
                         day: "numeric",
                       })}
@@ -391,7 +442,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
               })}
               {(!salesReport?.dailySales || salesReport.dailySales.length === 0) && (
                 <div className="flex-1 flex items-center justify-center text-slate-500">
-                  No daily sales data available for this period
+                  {t.noDailySalesData}
                 </div>
               )}
             </div>
@@ -400,70 +451,94 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
           {/* Detailed Stats Table */}
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200">
-              <h4 className="font-semibold text-slate-900">Detailed Breakdown</h4>
+              <h4 className="font-semibold text-slate-900">{t.detailedBreakdown}</h4>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                      Metric
+                    <th className={cn(
+                      "px-4 py-3 text-xs font-medium text-slate-500 uppercase",
+                      isRTL ? "text-right" : "text-left"
+                    )}>
+                      {t.metric}
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">
-                      Value
+                    <th className={cn(
+                      "px-4 py-3 text-xs font-medium text-slate-500 uppercase",
+                      isRTL ? "text-left" : "text-right"
+                    )}>
+                      {t.value}
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">
-                      Change
+                    <th className={cn(
+                      "px-4 py-3 text-xs font-medium text-slate-500 uppercase",
+                      isRTL ? "text-left" : "text-right"
+                    )}>
+                      {t.change}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   <tr className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm text-slate-900">Gross Revenue</td>
-                    <td className="px-4 py-3 text-sm text-right font-medium flex items-center justify-end gap-1">
+                    <td className="px-4 py-3 text-sm text-slate-900">{t.grossRevenue}</td>
+                    <td className={cn(
+                      "px-4 py-3 text-sm font-medium flex items-center gap-1",
+                      isRTL ? "justify-start" : "justify-end"
+                    )}>
                       <CurrencySymbol size="sm" /> {salesReport?.totalRevenue?.toFixed(2) || "0.00"}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className={cn("px-4 py-3", isRTL ? "text-left" : "text-right")}>
                       <ChangeIndicator value={12.5} />
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm text-slate-900">Total Tax Collected</td>
-                    <td className="px-4 py-3 text-sm text-right font-medium flex items-center justify-end gap-1">
+                    <td className="px-4 py-3 text-sm text-slate-900">{t.totalTaxCollected}</td>
+                    <td className={cn(
+                      "px-4 py-3 text-sm font-medium flex items-center gap-1",
+                      isRTL ? "justify-start" : "justify-end"
+                    )}>
                       <CurrencySymbol size="sm" /> {salesReport?.taxCollected?.toFixed(2) || "0.00"}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className={cn("px-4 py-3", isRTL ? "text-left" : "text-right")}>
                       <ChangeIndicator value={8.3} />
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm text-slate-900">Total Discounts</td>
-                    <td className="px-4 py-3 text-sm text-right font-medium flex items-center justify-end gap-1">
+                    <td className="px-4 py-3 text-sm text-slate-900">{t.totalDiscounts}</td>
+                    <td className={cn(
+                      "px-4 py-3 text-sm font-medium flex items-center gap-1",
+                      isRTL ? "justify-start" : "justify-end"
+                    )}>
                       <CurrencySymbol size="sm" /> {salesReport?.totalDiscounts?.toFixed(2) || "0.00"}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className={cn("px-4 py-3", isRTL ? "text-left" : "text-right")}>
                       <ChangeIndicator value={-5.2} />
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm text-slate-900">Net Revenue</td>
-                    <td className="px-4 py-3 text-sm text-right font-medium flex items-center justify-end gap-1">
+                    <td className="px-4 py-3 text-sm text-slate-900">{t.netRevenue}</td>
+                    <td className={cn(
+                      "px-4 py-3 text-sm font-medium flex items-center gap-1",
+                      isRTL ? "justify-start" : "justify-end"
+                    )}>
                       <CurrencySymbol size="sm" />{" "}
                       {(
                         (salesReport?.totalRevenue || 0) -
                         (salesReport?.totalDiscounts || 0)
                       ).toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className={cn("px-4 py-3", isRTL ? "text-left" : "text-right")}>
                       <ChangeIndicator value={10.1} />
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm text-slate-900">Total Refunds</td>
-                    <td className="px-4 py-3 text-sm text-right font-medium flex items-center justify-end gap-1">
+                    <td className="px-4 py-3 text-sm text-slate-900">{t.totalRefunds}</td>
+                    <td className={cn(
+                      "px-4 py-3 text-sm font-medium flex items-center gap-1",
+                      isRTL ? "justify-start" : "justify-end"
+                    )}>
                       <CurrencySymbol size="sm" /> {salesReport?.totalRefunds?.toFixed(2) || "0.00"}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className={cn("px-4 py-3", isRTL ? "text-left" : "text-right")}>
                       <ChangeIndicator value={-15.3} />
                     </td>
                   </tr>
@@ -483,12 +558,14 @@ function SummaryCard({
   value,
   change,
   color,
+  vsPreviousPeriod,
 }: {
   icon: React.ElementType;
   label: string;
   value: React.ReactNode;
   change: number;
   color: "green" | "blue" | "purple" | "orange";
+  vsPreviousPeriod: string;
 }) {
   const colorClasses = {
     green: { bg: "bg-green-100", text: "text-green-600" },
@@ -514,7 +591,7 @@ function SummaryCard({
         </div>
       </div>
       <div className="mt-4">
-        <ChangeIndicator value={change} showLabel />
+        <ChangeIndicator value={change} showLabel labelText={vsPreviousPeriod} />
       </div>
     </div>
   );
@@ -523,9 +600,11 @@ function SummaryCard({
 function ChangeIndicator({
   value,
   showLabel = false,
+  labelText = "vs previous period",
 }: {
   value: number;
   showLabel?: boolean;
+  labelText?: string;
 }) {
   const isPositive = value >= 0;
   const Icon = isPositive ? ArrowUp : ArrowDown;
@@ -540,7 +619,7 @@ function ChangeIndicator({
       <Icon className="w-3 h-3" />
       {Math.abs(value).toFixed(1)}%
       {showLabel && (
-        <span className="text-slate-500 font-normal ml-1">vs previous period</span>
+        <span className="text-slate-500 font-normal ml-1">{labelText}</span>
       )}
     </span>
   );

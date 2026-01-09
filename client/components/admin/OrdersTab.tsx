@@ -19,6 +19,7 @@ import { ordersApi } from "@/lib/api";
 import type { Order, OrderStatus } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -26,14 +27,147 @@ interface AdminTabProps {
   onClearSelection?: () => void;
 }
 
-const ORDER_STATUSES: { value: OrderStatus | "all"; label: string }[] = [
-  { value: "all", label: "All Orders" },
-  { value: "pending", label: "Pending" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "processing", label: "Processing" },
-  { value: "out_for_delivery", label: "Out for Delivery" },
-  { value: "delivered", label: "Delivered" },
-  { value: "cancelled", label: "Cancelled" },
+const translations = {
+  en: {
+    ordersManagement: "Orders Management",
+    totalOrders: "total orders",
+    refresh: "Refresh",
+    searchPlaceholder: "Search by order #, customer name, or phone...",
+    noOrdersFound: "No orders found",
+    order: "Order",
+    customer: "Customer",
+    items: "Items",
+    total: "Total",
+    status: "Status",
+    payment: "Payment",
+    date: "Date",
+    actions: "Actions",
+    viewDetails: "View Details",
+    update: "Update",
+    updating: "Updating...",
+    markAs: "Mark as",
+    createdOn: "Created on",
+    orderStatus: "Order Status",
+    paymentStatus: "Payment Status",
+    paymentMethod: "Payment Method",
+    customerInformation: "Customer Information",
+    name: "Name",
+    mobile: "Mobile",
+    email: "Email",
+    deliveryAddress: "Delivery Address",
+    landmark: "Landmark",
+    notes: "Notes",
+    orderItems: "Order Items",
+    product: "Product",
+    qty: "Qty",
+    price: "Price",
+    subtotal: "Subtotal",
+    discount: "Discount",
+    deliveryFee: "Delivery Fee",
+    vat: "VAT",
+    statusHistory: "Status History",
+    by: "by",
+    // Status labels
+    allOrders: "All Orders",
+    pending: "Pending",
+    confirmed: "Confirmed",
+    processing: "Processing",
+    readyForPickup: "Ready for Pickup",
+    outForDelivery: "Out for Delivery",
+    delivered: "Delivered",
+    cancelled: "Cancelled",
+    refunded: "Refunded",
+    // Payment status labels
+    authorized: "Authorized",
+    captured: "Captured",
+    failed: "Failed",
+    partiallyRefunded: "Partially Refunded",
+  },
+  ar: {
+    ordersManagement: "إدارة الطلبات",
+    totalOrders: "إجمالي الطلبات",
+    refresh: "تحديث",
+    searchPlaceholder: "البحث برقم الطلب، اسم العميل، أو الهاتف...",
+    noOrdersFound: "لم يتم العثور على طلبات",
+    order: "الطلب",
+    customer: "العميل",
+    items: "العناصر",
+    total: "المجموع",
+    status: "الحالة",
+    payment: "الدفع",
+    date: "التاريخ",
+    actions: "الإجراءات",
+    viewDetails: "عرض التفاصيل",
+    update: "تحديث",
+    updating: "جاري التحديث...",
+    markAs: "تحديد كـ",
+    createdOn: "تم الإنشاء في",
+    orderStatus: "حالة الطلب",
+    paymentStatus: "حالة الدفع",
+    paymentMethod: "طريقة الدفع",
+    customerInformation: "معلومات العميل",
+    name: "الاسم",
+    mobile: "الجوال",
+    email: "البريد الإلكتروني",
+    deliveryAddress: "عنوان التوصيل",
+    landmark: "علامة مميزة",
+    notes: "ملاحظات",
+    orderItems: "عناصر الطلب",
+    product: "المنتج",
+    qty: "الكمية",
+    price: "السعر",
+    subtotal: "المجموع الفرعي",
+    discount: "الخصم",
+    deliveryFee: "رسوم التوصيل",
+    vat: "ضريبة القيمة المضافة",
+    statusHistory: "سجل الحالات",
+    by: "بواسطة",
+    // Status labels
+    allOrders: "جميع الطلبات",
+    pending: "قيد الانتظار",
+    confirmed: "مؤكد",
+    processing: "قيد المعالجة",
+    readyForPickup: "جاهز للاستلام",
+    outForDelivery: "في الطريق للتوصيل",
+    delivered: "تم التوصيل",
+    cancelled: "ملغي",
+    refunded: "مسترد",
+    // Payment status labels
+    authorized: "مصرح",
+    captured: "تم الدفع",
+    failed: "فشل",
+    partiallyRefunded: "مسترد جزئياً",
+  },
+};
+
+const getStatusLabel = (status: string, t: typeof translations.en): string => {
+  const statusMap: Record<string, keyof typeof translations.en> = {
+    all: "allOrders",
+    pending: "pending",
+    confirmed: "confirmed",
+    processing: "processing",
+    ready_for_pickup: "readyForPickup",
+    out_for_delivery: "outForDelivery",
+    delivered: "delivered",
+    cancelled: "cancelled",
+    refunded: "refunded",
+    authorized: "authorized",
+    captured: "captured",
+    failed: "failed",
+    partially_refunded: "partiallyRefunded",
+  };
+  const key = statusMap[status];
+  return key ? (t[key] as string) : status.replace(/_/g, " ");
+};
+
+const ORDER_STATUSES: { value: OrderStatus | "all"; labelKey: keyof typeof translations.en }[] = [
+  { value: "all", labelKey: "allOrders" },
+  { value: "pending", labelKey: "pending" },
+  { value: "confirmed", labelKey: "confirmed" },
+  { value: "processing", labelKey: "processing" },
+  { value: "out_for_delivery", labelKey: "outForDelivery" },
+  { value: "delivered", labelKey: "delivered" },
+  { value: "cancelled", labelKey: "cancelled" },
 ];
 
 const STATUS_ACTIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -48,6 +182,10 @@ const STATUS_ACTIONS: Record<OrderStatus, OrderStatus[]> = {
 };
 
 export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: AdminTabProps) {
+  const { language } = useLanguage();
+  const isRTL = language === 'ar';
+  const t = translations[language];
+  
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
@@ -107,13 +245,13 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">Orders Management</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{t.ordersManagement}</h3>
           <p className="text-sm text-slate-500">
-            {orders.length} total orders
+            {orders.length} {t.totalOrders}
           </p>
         </div>
         <button
@@ -121,7 +259,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
           className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
         >
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          Refresh
+          {t.refresh}
         </button>
       </div>
 
@@ -129,13 +267,13 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       <div className="bg-white rounded-xl shadow-sm p-4">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Search className={cn("absolute top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400", isRTL ? "right-3" : "left-3")} />
             <input
               type="text"
-              placeholder="Search by order #, customer name, or phone..."
+              placeholder={t.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+              className={cn("w-full py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none", isRTL ? "pr-10 pl-4" : "pl-10 pr-4")}
             />
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -150,7 +288,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 )}
               >
-                {status.label}
+                {t[status.labelKey]}
               </button>
             ))}
           </div>
@@ -166,36 +304,36 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
         ) : filteredOrders.length === 0 ? (
           <div className="text-center py-12">
             <Package className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500">No orders found</p>
+            <p className="text-slate-500">{t.noOrdersFound}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
-                    Order
+                  <th className={cn("px-6 py-3 text-xs font-semibold text-slate-500 uppercase", isRTL ? "text-right" : "text-left")}>
+                    {t.order}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
-                    Customer
+                  <th className={cn("px-6 py-3 text-xs font-semibold text-slate-500 uppercase", isRTL ? "text-right" : "text-left")}>
+                    {t.customer}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
-                    Items
+                  <th className={cn("px-6 py-3 text-xs font-semibold text-slate-500 uppercase", isRTL ? "text-right" : "text-left")}>
+                    {t.items}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
-                    Total
+                  <th className={cn("px-6 py-3 text-xs font-semibold text-slate-500 uppercase", isRTL ? "text-right" : "text-left")}>
+                    {t.total}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
-                    Status
+                  <th className={cn("px-6 py-3 text-xs font-semibold text-slate-500 uppercase", isRTL ? "text-right" : "text-left")}>
+                    {t.status}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
-                    Payment
+                  <th className={cn("px-6 py-3 text-xs font-semibold text-slate-500 uppercase", isRTL ? "text-right" : "text-left")}>
+                    {t.payment}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
-                    Date
+                  <th className={cn("px-6 py-3 text-xs font-semibold text-slate-500 uppercase", isRTL ? "text-right" : "text-left")}>
+                    {t.date}
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">
-                    Actions
+                  <th className={cn("px-6 py-3 text-xs font-semibold text-slate-500 uppercase", isRTL ? "text-left" : "text-right")}>
+                    {t.actions}
                   </th>
                 </tr>
               </thead>
@@ -218,7 +356,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">
-                      {order.items.length} items
+                      {order.items.length} {t.items.toLowerCase()}
                     </td>
                     <td className="px-6 py-4 text-sm font-semibold text-slate-900">
                       <span className="flex items-center gap-1">
@@ -227,25 +365,25 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <OrderStatusBadge status={order.status} />
+                      <OrderStatusBadge status={order.status} t={t} />
                     </td>
                     <td className="px-6 py-4">
                       <div>
-                        <PaymentStatusBadge status={order.paymentStatus} />
+                        <PaymentStatusBadge status={order.paymentStatus} t={t} />
                         <p className="text-xs text-slate-500 mt-1 capitalize">
                           {order.paymentMethod}
                         </p>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">
-                      {new Date(order.createdAt).toLocaleDateString()}
+                      {new Date(order.createdAt).toLocaleDateString(isRTL ? 'ar-AE' : 'en-AE')}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className={cn("flex items-center gap-2", isRTL ? "justify-start" : "justify-end")}>
                         <button
                           onClick={() => setSelectedOrder(order)}
                           className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                          title="View Details"
+                          title={t.viewDetails}
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -256,6 +394,8 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
                             availableStatuses={STATUS_ACTIONS[order.status]}
                             onUpdate={handleStatusUpdate}
                             updating={updating === order.id}
+                            t={t}
+                            isRTL={isRTL}
                           />
                         )}
                       </div>
@@ -275,6 +415,8 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
           onClose={() => setSelectedOrder(null)}
           onStatusUpdate={(status) => handleStatusUpdate(selectedOrder.id, status)}
           updating={updating === selectedOrder.id}
+          t={t}
+          isRTL={isRTL}
         />
       )}
     </div>
@@ -287,12 +429,16 @@ function StatusDropdown({
   availableStatuses,
   onUpdate,
   updating,
+  t,
+  isRTL,
 }: {
   orderId: string;
   currentStatus: OrderStatus;
   availableStatuses: OrderStatus[];
   onUpdate: (orderId: string, status: OrderStatus) => void;
   updating: boolean;
+  t: typeof translations.en;
+  isRTL: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -307,7 +453,7 @@ function StatusDropdown({
           <RefreshCw className="w-4 h-4 animate-spin" />
         ) : (
           <>
-            Update
+            {t.update}
             <ChevronDown className="w-4 h-4" />
           </>
         )}
@@ -318,7 +464,7 @@ function StatusDropdown({
             className="fixed inset-0 z-10"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-20">
+          <div className={cn("absolute mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-20", isRTL ? "left-0" : "right-0")}>
             {availableStatuses.map((status) => (
               <button
                 key={status}
@@ -326,7 +472,7 @@ function StatusDropdown({
                   onUpdate(orderId, status);
                   setOpen(false);
                 }}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg flex items-center gap-2"
+                className={cn("w-full px-4 py-2 text-sm hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg flex items-center gap-2", isRTL ? "text-right flex-row-reverse" : "text-left")}
               >
                 {status === "cancelled" ? (
                   <X className="w-4 h-4 text-red-500" />
@@ -337,7 +483,7 @@ function StatusDropdown({
                 ) : (
                   <Package className="w-4 h-4 text-slate-500" />
                 )}
-                <span className="capitalize">{status.replace(/_/g, " ")}</span>
+                <span>{getStatusLabel(status, t)}</span>
               </button>
             ))}
           </div>
@@ -352,22 +498,26 @@ function OrderDetailsModal({
   onClose,
   onStatusUpdate,
   updating,
+  t,
+  isRTL,
 }: {
   order: Order;
   onClose: () => void;
   onStatusUpdate: (status: OrderStatus) => void;
   updating: boolean;
+  t: typeof translations.en;
+  isRTL: boolean;
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" dir={isRTL ? 'rtl' : 'ltr'}>
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-slate-900">
-              Order {order.orderNumber}
+              {t.order} {order.orderNumber}
             </h2>
             <p className="text-sm text-slate-500">
-              Created on {new Date(order.createdAt).toLocaleString()}
+              {t.createdOn} {new Date(order.createdAt).toLocaleString(isRTL ? 'ar-AE' : 'en-AE')}
             </p>
           </div>
           <button
@@ -382,33 +532,33 @@ function OrderDetailsModal({
           {/* Status and Payment */}
           <div className="flex flex-wrap gap-4">
             <div>
-              <p className="text-xs text-slate-500 mb-1">Order Status</p>
-              <OrderStatusBadge status={order.status} />
+              <p className="text-xs text-slate-500 mb-1">{t.orderStatus}</p>
+              <OrderStatusBadge status={order.status} t={t} />
             </div>
             <div>
-              <p className="text-xs text-slate-500 mb-1">Payment Status</p>
-              <PaymentStatusBadge status={order.paymentStatus} />
+              <p className="text-xs text-slate-500 mb-1">{t.paymentStatus}</p>
+              <PaymentStatusBadge status={order.paymentStatus} t={t} />
             </div>
             <div>
-              <p className="text-xs text-slate-500 mb-1">Payment Method</p>
+              <p className="text-xs text-slate-500 mb-1">{t.paymentMethod}</p>
               <span className="text-sm font-medium capitalize">{order.paymentMethod}</span>
             </div>
           </div>
 
           {/* Customer Info */}
           <div className="bg-slate-50 rounded-lg p-4">
-            <h3 className="font-semibold text-slate-900 mb-3">Customer Information</h3>
+            <h3 className="font-semibold text-slate-900 mb-3">{t.customerInformation}</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-slate-500">Name</p>
+                <p className="text-slate-500">{t.name}</p>
                 <p className="font-medium">{order.customerName}</p>
               </div>
               <div>
-                <p className="text-slate-500">Mobile</p>
+                <p className="text-slate-500">{t.mobile}</p>
                 <p className="font-medium">{order.customerMobile}</p>
               </div>
               <div>
-                <p className="text-slate-500">Email</p>
+                <p className="text-slate-500">{t.email}</p>
                 <p className="font-medium">{order.customerEmail}</p>
               </div>
             </div>
@@ -416,7 +566,7 @@ function OrderDetailsModal({
 
           {/* Delivery Address */}
           <div className="bg-slate-50 rounded-lg p-4">
-            <h3 className="font-semibold text-slate-900 mb-3">Delivery Address</h3>
+            <h3 className="font-semibold text-slate-900 mb-3">{t.deliveryAddress}</h3>
             <p className="text-sm text-slate-700">
               {order.deliveryAddress.building}, {order.deliveryAddress.street}
               <br />
@@ -424,35 +574,35 @@ function OrderDetailsModal({
               {order.deliveryAddress.landmark && (
                 <>
                   <br />
-                  <span className="text-slate-500">Landmark: {order.deliveryAddress.landmark}</span>
+                  <span className="text-slate-500">{t.landmark}: {order.deliveryAddress.landmark}</span>
                 </>
               )}
             </p>
             {order.deliveryNotes && (
               <p className="text-sm text-slate-500 mt-2">
-                <strong>Notes:</strong> {order.deliveryNotes}
+                <strong>{t.notes}:</strong> {order.deliveryNotes}
               </p>
             )}
           </div>
 
           {/* Order Items */}
           <div>
-            <h3 className="font-semibold text-slate-900 mb-3">Order Items</h3>
+            <h3 className="font-semibold text-slate-900 mb-3">{t.orderItems}</h3>
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <table className="w-full">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500">
-                      Product
+                    <th className={cn("px-4 py-2 text-xs font-semibold text-slate-500", isRTL ? "text-right" : "text-left")}>
+                      {t.product}
                     </th>
                     <th className="px-4 py-2 text-center text-xs font-semibold text-slate-500">
-                      Qty
+                      {t.qty}
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500">
-                      Price
+                    <th className={cn("px-4 py-2 text-xs font-semibold text-slate-500", isRTL ? "text-left" : "text-right")}>
+                      {t.price}
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500">
-                      Total
+                    <th className={cn("px-4 py-2 text-xs font-semibold text-slate-500", isRTL ? "text-left" : "text-right")}>
+                      {t.total}
                     </th>
                   </tr>
                 </thead>
@@ -461,14 +611,14 @@ function OrderDetailsModal({
                     <tr key={item.id}>
                       <td className="px-4 py-3 text-sm">{item.productName}</td>
                       <td className="px-4 py-3 text-sm text-center">{item.quantity}</td>
-                      <td className="px-4 py-3 text-sm text-right">
-                        <span className="flex items-center justify-end gap-1">
+                      <td className={cn("px-4 py-3 text-sm", isRTL ? "text-left" : "text-right")}>
+                        <span className={cn("flex items-center gap-1", isRTL ? "justify-start" : "justify-end")}>
                           <CurrencySymbol size="sm" />
                           {item.unitPrice.toFixed(2)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-right font-medium">
-                        <span className="flex items-center justify-end gap-1">
+                      <td className={cn("px-4 py-3 text-sm font-medium", isRTL ? "text-left" : "text-right")}>
+                        <span className={cn("flex items-center gap-1", isRTL ? "justify-start" : "justify-end")}>
                           <CurrencySymbol size="sm" />
                           {item.totalPrice.toFixed(2)}
                         </span>
@@ -484,7 +634,7 @@ function OrderDetailsModal({
           <div className="bg-slate-50 rounded-lg p-4">
             <div className="space-y-2 text-sm">
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Subtotal</span>
+                <span className="text-slate-500">{t.subtotal}</span>
                 <span className="flex items-center gap-1">
                   <CurrencySymbol size="sm" />
                   {order.subtotal.toFixed(2)}
@@ -492,7 +642,7 @@ function OrderDetailsModal({
               </div>
               {order.discount > 0 && (
                 <div className="flex justify-between items-center text-green-600">
-                  <span>Discount</span>
+                  <span>{t.discount}</span>
                   <span className="flex items-center gap-1">
                     -<CurrencySymbol size="sm" />
                     {order.discount.toFixed(2)}
@@ -500,21 +650,21 @@ function OrderDetailsModal({
                 </div>
               )}
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Delivery Fee</span>
+                <span className="text-slate-500">{t.deliveryFee}</span>
                 <span className="flex items-center gap-1">
                   <CurrencySymbol size="sm" />
                   {order.deliveryFee.toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">VAT ({(order.vatRate * 100).toFixed(0)}%)</span>
+                <span className="text-slate-500">{t.vat} ({(order.vatRate * 100).toFixed(0)}%)</span>
                 <span className="flex items-center gap-1">
                   <CurrencySymbol size="sm" />
                   {order.vatAmount.toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center font-bold text-lg pt-2 border-t border-slate-300">
-                <span>Total</span>
+                <span>{t.total}</span>
                 <span className="flex items-center gap-1">
                   <CurrencySymbol size="md" />
                   {order.total.toFixed(2)}
@@ -538,7 +688,7 @@ function OrderDetailsModal({
                       : "bg-primary text-white hover:bg-primary/90"
                   )}
                 >
-                  {updating ? "Updating..." : `Mark as ${status.replace(/_/g, " ")}`}
+                  {updating ? t.updating : `${t.markAs} ${getStatusLabel(status, t)}`}
                 </button>
               ))}
             </div>
@@ -546,18 +696,18 @@ function OrderDetailsModal({
 
           {/* Status History */}
           <div>
-            <h3 className="font-semibold text-slate-900 mb-3">Status History</h3>
+            <h3 className="font-semibold text-slate-900 mb-3">{t.statusHistory}</h3>
             <div className="space-y-2">
               {order.statusHistory.map((history, idx) => (
                 <div key={idx} className="flex items-center gap-3 text-sm">
                   <div className="w-2 h-2 bg-primary rounded-full" />
-                  <span className="capitalize font-medium">
-                    {history.status.replace(/_/g, " ")}
+                  <span className="font-medium">
+                    {getStatusLabel(history.status, t)}
                   </span>
                   <span className="text-slate-500">
-                    {new Date(history.changedAt).toLocaleString()}
+                    {new Date(history.changedAt).toLocaleString(isRTL ? 'ar-AE' : 'en-AE')}
                   </span>
-                  <span className="text-slate-400">by {history.changedBy}</span>
+                  <span className="text-slate-400">{t.by} {history.changedBy}</span>
                 </div>
               ))}
             </div>
@@ -568,7 +718,7 @@ function OrderDetailsModal({
   );
 }
 
-function OrderStatusBadge({ status }: { status: string }) {
+function OrderStatusBadge({ status, t }: { status: string; t: typeof translations.en }) {
   const styles: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-700",
     confirmed: "bg-blue-100 text-blue-700",
@@ -582,15 +732,15 @@ function OrderStatusBadge({ status }: { status: string }) {
 
   return (
     <span className={cn(
-      "px-2 py-1 rounded-full text-xs font-medium capitalize",
+      "px-2 py-1 rounded-full text-xs font-medium",
       styles[status] || "bg-slate-100 text-slate-700"
     )}>
-      {status.replace(/_/g, " ")}
+      {getStatusLabel(status, t)}
     </span>
   );
 }
 
-function PaymentStatusBadge({ status }: { status: string }) {
+function PaymentStatusBadge({ status, t }: { status: string; t: typeof translations.en }) {
   const styles: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-700",
     authorized: "bg-blue-100 text-blue-700",
@@ -602,10 +752,10 @@ function PaymentStatusBadge({ status }: { status: string }) {
 
   return (
     <span className={cn(
-      "px-2 py-1 rounded-full text-xs font-medium capitalize",
+      "px-2 py-1 rounded-full text-xs font-medium",
       styles[status] || "bg-slate-100 text-slate-700"
     )}>
-      {status.replace(/_/g, " ")}
+      {getStatusLabel(status, t)}
     </span>
   );
 }
