@@ -9,6 +9,7 @@ export interface BasketItem {
   quantity: number;
   image?: string;
   category?: string;
+  notes?: string; // Product options like Bone/Boneless, Cut Type
 }
 
 export interface BasketContextType {
@@ -72,15 +73,24 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const addItem = (item: BasketItem) => {
     setItems((prevItems) => {
-      const existingItem = prevItems.find((i) => i.id === item.id);
+      // Find existing item with same ID AND same notes (product options)
+      const existingItem = prevItems.find(
+        (i) => i.id === item.id && i.notes === item.notes
+      );
       if (existingItem) {
         return prevItems.map((i) =>
-          i.id === item.id
+          i.id === item.id && i.notes === item.notes
             ? { ...i, quantity: i.quantity + item.quantity }
             : i
         );
       }
-      return [...prevItems, item];
+      // If same product but different notes, add as new item with unique key
+      const itemWithKey = {
+        ...item,
+        // Create a unique ID for items with notes to differentiate them
+        id: item.notes ? `${item.id}_${Date.now()}` : item.id,
+      };
+      return [...prevItems, itemWithKey];
     });
   };
 

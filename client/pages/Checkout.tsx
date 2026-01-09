@@ -1397,119 +1397,136 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Full Name & Mobile */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Full Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={addressForm.fullName}
-                    onChange={(e) => setAddressForm({ ...addressForm, fullName: e.target.value })}
-                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-background text-foreground"
-                    placeholder="John Doe"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Mobile Number *
-                  </label>
-                  <input
-                    type="tel"
-                    value={addressForm.mobile}
-                    onChange={(e) => setAddressForm({ ...addressForm, mobile: e.target.value })}
-                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-background text-foreground"
-                    placeholder="+971 50 123 4567"
-                  />
-                </div>
+              {/* Full Name */}
+              <div>
+                <label className="block text-sm font-semibold text-foreground mb-2">
+                  Full Name<span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={addressForm.fullName}
+                  onChange={(e) => setAddressForm({ ...addressForm, fullName: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+                  placeholder="John Doe"
+                />
               </div>
 
-              {/* Emirate & Area */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Emirate *
-                  </label>
-                  <select
-                    value={addressForm.emirate}
-                    onChange={(e) => setAddressForm({ ...addressForm, emirate: e.target.value })}
-                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-background text-foreground"
-                  >
-                    <option value="">Select Emirate</option>
-                    <option value="Dubai">Dubai</option>
-                    <option value="Abu Dhabi">Abu Dhabi</option>
-                    <option value="Sharjah">Sharjah</option>
-                    <option value="Ajman">Ajman</option>
-                    <option value="Ras Al Khaimah">Ras Al Khaimah</option>
-                    <option value="Fujairah">Fujairah</option>
-                    <option value="Umm Al Quwain">Umm Al Quwain</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Area *
-                  </label>
-                  <input
-                    type="text"
-                    value={addressForm.area}
-                    onChange={(e) => setAddressForm({ ...addressForm, area: e.target.value })}
-                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-background text-foreground"
-                    placeholder="Downtown Dubai"
-                  />
-                </div>
+              {/* Mobile Number */}
+              <div>
+                <label className="block text-sm font-semibold text-foreground mb-2">
+                  Mobile Number<span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="tel"
+                  value={addressForm.mobile}
+                  onChange={(e) => setAddressForm({ ...addressForm, mobile: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+                  placeholder="+971 50 123 4567"
+                />
+              </div>
+
+              {/* Map Location Picker */}
+              <div>
+                <label className="block text-sm font-semibold text-foreground mb-2">
+                  Your Location
+                  {addressForm.latitude && addressForm.longitude && (
+                    <span className="ml-2 text-green-600 font-normal">✓ Located</span>
+                  )}
+                </label>
+                <MapPicker
+                  latitude={addressForm.latitude}
+                  longitude={addressForm.longitude}
+                  onLocationSelect={handleLocationSelect}
+                />
+              </div>
+
+              {/* Emirate */}
+              <div>
+                <label className="block text-sm font-semibold text-foreground mb-2">
+                  Emirate<span className="text-destructive">*</span>
+                </label>
+                <select
+                  value={addressForm.emirate}
+                  onChange={(e) => setAddressForm({ ...addressForm, emirate: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground focus:outline-none"
+                >
+                  <option value="">Select an emirate</option>
+                  <option value="Dubai">Dubai</option>
+                  <option value="Abu Dhabi">Abu Dhabi</option>
+                  <option value="Sharjah">Sharjah</option>
+                  <option value="Ajman">Ajman</option>
+                  <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+                  <option value="Fujairah">Fujairah</option>
+                  <option value="Umm Al Quwain">Umm Al Quwain</option>
+                </select>
+              </div>
+
+              {/* Area / Neighborhood */}
+              <div>
+                <label className="block text-sm font-semibold text-foreground mb-2">
+                  Area / Neighborhood<span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={addressForm.area}
+                  onChange={(e) => setAddressForm({ ...addressForm, area: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+                  placeholder="e.g., Al Barsha, Jumeirah, Downtown"
+                />
               </div>
 
               {/* Street */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Street *
+                <label className="block text-sm font-semibold text-foreground mb-2">
+                  Street<span className="text-destructive">*</span>
                 </label>
                 <input
                   type="text"
                   value={addressForm.street}
                   onChange={(e) => setAddressForm({ ...addressForm, street: e.target.value })}
-                  className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-background text-foreground"
-                  placeholder="Sheikh Mohammed bin Rashid Boulevard"
+                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+                  placeholder="Street name"
                 />
               </div>
 
-              {/* Building, Floor, Apartment */}
-              <div className="grid grid-cols-3 gap-4">
+              {/* Building Name / Number */}
+              <div>
+                <label className="block text-sm font-semibold text-foreground mb-2">
+                  Building Name / Number<span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={addressForm.building}
+                  onChange={(e) => setAddressForm({ ...addressForm, building: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+                  placeholder="Building name or number"
+                />
+              </div>
+
+              {/* Floor and Apartment */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Building *
-                  </label>
-                  <input
-                    type="text"
-                    value={addressForm.building}
-                    onChange={(e) => setAddressForm({ ...addressForm, building: e.target.value })}
-                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-background text-foreground"
-                    placeholder="Tower A"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-semibold text-foreground mb-2">
                     Floor
                   </label>
                   <input
                     type="text"
                     value={addressForm.floor}
                     onChange={(e) => setAddressForm({ ...addressForm, floor: e.target.value })}
-                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-background text-foreground"
-                    placeholder="15"
+                    className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+                    placeholder="Optional"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm font-semibold text-foreground mb-2">
                     Apartment
                   </label>
                   <input
                     type="text"
                     value={addressForm.apartment}
                     onChange={(e) => setAddressForm({ ...addressForm, apartment: e.target.value })}
-                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-background text-foreground"
-                    placeholder="1501"
+                    className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+                    placeholder="Optional"
                   />
                 </div>
               </div>
@@ -1528,30 +1545,20 @@ export default function CheckoutPage() {
                 </label>
               </div>
 
-              {/* Map Location Picker */}
-              <div className="pt-4 border-t border-border">
-                <label className="block text-sm font-medium text-foreground mb-3">
-                  📍 Pin Your Delivery Location *
-                </label>
-                <MapPicker
-                  latitude={addressForm.latitude}
-                  longitude={addressForm.longitude}
-                  onLocationSelect={handleLocationSelect}
-                />
-                {addressForm.latitude && addressForm.longitude && (
-                  <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="text-sm font-medium">Location confirmed</span>
-                    </div>
-                    <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                      Lat: {addressForm.latitude.toFixed(6)}, Lng: {addressForm.longitude.toFixed(6)}
-                    </p>
+              {/* Location Confirmation */}
+              {addressForm.latitude && addressForm.longitude && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-sm font-medium">Location confirmed</span>
                   </div>
-                )}
-              </div>
+                  <p className="text-xs text-green-600 dark:text-green-500 mt-1">
+                    Lat: {addressForm.latitude.toFixed(6)}, Lng: {addressForm.longitude.toFixed(6)}
+                  </p>
+                </div>
+              )}
 
               {/* Buttons */}
               <div className="flex gap-4 pt-4 border-t border-border">

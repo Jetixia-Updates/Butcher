@@ -93,6 +93,12 @@ export default function BasketPage() {
                       <p className="text-sm text-muted-foreground">
                         {getItemCategory(item)}
                       </p>
+                      {item.notes && (
+                        <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                          <span>🔪</span>
+                          {item.notes}
+                        </p>
+                      )}
                       <p className="font-semibold text-primary mt-2">
                         <PriceDisplay price={item.price} size="md" />
                       </p>
