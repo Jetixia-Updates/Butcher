@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
 import { useBasket } from "@/context/BasketContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -522,22 +520,18 @@ export default function CheckoutPage() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <Header />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-foreground mb-2">
-              Your basket is empty
-            </h1>
-            <button
-              onClick={() => navigate("/products")}
-              className="btn-primary mt-4"
-            >
-              Back to Products
-            </button>
-          </div>
-        </main>
-        <Footer />
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground mb-2">
+            Your basket is empty
+          </h1>
+          <button
+            onClick={() => navigate("/products")}
+            className="btn-primary mt-4"
+          >
+            Back to Products
+          </button>
+        </div>
       </div>
     );
   }
@@ -749,10 +743,7 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Header />
-
-      <main className="flex-1 py-12 px-4">
+    <div className="py-12 px-4">
         <div className="max-w-7xl mx-auto">
           {/* Progress Indicator */}
           <div className="mb-8 flex justify-center">
@@ -1118,9 +1109,6 @@ export default function CheckoutPage() {
             </div>
           </div>
         </div>
-      </main>
-
-      <Footer />
 
       {/* Add/Edit Address Modal */}
       {showAddressModal && (

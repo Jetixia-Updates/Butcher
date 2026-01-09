@@ -1,7 +1,5 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
 import { useBasket } from "@/context/BasketContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -37,35 +35,28 @@ export default function BasketPage() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <Header />
-        <main className="flex-1 flex items-center justify-center px-4 py-12">
-          <div className="max-w-md w-full text-center">
-            <div className="text-6xl mb-4">🛒</div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">
-              {t("basket.empty")}
-            </h1>
-            <p className="text-muted-foreground mb-6">
-              {t("basket.emptyDesc")}
-            </p>
-            <button
-              onClick={() => navigate("/products")}
-              className="btn-primary inline-block"
-            >
-              {t("basket.continueShopping")}
-            </button>
-          </div>
-        </main>
-        <Footer />
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
+        <div className="max-w-md w-full text-center">
+          <div className="text-6xl mb-4">🛒</div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">
+            {t("basket.empty")}
+          </h1>
+          <p className="text-muted-foreground mb-6">
+            {t("basket.emptyDesc")}
+          </p>
+          <button
+            onClick={() => navigate("/products")}
+            className="btn-primary inline-block"
+          >
+            {t("basket.continueShopping")}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Header />
-
-      <main className="flex-1 py-12 px-4">
+    <div className="py-12 px-4">
         <div className="max-w-7xl mx-auto">
           {/* Page Header */}
           <div className="mb-8">
@@ -255,9 +246,6 @@ export default function BasketPage() {
             </div>
           </div>
         </div>
-      </main>
-
-      <Footer />
     </div>
   );
 }
