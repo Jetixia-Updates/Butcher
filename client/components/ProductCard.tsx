@@ -105,6 +105,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     if (onAddToBasket) {
       onAddToBasket({
         id: product.id,
+        productId: product.id, // Original product ID for API calls
         name: product.name,
         nameAr: product.nameAr,
         price: product.price,

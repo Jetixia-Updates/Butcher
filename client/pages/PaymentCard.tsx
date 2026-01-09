@@ -203,8 +203,9 @@ export default function PaymentCardPage() {
       const response = await ordersApi.create({
         userId: user?.id || "",
         items: items.map((item) => ({
-          productId: item.id,
+          productId: item.productId || item.id.split('_')[0], // Use productId, fallback to extracting from id
           quantity: item.quantity,
+          notes: item.notes,
         })),
         addressId: addressId,
         paymentMethod: "card",

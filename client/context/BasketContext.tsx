@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { calculateVAT } from "@/utils/vat";
 
 export interface BasketItem {
-  id: string;
+  id: string; // Unique basket item key (for local basket management)
+  productId: string; // Original product ID (for API calls)
   name: string;
   nameAr?: string;
   price: number;
@@ -73,22 +74,24 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const addItem = (item: BasketItem) => {
     setItems((prevItems) => {
-      // Find existing item with same ID AND same notes (product options)
+      // Find existing item with same product ID AND same notes (product options)
       const existingItem = prevItems.find(
-        (i) => i.id === item.id && i.notes === item.notes
+        (i) => i.productId === item.productId && i.notes === item.notes
       );
       if (existingItem) {
         return prevItems.map((i) =>
-          i.id === item.id && i.notes === item.notes
+          i.productId === item.productId && i.notes === item.notes
             ? { ...i, quantity: i.quantity + item.quantity }
             : i
         );
       }
-      // If same product but different notes, add as new item with unique key
+      // Add as new basket item with unique basket item ID
       const itemWithKey = {
         ...item,
-        // Create a unique ID for items with notes to differentiate them
-        id: item.notes ? `${item.id}_${Date.now()}` : item.id,
+        // Create a unique basket item ID for differentiation
+        id: item.notes ? `${item.productId}_${Date.now()}` : item.productId,
+        // Ensure productId is set (for backward compatibility)
+        productId: item.productId || item.id,
       };
       return [...prevItems, itemWithKey];
     });
