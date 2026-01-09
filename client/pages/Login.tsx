@@ -4,17 +4,19 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { isValidUAEPhone, isStrongPassword } from "@/utils/validators";
+import { LogIn, UserPlus } from "lucide-react";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { loginWithCredentials, login } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [mobile, setMobile] = useState("+971 ");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<{ mobile?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
 
   const validateForm = () => {
     const newErrors: { mobile?: string; password?: string } = {};
@@ -59,20 +61,55 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex flex-col">
       {/* Header */}
-      <div className="py-6 px-4">
-        <div className="max-w-md mx-auto flex justify-center">
-          <LanguageSwitcher variant="compact" />
+      <header className="py-4 px-4 border-b border-border/50 bg-white/80 backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
+          {/* Left side - Register & Login icons */}
+          <div className="flex items-center gap-2">
+            <Link
+              to="/register"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === "register" 
+                  ? "bg-primary text-white" 
+                  : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+              }`}
+              onClick={() => setActiveTab("register")}
+            >
+              <UserPlus className="w-4 h-4" />
+              {language === "ar" ? "تسجيل" : "Register"}
+            </Link>
+            <button
+              onClick={() => setActiveTab("login")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === "login" 
+                  ? "bg-primary text-white" 
+                  : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+              }`}
+            >
+              <LogIn className="w-4 h-4" />
+              {language === "ar" ? "دخول" : "Login"}
+            </button>
+          </div>
+
+          {/* Right side - Language Switcher */}
+          <div className="flex items-center">
+            <LanguageSwitcher variant="compact" />
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-4 py-12">
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md">
-          {/* Logo & Title */}
-          <div className="text-center mb-8 animate-fade-in">
-            <h1 className="text-4xl font-bold text-primary mb-2">🥩</h1>
-            <h2 className="text-3xl font-bold text-foreground">{t("login.title")}</h2>
-            <p className="text-muted-foreground text-sm mt-2">
+          {/* Logo & Title - Larger */}
+          <div className="text-center mb-10 animate-fade-in">
+            <div className="text-7xl mb-4">🥩</div>
+            <p className="text-lg text-muted-foreground mb-1">
+              {language === "ar" ? "مرحباً بكم في" : "Welcome to"}
+            </p>
+            <h1 className="text-5xl font-bold text-foreground tracking-tight">
+              {language === "ar" ? "الجزار" : "BUTCHER"}
+            </h1>
+            <p className="text-muted-foreground text-sm mt-3">
               {t("login.subtitle")}
             </p>
           </div>

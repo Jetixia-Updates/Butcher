@@ -7,7 +7,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { useNotifications, formatRelativeTime, createOrderNotification, createStockNotification } from "@/context/NotificationContext";
+import { useNotifications, formatRelativeTime, createOrderNotification, createStockNotification, Notification } from "@/context/NotificationContext";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -29,6 +29,7 @@ import {
   MessageCircle,
   Send,
   ChevronLeft,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminChat } from "@/context/ChatContext";
@@ -88,6 +89,7 @@ export function AdminLayout({
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
   const [adminMessage, setAdminMessage] = useState("");
+  const [selectedInvoice, setSelectedInvoice] = useState<Notification | null>(null);
   const chatMessagesRef = React.useRef<HTMLDivElement>(null);
 
   // Use admin chat hook
@@ -136,8 +138,21 @@ export function AdminLayout({
     navigate("/admin/login");
   };
 
+  // Check if a notification is an invoice
+  const isInvoiceNotification = (notification: Notification) => {
+    return notification.title.includes("TAX Invoice") || notification.title.includes("فاتورة ضريبية");
+  };
+
   const handleNotificationClick = (notif: typeof notifications[0]) => {
     markAsRead(notif.id);
+    
+    // Check if this is a TAX invoice notification
+    if (isInvoiceNotification(notif)) {
+      setSelectedInvoice(notif);
+      setNotificationOpen(false);
+      return;
+    }
+    
     if (notif.linkTab) {
       // Use onNavigateWithId if available and there's a linkId, otherwise use onTabChange
       if (onNavigateWithId && notif.linkId) {
@@ -525,9 +540,18 @@ export function AdminLayout({
                                 <p className="text-sm font-medium text-slate-900">
                                   {language === 'ar' ? notif.titleAr : notif.title}
                                 </p>
-                                <p className="text-sm text-slate-600 mt-0.5">
-                                  {language === 'ar' ? notif.messageAr : notif.message}
+                                <p className="text-sm text-slate-600 mt-0.5 line-clamp-2">
+                                  {isInvoiceNotification(notif)
+                                    ? (language === 'ar' ? 'اضغط لعرض الفاتورة الكاملة' : 'Click to view full invoice')
+                                    : (language === 'ar' ? notif.messageAr : notif.message)
+                                  }
                                 </p>
+                                {isInvoiceNotification(notif) && (
+                                  <span className="inline-flex items-center gap-1 mt-1 text-xs text-emerald-600 font-medium">
+                                    <FileText className="w-3 h-3" />
+                                    {language === 'ar' ? 'عرض الفاتورة' : 'View Invoice'}
+                                  </span>
+                                )}
                                 <p className="text-xs text-slate-400 mt-1">
                                   {formatRelativeTime(notif.createdAt, language)}
                                 </p>
@@ -586,6 +610,88 @@ export function AdminLayout({
         {/* Page content */}
         <main className="flex-1 p-4 lg:p-6 overflow-auto">{children}</main>
       </div>
+
+      {/* Invoice Modal */}
+      {selectedInvoice && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-primary/80 text-white">
+              <div className="flex items-center gap-3">
+                <FileText className="w-6 h-6" />
+                <div>
+                  <h2 className="font-bold text-lg">
+                    {language === "ar" ? "فاتورة ضريبية" : "TAX Invoice"}
+                  </h2>
+                  <p className="text-sm opacity-90">
+                    {formatRelativeTime(selectedInvoice.createdAt, language)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedInvoice(null)}
+                className="p-2 hover:bg-white/20 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Invoice Content */}
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <pre className="whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded-lg border border-gray-200 text-gray-800 leading-relaxed">
+                {language === "ar" ? selectedInvoice.messageAr : selectedInvoice.message}
+              </pre>
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t flex gap-3">
+              <button
+                onClick={() => {
+                  // Copy invoice to clipboard
+                  const invoiceText = language === "ar" ? selectedInvoice.messageAr : selectedInvoice.message;
+                  navigator.clipboard.writeText(invoiceText);
+                  alert(language === "ar" ? "تم نسخ الفاتورة!" : "Invoice copied to clipboard!");
+                }}
+                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {language === "ar" ? "نسخ الفاتورة" : "Copy Invoice"}
+              </button>
+              <button
+                onClick={() => {
+                  // Print invoice
+                  const invoiceText = language === "ar" ? selectedInvoice.messageAr : selectedInvoice.message;
+                  const printWindow = window.open('', '_blank');
+                  if (printWindow) {
+                    printWindow.document.write(`
+                      <html>
+                        <head>
+                          <title>${language === "ar" ? "فاتورة ضريبية" : "TAX Invoice"}</title>
+                          <style>
+                            body { font-family: monospace; padding: 20px; white-space: pre-wrap; }
+                            @media print { body { padding: 0; } }
+                          </style>
+                        </head>
+                        <body>${invoiceText}</body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                {language === "ar" ? "طباعة" : "Print"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
