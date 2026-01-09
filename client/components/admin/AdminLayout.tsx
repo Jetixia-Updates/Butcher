@@ -403,21 +403,21 @@ export function AdminLayout({
                       setSelectedChatUserId(null);
                     }} 
                   />
-                  <div className="absolute right-0 top-full mt-2 w-[450px] bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+                  <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} top-full mt-2 w-80 sm:w-[450px] bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden`}>
                     <div className="p-3 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
                       {selectedChatUserId && (
                         <button
                           onClick={() => setSelectedChatUserId(null)}
                           className="p-1 hover:bg-slate-200 rounded transition-colors"
                         >
-                          <ChevronLeft className="w-5 h-5" />
+                          <ChevronLeft className={`w-5 h-5 ${language === 'ar' ? 'rotate-180' : ''}`} />
                         </button>
                       )}
-                      <h3 className="font-semibold text-slate-900">
+                      <h3 className="font-semibold text-slate-900 text-sm sm:text-base">
                         {selectedChat ? selectedChat.userName : (language === 'ar' ? 'محادثات العملاء' : 'Customer Chats')}
                       </h3>
                       {chatTotalUnread > 0 && !selectedChatUserId && (
-                        <span className="ml-auto text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                        <span className={`${language === 'ar' ? 'mr-auto' : 'ml-auto'} text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full`}>
                           {chatTotalUnread} {language === 'ar' ? 'جديد' : 'new'}
                         </span>
                       )}
@@ -638,13 +638,13 @@ export function AdminLayout({
                     className="fixed inset-0 z-40" 
                     onClick={() => setNotificationOpen(false)} 
                   />
-                  <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
-                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                      <h3 className="font-semibold text-slate-900">{t("admin.notifications")}</h3>
+                  <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} top-full mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden`}>
+                    <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+                      <h3 className="font-semibold text-slate-900 text-sm sm:text-base">{t("admin.notifications")}</h3>
                       {unreadCount > 0 && (
                         <button
                           onClick={() => markAllAsRead()}
-                          className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                          className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 whitespace-nowrap"
                         >
                           <CheckCheck className="w-3.5 h-3.5" />
                           {language === 'ar' ? 'تحديد الكل كمقروء' : 'Mark all read'}
