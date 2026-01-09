@@ -160,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
                 {/* Chat Dropdown */}
                 {showChat && (
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden">
+                  <div className={`fixed sm:absolute inset-x-2 sm:inset-x-auto top-14 sm:top-auto sm:mt-2 ${language === "ar" ? "sm:left-0 sm:right-auto" : "sm:right-0 sm:left-auto"} w-auto sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden`}>
                     {/* Chat Header */}
                     <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary to-primary/80 text-white">
                       <div className="flex items-center gap-2">
@@ -267,17 +267,17 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
                 {/* Notifications Dropdown */}
                 {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden">
+                  <div className={`fixed sm:absolute inset-x-2 sm:inset-x-auto top-14 sm:top-auto sm:mt-2 ${language === "ar" ? "sm:left-0 sm:right-auto" : "sm:right-0 sm:left-auto"} w-auto sm:w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden`}>
                     {/* Header */}
                     <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
-                      <h3 className="font-semibold text-gray-900">
+                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base">
                         {language === "ar" ? "الإشعارات" : "Notifications"}
                       </h3>
                       <div className="flex items-center gap-2">
                         {userUnreadCount > 0 && (
                           <button
                             onClick={() => markAllAsRead()}
-                            className="text-xs text-primary hover:underline"
+                            className="text-xs text-primary hover:underline whitespace-nowrap"
                           >
                             {language === "ar" ? "تحديد الكل كمقروء" : "Mark all read"}
                           </button>
