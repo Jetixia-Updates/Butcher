@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { User } from "lucide-react";
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
   const { loginAdmin, isAdmin } = useAuth();
   const { t } = useLanguage();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +25,7 @@ export default function AdminLoginPage() {
     setError("");
     setIsLoading(true);
 
-    const result = await loginAdmin(email, password);
+    const result = await loginAdmin(username, password);
     
     if (result.success) {
       navigate("/admin/dashboard");
@@ -59,18 +60,21 @@ export default function AdminLoginPage() {
             )}
 
             <div>
-              <label htmlFor="email" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
-                Email Address
+              <label htmlFor="username" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
+                Username
               </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm sm:text-base"
-                placeholder="admin@butcher.ae"
-                required
-              />
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+                  className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm sm:text-base"
+                  placeholder="admin"
+                  required
+                />
+              </div>
             </div>
 
             <div>
@@ -122,7 +126,7 @@ export default function AdminLoginPage() {
         {/* Demo Credentials */}
         <div className="mt-4 sm:mt-6 text-center">
           <p className="text-slate-400 text-xs sm:text-sm">
-            Demo: admin@butcher.ae / admin123
+            Demo: admin / admin123
           </p>
         </div>
       </div>

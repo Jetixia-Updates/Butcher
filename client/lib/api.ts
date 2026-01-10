@@ -117,10 +117,10 @@ export const authApi = {
       body: JSON.stringify({ username, password }),
     }),
 
-  adminLogin: (email: string, password: string) =>
+  adminLogin: (username: string, password: string) =>
     fetchApi<LoginResponse>("/users/admin-login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     }),
 
   register: (userData: {

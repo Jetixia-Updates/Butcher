@@ -33,7 +33,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (user: User) => void;
   loginWithCredentials: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  loginAdmin: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginAdmin: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   register: (user: Omit<User, "id"> & { username: string; password: string; deliveryAddress?: {
     label: string;
@@ -166,9 +166,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const loginAdmin = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const loginAdmin = async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await authApi.adminLogin(email, password);
+      const response = await authApi.adminLogin(username, password);
 
       if (response.success && response.data) {
         // Set auth token

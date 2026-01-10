@@ -396,14 +396,14 @@ function createApp() {
   // Admin login
   app.post('/api/users/admin-login', (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { username, password } = req.body;
       
-      if (!email || !password) {
-        return res.status(400).json({ success: false, error: 'Email and password are required' });
+      if (!username || !password) {
+        return res.status(400).json({ success: false, error: 'Username and password are required' });
       }
 
       const user = Array.from(users.values()).find(
-        u => u.email.toLowerCase() === email.toLowerCase() && u.role === 'admin'
+        u => u.username?.toLowerCase() === username.toLowerCase() && u.role === 'admin'
       );
 
       if (!user || user.password !== password) {

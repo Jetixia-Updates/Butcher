@@ -418,30 +418,30 @@ const login: RequestHandler = (req, res) => {
 // POST /api/users/admin-login - Admin login
 const adminLogin: RequestHandler = (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
 
-    console.log("[Admin Login] Attempt with email:", email);
+    console.log("[Admin Login] Attempt with username:", username);
 
-    if (!email || !password) {
-      console.log("[Admin Login] Missing email or password");
+    if (!username || !password) {
+      console.log("[Admin Login] Missing username or password");
       const response: ApiResponse<null> = {
         success: false,
-        error: "Email and password are required",
+        error: "Username and password are required",
       };
       return res.status(400).json(response);
     }
 
-    // Find admin user by email
+    // Find admin user by username
     const allUsers = Array.from(db.users.values());
     console.log("[Admin Login] Total users in DB:", allUsers.length);
-    console.log("[Admin Login] Admin users:", allUsers.filter(u => u.role === "admin").map(u => ({ email: u.email, role: u.role })));
+    console.log("[Admin Login] Admin users:", allUsers.filter(u => u.role === "admin").map(u => ({ username: u.username, role: u.role })));
     
     const user = allUsers.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase() && u.role === "admin"
+      (u) => u.username?.toLowerCase() === username.toLowerCase() && u.role === "admin"
     );
 
     if (!user) {
-      console.log("[Admin Login] No admin user found with email:", email);
+      console.log("[Admin Login] No admin user found with username:", username);
       const response: ApiResponse<null> = {
         success: false,
         error: "Invalid admin credentials",
@@ -449,7 +449,7 @@ const adminLogin: RequestHandler = (req, res) => {
       return res.status(401).json(response);
     }
 
-    console.log("[Admin Login] Found user:", user.email, "checking password...");
+    console.log("[Admin Login] Found user:", user.username, "checking password...");
     
     if (user.password !== password) {
       console.log("[Admin Login] Password mismatch");
@@ -460,7 +460,7 @@ const adminLogin: RequestHandler = (req, res) => {
       return res.status(401).json(response);
     }
 
-    console.log("[Admin Login] Login successful for:", user.email);
+    console.log("[Admin Login] Login successful for:", user.username);
 
     // Generate token
     const token = generateToken();
