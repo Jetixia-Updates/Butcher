@@ -20,6 +20,7 @@ import type { Order, OrderStatus } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useLanguage } from "@/context/LanguageContext";
+import { useNotifications, createUserOrderNotification } from "@/context/NotificationContext";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -185,6 +186,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   const { language } = useLanguage();
   const isRTL = language === 'ar';
   const t = translations[language];
+  const { addNotification } = useNotifications();
   
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -229,6 +231,28 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       await fetchOrders();
       if (selectedOrder?.id === orderId && response.data) {
         setSelectedOrder(response.data);
+      }
+      
+      // Send notification to user about order status change
+      if (response.data) {
+        const order = response.data;
+        // Map OrderStatus to user notification status
+        const statusMap: Record<OrderStatus, "confirmed" | "preparing" | "ready" | "outForDelivery" | "delivered" | "cancelled" | null> = {
+          pending: null, // No notification for pending
+          confirmed: "confirmed",
+          processing: "preparing",
+          ready_for_pickup: "ready",
+          out_for_delivery: "outForDelivery",
+          delivered: "delivered",
+          cancelled: "cancelled",
+          refunded: null, // Handle refund separately if needed
+        };
+        
+        const notificationStatus = statusMap[newStatus];
+        if (notificationStatus) {
+          const notification = createUserOrderNotification(order.orderNumber, notificationStatus);
+          addNotification(notification);
+        }
       }
     }
     setUpdating(null);
