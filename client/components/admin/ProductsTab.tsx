@@ -67,6 +67,7 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
     productDescriptionAr: isRTL ? "الوصف (عربي)" : "Description (Arabic)",
     productImage: isRTL ? "صورة المنتج" : "Product Image",
     productAvailable: isRTL ? "متوفر للبيع" : "Available for Sale",
+    outOfStock: isRTL ? "غير متوفر للبيع" : "Out of Stock",
     selectCategory: isRTL ? "اختر الفئة" : "Select Category",
     beef: isRTL ? "لحم بقري" : "Beef",
     lamb: isRTL ? "لحم ضأن" : "Lamb",
@@ -598,23 +599,42 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
           </div>
 
           {/* Availability Toggle */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setAvailable(!available)}
-              className={cn(
-                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                available ? "bg-primary" : "bg-slate-300"
-              )}
-            >
-              <span
-                className={cn(
-                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                  available ? (isRTL ? "translate-x-1" : "translate-x-6") : isRTL ? "translate-x-6" : "translate-x-1"
-                )}
-              />
-            </button>
-            <span className="text-sm font-medium text-slate-700">{t.productAvailable}</span>
+          <div className="p-4 bg-slate-50 rounded-xl space-y-3">
+            <label className="block text-sm font-medium text-slate-700">{t.status}</label>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAvailable(!available)}
+                  className={cn(
+                    "relative inline-flex h-7 w-14 items-center rounded-full transition-colors",
+                    available ? "bg-green-500" : "bg-red-400"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm",
+                      available ? (isRTL ? "translate-x-1" : "translate-x-8") : isRTL ? "translate-x-8" : "translate-x-1"
+                    )}
+                  />
+                </button>
+                <span className={cn(
+                  "text-sm font-semibold",
+                  available ? "text-green-600" : "text-red-600"
+                )}>
+                  {available ? t.available : t.unavailable}
+                </span>
+              </div>
+              <span className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium",
+                available 
+                  ? "bg-green-100 text-green-700" 
+                  : "bg-red-100 text-red-700"
+              )}>
+                {available ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                {available ? t.productAvailable : t.outOfStock}
+              </span>
+            </div>
           </div>
 
           {/* Action Buttons */}
