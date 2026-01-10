@@ -145,6 +145,7 @@ function seedData() {
   // Admin user
   users.set("admin_1", {
     id: "admin_1",
+    username: "admin",
     email: "admin@butcher.ae",
     mobile: "+971501234567",
     password: "admin123",
@@ -167,11 +168,11 @@ function seedData() {
 
   // Demo customers
   const customerData = [
-    { id: "user_1", email: "ahmed@example.com", mobile: "+971501111111", firstName: "Ahmed", familyName: "Al Maktoum", emirate: "Dubai" },
-    { id: "user_2", email: "fatima@example.com", mobile: "+971502222222", firstName: "Fatima", familyName: "Al Nahyan", emirate: "Abu Dhabi" },
-    { id: "user_3", email: "omar@example.com", mobile: "+971503333333", firstName: "Omar", familyName: "Al Qasimi", emirate: "Sharjah" },
-    { id: "user_4", email: "sara@example.com", mobile: "+971504444444", firstName: "Sara", familyName: "Al Falasi", emirate: "Dubai" },
-    { id: "user_5", email: "khalid@example.com", mobile: "+971505555555", firstName: "Khalid", familyName: "Al Rashid", emirate: "Ajman" },
+    { id: "user_1", username: "Mohamed", email: "ahmed@example.com", mobile: "+971501111111", firstName: "Ahmed", familyName: "Al Maktoum", emirate: "Dubai" },
+    { id: "user_2", username: "fatima", email: "fatima@example.com", mobile: "+971502222222", firstName: "Fatima", familyName: "Al Nahyan", emirate: "Abu Dhabi" },
+    { id: "user_3", username: "omar", email: "omar@example.com", mobile: "+971503333333", firstName: "Omar", familyName: "Al Qasimi", emirate: "Sharjah" },
+    { id: "user_4", username: "sara", email: "sara@example.com", mobile: "+971504444444", firstName: "Sara", familyName: "Al Falasi", emirate: "Dubai" },
+    { id: "user_5", username: "khalid", email: "khalid@example.com", mobile: "+971505555555", firstName: "Khalid", familyName: "Al Rashid", emirate: "Ajman" },
   ];
 
   customerData.forEach((c, i) => {
@@ -190,6 +191,7 @@ function seedData() {
   // Delivery staff
   users.set("driver_1", {
     id: "driver_1",
+    username: "driver",
     email: "driver1@butcher.ae",
     mobile: "+971509999999",
     password: "driver123",
@@ -349,19 +351,18 @@ function createApp() {
   // User login
   app.post('/api/users/login', (req, res) => {
     try {
-      const { mobile, password } = req.body;
+      const { username, password } = req.body;
       
-      if (!mobile || !password) {
-        return res.status(400).json({ success: false, error: 'Mobile and password are required' });
+      if (!username || !password) {
+        return res.status(400).json({ success: false, error: 'Username and password are required' });
       }
       
-      const normalizedMobile = mobile.replace(/\s/g, '');
       const user = Array.from(users.values()).find(
-        u => u.mobile.replace(/\s/g, '') === normalizedMobile
+        u => u.username?.toLowerCase() === username.toLowerCase()
       );
 
       if (!user) {
-        return res.status(401).json({ success: false, error: 'No account found with this phone number' });
+        return res.status(401).json({ success: false, error: 'No account found with this username' });
       }
 
       if (!user.isActive) {
@@ -432,10 +433,22 @@ function createApp() {
   // Register user
   app.post('/api/users', (req, res) => {
     try {
-      const { email, mobile, password, firstName, familyName, emirate, address, deliveryAddress } = req.body;
+      const { username, email, mobile, password, firstName, familyName, emirate, address, deliveryAddress } = req.body;
       
-      if (!email || !mobile || !password || !firstName || !familyName || !emirate) {
+      if (!username || !email || !mobile || !password || !firstName || !familyName || !emirate) {
         return res.status(400).json({ success: false, error: 'All fields are required' });
+      }
+
+      // Check username
+      if (username.length < 3 || !/^[a-zA-Z0-9_]+$/.test(username)) {
+        return res.status(400).json({ success: false, error: 'Username must be at least 3 characters and contain only letters, numbers, and underscores' });
+      }
+
+      const existingUsername = Array.from(users.values()).find(
+        u => u.username?.toLowerCase() === username.toLowerCase()
+      );
+      if (existingUsername) {
+        return res.status(400).json({ success: false, error: 'Username already taken' });
       }
 
       // Check existing
@@ -457,6 +470,7 @@ function createApp() {
       const userId = `user_${Date.now()}`;
       const newUser: User = {
         id: userId,
+        username,
         email,
         mobile,
         password,
