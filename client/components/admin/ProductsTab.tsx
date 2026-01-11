@@ -88,6 +88,8 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
     deleteWarning: isRTL ? "سيتم حذف هذا المنتج نهائياً ولا يمكن استرجاعه." : "This product will be permanently deleted and cannot be recovered.",
     description: isRTL ? "الوصف" : "Description",
     image: isRTL ? "الصورة" : "Image",
+    discountPercent: isRTL ? "نسبة الخصم (%)" : "Discount (%)",
+    discountHint: isRTL ? "اتركه فارغاً إذا لم يكن هناك خصم" : "Leave empty for no discount",
     exportProducts: isRTL ? "تصدير المنتجات" : "Export Products",
     importProducts: isRTL ? "استيراد المنتجات" : "Import Products",
     resetToDefaults: isRTL ? "إعادة التعيين" : "Reset to Defaults",
@@ -545,6 +547,7 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
   const [name, setName] = useState(product?.name || "");
   const [nameAr, setNameAr] = useState(product?.nameAr || "");
   const [price, setPrice] = useState(product?.price?.toString() || "");
+  const [discount, setDiscount] = useState(product?.discount?.toString() || "");
   const [category, setCategory] = useState(product?.category || "");
   const [isPremium, setIsPremium] = useState(product?.isPremium ?? false);
   const [description, setDescription] = useState(product?.description || "");
@@ -590,6 +593,7 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
         name,
         nameAr: nameAr || undefined,
         price: parseFloat(price),
+        discount: discount ? parseFloat(discount) : undefined,
         category,
         isPremium,
         description,
@@ -718,6 +722,33 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Discount Field */}
+          <div className="p-4 bg-orange-50 rounded-xl space-y-2">
+            <label className="block text-sm font-medium text-orange-900">
+              {t.discountPercent}
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                min="0"
+                max="100"
+                step="1"
+                placeholder="0"
+                className="w-32 px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none bg-white"
+              />
+              <span className="text-orange-700 font-medium">%</span>
+              {discount && parseFloat(discount) > 0 && (
+                <span className="text-sm text-orange-600">
+                  {isRTL ? "السعر بعد الخصم:" : "Price after discount:"}{" "}
+                  <strong>{(parseFloat(price || "0") * (1 - parseFloat(discount) / 100)).toFixed(2)} AED</strong>
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-orange-600">{t.discountHint}</p>
           </div>
 
           {/* Description Fields */}
