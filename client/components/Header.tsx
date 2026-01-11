@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Package, Truck, CreditCard, CheckCircle, X, Trash2, FileText, MessageCircle, Send, Paperclip, Download, Image, File } from "lucide-react";
+import { Bell, Package, Truck, CreditCard, CheckCircle, X, Trash2, FileText, MessageCircle, Send, Paperclip, Download, Image, File, Heart, User, ShoppingBag, ChevronDown } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useBasket } from "@/context/BasketContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useNotifications, formatRelativeTime, Notification } from "@/context/NotificationContext";
 import { useUserChat, ChatAttachment } from "@/context/ChatContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
 interface HeaderProps {
@@ -37,14 +38,17 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
   const { itemCount } = useBasket();
   const { t, language } = useLanguage();
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAllNotifications } = useNotifications();
+  const { items: wishlistItems } = useWishlist();
   
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Notification | null>(null);
   const [showChat, setShowChat] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
   const notificationRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,6 +70,9 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
       }
       if (chatRef.current && !chatRef.current.contains(event.target as Node)) {
         setShowChat(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -514,37 +521,106 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
               </Link>
             )}
 
-            {isLoggedIn ? (
-              <div className="flex items-center gap-1 sm:gap-4">
-                <span className="hidden sm:inline text-sm text-muted-foreground">
-                  {user?.firstName}
-                </span>
-                {isAdmin && (
-                  <Link
-                    to="/admin/dashboard"
-                    className="p-2 sm:px-3 sm:py-1.5 rounded-full sm:rounded-md hover:bg-gray-100 sm:hover:bg-transparent sm:btn-outline text-sm flex items-center gap-1"
-                    title={t("header.adminPanel")}
-                  >
-                    <svg className="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span className="hidden sm:inline">{t("header.adminPanel")}</span>
-                  </Link>
+            {/* Wishlist Icon - Only for logged in users */}
+            {isLoggedIn && (
+              <Link to="/wishlist" className="relative group hidden sm:block">
+                <Heart className="w-5 h-5 text-primary group-hover:text-primary/80 transition-colors" />
+                {wishlistItems.length > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {wishlistItems.length > 9 ? "9+" : wishlistItems.length}
+                  </span>
                 )}
+              </Link>
+            )}
+
+            {isLoggedIn ? (
+              <div className="relative" ref={userMenuRef}>
                 <button
-                  onClick={() => {
-                    logout();
-                    window.location.href = "/";
-                  }}
-                  className="p-2 sm:px-3 sm:py-1.5 rounded-full sm:rounded-md hover:bg-gray-100 sm:hover:bg-transparent sm:btn-outline text-sm flex items-center"
-                  title={t("login.logout")}
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-1 sm:gap-2 p-2 sm:px-3 sm:py-1.5 rounded-full sm:rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  <svg className="w-5 h-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  <span className="hidden sm:inline">{t("login.logout")}</span>
+                  <User className="w-5 h-5 text-primary" />
+                  <span className="hidden sm:inline text-sm text-muted-foreground max-w-[80px] truncate">
+                    {user?.firstName}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform hidden sm:block ${showUserMenu ? "rotate-180" : ""}`} />
                 </button>
+
+                {/* User Dropdown Menu */}
+                {showUserMenu && (
+                  <div className={`absolute top-full mt-2 ${language === "ar" ? "left-0" : "right-0"} w-56 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden`}>
+                    {/* User Info */}
+                    <div className="px-4 py-3 bg-gray-50 border-b">
+                      <p className="font-semibold text-foreground text-sm">{user?.firstName} {user?.familyName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="py-2">
+                      <Link
+                        to="/profile"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                      >
+                        <User className="w-4 h-4 text-muted-foreground" />
+                        {language === "ar" ? "حسابي" : "My Account"}
+                      </Link>
+                      <Link
+                        to="/orders"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                      >
+                        <ShoppingBag className="w-4 h-4 text-muted-foreground" />
+                        {language === "ar" ? "طلباتي" : "My Orders"}
+                      </Link>
+                      <Link
+                        to="/wishlist"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                      >
+                        <Heart className="w-4 h-4 text-muted-foreground" />
+                        {language === "ar" ? "المفضلة" : "Wishlist"}
+                        {wishlistItems.length > 0 && (
+                          <span className="ml-auto bg-red-100 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full">
+                            {wishlistItems.length}
+                          </span>
+                        )}
+                      </Link>
+                      
+                      {isAdmin && (
+                        <>
+                          <div className="border-t border-gray-100 my-2" />
+                          <Link
+                            to="/admin/dashboard"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                          >
+                            <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            {t("header.adminPanel")}
+                          </Link>
+                        </>
+                      )}
+                      
+                      <div className="border-t border-gray-100 my-2" />
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          logout();
+                          window.location.href = "/";
+                        }}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors w-full"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        {t("login.logout")}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <Link to="/" className="btn-primary text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-1.5">

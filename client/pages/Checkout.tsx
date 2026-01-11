@@ -534,6 +534,65 @@ export default function CheckoutPage() {
   const isRTL = language === 'ar';
   const { addNotification } = useNotifications();
   
+  // Promo code state
+  const [promoCode, setPromoCode] = useState("");
+  const [promoApplied, setPromoApplied] = useState<{ code: string; discount: number; type: "percent" | "fixed" } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [isApplyingPromo, setIsApplyingPromo] = useState(false);
+
+  // Demo promo codes (in production, these would be validated on the server)
+  const validPromoCodes: Record<string, { discount: number; type: "percent" | "fixed"; minOrder?: number }> = {
+    "WELCOME10": { discount: 10, type: "percent" },
+    "SAVE20": { discount: 20, type: "fixed" },
+    "MEAT15": { discount: 15, type: "percent", minOrder: 100 },
+    "FIRSTORDER": { discount: 25, type: "fixed" },
+  };
+
+  const handleApplyPromo = () => {
+    setPromoError(null);
+    setIsApplyingPromo(true);
+    
+    // Simulate API call
+    setTimeout(() => {
+      const code = promoCode.toUpperCase().trim();
+      const promo = validPromoCodes[code];
+      
+      if (promo) {
+        if (promo.minOrder && subtotal < promo.minOrder) {
+          setPromoError(
+            isRTL 
+              ? `الحد الأدنى للطلب ${promo.minOrder} درهم للاستفادة من هذا الكود`
+              : `Minimum order of AED ${promo.minOrder} required for this code`
+          );
+        } else {
+          setPromoApplied({ code, discount: promo.discount, type: promo.type });
+          setPromoError(null);
+        }
+      } else {
+        setPromoError(isRTL ? "كود غير صالح" : "Invalid promo code");
+      }
+      setIsApplyingPromo(false);
+    }, 500);
+  };
+
+  const handleRemovePromo = () => {
+    setPromoApplied(null);
+    setPromoCode("");
+    setPromoError(null);
+  };
+
+  // Calculate discount amount
+  const discountAmount = promoApplied
+    ? promoApplied.type === "percent"
+      ? subtotal * (promoApplied.discount / 100)
+      : promoApplied.discount
+    : 0;
+
+  // Adjusted totals
+  const adjustedSubtotal = subtotal - discountAmount;
+  const adjustedVat = adjustedSubtotal * 0.05;
+  const adjustedTotal = adjustedSubtotal + adjustedVat;
+  
   // Translations
   const t = {
     basket: isRTL ? 'السلة' : 'Basket',
@@ -592,6 +651,12 @@ export default function CheckoutPage() {
     selectPayment: isRTL ? 'يرجى اختيار طريقة الدفع' : 'Please select a payment method',
     close: isRTL ? 'إغلاق' : 'Close',
     locationOnMap: isRTL ? 'الموقع على الخريطة' : 'Location on Map',
+    promoCode: isRTL ? 'كود الخصم' : 'Promo Code',
+    promoPlaceholder: isRTL ? 'أدخل كود الخصم' : 'Enter promo code',
+    apply: isRTL ? 'تطبيق' : 'Apply',
+    applying: isRTL ? 'جاري التطبيق...' : 'Applying...',
+    discount: isRTL ? 'الخصم' : 'Discount',
+    remove: isRTL ? 'إزالة' : 'Remove',
   };
 
   // Emirates translations
@@ -1410,16 +1475,80 @@ export default function CheckoutPage() {
                   ))}
                 </div>
 
+                {/* Promo Code Section */}
+                <div className="border-b border-border pb-3 sm:pb-4">
+                  <label className="block text-xs sm:text-sm font-medium text-foreground mb-2">
+                    {t.promoCode}
+                  </label>
+                  {promoApplied ? (
+                    <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2.5 sm:p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-600 dark:text-green-400">🎉</span>
+                        <div>
+                          <p className="text-xs sm:text-sm font-semibold text-green-700 dark:text-green-400">
+                            {promoApplied.code}
+                          </p>
+                          <p className="text-[10px] sm:text-xs text-green-600 dark:text-green-500">
+                            {promoApplied.type === "percent" 
+                              ? `${promoApplied.discount}% ${isRTL ? 'خصم' : 'off'}`
+                              : `${isRTL ? 'خصم' : 'AED'} ${promoApplied.discount} ${isRTL ? 'درهم' : 'off'}`
+                            }
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleRemovePromo}
+                        className="text-xs sm:text-sm text-red-600 hover:text-red-700 font-medium"
+                      >
+                        {t.remove}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                        placeholder={t.promoPlaceholder}
+                        className="flex-1 px-3 py-2 text-xs sm:text-sm border border-border rounded-lg focus:border-primary outline-none"
+                      />
+                      <button
+                        onClick={handleApplyPromo}
+                        disabled={!promoCode.trim() || isApplyingPromo}
+                        className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground text-xs sm:text-sm font-medium rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                      >
+                        {isApplyingPromo ? t.applying : t.apply}
+                      </button>
+                    </div>
+                  )}
+                  {promoError && (
+                    <p className="text-[10px] sm:text-xs text-red-600 mt-1.5">{promoError}</p>
+                  )}
+                  {!promoApplied && !promoError && (
+                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5">
+                      {isRTL ? 'جرب: WELCOME10, SAVE20' : 'Try: WELCOME10, SAVE20'}
+                    </p>
+                  )}
+                </div>
+
                 {/* Totals */}
                 <div className="space-y-2 sm:space-y-3">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground">{t.subtotal}</span>
                     <span className="font-semibold"><PriceDisplay price={subtotal} size="md" /></span>
                   </div>
+                  {promoApplied && discountAmount > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-green-600 dark:text-green-400">{t.discount}</span>
+                      <span className="font-semibold text-green-600 dark:text-green-400">
+                        -<PriceDisplay price={discountAmount} size="md" />
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center bg-secondary/10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 text-sm">
                     <span className="text-muted-foreground">{t.vat}</span>
                     <span className="font-semibold text-secondary">
-                      <PriceDisplay price={vat} size="md" />
+                      <PriceDisplay price={promoApplied ? adjustedVat : vat} size="md" />
                     </span>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-border">
@@ -1427,7 +1556,7 @@ export default function CheckoutPage() {
                       {t.total}
                     </span>
                     <span className="text-xl sm:text-2xl font-bold text-primary">
-                      <PriceDisplay price={total} size="lg" />
+                      <PriceDisplay price={promoApplied ? adjustedTotal : total} size="lg" />
                     </span>
                   </div>
                 </div>

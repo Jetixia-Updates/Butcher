@@ -30,6 +30,7 @@ export default function VisitorPage() {
           // Create visitor session
           login({
             id: `visitor_${Date.now()}`,
+            username: `visitor_${Date.now()}`,
             firstName: "Visitor",
             familyName: "Guest",
             email: `visitor_${Date.now()}@guest.butcher.ae`,
@@ -78,6 +79,7 @@ export default function VisitorPage() {
 
           login({
             id: `visitor_${Date.now()}`,
+            username: `visitor_${Date.now()}`,
             firstName: "Visitor",
             familyName: "Guest",
             email: `visitor_${Date.now()}@guest.butcher.ae`,
@@ -100,6 +102,7 @@ export default function VisitorPage() {
       // Still proceed as visitor
       login({
         id: `visitor_${Date.now()}`,
+        username: `visitor_${Date.now()}`,
         firstName: "Visitor",
         familyName: "Guest",
         email: `visitor_${Date.now()}@guest.butcher.ae`,
@@ -151,6 +154,7 @@ export default function VisitorPage() {
               // Manual fallback
               login({
                 id: `visitor_${Date.now()}`,
+                username: `visitor_${Date.now()}`,
                 firstName: "Visitor",
                 familyName: "Guest",
                 email: `visitor_${Date.now()}@guest.butcher.ae`,

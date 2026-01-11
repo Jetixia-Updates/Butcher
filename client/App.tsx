@@ -12,6 +12,10 @@ import { LanguageProvider } from "@/context/LanguageContext";
 import { ProductsProvider } from "@/context/ProductsContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { ChatProvider } from "@/context/ChatContext";
+import { WishlistProvider } from "@/context/WishlistContext";
+import { ReviewsProvider } from "@/context/ReviewsContext";
+import { LoyaltyProvider } from "@/context/LoyaltyContext";
+import { OrdersProvider } from "@/context/OrdersContext";
 import { useCapacitorInit } from "@/hooks/useCapacitor";
 import { Layout } from "@/components/Layout";
 
@@ -21,9 +25,13 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Visitor from "./pages/Visitor";
 import Products from "./pages/Products";
+import ProductDetail from "./pages/ProductDetail";
 import Basket from "./pages/Basket";
 import Checkout from "./pages/Checkout";
 import PaymentCard from "./pages/PaymentCard";
+import Orders from "./pages/Orders";
+import Profile from "./pages/Profile";
+import Wishlist from "./pages/Wishlist";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
@@ -41,39 +49,53 @@ const App = () => {
           <NotificationProvider>
             <ChatProvider>
               <ProductsProvider>
-              <BasketProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <Sonner />
-                  <BrowserRouter>
-                    <Routes>
-                      {/* Auth Routes - No header/footer */}
-                      <Route path="/" element={<Login />} />
-                      <Route path="/login" element={<Login />} />
-                      <Route path="/register" element={<Register />} />
-                      <Route path="/forgot-password" element={<ForgotPassword />} />
-                      <Route path="/reset-password" element={<ResetPassword />} />
+                <WishlistProvider>
+                  <ReviewsProvider>
+                    <LoyaltyProvider>
+                      <OrdersProvider>
+                        <BasketProvider>
+                          <TooltipProvider>
+                            <Toaster />
+                            <Sonner />
+                            <BrowserRouter>
+                              <Routes>
+                                {/* Auth Routes - No header/footer */}
+                                <Route path="/" element={<Login />} />
+                                <Route path="/login" element={<Login />} />
+                                <Route path="/register" element={<Register />} />
+                                <Route path="/forgot-password" element={<ForgotPassword />} />
+                                <Route path="/reset-password" element={<ResetPassword />} />
 
-                      {/* Visitor & Shopping Routes - With header/footer */}
-                      <Route path="/visitor" element={<Layout><Visitor /></Layout>} />
-                      <Route path="/products" element={<Layout><Products /></Layout>} />
+                                {/* Visitor & Shopping Routes - With header/footer */}
+                                <Route path="/visitor" element={<Layout><Visitor /></Layout>} />
+                                <Route path="/products" element={<Layout><Products /></Layout>} />
+                                <Route path="/products/:id" element={<Layout><ProductDetail /></Layout>} />
 
-                      {/* Checkout Flow - With header/footer */}
-                      <Route path="/basket" element={<Layout><Basket /></Layout>} />
-                      <Route path="/checkout" element={<Layout><Checkout /></Layout>} />
-                      <Route path="/payment/card" element={<Layout><PaymentCard /></Layout>} />
+                                {/* Checkout Flow - With header/footer */}
+                                <Route path="/basket" element={<Layout><Basket /></Layout>} />
+                                <Route path="/checkout" element={<Layout><Checkout /></Layout>} />
+                                <Route path="/payment/card" element={<Layout><PaymentCard /></Layout>} />
 
-                      {/* Admin Routes - No header/footer for login, custom layout for dashboard */}
-                      <Route path="/admin/login" element={<AdminLogin />} />
-                      <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                                {/* User Account Routes - With header/footer */}
+                                <Route path="/orders" element={<Layout><Orders /></Layout>} />
+                                <Route path="/profile" element={<Layout><Profile /></Layout>} />
+                                <Route path="/wishlist" element={<Layout><Wishlist /></Layout>} />
 
-                      {/* Catch All - With header/footer */}
-                      <Route path="*" element={<Layout><NotFound /></Layout>} />
-                    </Routes>
-                  </BrowserRouter>
-                </TooltipProvider>
-              </BasketProvider>
-            </ProductsProvider>
+                                {/* Admin Routes - No header/footer for login, custom layout for dashboard */}
+                                <Route path="/admin/login" element={<AdminLogin />} />
+                                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+
+                                {/* Catch All - With header/footer */}
+                                <Route path="*" element={<Layout><NotFound /></Layout>} />
+                              </Routes>
+                            </BrowserRouter>
+                          </TooltipProvider>
+                        </BasketProvider>
+                      </OrdersProvider>
+                    </LoyaltyProvider>
+                  </ReviewsProvider>
+                </WishlistProvider>
+              </ProductsProvider>
             </ChatProvider>
           </NotificationProvider>
         </AuthProvider>
