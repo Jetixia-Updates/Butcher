@@ -1630,14 +1630,14 @@ export default function CheckoutPage() {
                         ? handleCardPayment
                         : handleCODPayment
                     }
-                    disabled={isProcessing || !selectedAddressId || !selectedTimeSlotId}
+                    disabled={isProcessing || !selectedAddressId || (!isExpressDelivery && !selectedTimeSlotId)}
                     className="w-full btn-primary py-2.5 sm:py-3 rounded-lg font-semibold text-sm sm:text-base mt-4 sm:mt-6 disabled:opacity-50 transition-all"
                   >
                     {isProcessing
                       ? (language === "ar" ? "جاري المعالجة..." : "Processing...")
                       : !selectedAddressId
                       ? (language === "ar" ? "اختر عنوان التوصيل" : "Select a Delivery Address")
-                      : !selectedTimeSlotId
+                      : (!isExpressDelivery && !selectedTimeSlotId)
                       ? (language === "ar" ? "اختر موعد التوصيل" : "Select a Delivery Time")
                       : paymentMethod === "card"
                       ? (language === "ar" ? "المتابعة للدفع" : "Continue to Payment")
