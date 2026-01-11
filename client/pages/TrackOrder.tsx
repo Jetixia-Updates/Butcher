@@ -1,0 +1,567 @@
+import React, { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { 
+  ArrowLeft, 
+  Phone, 
+  MessageCircle, 
+  MapPin, 
+  Clock, 
+  Package, 
+  Truck, 
+  CheckCircle,
+  ChefHat,
+  User,
+  Navigation,
+  RefreshCw
+} from "lucide-react";
+import { useLanguage } from "@/context/LanguageContext";
+import { useOrders } from "@/context/OrdersContext";
+import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Fix Leaflet default marker icon issue
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
+
+// @ts-ignore
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
+
+// Custom driver icon
+const driverIcon = L.divIcon({
+  className: 'driver-marker',
+  html: '<div style="background: #ef4444; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3);"><span style="font-size: 20px;">🛵</span></div>',
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
+});
+
+// Custom destination icon
+const destinationIcon = L.divIcon({
+  className: 'destination-marker',
+  html: '<div style="background: #22c55e; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3);"><span style="font-size: 20px;">🏠</span></div>',
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
+});
+
+// Simulated driver locations for demo (would come from real-time API)
+const simulateDriverMovement = (currentLat: number, currentLng: number, targetLat: number, targetLng: number) => {
+  const latDiff = (targetLat - currentLat) * 0.1;
+  const lngDiff = (targetLng - currentLat) * 0.1;
+  return {
+    latitude: currentLat + latDiff + (Math.random() - 0.5) * 0.001,
+    longitude: currentLng + lngDiff + (Math.random() - 0.5) * 0.001,
+  };
+};
+
+interface TrackingInfo {
+  status: "preparing" | "ready" | "picked_up" | "on_the_way" | "nearby" | "delivered";
+  driver?: {
+    name: string;
+    phone: string;
+    photo?: string;
+    rating: number;
+    vehicleType: string;
+    vehiclePlate: string;
+  };
+  estimatedArrival?: string;
+  currentLocation?: {
+    latitude: number;
+    longitude: number;
+  };
+  timeline: {
+    status: string;
+    timestamp: string;
+    completed: boolean;
+  }[];
+}
+
+export default function TrackOrderPage() {
+  const { orderNumber } = useParams<{ orderNumber: string }>();
+  const navigate = useNavigate();
+  const { language } = useLanguage();
+  const { orders } = useOrders();
+  const { user } = useAuth();
+  const isRTL = language === "ar";
+  
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const driverMarkerRef = useRef<L.Marker | null>(null);
+  const destinationMarkerRef = useRef<L.Marker | null>(null);
+  const routeLineRef = useRef<L.Polyline | null>(null);
+  
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [tracking, setTracking] = useState<TrackingInfo | null>(null);
+  const [countdown, setCountdown] = useState<string>("");
+
+  // Find order
+  const order = orders.find(o => o.orderNumber === orderNumber);
+
+  // Translations
+  const t = {
+    en: {
+      trackOrder: "Track Order",
+      orderNumber: "Order",
+      estimatedArrival: "Estimated Arrival",
+      minutes: "min",
+      arriving: "Arriving",
+      yourDriver: "Your Driver",
+      callDriver: "Call",
+      messageDriver: "Message",
+      vehicleInfo: "Vehicle Info",
+      orderStatus: "Order Status",
+      preparing: "Preparing Your Order",
+      preparingDesc: "Our butchers are preparing your fresh cuts",
+      ready: "Order Ready",
+      readyDesc: "Your order is ready for pickup",
+      pickedUp: "Picked Up",
+      pickedUpDesc: "Driver has collected your order",
+      onTheWay: "On the Way",
+      onTheWayDesc: "Driver is heading to your location",
+      nearby: "Almost There",
+      nearbyDesc: "Driver is nearby, please be ready",
+      delivered: "Delivered",
+      deliveredDesc: "Order has been delivered",
+      deliveryAddress: "Delivery Address",
+      orderDetails: "Order Details",
+      items: "items",
+      total: "Total",
+      refresh: "Refresh",
+      orderNotFound: "Order not found",
+      goToOrders: "View All Orders",
+      liveTracking: "Live Tracking",
+      driverLocation: "Driver's current location",
+    },
+    ar: {
+      trackOrder: "تتبع الطلب",
+      orderNumber: "الطلب",
+      estimatedArrival: "الوصول المتوقع",
+      minutes: "دقيقة",
+      arriving: "يصل خلال",
+      yourDriver: "السائق",
+      callDriver: "اتصال",
+      messageDriver: "رسالة",
+      vehicleInfo: "معلومات المركبة",
+      orderStatus: "حالة الطلب",
+      preparing: "جاري تحضير طلبك",
+      preparingDesc: "جزارونا يحضرون قطعك الطازجة",
+      ready: "الطلب جاهز",
+      readyDesc: "طلبك جاهز للاستلام",
+      pickedUp: "تم الاستلام",
+      pickedUpDesc: "السائق استلم طلبك",
+      onTheWay: "في الطريق",
+      onTheWayDesc: "السائق متجه إلى موقعك",
+      nearby: "على وشك الوصول",
+      nearbyDesc: "السائق قريب، كن مستعداً",
+      delivered: "تم التوصيل",
+      deliveredDesc: "تم توصيل الطلب",
+      deliveryAddress: "عنوان التوصيل",
+      orderDetails: "تفاصيل الطلب",
+      items: "منتجات",
+      total: "المجموع",
+      refresh: "تحديث",
+      orderNotFound: "الطلب غير موجود",
+      goToOrders: "عرض جميع الطلبات",
+      liveTracking: "تتبع مباشر",
+      driverLocation: "موقع السائق الحالي",
+    },
+  };
+
+  const tt = t[language];
+
+  // Demo tracking data
+  useEffect(() => {
+    if (!order) return;
+
+    // Simulate tracking based on order status
+    const statusMap: Record<string, TrackingInfo["status"]> = {
+      pending: "preparing",
+      confirmed: "preparing",
+      processing: "preparing",
+      out_for_delivery: "on_the_way",
+      delivered: "delivered",
+    };
+
+    const currentStatus = statusMap[order.status] || "preparing";
+    
+    // Demo driver info (in production, fetch from API)
+    const demoDriver = {
+      name: "Ahmed Hassan",
+      phone: "+971 50 123 4567",
+      rating: 4.8,
+      vehicleType: "Motorcycle",
+      vehiclePlate: "DXB A 12345",
+    };
+
+    // Demo timeline
+    const now = new Date();
+    const timeline = [
+      { status: "preparing", timestamp: new Date(now.getTime() - 30 * 60000).toISOString(), completed: true },
+      { status: "ready", timestamp: new Date(now.getTime() - 15 * 60000).toISOString(), completed: currentStatus !== "preparing" },
+      { status: "picked_up", timestamp: new Date(now.getTime() - 10 * 60000).toISOString(), completed: ["on_the_way", "nearby", "delivered"].includes(currentStatus) },
+      { status: "on_the_way", timestamp: new Date(now.getTime() - 5 * 60000).toISOString(), completed: ["on_the_way", "nearby", "delivered"].includes(currentStatus) },
+      { status: "delivered", timestamp: "", completed: currentStatus === "delivered" },
+    ];
+
+    // Demo location (Dubai coordinates)
+    const driverLocation = currentStatus === "on_the_way" || currentStatus === "nearby" 
+      ? { latitude: 25.2048 + (Math.random() - 0.5) * 0.02, longitude: 55.2708 + (Math.random() - 0.5) * 0.02 }
+      : undefined;
+
+    const estimatedArrival = currentStatus === "on_the_way" 
+      ? new Date(now.getTime() + 15 * 60000).toISOString()
+      : currentStatus === "nearby"
+      ? new Date(now.getTime() + 5 * 60000).toISOString()
+      : undefined;
+
+    setTracking({
+      status: currentStatus,
+      driver: ["on_the_way", "nearby", "delivered"].includes(currentStatus) ? demoDriver : undefined,
+      estimatedArrival,
+      currentLocation: driverLocation,
+      timeline,
+    });
+  }, [order]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!tracking?.estimatedArrival) {
+      setCountdown("");
+      return;
+    }
+
+    const updateCountdown = () => {
+      const now = new Date().getTime();
+      const arrival = new Date(tracking.estimatedArrival!).getTime();
+      const diff = arrival - now;
+
+      if (diff <= 0) {
+        setCountdown(isRTL ? "يصل الآن!" : "Arriving now!");
+      } else {
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        setCountdown(`${minutes}:${seconds.toString().padStart(2, "0")}`);
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [tracking?.estimatedArrival, isRTL]);
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapRef.current || !tracking?.currentLocation || leafletMapRef.current) return;
+
+    // Destination coordinates (demo - would come from order address)
+    const destination = { latitude: 25.2100, longitude: 55.2750 };
+
+    leafletMapRef.current = L.map(mapRef.current).setView(
+      [tracking.currentLocation.latitude, tracking.currentLocation.longitude],
+      14
+    );
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© OpenStreetMap',
+      maxZoom: 19,
+    }).addTo(leafletMapRef.current);
+
+    // Add driver marker
+    driverMarkerRef.current = L.marker(
+      [tracking.currentLocation.latitude, tracking.currentLocation.longitude],
+      { icon: driverIcon }
+    ).addTo(leafletMapRef.current);
+
+    // Add destination marker
+    destinationMarkerRef.current = L.marker(
+      [destination.latitude, destination.longitude],
+      { icon: destinationIcon }
+    ).addTo(leafletMapRef.current);
+
+    // Draw route line
+    routeLineRef.current = L.polyline(
+      [
+        [tracking.currentLocation.latitude, tracking.currentLocation.longitude],
+        [destination.latitude, destination.longitude],
+      ],
+      { color: "#ef4444", weight: 4, dashArray: "10, 10" }
+    ).addTo(leafletMapRef.current);
+
+    // Fit bounds to show both markers
+    const bounds = L.latLngBounds(
+      [tracking.currentLocation.latitude, tracking.currentLocation.longitude],
+      [destination.latitude, destination.longitude]
+    );
+    leafletMapRef.current.fitBounds(bounds, { padding: [50, 50] });
+
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, [tracking?.currentLocation]);
+
+  // Simulate driver movement
+  useEffect(() => {
+    if (!tracking?.currentLocation || tracking.status === "delivered") return;
+
+    const interval = setInterval(() => {
+      const destination = { latitude: 25.2100, longitude: 55.2750 };
+      const newLocation = simulateDriverMovement(
+        tracking.currentLocation!.latitude,
+        tracking.currentLocation!.longitude,
+        destination.latitude,
+        destination.longitude
+      );
+
+      if (driverMarkerRef.current) {
+        driverMarkerRef.current.setLatLng([newLocation.latitude, newLocation.longitude]);
+      }
+
+      if (routeLineRef.current) {
+        routeLineRef.current.setLatLngs([
+          [newLocation.latitude, newLocation.longitude],
+          [destination.latitude, destination.longitude],
+        ]);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [tracking?.currentLocation, tracking?.status]);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setTimeout(() => setIsRefreshing(false), 1000);
+  };
+
+  const getStatusInfo = (status: string) => {
+    const statusConfig: Record<string, { icon: React.ReactNode; color: string }> = {
+      preparing: { icon: <ChefHat className="w-5 h-5" />, color: "text-orange-500" },
+      ready: { icon: <Package className="w-5 h-5" />, color: "text-blue-500" },
+      picked_up: { icon: <Truck className="w-5 h-5" />, color: "text-purple-500" },
+      on_the_way: { icon: <Navigation className="w-5 h-5" />, color: "text-primary" },
+      nearby: { icon: <MapPin className="w-5 h-5" />, color: "text-green-500" },
+      delivered: { icon: <CheckCircle className="w-5 h-5" />, color: "text-green-600" },
+    };
+    return statusConfig[status] || { icon: <Clock className="w-5 h-5" />, color: "text-gray-500" };
+  };
+
+  if (!order) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="text-center">
+          <Package className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-foreground mb-2">{tt.orderNotFound}</h1>
+          <Link to="/orders" className="btn-primary inline-block mt-4">
+            {tt.goToOrders}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background" dir={isRTL ? "rtl" : "ltr"}>
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white border-b border-border shadow-sm">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)} className="p-2 hover:bg-muted rounded-full">
+              <ArrowLeft className={cn("w-5 h-5", isRTL && "rotate-180")} />
+            </button>
+            <div>
+              <h1 className="font-bold text-foreground">{tt.trackOrder}</h1>
+              <p className="text-xs text-muted-foreground">{tt.orderNumber} #{orderNumber}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleRefresh}
+            className={cn("p-2 hover:bg-muted rounded-full", isRefreshing && "animate-spin")}
+          >
+            <RefreshCw className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-3xl mx-auto p-4 space-y-4">
+        {/* ETA Card */}
+        {tracking?.estimatedArrival && tracking.status !== "delivered" && (
+          <div className="bg-gradient-to-r from-primary to-primary/80 rounded-2xl p-6 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-primary-foreground/80 text-sm">{tt.estimatedArrival}</p>
+                <p className="text-3xl font-bold mt-1">{countdown}</p>
+              </div>
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+                <Truck className="w-8 h-8" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delivered Badge */}
+        {tracking?.status === "delivered" && (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center">
+            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-3" />
+            <h2 className="text-xl font-bold text-green-700">{tt.delivered}</h2>
+            <p className="text-green-600 text-sm mt-1">{tt.deliveredDesc}</p>
+          </div>
+        )}
+
+        {/* Live Map */}
+        {tracking?.currentLocation && tracking.status !== "delivered" && (
+          <div className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+            <div className="p-3 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                <span className="font-medium text-sm">{tt.liveTracking}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">{tt.driverLocation}</span>
+            </div>
+            <div ref={mapRef} className="w-full h-64" />
+          </div>
+        )}
+
+        {/* Driver Card */}
+        {tracking?.driver && (
+          <div className="bg-white rounded-2xl border border-border p-4 shadow-sm">
+            <h3 className="font-semibold text-foreground mb-3">{tt.yourDriver}</h3>
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center">
+                <User className="w-7 h-7 text-muted-foreground" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-foreground">{tracking.driver.name}</p>
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <span className="text-yellow-500">★</span>
+                  <span>{tracking.driver.rating}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {tracking.driver.vehicleType} • {tracking.driver.vehiclePlate}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <a
+                  href={`tel:${tracking.driver.phone}`}
+                  className="p-3 bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors"
+                >
+                  <Phone className="w-5 h-5" />
+                </a>
+                <button className="p-3 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors">
+                  <MessageCircle className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Status Timeline */}
+        <div className="bg-white rounded-2xl border border-border p-4 shadow-sm">
+          <h3 className="font-semibold text-foreground mb-4">{tt.orderStatus}</h3>
+          <div className="space-y-4">
+            {tracking?.timeline.map((step, index) => {
+              const statusInfo = getStatusInfo(step.status);
+              const isActive = tracking.status === step.status;
+              const statusLabels: Record<string, { title: string; desc: string }> = {
+                preparing: { title: tt.preparing, desc: tt.preparingDesc },
+                ready: { title: tt.ready, desc: tt.readyDesc },
+                picked_up: { title: tt.pickedUp, desc: tt.pickedUpDesc },
+                on_the_way: { title: tt.onTheWay, desc: tt.onTheWayDesc },
+                delivered: { title: tt.delivered, desc: tt.deliveredDesc },
+              };
+              const label = statusLabels[step.status] || { title: step.status, desc: "" };
+
+              return (
+                <div key={step.status} className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all",
+                        step.completed
+                          ? "bg-green-100 border-green-500 text-green-600"
+                          : isActive
+                          ? "bg-primary/10 border-primary text-primary animate-pulse"
+                          : "bg-muted border-border text-muted-foreground"
+                      )}
+                    >
+                      {step.completed ? <CheckCircle className="w-5 h-5" /> : statusInfo.icon}
+                    </div>
+                    {index < tracking.timeline.length - 1 && (
+                      <div
+                        className={cn(
+                          "w-0.5 h-12 mt-2",
+                          step.completed ? "bg-green-500" : "bg-border"
+                        )}
+                      />
+                    )}
+                  </div>
+                  <div className="flex-1 pb-4">
+                    <p className={cn(
+                      "font-medium",
+                      step.completed || isActive ? "text-foreground" : "text-muted-foreground"
+                    )}>
+                      {label.title}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{label.desc}</p>
+                    {step.completed && step.timestamp && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(step.timestamp).toLocaleTimeString(isRTL ? "ar-AE" : "en-US", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Delivery Address */}
+        <div className="bg-white rounded-2xl border border-border p-4 shadow-sm">
+          <h3 className="font-semibold text-foreground mb-3">{tt.deliveryAddress}</h3>
+          <div className="flex items-start gap-3">
+            <MapPin className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-foreground">{order.deliveryAddress.fullName}</p>
+              <p className="text-sm text-muted-foreground">
+                {order.deliveryAddress.building}, {order.deliveryAddress.street}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {order.deliveryAddress.area}, {order.deliveryAddress.emirate}
+              </p>
+              <p className="text-sm text-muted-foreground">{order.deliveryAddress.mobile}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Order Summary */}
+        <div className="bg-white rounded-2xl border border-border p-4 shadow-sm">
+          <h3 className="font-semibold text-foreground mb-3">{tt.orderDetails}</h3>
+          <div className="space-y-2">
+            {order.items.map((item) => (
+              <div key={item.id} className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">
+                  {isRTL && item.nameAr ? item.nameAr : item.name} × {item.quantity}
+                </span>
+                <span className="font-medium">AED {(item.price * item.quantity).toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="border-t border-border pt-2 mt-2 flex justify-between items-center">
+              <span className="font-semibold">{tt.total}</span>
+              <span className="font-bold text-primary">AED {order.total.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

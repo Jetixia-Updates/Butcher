@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Package, Truck, CreditCard, CheckCircle, X, Trash2, FileText, MessageCircle, Send, Paperclip, Download, Image, File, Heart, User, ShoppingBag, ChevronDown } from "lucide-react";
+import { Bell, Package, Truck, CreditCard, CheckCircle, X, Trash2, FileText, MessageCircle, Send, Paperclip, Download, Image, File, Heart, User, ShoppingBag, ChevronDown, Sun, Moon } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useBasket } from "@/context/BasketContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -8,6 +8,32 @@ import { useNotifications, formatRelativeTime, Notification } from "@/context/No
 import { useUserChat, ChatAttachment } from "@/context/ChatContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+
+// Dark mode hook
+const useDarkMode = () => {
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("darkMode");
+      if (saved !== null) return JSON.parse(saved);
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    localStorage.setItem("darkMode", JSON.stringify(isDark));
+  }, [isDark]);
+
+  const toggleDarkMode = () => setIsDark(!isDark);
+
+  return { isDark, toggleDarkMode };
+};
 
 interface HeaderProps {
   showBasketIcon?: boolean;
@@ -39,6 +65,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
   const { t, language } = useLanguage();
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAllNotifications } = useNotifications();
   const { items: wishlistItems } = useWishlist();
+  const { isDark, toggleDarkMode } = useDarkMode();
   
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Notification | null>(null);
@@ -177,12 +204,23 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-border shadow-sm">
+    <header className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-3 sm:py-4">
-          {/* Left: Language Switcher */}
-          <div className="flex-1 flex items-center">
+          {/* Left: Language Switcher & Dark Mode */}
+          <div className="flex-1 flex items-center gap-2">
             <LanguageSwitcher variant="compact" />
+            <button
+              onClick={toggleDarkMode}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDark ? (
+                <Sun className="w-5 h-5 text-yellow-500" />
+              ) : (
+                <Moon className="w-5 h-5 text-gray-600" />
+              )}
+            </button>
           </div>
 
           {/* Center: Logo */}

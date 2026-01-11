@@ -6,20 +6,43 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
-    <meta name="theme-color" content="#1a1a1a" />
+    <meta name="theme-color" content="#dc2626" />
     <meta name="mobile-web-app-capable" content="yes" />
     
-    <title>Butcher Shop</title>
-    <meta name="description" content="Premium quality meats delivered to your door" />
+    <title>Al Jazira Butcher - Premium Fresh Meat Delivery</title>
+    <meta name="description" content="Premium quality fresh meats delivered to your door - قطع لحوم طازجة ممتازة توصيل للمنزل" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
     
     <!-- App Icons -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/1.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-72x72.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-72x72.png" />
     <link rel="icon" type="image/png" href="/1.png" />
+    
+    <!-- iOS Splash Screens -->
+    <link rel="apple-touch-startup-image" href="/icons/icon-512x512.png" />
   </head>
 
   <body>
     <div id="root"></div>
 
     <script type="module" src="/client/App.tsx"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('SW registered:', registration.scope);
+            })
+            .catch((error) => {
+              console.log('SW registration failed:', error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>

@@ -16,6 +16,7 @@ import { WishlistProvider } from "@/context/WishlistContext";
 import { ReviewsProvider } from "@/context/ReviewsContext";
 import { LoyaltyProvider } from "@/context/LoyaltyContext";
 import { OrdersProvider } from "@/context/OrdersContext";
+import { WalletProvider } from "@/context/WalletContext";
 import { useCapacitorInit } from "@/hooks/useCapacitor";
 import { Layout } from "@/components/Layout";
 
@@ -32,6 +33,10 @@ import PaymentCard from "./pages/PaymentCard";
 import Orders from "./pages/Orders";
 import Profile from "./pages/Profile";
 import Wishlist from "./pages/Wishlist";
+import Wallet from "./pages/Wallet";
+import Home from "./pages/Home";
+import Deals from "./pages/Deals";
+import TrackOrder from "./pages/TrackOrder";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
@@ -53,44 +58,52 @@ const App = () => {
                   <ReviewsProvider>
                     <LoyaltyProvider>
                       <OrdersProvider>
-                        <BasketProvider>
-                          <TooltipProvider>
-                            <Toaster />
-                            <Sonner />
-                            <BrowserRouter>
-                              <Routes>
-                                {/* Auth Routes - No header/footer */}
-                                <Route path="/" element={<Login />} />
-                                <Route path="/login" element={<Login />} />
-                                <Route path="/register" element={<Register />} />
-                                <Route path="/forgot-password" element={<ForgotPassword />} />
-                                <Route path="/reset-password" element={<ResetPassword />} />
+                        <WalletProvider>
+                          <BasketProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <BrowserRouter>
+                                <Routes>
+                                  {/* Auth Routes - No header/footer */}
+                                  <Route path="/" element={<Login />} />
+                                  <Route path="/login" element={<Login />} />
+                                  <Route path="/register" element={<Register />} />
+                                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                                  <Route path="/reset-password" element={<ResetPassword />} />
 
-                                {/* Visitor & Shopping Routes - With header/footer */}
-                                <Route path="/visitor" element={<Layout><Visitor /></Layout>} />
-                                <Route path="/products" element={<Layout><Products /></Layout>} />
-                                <Route path="/products/:id" element={<Layout><ProductDetail /></Layout>} />
+                                  {/* Homepage & Visitor Routes - With header/footer */}
+                                  <Route path="/home" element={<Layout><Home /></Layout>} />
+                                  <Route path="/visitor" element={<Layout><Visitor /></Layout>} />
+                                  
+                                  {/* Shopping Routes - With header/footer */}
+                                  <Route path="/products" element={<Layout><Products /></Layout>} />
+                                  <Route path="/products/:id" element={<Layout><ProductDetail /></Layout>} />
+                                  <Route path="/deals" element={<Layout><Deals /></Layout>} />
 
-                                {/* Checkout Flow - With header/footer */}
-                                <Route path="/basket" element={<Layout><Basket /></Layout>} />
-                                <Route path="/checkout" element={<Layout><Checkout /></Layout>} />
-                                <Route path="/payment/card" element={<Layout><PaymentCard /></Layout>} />
+                                  {/* Checkout Flow - With header/footer */}
+                                  <Route path="/basket" element={<Layout><Basket /></Layout>} />
+                                  <Route path="/checkout" element={<Layout><Checkout /></Layout>} />
+                                  <Route path="/payment/card" element={<Layout><PaymentCard /></Layout>} />
 
-                                {/* User Account Routes - With header/footer */}
-                                <Route path="/orders" element={<Layout><Orders /></Layout>} />
-                                <Route path="/profile" element={<Layout><Profile /></Layout>} />
-                                <Route path="/wishlist" element={<Layout><Wishlist /></Layout>} />
+                                  {/* User Account Routes - With header/footer */}
+                                  <Route path="/orders" element={<Layout><Orders /></Layout>} />
+                                  <Route path="/track/:orderNumber" element={<Layout><TrackOrder /></Layout>} />
+                                  <Route path="/profile" element={<Layout><Profile /></Layout>} />
+                                  <Route path="/wishlist" element={<Layout><Wishlist /></Layout>} />
+                                  <Route path="/wallet" element={<Layout><Wallet /></Layout>} />
 
-                                {/* Admin Routes - No header/footer for login, custom layout for dashboard */}
-                                <Route path="/admin/login" element={<AdminLogin />} />
-                                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                                  {/* Admin Routes - No header/footer for login, custom layout for dashboard */}
+                                  <Route path="/admin/login" element={<AdminLogin />} />
+                                  <Route path="/admin/dashboard" element={<AdminDashboard />} />
 
-                                {/* Catch All - With header/footer */}
-                                <Route path="*" element={<Layout><NotFound /></Layout>} />
-                              </Routes>
-                            </BrowserRouter>
-                          </TooltipProvider>
-                        </BasketProvider>
+                                  {/* Catch All - With header/footer */}
+                                  <Route path="*" element={<Layout><NotFound /></Layout>} />
+                                </Routes>
+                              </BrowserRouter>
+                            </TooltipProvider>
+                          </BasketProvider>
+                        </WalletProvider>
                       </OrdersProvider>
                     </LoyaltyProvider>
                   </ReviewsProvider>

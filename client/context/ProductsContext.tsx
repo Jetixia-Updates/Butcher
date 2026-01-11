@@ -11,6 +11,9 @@ export interface Product {
   descriptionAr?: string;
   image?: string;
   available: boolean;
+  discount?: number;
+  rating?: number;
+  badges?: ("halal" | "organic" | "grass-fed" | "premium" | "fresh" | "local")[];
 }
 
 interface ProductsContextType {

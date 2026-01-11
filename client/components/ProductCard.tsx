@@ -31,17 +31,34 @@ interface ProductCardProps {
     descriptionAr?: string;
     image?: string;
     available: boolean;
+    discount?: number;
+    rating?: number;
+    badges?: ("halal" | "organic" | "grass-fed" | "premium" | "fresh" | "local")[];
   };
   onAddToBasket?: (item: BasketItem) => void;
   isVisitor?: boolean;
   onLoginRequired?: () => void;
+  compact?: boolean;
+  showDiscount?: boolean;
 }
+
+// Badge configuration
+const BADGE_CONFIG: Record<string, { icon: string; label: string; labelAr: string; color: string }> = {
+  halal: { icon: "☪️", label: "Halal", labelAr: "حلال", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  organic: { icon: "🌿", label: "Organic", labelAr: "عضوي", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" },
+  "grass-fed": { icon: "🌾", label: "Grass-Fed", labelAr: "تغذية طبيعية", color: "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400" },
+  premium: { icon: "⭐", label: "Premium", labelAr: "ممتاز", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+  fresh: { icon: "❄️", label: "Fresh", labelAr: "طازج", color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400" },
+  local: { icon: "📍", label: "Local", labelAr: "محلي", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+};
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onAddToBasket,
   isVisitor,
   onLoginRequired,
+  compact = false,
+  showDiscount = false,
 }) => {
   const { t, language } = useLanguage();
   const [quantity, setQuantity] = useState(0.500);
@@ -134,7 +151,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     <>
       <div className="card-premium overflow-hidden group h-full flex flex-col">
         {/* Product Image */}
-        <div className="relative overflow-hidden bg-muted h-32 sm:h-48 w-full flex items-center justify-center">
+        <div className={`relative overflow-hidden bg-muted ${compact ? "h-24 sm:h-32" : "h-32 sm:h-48"} w-full flex items-center justify-center`}>
           {product.image ? (
             <img
               src={product.image}
@@ -142,8 +159,35 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
             />
           ) : (
-            <div className="text-4xl sm:text-6xl">🥩</div>
+            <div className={`${compact ? "text-3xl sm:text-4xl" : "text-4xl sm:text-6xl"}`}>🥩</div>
           )}
+          
+          {/* Discount Badge */}
+          {product.discount && product.discount > 0 && (
+            <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+              -{product.discount}%
+            </div>
+          )}
+          
+          {/* Dietary Badges */}
+          {product.badges && product.badges.length > 0 && (
+            <div className="absolute top-2 right-2 flex flex-col gap-1">
+              {product.badges.slice(0, 2).map((badge) => {
+                const config = BADGE_CONFIG[badge];
+                if (!config) return null;
+                return (
+                  <span
+                    key={badge}
+                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${config.color}`}
+                  >
+                    <span>{config.icon}</span>
+                    <span className="hidden sm:inline">{language === "ar" ? config.labelAr : config.label}</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          
           {!product.available && (
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
               <p className="text-white font-semibold text-sm sm:text-base">{t("product.outOfStock")}</p>
@@ -169,11 +213,25 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </p>
 
           {/* Price */}
-          <div className="mt-2 sm:mt-4 mb-2 sm:mb-4">
-            <p className="text-lg sm:text-2xl font-bold text-primary">
-              <PriceDisplay price={product.price} size="lg" />
-              <span className="text-[10px] sm:text-sm text-muted-foreground font-normal"> / {priceUnit}</span>
-            </p>
+          <div className={`${compact ? "mt-1 mb-1" : "mt-2 sm:mt-4 mb-2 sm:mb-4"}`}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className={`${compact ? "text-sm sm:text-lg" : "text-lg sm:text-2xl"} font-bold text-primary`}>
+                <PriceDisplay price={product.discount ? product.price * (1 - product.discount / 100) : product.price} size={compact ? "md" : "lg"} />
+                <span className="text-[10px] sm:text-sm text-muted-foreground font-normal"> / {priceUnit}</span>
+              </p>
+              {product.discount && product.discount > 0 && (
+                <span className="text-xs text-muted-foreground line-through">
+                  <PriceDisplay price={product.price} size="sm" />
+                </span>
+              )}
+            </div>
+            {/* Rating */}
+            {product.rating && product.rating > 0 && (
+              <div className="flex items-center gap-1 mt-1">
+                <span className="text-yellow-500 text-sm">★</span>
+                <span className="text-xs text-muted-foreground">{product.rating.toFixed(1)}</span>
+              </div>
+            )}
           </div>
 
           {/* Quantity & Button */}
@@ -396,3 +454,5 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     </>
   );
 };
+
+export default ProductCard;

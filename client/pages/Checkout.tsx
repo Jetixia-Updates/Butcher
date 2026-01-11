@@ -587,11 +587,6 @@ export default function CheckoutPage() {
       ? subtotal * (promoApplied.discount / 100)
       : promoApplied.discount
     : 0;
-
-  // Adjusted totals
-  const adjustedSubtotal = subtotal - discountAmount;
-  const adjustedVat = adjustedSubtotal * 0.05;
-  const adjustedTotal = adjustedSubtotal + adjustedVat;
   
   // Translations
   const t = {
@@ -693,6 +688,20 @@ export default function CheckoutPage() {
   const [deliveryDates] = useState<DeliveryDate[]>(generateDeliveryDates);
   const [selectedDateIndex, setSelectedDateIndex] = useState<number>(0);
   const [selectedTimeSlotId, setSelectedTimeSlotId] = useState<string | null>(null);
+  
+  // Express delivery state
+  const [isExpressDelivery, setIsExpressDelivery] = useState(false);
+  const expressDeliveryFee = 25; // AED 25 for express delivery
+  
+  // Driver tip state
+  const [driverTip, setDriverTip] = useState<number>(0);
+  const tipOptions = [0, 5, 10, 15, 20];
+
+  // Adjusted totals with express delivery and tip
+  const adjustedSubtotal = subtotal - discountAmount;
+  const adjustedVat = adjustedSubtotal * 0.05;
+  const deliveryFeeTotal = isExpressDelivery ? expressDeliveryFee : 0;
+  const adjustedTotal = adjustedSubtotal + adjustedVat + deliveryFeeTotal + driverTip;
 
   // Helper function to get localized item name
   const getItemName = (item: typeof items[0]) => {
@@ -1313,6 +1322,117 @@ export default function CheckoutPage() {
                     </p>
                   </div>
                 )}
+
+                {/* Express Delivery Option */}
+                <div className="mt-4 sm:mt-6 pt-4 border-t border-border">
+                  <div
+                    onClick={() => setIsExpressDelivery(!isExpressDelivery)}
+                    className={`p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                      isExpressDelivery
+                        ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
+                        : "border-border hover:border-orange-300"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                          isExpressDelivery
+                            ? "border-orange-500 bg-orange-500"
+                            : "border-border"
+                        }`}
+                      >
+                        {isExpressDelivery && (
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">⚡</span>
+                          <h3 className="font-semibold text-foreground text-sm sm:text-base">
+                            {language === "ar" ? "توصيل سريع" : "Express Delivery"}
+                          </h3>
+                          <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">
+                            {language === "ar" ? "سريع" : "FAST"}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                          {language === "ar" 
+                            ? "احصل على طلبك خلال ساعة واحدة! رسوم إضافية 25 درهم" 
+                            : "Get your order within 1 hour! Additional AED 25 fee"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-orange-600 dark:text-orange-400">+AED 25</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Driver Tip Section */}
+              <div className="card-premium p-4 sm:p-6">
+                <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-2">
+                  {language === "ar" ? "إكرامية للسائق" : "Tip Your Driver"}
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-4">
+                  {language === "ar" 
+                    ? "100% من الإكرامية تذهب للسائق 💚"
+                    : "100% of your tip goes to the driver 💚"}
+                </p>
+                
+                <div className="flex gap-2 flex-wrap">
+                  {tipOptions.map((tip) => (
+                    <button
+                      key={tip}
+                      type="button"
+                      onClick={() => setDriverTip(tip)}
+                      className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all ${
+                        driverTip === tip
+                          ? "bg-primary text-white"
+                          : "bg-muted text-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      {tip === 0 
+                        ? (language === "ar" ? "لا شكراً" : "No tip")
+                        : `AED ${tip}`
+                      }
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const customTip = prompt(language === "ar" ? "أدخل مبلغ الإكرامية:" : "Enter tip amount:");
+                      if (customTip) {
+                        const amount = parseFloat(customTip);
+                        if (!isNaN(amount) && amount >= 0) {
+                          setDriverTip(amount);
+                        }
+                      }
+                    }}
+                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all ${
+                      !tipOptions.includes(driverTip) && driverTip > 0
+                        ? "bg-primary text-white"
+                        : "bg-muted text-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {!tipOptions.includes(driverTip) && driverTip > 0 
+                      ? `AED ${driverTip}`
+                      : (language === "ar" ? "مبلغ آخر" : "Other")}
+                  </button>
+                </div>
+
+                {driverTip > 0 && (
+                  <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center gap-2">
+                    <span className="text-xl">🙏</span>
+                    <p className="text-sm text-green-700 dark:text-green-400">
+                      {language === "ar" 
+                        ? `شكراً لك! سيحصل السائق على ${driverTip} درهم إكرامية`
+                        : `Thank you! Your driver will receive AED ${driverTip} tip`}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Payment Method Selection */}
@@ -1551,12 +1671,32 @@ export default function CheckoutPage() {
                       <PriceDisplay price={promoApplied ? adjustedVat : vat} size="md" />
                     </span>
                   </div>
+                  {isExpressDelivery && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                        ⚡ {isRTL ? "توصيل سريع" : "Express Delivery"}
+                      </span>
+                      <span className="font-semibold text-orange-600 dark:text-orange-400">
+                        +<PriceDisplay price={expressDeliveryFee} size="md" />
+                      </span>
+                    </div>
+                  )}
+                  {driverTip > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                        💚 {isRTL ? "إكرامية السائق" : "Driver Tip"}
+                      </span>
+                      <span className="font-semibold text-green-600 dark:text-green-400">
+                        +<PriceDisplay price={driverTip} size="md" />
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center pt-2 border-t border-border">
                     <span className="text-base sm:text-lg font-bold text-foreground">
                       {t.total}
                     </span>
                     <span className="text-xl sm:text-2xl font-bold text-primary">
-                      <PriceDisplay price={promoApplied ? adjustedTotal : total} size="lg" />
+                      <PriceDisplay price={promoApplied ? adjustedTotal : (total + deliveryFeeTotal + driverTip)} size="lg" />
                     </span>
                   </div>
                 </div>
