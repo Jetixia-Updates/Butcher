@@ -19,7 +19,23 @@ const createUserSchema = z.object({
   firstName: z.string().min(1),
   familyName: z.string().min(1),
   emirate: z.string().min(2),
+  address: z.string().optional(),
+  isVisitor: z.boolean().optional(),
   role: z.enum(["customer", "admin", "staff", "delivery"]).optional(),
+  deliveryAddress: z.object({
+    label: z.string(),
+    fullName: z.string(),
+    mobile: z.string(),
+    emirate: z.string(),
+    area: z.string(),
+    street: z.string(),
+    building: z.string(),
+    floor: z.string().optional(),
+    apartment: z.string().optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
+    isDefault: z.boolean(),
+  }).optional(),
 });
 
 const updateUserSchema = z.object({
@@ -206,6 +222,7 @@ const createUser: RequestHandler = (req, res) => {
       isActive: true,
       isVerified: false,
       emirate: data.emirate,
+      address: data.address,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       preferences: {
