@@ -31,7 +31,7 @@ const translations: Record<Language, Record<string, string>> = {
     "category.beef": "Beef",
     "category.lamb": "Lamb",
     "category.chicken": "Chicken",
-    "category.mutton": "Mutton",
+    "category.goat": "Goat",
     
     // Product Card
     "product.add": "Add",
@@ -262,7 +262,7 @@ const translations: Record<Language, Record<string, string>> = {
     "category.beef": "لحم البقر",
     "category.lamb": "لحم الخروف",
     "category.chicken": "دجاج",
-    "category.mutton": "لحم الغنم",
+    "category.goat": "لحم ماعز",
     
     // Product Card
     "product.add": "إضافة",

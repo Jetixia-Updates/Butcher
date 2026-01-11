@@ -135,7 +135,7 @@ const demoProducts = [
   { id: 'prod_3', name: 'Chicken Breast', nameAr: 'صدر دجاج', price: 34.99, category: 'Chicken', unit: 'kg', isActive: true, isFeatured: false, isPremium: false, description: 'Boneless chicken breast', descriptionAr: 'صدر دجاج بدون عظم', available: true },
   { id: 'prod_4', name: 'Ground Beef', nameAr: 'لحم بقري مفروم', price: 45.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: false, isPremium: false, description: 'Fresh ground beef', descriptionAr: 'لحم بقري مفروم طازج', available: true },
   { id: 'prod_5', name: 'Beef Brisket', nameAr: 'صدر لحم بقري', price: 95.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium beef brisket', descriptionAr: 'صدر لحم بقري ممتاز', available: true },
-  { id: 'prod_6', name: 'Mutton Leg', nameAr: 'فخذ خروف', price: 125.00, category: 'Mutton', unit: 'piece', isActive: true, isFeatured: true, isPremium: true, description: 'Whole mutton leg', descriptionAr: 'فخذ خروف كامل', available: true },
+  { id: 'prod_6', name: 'Goat Leg', nameAr: 'فخذ ماعز', price: 125.00, category: 'Goat', unit: 'piece', isActive: true, isFeatured: true, isPremium: true, description: 'Whole goat leg', descriptionAr: 'فخذ ماعز كامل', available: true },
 ];
 
 // Seed initial data
@@ -1608,7 +1608,7 @@ function createApp() {
         { category: 'Beef', totalSales: 4500, revenue: 4500, orders: 45, percentage: 40 },
         { category: 'Lamb', totalSales: 2800, revenue: 2800, orders: 28, percentage: 25 },
         { category: 'Chicken', totalSales: 2200, revenue: 2200, orders: 35, percentage: 20 },
-        { category: 'Mutton', totalSales: 1700, revenue: 1700, orders: 12, percentage: 15 },
+        { category: 'Goat', totalSales: 1700, revenue: 1700, orders: 12, percentage: 15 },
       ],
     });
   });
@@ -1661,7 +1661,7 @@ function createApp() {
           { category: 'Beef', count: 3, value: 7500 },
           { category: 'Lamb', count: 1, value: 3725 },
           { category: 'Chicken', count: 1, value: 1750 },
-          { category: 'Mutton', count: 1, value: 6250 },
+          { category: 'Goat', count: 1, value: 6250 },
         ],
       },
     });

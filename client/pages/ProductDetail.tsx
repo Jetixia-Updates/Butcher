@@ -39,7 +39,7 @@ const CUT_OPTIONS = [
 const NUTRITIONAL_INFO: Record<string, { calories: number; protein: number; fat: number; carbs: number }> = {
   Beef: { calories: 250, protein: 26, fat: 17, carbs: 0 },
   Lamb: { calories: 294, protein: 25, fat: 21, carbs: 0 },
-  Mutton: { calories: 294, protein: 25, fat: 21, carbs: 0 },
+  Goat: { calories: 143, protein: 27, fat: 3, carbs: 0 },
   Chicken: { calories: 239, protein: 27, fat: 14, carbs: 0 },
 };
 

@@ -74,7 +74,7 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
     premiumDescription: isRTL ? "سيظهر هذا المنتج في فئته وفي قسم المنتجات الفاخرة" : "This product will appear in its category and in Premium section",
     beef: isRTL ? "لحم بقري" : "Beef",
     lamb: isRTL ? "لحم ضأن" : "Lamb",
-    mutton: isRTL ? "لحم خروف" : "Mutton",
+    goat: isRTL ? "لحم ماعز" : "Goat",
     chicken: isRTL ? "دجاج" : "Chicken",
     other: isRTL ? "أخرى" : "Other",
     uploadImage: isRTL ? "رفع صورة" : "Upload Image",

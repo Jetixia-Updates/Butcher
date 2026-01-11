@@ -32,7 +32,7 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [showFilters, setShowFilters] = useState(false);
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 200]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
@@ -95,15 +95,10 @@ export default function ProductsPage() {
     };
   }, [refreshProducts]);
 
-  // Categories - use shared categories and filter to only those with products or have premium products
-  const productCategories = new Set(products.map((p) => p.category));
-  const hasPremiumProducts = products.some(p => p.isPremium);
+  // Categories - use all shared categories
   const categories = [
     { id: "All", nameEn: "All", nameAr: "الكل" },
-    ...PRODUCT_CATEGORIES.filter(cat => {
-      if (cat.id === "Premium") return hasPremiumProducts;
-      return productCategories.has(cat.id);
-    })
+    ...PRODUCT_CATEGORIES
   ];
 
   // Sync category with URL params
@@ -120,7 +115,7 @@ export default function ProductsPage() {
 
   // Get max price for range
   const maxPrice = useMemo(() => {
-    return Math.max(...products.map(p => p.price), 200);
+    return Math.max(...products.map(p => p.price), 10000);
   }, [products]);
 
   // Filter and sort products

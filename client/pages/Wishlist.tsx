@@ -23,7 +23,7 @@ export default function WishlistPage() {
       empty: "Your wishlist is empty",
       emptyDesc: "Save products you love for later!",
       browseProducts: "Browse Products",
-      addToCart: "Add to Cart",
+      moveToCart: "Move to Cart",
       remove: "Remove",
       clearAll: "Clear All",
       addedOn: "Added on",
@@ -37,7 +37,7 @@ export default function WishlistPage() {
       empty: "قائمة المفضلة فارغة",
       emptyDesc: "احفظ المنتجات التي تحبها لوقت لاحق!",
       browseProducts: "تصفح المنتجات",
-      addToCart: "أضف للسلة",
+      moveToCart: "نقل للسلة",
       remove: "حذف",
       clearAll: "مسح الكل",
       addedOn: "تمت الإضافة في",
@@ -60,6 +60,8 @@ export default function WishlistPage() {
       image: item.image,
       category: item.category,
     });
+    // Remove from wishlist after adding to cart
+    removeFromWishlist(item.productId);
   };
 
   if (!isLoggedIn) {
@@ -161,7 +163,7 @@ export default function WishlistPage() {
                         className="flex-1 btn-primary flex items-center justify-center gap-2"
                       >
                         <ShoppingCart className="w-4 h-4" />
-                        {t.addToCart}
+                        {t.moveToCart}
                       </button>
                       <button
                         onClick={() => removeFromWishlist(item.productId)}

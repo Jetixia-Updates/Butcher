@@ -14,7 +14,7 @@ export interface Category {
 export const PRODUCT_CATEGORIES: Category[] = [
   { id: "Beef", nameEn: "Beef", nameAr: "لحم بقري", icon: "🥩", color: "bg-red-100 text-red-600" },
   { id: "Lamb", nameEn: "Lamb", nameAr: "لحم ضأن", icon: "🍖", color: "bg-orange-100 text-orange-600" },
-  { id: "Mutton", nameEn: "Mutton", nameAr: "لحم خروف", icon: "🐑", color: "bg-amber-100 text-amber-600" },
+  { id: "Goat", nameEn: "Goat", nameAr: "لحم ماعز", icon: "🐐", color: "bg-amber-100 text-amber-600" },
   { id: "Chicken", nameEn: "Chicken", nameAr: "دجاج", icon: "🍗", color: "bg-yellow-100 text-yellow-600" },
   { id: "Marinated", nameEn: "Marinated", nameAr: "متبل", icon: "🌿", color: "bg-green-100 text-green-600" },
   { id: "Premium", nameEn: "Premium", nameAr: "فاخر", icon: "⭐", color: "bg-purple-100 text-purple-600" },

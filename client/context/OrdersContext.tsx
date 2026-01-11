@@ -139,8 +139,8 @@ const INITIAL_ORDERS: CustomerOrder[] = [
       {
         id: "item_4",
         productId: "prod_6",
-        name: "Mutton Leg",
-        nameAr: "فخذ خروف",
+        name: "Goat Leg",
+        nameAr: "فخذ ماعز",
         quantity: 1,
         price: 125.0,
         notes: "Whole",

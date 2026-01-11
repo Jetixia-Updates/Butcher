@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { Capacitor } from "@capacitor/core";
 import { productsApi } from "@/lib/api";
 
 export interface Product {
@@ -59,12 +60,12 @@ const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod_6",
-    name: "Mutton Leg",
-    nameAr: "فخذ خروف",
+    name: "Goat Leg",
+    nameAr: "فخذ ماعز",
     price: 125,
-    category: "Mutton",
-    description: "Whole mutton leg, perfect for traditional dishes",
-    descriptionAr: "فخذ خروف كامل، مثالي للأطباق التقليدية",
+    category: "Goat",
+    description: "Whole goat leg, perfect for traditional dishes",
+    descriptionAr: "فخذ ماعز كامل، مثالي للأطباق التقليدية",
     available: true,
     discount: 20,
     rating: 4.9,
@@ -121,12 +122,12 @@ const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: "prod_8",
-    name: "Mutton Ribs",
-    nameAr: "ريش خروف",
+    name: "Goat Ribs",
+    nameAr: "ريش ماعز",
     price: 95,
-    category: "Mutton",
-    description: "Premium mutton ribs, perfect for grilling",
-    descriptionAr: "ريش خروف ممتازة، مثالية للشوي",
+    category: "Goat",
+    description: "Premium goat ribs, perfect for grilling",
+    descriptionAr: "ريش ماعز ممتازة، مثالية للشوي",
     available: true,
     discount: 25,
     rating: 4.8,
@@ -160,15 +161,32 @@ const INITIAL_PRODUCTS: Product[] = [
 ];
 
 export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Initialize with INITIAL_PRODUCTS for consistency across all platforms
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem("butcher_products");
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    // Try to load from localStorage first (works on both web and Capacitor WebView)
+    try {
+      const saved = localStorage.getItem("butcher_products");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return INITIAL_PRODUCTS;
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync products across browser tabs using storage event
+  // Check if running on native mobile platform
+  const isNative = Capacitor.isNativePlatform();
+
+  // Sync products across browser tabs using storage event (web only)
   useEffect(() => {
+    if (isNative) return; // Skip on mobile - no cross-tab sync needed
+    
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "butcher_products" && e.newValue) {
         try {
@@ -182,36 +200,41 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+  }, [isNative]);
 
-  // Save to localStorage whenever products change
+  // Save to localStorage whenever products change (works on both web and mobile WebView)
   useEffect(() => {
-    localStorage.setItem("butcher_products", JSON.stringify(products));
+    try {
+      localStorage.setItem("butcher_products", JSON.stringify(products));
+    } catch (err) {
+      console.error("Failed to save products to localStorage:", err);
+    }
   }, [products]);
 
-  // Fetch products from localStorage (source of truth for this demo)
-  // In production, this would fetch from the API
+  // Fetch products - localStorage is the source of truth for this demo
+  // API is stateless (serverless), so we use localStorage for persistence
   const fetchProducts = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Try to fetch from API first
-      const response = await productsApi.getAll();
-      if (response.success && response.data && response.data.length > 0) {
-        // Check if we have local updates that are newer
-        const savedStr = localStorage.getItem("butcher_products");
-        if (savedStr) {
-          const savedProducts: Product[] = JSON.parse(savedStr);
-          // Use localStorage as source of truth since admin updates go there
-          // Only use API data if localStorage is empty
-          if (savedProducts.length > 0) {
-            setProducts(savedProducts);
+      // Try to load from localStorage first
+      const saved = localStorage.getItem("butcher_products");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setProducts(parsed);
             setIsLoading(false);
             return;
           }
+        } catch {
+          // Continue to API fallback
         }
-        
-        // Map backend products to frontend format
+      }
+      
+      // Fallback to API if localStorage is empty
+      const response = await productsApi.getAll();
+      if (response.success && response.data && response.data.length > 0) {
         const mappedProducts: Product[] = response.data.map((p) => ({
           id: p.id,
           name: p.name,
@@ -222,37 +245,37 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
           descriptionAr: p.descriptionAr,
           image: p.image,
           available: p.isActive,
+          discount: (p as any).discount,
+          rating: (p as any).rating,
+          isPremium: (p as any).isPremium,
+          badges: (p as any).badges,
         }));
         setProducts(mappedProducts);
         localStorage.setItem("butcher_products", JSON.stringify(mappedProducts));
       } else {
-        // API failed or returned empty, use localStorage
-        const saved = localStorage.getItem("butcher_products");
-        if (saved) {
-          setProducts(JSON.parse(saved));
-        }
+        // Use initial products as last resort
+        setProducts(INITIAL_PRODUCTS);
+        localStorage.setItem("butcher_products", JSON.stringify(INITIAL_PRODUCTS));
       }
     } catch (err) {
       setError("Failed to fetch products");
-      // Use localStorage as fallback
-      const saved = localStorage.getItem("butcher_products");
-      if (saved) {
-        setProducts(JSON.parse(saved));
+      // Use initial products as fallback
+      if (products.length === 0) {
+        setProducts(INITIAL_PRODUCTS);
       }
     }
     setIsLoading(false);
-  }, []);
+  }, [products.length]);
 
-  // Only fetch on initial mount, not on every render
+  // Fetch on initial mount if localStorage is empty
   useEffect(() => {
-    // Don't fetch if we already have products from localStorage
     const saved = localStorage.getItem("butcher_products");
     if (!saved) {
       fetchProducts();
     }
-  }, []);
+  }, [fetchProducts]);
 
-  // refreshProducts now reads from localStorage (synced across tabs)
+  // Refresh products from localStorage
   const refreshProducts = useCallback(async () => {
     const saved = localStorage.getItem("butcher_products");
     if (saved) {
@@ -260,7 +283,6 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
         const parsedProducts = JSON.parse(saved);
         setProducts(parsedProducts);
       } catch {
-        // If parse fails, fetch from API
         await fetchProducts();
       }
     } else {

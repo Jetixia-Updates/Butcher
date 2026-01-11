@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Heart } from "lucide-react";
 import { useBasket } from "@/context/BasketContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { PriceDisplay } from "@/components/CurrencySymbol";
@@ -10,6 +12,7 @@ export default function BasketPage() {
   const { user } = useAuth();
   const { items, subtotal, vat, total, removeItem, updateQuantity, saveBasket, clearBasket } =
     useBasket();
+  const { addToWishlist, isInWishlist } = useWishlist();
   const { t, language } = useLanguage();
   const isRTL = language === 'ar';
   const [savedBasketName, setSavedBasketName] = useState("");
@@ -23,6 +26,21 @@ export default function BasketPage() {
   // Helper function to get localized category
   const getItemCategory = (item: typeof items[0]) => {
     return item.category ? t(`category.${item.category.toLowerCase()}`) : "";
+  };
+
+  // Handle save for later - move item to wishlist
+  const handleSaveForLater = (item: typeof items[0]) => {
+    // Add to wishlist
+    addToWishlist({
+      productId: item.productId,
+      name: item.name,
+      nameAr: item.nameAr,
+      price: item.price,
+      image: item.image,
+      category: item.category || "",
+    });
+    // Remove from basket
+    removeItem(item.id);
   };
 
   const handleSaveBasket = () => {
@@ -145,17 +163,28 @@ export default function BasketPage() {
                         </button>
                       </div>
 
-                      {/* Item Total & Remove */}
-                      <div className="text-right">
+                      {/* Item Total & Actions */}
+                      <div className="text-right flex flex-col items-end gap-1">
                         <p className="font-bold text-foreground text-sm sm:text-base">
                           <PriceDisplay price={item.price * item.quantity} size="md" />
                         </p>
-                        <button
-                          onClick={() => removeItem(item.id)}
-                          className="text-destructive hover:text-destructive/80 text-xs sm:text-sm font-semibold mt-1 sm:mt-2 transition-colors"
-                        >
-                          {t("basket.remove")}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleSaveForLater(item)}
+                            className={`text-primary hover:text-primary/80 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1 ${isInWishlist(item.productId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={isInWishlist(item.productId)}
+                            title={isInWishlist(item.productId) ? (language === 'ar' ? 'موجود في المفضلة' : 'Already in wishlist') : (language === 'ar' ? 'حفظ لوقت لاحق' : 'Save for later')}
+                          >
+                            <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span className="hidden sm:inline">{language === 'ar' ? 'حفظ' : 'Save'}</span>
+                          </button>
+                          <button
+                            onClick={() => removeItem(item.id)}
+                            className="text-destructive hover:text-destructive/80 text-xs sm:text-sm font-semibold transition-colors"
+                          >
+                            {t("basket.remove")}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
