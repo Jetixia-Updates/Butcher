@@ -1,6 +1,6 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { Heart } from "lucide-react";
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { Heart, LogIn, UserPlus } from "lucide-react";
 import { useBasket } from "@/context/BasketContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useAuth } from "@/context/AuthContext";
@@ -9,12 +9,13 @@ import { PriceDisplay } from "@/components/CurrencySymbol";
 
 export default function BasketPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isLoggedIn } = useAuth();
   const { items, subtotal, vat, total, removeItem, updateQuantity, clearBasket } =
     useBasket();
   const { addToWishlist, isInWishlist } = useWishlist();
   const { t, language } = useLanguage();
   const isRTL = language === 'ar';
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   // Helper function to get localized item name
   const getItemName = (item: typeof items[0]) => {
@@ -217,7 +218,13 @@ export default function BasketPage() {
                 </div>
 
                 <button
-                  onClick={() => navigate("/checkout")}
+                  onClick={() => {
+                    if (isLoggedIn) {
+                      navigate("/checkout");
+                    } else {
+                      setShowLoginPrompt(true);
+                    }
+                  }}
                   className="w-full btn-primary py-2.5 sm:py-3 rounded-lg font-semibold text-sm sm:text-base"
                 >
                   {t("basket.checkout")}
@@ -262,6 +269,98 @@ export default function BasketPage() {
             </div>
           </div>
         </div>
+
+      {/* Login/Register Prompt Modal */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-6 text-center border-b border-border">
+              <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
+                <LogIn className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold text-foreground">
+                {language === "ar" ? "تسجيل الدخول مطلوب" : "Login Required"}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-2">
+                {language === "ar" 
+                  ? "يرجى تسجيل الدخول أو إنشاء حساب جديد للمتابعة مع طلبك"
+                  : "Please login or create an account to proceed with your order"}
+              </p>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4">
+              {/* Login Button */}
+              <Link
+                to="/login"
+                state={{ from: "/basket" }}
+                className="w-full btn-primary py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+              >
+                <LogIn className="w-5 h-5" />
+                {language === "ar" ? "تسجيل الدخول" : "Login"}
+              </Link>
+
+              {/* Divider */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-background text-muted-foreground">
+                    {language === "ar" ? "أو" : "or"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Register Button */}
+              <Link
+                to="/register"
+                state={{ from: "/basket" }}
+                className="w-full btn-outline py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+              >
+                <UserPlus className="w-5 h-5" />
+                {language === "ar" ? "إنشاء حساب جديد" : "Create New Account"}
+              </Link>
+
+              {/* Benefits */}
+              <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+                <p className="text-xs font-semibold text-foreground mb-2">
+                  {language === "ar" ? "مزايا إنشاء حساب:" : "Benefits of creating an account:"}
+                </p>
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  <li className="flex items-center gap-2">
+                    <span className="text-primary">✓</span>
+                    {language === "ar" ? "تتبع طلباتك بسهولة" : "Track your orders easily"}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-primary">✓</span>
+                    {language === "ar" ? "حفظ عناوين التوصيل" : "Save delivery addresses"}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-primary">✓</span>
+                    {language === "ar" ? "كسب نقاط الولاء" : "Earn loyalty points"}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-primary">✓</span>
+                    {language === "ar" ? "عروض وخصومات حصرية" : "Exclusive deals & discounts"}
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-border bg-muted/30">
+              <button
+                onClick={() => setShowLoginPrompt(false)}
+                className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
+              >
+                {language === "ar" ? "متابعة التسوق" : "Continue Shopping"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

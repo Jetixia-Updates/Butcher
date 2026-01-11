@@ -536,7 +536,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
               </div>
             )}
 
-            {showBasketIcon && isLoggedIn && (
+            {showBasketIcon && (
               <Link to="/basket" className="relative group">
                 <svg
                   className="w-6 h-6 text-primary group-hover:text-primary/80 transition-colors"

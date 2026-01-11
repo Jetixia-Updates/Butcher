@@ -81,10 +81,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const priceUnit = language === "ar" ? "كجم" : "Kg";
 
   const handleAddToCartClick = () => {
-    if (isVisitor) {
-      if (onLoginRequired) onLoginRequired();
-      return;
-    }
+    // Allow visitors to add to cart - they'll be prompted at checkout
     // Show options modal
     setShowOptionsModal(true);
   };
@@ -234,8 +231,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             )}
           </div>
 
-          {/* Quantity & Button */}
-          {product.available && !isVisitor && (
+          {/* Quantity & Button - Now available for all users including visitors */}
+          {product.available && (
             <div className="flex gap-1 sm:gap-2 items-center mt-auto">
               <div className="flex items-center border border-border rounded-md flex-1">
                 <button
@@ -286,16 +283,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </div>
           )}
 
-          {/* Visitor/Login Required */}
-          {isVisitor || !product.available ? (
+          {/* Out of Stock Message */}
+          {!product.available && (
             <button
-              onClick={onLoginRequired}
               className="btn-outline w-full mt-auto text-sm sm:text-base py-1.5 sm:py-2"
-              disabled={!product.available}
+              disabled
             >
-              {isVisitor ? t("product.login") : t("product.outOfStock")}
+              {t("product.outOfStock")}
             </button>
-          ) : null}
+          )}
         </div>
       </div>
 
