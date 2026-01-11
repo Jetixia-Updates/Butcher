@@ -1310,8 +1310,7 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              {/* Preferred Delivery Time Slot Section - Hidden for Express Delivery */}
-              {!isExpressDelivery && (
+              {/* Preferred Delivery Time Slot Section */}
               <div className="card-premium p-4 sm:p-6">
                 <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-1 sm:mb-2">
                   {language === "ar" ? "وقت التوصيل المفضل" : "Preferred Delivery Time"}
@@ -1322,6 +1321,9 @@ export default function CheckoutPage() {
                     : "Choose your preferred date and time for delivery"}
                 </p>
 
+                {/* Date and Time Selection - Hidden when Express Delivery is selected */}
+                {!isExpressDelivery && (
+                  <>
                 {/* Date Selection */}
                 <div className="mb-4 sm:mb-6">
                   <label className="block text-xs sm:text-sm font-semibold text-foreground mb-2 sm:mb-3">
@@ -1411,22 +1413,19 @@ export default function CheckoutPage() {
                     </p>
                   </div>
                 )}
-              </div>
-              )}
+                  </>
+                )}
 
-              {/* Express Delivery Option - Always visible */}
-              <div className="card-premium p-4 sm:p-6">
-                <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-2">
-                  {language === "ar" ? "خيار التوصيل" : "Delivery Option"}
-                </h2>
-                <div
-                  onClick={() => setIsExpressDelivery(!isExpressDelivery)}
-                  className={`p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                    isExpressDelivery
-                      ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
-                      : "border-border hover:border-orange-300"
-                  }`}
-                >
+                {/* Express Delivery Option */}
+                <div className="mt-4 sm:mt-6 pt-4 border-t border-border">
+                  <div
+                    onClick={() => setIsExpressDelivery(!isExpressDelivery)}
+                    className={`p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                      isExpressDelivery
+                        ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
+                        : "border-border hover:border-orange-300"
+                    }`}
+                  >
                     <div className="flex items-start gap-3">
                       <div
                         className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
@@ -1462,6 +1461,7 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                   </div>
+                </div>
               </div>
 
               {/* Driver Tip Section */}
