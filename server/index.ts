@@ -2,7 +2,6 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
-import { seedDatabase } from "./db";
 
 // Import route modules
 import ordersRouter from "./routes/orders";
@@ -18,8 +17,7 @@ import suppliersRouter from "./routes/suppliers";
 export function createServer() {
   const app = express();
 
-  // Initialize database with seed data
-  seedDatabase();
+  // Database is seeded on module load in db/index.ts
 
   // Middleware
   app.use(cors());

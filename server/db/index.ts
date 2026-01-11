@@ -65,7 +65,15 @@ export const generateToken = () => `tok_${Date.now()}_${Math.random().toString(3
 // SEED DATA
 // =====================================================
 
+let isSeeded = false;
+
 export function seedDatabase() {
+  // Prevent duplicate seeding
+  if (isSeeded) {
+    return;
+  }
+  isSeeded = true;
+
   // Seed products
   const products: Product[] = [
     {
