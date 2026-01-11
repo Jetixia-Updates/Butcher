@@ -95,11 +95,15 @@ export default function ProductsPage() {
     };
   }, [refreshProducts]);
 
-  // Categories - use shared categories and filter to only those with products
+  // Categories - use shared categories and filter to only those with products or have premium products
   const productCategories = new Set(products.map((p) => p.category));
+  const hasPremiumProducts = products.some(p => p.isPremium);
   const categories = [
     { id: "All", nameEn: "All", nameAr: "الكل" },
-    ...PRODUCT_CATEGORIES.filter(cat => productCategories.has(cat.id))
+    ...PRODUCT_CATEGORIES.filter(cat => {
+      if (cat.id === "Premium") return hasPremiumProducts;
+      return productCategories.has(cat.id);
+    })
   ];
 
   // Sync category with URL params
@@ -124,8 +128,13 @@ export default function ProductsPage() {
     let result = [...products];
 
     // Category filter - case-insensitive match
+    // For Premium category, show all products marked as isPremium
     if (selectedCategory !== "All") {
-      result = result.filter((p) => p.category.toLowerCase() === selectedCategory.toLowerCase());
+      if (selectedCategory.toLowerCase() === "premium") {
+        result = result.filter((p) => p.isPremium === true);
+      } else {
+        result = result.filter((p) => p.category.toLowerCase() === selectedCategory.toLowerCase());
+      }
     }
 
     // Search filter

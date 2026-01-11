@@ -13,6 +13,7 @@ export interface Product {
   available: boolean;
   discount?: number;
   rating?: number;
+  isPremium?: boolean;
   badges?: ("halal" | "organic" | "grass-fed" | "premium" | "fresh" | "local")[];
 }
 

@@ -130,12 +130,12 @@ const addresses = new Map<string, Address>();
 
 // Demo products data
 const demoProducts = [
-  { id: 'prod_1', name: 'Premium Beef Steak', nameAr: 'ستيك لحم بقري ممتاز', price: 89.99, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, description: 'Premium quality beef steak', descriptionAr: 'ستيك لحم بقري عالي الجودة', available: true },
-  { id: 'prod_2', name: 'Lamb Chops', nameAr: 'ريش لحم ضأن', price: 74.50, category: 'Lamb', unit: 'kg', isActive: true, isFeatured: true, description: 'Fresh lamb chops', descriptionAr: 'ريش لحم ضأن طازجة', available: true },
-  { id: 'prod_3', name: 'Chicken Breast', nameAr: 'صدر دجاج', price: 34.99, category: 'Chicken', unit: 'kg', isActive: true, isFeatured: false, description: 'Boneless chicken breast', descriptionAr: 'صدر دجاج بدون عظم', available: true },
-  { id: 'prod_4', name: 'Ground Beef', nameAr: 'لحم بقري مفروم', price: 45.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: false, description: 'Fresh ground beef', descriptionAr: 'لحم بقري مفروم طازج', available: true },
-  { id: 'prod_5', name: 'Beef Brisket', nameAr: 'صدر لحم بقري', price: 95.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, description: 'Premium beef brisket', descriptionAr: 'صدر لحم بقري ممتاز', available: true },
-  { id: 'prod_6', name: 'Mutton Leg', nameAr: 'فخذ خروف', price: 125.00, category: 'Mutton', unit: 'piece', isActive: true, isFeatured: true, description: 'Whole mutton leg', descriptionAr: 'فخذ خروف كامل', available: true },
+  { id: 'prod_1', name: 'Premium Beef Steak', nameAr: 'ستيك لحم بقري ممتاز', price: 89.99, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium quality beef steak', descriptionAr: 'ستيك لحم بقري عالي الجودة', available: true },
+  { id: 'prod_2', name: 'Lamb Chops', nameAr: 'ريش لحم ضأن', price: 74.50, category: 'Lamb', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Fresh lamb chops', descriptionAr: 'ريش لحم ضأن طازجة', available: true },
+  { id: 'prod_3', name: 'Chicken Breast', nameAr: 'صدر دجاج', price: 34.99, category: 'Chicken', unit: 'kg', isActive: true, isFeatured: false, isPremium: false, description: 'Boneless chicken breast', descriptionAr: 'صدر دجاج بدون عظم', available: true },
+  { id: 'prod_4', name: 'Ground Beef', nameAr: 'لحم بقري مفروم', price: 45.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: false, isPremium: false, description: 'Fresh ground beef', descriptionAr: 'لحم بقري مفروم طازج', available: true },
+  { id: 'prod_5', name: 'Beef Brisket', nameAr: 'صدر لحم بقري', price: 95.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium beef brisket', descriptionAr: 'صدر لحم بقري ممتاز', available: true },
+  { id: 'prod_6', name: 'Mutton Leg', nameAr: 'فخذ خروف', price: 125.00, category: 'Mutton', unit: 'piece', isActive: true, isFeatured: true, isPremium: true, description: 'Whole mutton leg', descriptionAr: 'فخذ خروف كامل', available: true },
 ];
 
 // Seed initial data

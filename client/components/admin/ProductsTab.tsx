@@ -70,6 +70,8 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
     productAvailable: isRTL ? "متوفر للبيع" : "Available for Sale",
     outOfStock: isRTL ? "غير متوفر للبيع" : "Out of Stock",
     selectCategory: isRTL ? "اختر الفئة" : "Select Category",
+    premiumProduct: isRTL ? "منتج فاخر" : "Premium Product",
+    premiumDescription: isRTL ? "سيظهر هذا المنتج في فئته وفي قسم المنتجات الفاخرة" : "This product will appear in its category and in Premium section",
     beef: isRTL ? "لحم بقري" : "Beef",
     lamb: isRTL ? "لحم ضأن" : "Lamb",
     mutton: isRTL ? "لحم خروف" : "Mutton",
@@ -402,6 +404,7 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
   const [nameAr, setNameAr] = useState(product?.nameAr || "");
   const [price, setPrice] = useState(product?.price?.toString() || "");
   const [category, setCategory] = useState(product?.category || "");
+  const [isPremium, setIsPremium] = useState(product?.isPremium ?? false);
   const [description, setDescription] = useState(product?.description || "");
   const [descriptionAr, setDescriptionAr] = useState(product?.descriptionAr || "");
   const [imageUrl, setImageUrl] = useState(product?.image || "");
@@ -409,11 +412,13 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
   const [available, setAvailable] = useState(product?.available ?? true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Use shared categories
-  const categories = PRODUCT_CATEGORIES.map(cat => ({
-    value: cat.id,
-    label: isRTL ? cat.nameAr : cat.nameEn,
-  }));
+  // Use shared categories - exclude Premium from dropdown since it's a checkbox
+  const categories = PRODUCT_CATEGORIES
+    .filter(cat => cat.id !== "Premium")
+    .map(cat => ({
+      value: cat.id,
+      label: isRTL ? cat.nameAr : cat.nameEn,
+    }));
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -444,6 +449,7 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
         nameAr: nameAr || undefined,
         price: parseFloat(price),
         category,
+        isPremium,
         description,
         descriptionAr: descriptionAr || undefined,
         image: imageUrl || undefined,
@@ -629,6 +635,33 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
               <span className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium",
                 available 
+                  ? "bg-green-100 text-green-700" 
+                  : "bg-red-100 text-red-700"
+              )}>
+                {available ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                {available ? t.productAvailable : t.outOfStock}
+              </span>
+            </div>
+          </div>
+
+          {/* Premium Product Checkbox */}
+          <div className="p-4 bg-purple-50 rounded-xl space-y-2">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isPremium}
+                onChange={(e) => setIsPremium(e.target.checked)}
+                className="w-5 h-5 rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⭐</span>
+                <span className="font-medium text-purple-900">{t.premiumProduct}</span>
+              </div>
+            </label>
+            <p className="text-xs text-purple-600 {isRTL ? 'mr-8' : 'ml-8'}">
+              {t.premiumDescription}
+            </p>
+          </div> 
                   ? "bg-green-100 text-green-700" 
                   : "bg-red-100 text-red-700"
               )}>
