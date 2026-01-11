@@ -52,17 +52,6 @@ const banners: Banner[] = [
   },
   {
     id: "2",
-    titleEn: "Eid Special",
-    titleAr: "عروض العيد",
-    subtitleEn: "Premium lamb cuts for your celebrations",
-    subtitleAr: "قطع لحم الضأن الممتازة لاحتفالاتكم",
-    image: "/photos/eid-special.jpg",
-    bgColor: "from-emerald-600 to-emerald-800",
-    link: "/products?category=lamb",
-    badge: "LIMITED",
-  },
-  {
-    id: "3",
     titleEn: "Free Delivery",
     titleAr: "توصيل مجاني",
     subtitleEn: "On orders above AED 150",
