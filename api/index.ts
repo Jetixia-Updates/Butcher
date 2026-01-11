@@ -137,6 +137,10 @@ const demoProducts = [
   { id: 'prod_4', name: 'Ground Beef', nameAr: 'لحم بقري مفروم', price: 45.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: false, isPremium: false, description: 'Fresh ground beef', descriptionAr: 'لحم بقري مفروم طازج', available: true },
   { id: 'prod_5', name: 'Beef Brisket', nameAr: 'صدر لحم بقري', price: 95.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium beef brisket', descriptionAr: 'صدر لحم بقري ممتاز', available: true },
   { id: 'prod_6', name: 'Goat Leg', nameAr: 'فخذ ماعز', price: 125.00, category: 'Goat', unit: 'piece', isActive: true, isFeatured: true, isPremium: true, description: 'Whole goat leg', descriptionAr: 'فخذ ماعز كامل', available: true },
+  { id: 'prod_7', name: 'Lamb Leg', nameAr: 'فخذ ضأن', price: 125.00, category: 'Lamb', unit: 'piece', isActive: true, isFeatured: false, isPremium: true, description: 'Whole lamb leg, perfect for family dinners', descriptionAr: 'فخذ ضأن كامل، مثالي لعشاء العائلة', available: false },
+  { id: 'prod_8', name: 'Goat Ribs', nameAr: 'ريش ماعز', price: 95.00, category: 'Goat', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium goat ribs, perfect for grilling', descriptionAr: 'ريش ماعز ممتازة، مثالية للشوي', available: true },
+  { id: 'prod_9', name: 'Wagyu Ribeye', nameAr: 'واغيو ريب آي', price: 249.99, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium Australian Wagyu A5, melt-in-your-mouth texture', descriptionAr: 'واغيو أسترالي ممتاز A5، قوام يذوب في الفم', available: true },
+  { id: 'prod_10', name: 'Organic Chicken Thighs', nameAr: 'أفخاذ دجاج عضوي', price: 42.99, category: 'Chicken', unit: 'kg', isActive: true, isFeatured: false, isPremium: false, description: 'Free-range organic chicken thighs, extra juicy', descriptionAr: 'أفخاذ دجاج عضوي حر، طرية وغنية بالعصارة', available: true },
 ];
 
 // Seed initial data
