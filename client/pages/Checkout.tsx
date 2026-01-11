@@ -1352,8 +1352,8 @@ export default function CheckoutPage() {
                         </div>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                           {language === "ar" 
-                            ? "احصل على طلبك خلال ساعة واحدة! رسوم إضافية 25 درهم" 
-                            : "Get your order within 1 hour! Additional AED 25 fee"}
+                            ? "احصل على طلبك خلال 3 ساعات! رسوم إضافية 25 درهم" 
+                            : "Get your order within 3 hours! Additional AED 25 fee"}
                         </p>
                       </div>
                       <div className="text-right">
