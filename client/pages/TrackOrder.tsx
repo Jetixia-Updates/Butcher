@@ -552,12 +552,12 @@ export default function TrackOrderPage() {
                 <span className="text-muted-foreground">
                   {isRTL && item.nameAr ? item.nameAr : item.name} × {item.quantity}
                 </span>
-                <span className="font-medium">د.إ {(item.price * item.quantity).toFixed(2)}</span>
+                <span className="font-medium">AED {(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
             <div className="border-t border-border pt-2 mt-2 flex justify-between items-center">
               <span className="font-semibold">{tt.total}</span>
-              <span className="font-bold text-primary">د.إ {order.total.toFixed(2)}</span>
+              <span className="font-bold text-primary">AED {order.total.toFixed(2)}</span>
             </div>
           </div>
         </div>

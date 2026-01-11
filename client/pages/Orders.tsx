@@ -181,13 +181,13 @@ Order: ${order.orderNumber}
 Date: ${new Date(order.createdAt).toLocaleDateString()}
 
 Items:
-${order.items.map((item) => `- ${item.name} x${item.quantity} = د.إ ${(item.price * item.quantity).toFixed(2)}`).join("\n")}
+${order.items.map((item) => `- ${item.name} x${item.quantity} = AED ${(item.price * item.quantity).toFixed(2)}`).join("\n")}
 
-Subtotal: د.إ ${order.subtotal.toFixed(2)}
-VAT: د.إ ${order.vat.toFixed(2)}
-Delivery: د.إ ${order.deliveryFee.toFixed(2)}
-${order.discount > 0 ? `Discount: -د.إ ${order.discount.toFixed(2)}\n` : ""}
-Total: د.إ ${order.total.toFixed(2)}
+Subtotal: AED ${order.subtotal.toFixed(2)}
+VAT: AED ${order.vat.toFixed(2)}
+Delivery: AED ${order.deliveryFee.toFixed(2)}
+${order.discount > 0 ? `Discount: -AED ${order.discount.toFixed(2)}\n` : ""}
+Total: AED ${order.total.toFixed(2)}
     `;
     
     const blob = new Blob([invoiceData], { type: "text/plain" });

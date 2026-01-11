@@ -207,7 +207,7 @@ export const createPaymentNotification = (orderNumber: string, amount: number, s
     received: {
       title: "Payment Received",
       titleAr: "تم استلام الدفع",
-      message: `Payment of ${amount} د.إ for ${orderNumber} received`,
+      message: `Payment of ${amount} AED for ${orderNumber} received`,
       messageAr: `تم استلام دفعة ${amount} درهم للطلب ${orderNumber}`,
     },
     failed: {
@@ -219,7 +219,7 @@ export const createPaymentNotification = (orderNumber: string, amount: number, s
     refunded: {
       title: "Payment Refunded",
       titleAr: "تم استرداد الدفع",
-      message: `${amount} د.إ refunded for ${orderNumber}`,
+      message: `${amount} AED refunded for ${orderNumber}`,
       messageAr: `تم استرداد ${amount} درهم للطلب ${orderNumber}`,
     },
   };
@@ -322,7 +322,7 @@ export const createUserPaymentNotification = (orderNumber: string, amount: numbe
     success: {
       title: "Payment Successful",
       titleAr: "تم الدفع بنجاح",
-      message: `Payment of ${amount} د.إ for order ${orderNumber} was successful`,
+      message: `Payment of ${amount} AED for order ${orderNumber} was successful`,
       messageAr: `تم دفع ${amount} درهم للطلب ${orderNumber} بنجاح`,
     },
     failed: {
@@ -334,7 +334,7 @@ export const createUserPaymentNotification = (orderNumber: string, amount: numbe
     refunded: {
       title: "Refund Processed",
       titleAr: "تم الاسترداد",
-      message: `${amount} د.إ has been refunded for order ${orderNumber}`,
+      message: `${amount} AED has been refunded for order ${orderNumber}`,
       messageAr: `تم استرداد ${amount} درهم للطلب ${orderNumber}`,
     },
   };
@@ -460,7 +460,7 @@ ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatRef
   }
 
   const itemsList = invoice.items.map(item => 
-    `• ${item.name} × ${item.quantity.toFixed(3)} gr\n  د.إ ${item.totalPrice.toFixed(2)}`
+    `• ${item.name} × ${item.quantity.toFixed(3)} gr\n  AED ${item.totalPrice.toFixed(2)}`
   ).join('\n');
 
   return `
@@ -478,7 +478,7 @@ ${separator}
 Items:
 ${itemsList}
 ${separator}
-Subtotal: د.إ ${invoice.subtotal.toFixed(2)}
+Subtotal: AED ${invoice.subtotal.toFixed(2)}
 VAT (${invoice.vatRate}%): AED ${invoice.vatAmount.toFixed(2)}
 ${doubleSeparator}
 TOTAL: AED ${invoice.total.toFixed(2)}

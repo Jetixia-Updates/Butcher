@@ -429,7 +429,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                     <div
                       className="w-full bg-primary/80 rounded-t-lg transition-all hover:bg-primary"
                       style={{ height: `${Math.max(height, 4)}%` }}
-                      title={`${day.date}: د.إ ${day.revenue.toFixed(2)}`}
+                      title={`${day.date}: AED ${day.revenue.toFixed(2)}`}
                     />
                     <span className="text-xs text-slate-500 truncate w-full text-center">
                       {new Date(day.date).toLocaleDateString(isRTL ? "ar-AE" : "en-US", {

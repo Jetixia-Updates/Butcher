@@ -62,7 +62,7 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
     addNewProduct: isRTL ? "إضافة منتج جديد" : "Add New Product",
     productNameEn: isRTL ? "اسم المنتج (إنجليزي)" : "Product Name (English)",
     productNameAr: isRTL ? "اسم المنتج (عربي)" : "Product Name (Arabic)",
-    productPrice: isRTL ? "السعر (د.إ)" : "Price (د.إ)",
+    productPrice: isRTL ? "السعر (درهم)" : "Price (AED)",
     productCategory: isRTL ? "الفئة" : "Category",
     productDescriptionEn: isRTL ? "الوصف (إنجليزي)" : "Description (English)",
     productDescriptionAr: isRTL ? "الوصف (عربي)" : "Description (Arabic)",
@@ -290,7 +290,7 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
                     </td>
                     {/* Price */}
                     <td className="px-3 sm:px-4 py-3 text-center font-semibold text-slate-900 text-xs sm:text-sm">
-                      {product.price.toFixed(2)} <span className="text-xs text-slate-500">د.إ</span>
+                      {product.price.toFixed(2)} <span className="text-xs text-slate-500">AED</span>
                     </td>
                     {/* Status */}
                     <td className="px-3 sm:px-4 py-3 text-center hidden sm:table-cell">
@@ -702,7 +702,7 @@ function DeleteConfirmModal({ product, onClose, onConfirm, isRTL, t }: DeleteCon
                 {isRTL && product.nameAr ? product.nameAr : product.name}
               </p>
               <p className="text-sm text-slate-500">{product.category}</p>
-              <p className="text-sm font-medium text-primary">{product.price.toFixed(2)} د.إ</p>
+              <p className="text-sm font-medium text-primary">{product.price.toFixed(2)} AED</p>
             </div>
           </div>
 

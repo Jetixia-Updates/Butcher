@@ -48,7 +48,7 @@ const promoCodes: PromoCode[] = [
     code: "MEAT50",
     titleEn: "Weekend Special",
     titleAr: "عرض نهاية الأسبوع",
-    descriptionEn: "د.إ 50 off on orders above د.إ 300",
+    descriptionEn: "AED 50 off on orders above AED 300",
     descriptionAr: "خصم 50 درهم على الطلبات فوق 300 درهم",
     discount: 50,
     discountType: "fixed",
@@ -218,7 +218,7 @@ export default function DealsPage() {
                   </p>
                   {promo.minOrder && (
                     <p className="text-white/60 text-xs mt-2">
-                      {tt.minOrder}: د.إ {promo.minOrder}
+                      {tt.minOrder}: AED {promo.minOrder}
                     </p>
                   )}
                   {promo.expiresAt && (
@@ -320,8 +320,8 @@ export default function DealsPage() {
                       : "Ribeye Steak + Lamb Kebab + Chicken Breast"}
                   </p>
                   <div className="flex items-center gap-2 mt-3">
-                    <span className="text-lg font-bold text-primary">د.إ 199</span>
-                    <span className="text-sm text-muted-foreground line-through">د.إ 265</span>
+                    <span className="text-lg font-bold text-primary">AED 199</span>
+                    <span className="text-sm text-muted-foreground line-through">AED 265</span>
                   </div>
                 </div>
               </div>
@@ -346,8 +346,8 @@ export default function DealsPage() {
                       : "Lamb Leg + Minced Lamb + Lamb Chops"}
                   </p>
                   <div className="flex items-center gap-2 mt-3">
-                    <span className="text-lg font-bold text-primary">د.إ 349</span>
-                    <span className="text-sm text-muted-foreground line-through">د.إ 499</span>
+                    <span className="text-lg font-bold text-primary">AED 349</span>
+                    <span className="text-sm text-muted-foreground line-through">AED 499</span>
                   </div>
                 </div>
               </div>

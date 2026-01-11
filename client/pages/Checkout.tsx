@@ -562,7 +562,7 @@ export default function CheckoutPage() {
           setPromoError(
             isRTL 
               ? `الحد الأدنى للطلب ${promo.minOrder} درهم للاستفادة من هذا الكود`
-              : `Minimum order of د.إ ${promo.minOrder} required for this code`
+              : `Minimum order of AED ${promo.minOrder} required for this code`
           );
         } else {
           setPromoApplied({ code, discount: promo.discount, type: promo.type });
@@ -1360,11 +1360,11 @@ export default function CheckoutPage() {
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                           {language === "ar" 
                             ? "احصل على طلبك خلال ساعة واحدة! رسوم إضافية 25 درهم" 
-                            : "Get your order within 1 hour! Additional د.إ 25 fee"}
+                            : "Get your order within 1 hour! Additional AED 25 fee"}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-orange-600 dark:text-orange-400">+د.إ 25</p>
+                        <p className="font-bold text-orange-600 dark:text-orange-400">+AED 25</p>
                       </div>
                     </div>
                   </div>
@@ -1396,7 +1396,7 @@ export default function CheckoutPage() {
                     >
                       {tip === 0 
                         ? (language === "ar" ? "لا شكراً" : "No tip")
-                        : `د.إ ${tip}`
+                        : `AED ${tip}`
                       }
                     </button>
                   ))}
@@ -1418,7 +1418,7 @@ export default function CheckoutPage() {
                     }`}
                   >
                     {!tipOptions.includes(driverTip) && driverTip > 0 
-                      ? `د.إ ${driverTip}`
+                      ? `AED ${driverTip}`
                       : (language === "ar" ? "مبلغ آخر" : "Other")}
                   </button>
                 </div>
@@ -1429,7 +1429,7 @@ export default function CheckoutPage() {
                     <p className="text-sm text-green-700 dark:text-green-400">
                       {language === "ar" 
                         ? `شكراً لك! سيحصل السائق على ${driverTip} درهم إكرامية`
-                        : `Thank you! Your driver will receive د.إ ${driverTip} tip`}
+                        : `Thank you! Your driver will receive AED ${driverTip} tip`}
                     </p>
                   </div>
                 )}
@@ -1611,7 +1611,7 @@ export default function CheckoutPage() {
                           <p className="text-[10px] sm:text-xs text-green-600 dark:text-green-500">
                             {promoApplied.type === "percent" 
                               ? `${promoApplied.discount}% ${isRTL ? 'خصم' : 'off'}`
-                              : `${isRTL ? 'خصم' : 'د.إ'} ${promoApplied.discount} ${isRTL ? 'درهم' : 'off'}`
+                              : `${isRTL ? 'خصم' : 'AED'} ${promoApplied.discount} ${isRTL ? 'درهم' : 'off'}`
                             }
                           </p>
                         </div>
