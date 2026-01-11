@@ -56,15 +56,20 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [items]);
 
   const addToWishlist = useCallback((item: Omit<WishlistItem, "id" | "addedAt">) => {
-    if (!isInWishlist(item.productId)) {
+    setItems((prev) => {
+      // Check if already in wishlist using prev state to avoid stale closure
+      const alreadyExists = prev.some((existing) => existing.productId === item.productId);
+      if (alreadyExists) {
+        return prev;
+      }
       const newItem: WishlistItem = {
         ...item,
         id: `wishlist_${Date.now()}`,
         addedAt: new Date().toISOString(),
       };
-      setItems((prev) => [...prev, newItem]);
-    }
-  }, [isInWishlist]);
+      return [...prev, newItem];
+    });
+  }, []);
 
   const removeFromWishlist = useCallback((productId: string) => {
     setItems((prev) => prev.filter((item) => item.productId !== productId));
