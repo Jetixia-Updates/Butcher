@@ -27,6 +27,9 @@ interface ProductsContextType {
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   getProductById: (id: string) => Product | undefined;
+  resetToDefaults: () => void;
+  exportProducts: () => string;
+  importProducts: (jsonData: string) => boolean;
 }
 
 const ProductsContext = createContext<ProductsContextType | undefined>(undefined);
@@ -195,19 +198,19 @@ const CATEGORY_IMAGES: Record<string, string> = {
   premium: "https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=400&h=300&fit=crop", // Premium raw meat
 };
 
-// Version number - increment this when images/prices are updated to force refresh
+// Version number - increment this to add new default products (not to override admin changes)
 const PRODUCTS_VERSION = 2;
 
-// Helper function to ensure product has the correct image from INITIAL_PRODUCTS
+// Helper function to ensure product has the correct image
 const ensureProductImage = (product: Product): Product => {
-  // For known product IDs, always use the default image to ensure consistency
+  // If product already has an image, keep it (respect admin changes)
+  if (product.image) return product;
+  
+  // For known product IDs without images, use the default image
   const defaultImage = DEFAULT_IMAGES[product.id];
   if (defaultImage) {
     return { ...product, image: defaultImage };
   }
-  
-  // For products with existing images, keep them
-  if (product.image) return product;
   
   // Fallback to category-based image
   const categoryImage = CATEGORY_IMAGES[product.category.toLowerCase()];
@@ -219,49 +222,47 @@ const ensureProductImage = (product: Product): Product => {
   return { ...product, image: CATEGORY_IMAGES.beef };
 };
 
-// Helper to merge saved products with INITIAL_PRODUCTS (for prices/images updates)
+// Helper to merge saved products with any new INITIAL_PRODUCTS (adds new products, respects admin changes)
 const mergeWithInitialProducts = (savedProducts: Product[]): Product[] => {
-  const initialProductsMap = new Map(INITIAL_PRODUCTS.map(p => [p.id, p]));
+  const savedProductsMap = new Map(savedProducts.map(p => [p.id, p]));
+  const result: Product[] = [];
   
-  return savedProducts.map(saved => {
-    const initial = initialProductsMap.get(saved.id);
-    if (initial) {
-      // Merge: use initial product's image and price, but keep saved product's other data
-      return {
-        ...saved,
-        image: initial.image,
-        price: initial.price,
-      };
-    }
-    return ensureProductImage(saved);
+  // Keep all saved products (with their admin-modified values)
+  savedProducts.forEach(saved => {
+    result.push(ensureProductImage(saved));
   });
+  
+  // Add any new products from INITIAL_PRODUCTS that don't exist in saved
+  INITIAL_PRODUCTS.forEach(initial => {
+    if (!savedProductsMap.has(initial.id)) {
+      result.push(initial);
+    }
+  });
+  
+  return result;
 };
 
 export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Initialize with INITIAL_PRODUCTS for consistency across all platforms
+  // Initialize products - respect admin changes, only add defaults for missing products
   const [products, setProducts] = useState<Product[]>(() => {
-    // Check version - if outdated, clear localStorage and use fresh data
-    const savedVersion = localStorage.getItem("butcher_products_version");
-    if (!savedVersion || parseInt(savedVersion) < PRODUCTS_VERSION) {
-      // Version mismatch - use fresh INITIAL_PRODUCTS
-      localStorage.setItem("butcher_products_version", PRODUCTS_VERSION.toString());
-      localStorage.setItem("butcher_products", JSON.stringify(INITIAL_PRODUCTS));
-      return INITIAL_PRODUCTS;
-    }
-    
     // Try to load from localStorage first (works on both web and Capacitor WebView)
     try {
       const saved = localStorage.getItem("butcher_products");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge with initial products to ensure correct images and prices
-          return mergeWithInitialProducts(parsed);
+          // Merge with initial products - respects admin changes, adds missing defaults
+          const merged = mergeWithInitialProducts(parsed);
+          // Update version
+          localStorage.setItem("butcher_products_version", PRODUCTS_VERSION.toString());
+          return merged;
         }
       }
     } catch {
       // Ignore parse errors
     }
+    // No saved products - use INITIAL_PRODUCTS
+    localStorage.setItem("butcher_products_version", PRODUCTS_VERSION.toString());
     return INITIAL_PRODUCTS;
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -479,6 +480,48 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
     return products.find((product) => product.id === id);
   };
 
+  // Reset products to initial defaults
+  const resetToDefaults = () => {
+    const productsWithImages = INITIAL_PRODUCTS.map(ensureProductImage);
+    setProducts(productsWithImages);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(productsWithImages));
+    localStorage.setItem(VERSION_KEY, String(PRODUCTS_VERSION));
+  };
+
+  // Export products as JSON string for syncing
+  const exportProducts = (): string => {
+    return JSON.stringify(products, null, 2);
+  };
+
+  // Import products from JSON string
+  const importProducts = (jsonData: string): boolean => {
+    try {
+      const importedProducts = JSON.parse(jsonData);
+      if (!Array.isArray(importedProducts)) {
+        return false;
+      }
+      // Validate that each item looks like a product
+      const validProducts = importedProducts.filter(
+        (p: unknown) =>
+          typeof p === 'object' &&
+          p !== null &&
+          'id' in p &&
+          'name' in p &&
+          'price' in p
+      );
+      if (validProducts.length === 0) {
+        return false;
+      }
+      const productsWithImages = validProducts.map(ensureProductImage);
+      setProducts(productsWithImages);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(productsWithImages));
+      localStorage.setItem(VERSION_KEY, String(PRODUCTS_VERSION));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   return (
     <ProductsContext.Provider
       value={{
@@ -490,6 +533,9 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
         updateProduct,
         deleteProduct,
         getProductById,
+        resetToDefaults,
+        exportProducts,
+        importProducts,
       }}
     >
       {children}

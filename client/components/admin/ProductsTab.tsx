@@ -3,7 +3,7 @@
  * Full CRUD operations for products with image upload, categories, and availability
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   Plus,
@@ -19,6 +19,9 @@ import {
   RefreshCw,
   MoreVertical,
   Check,
+  Download,
+  UploadCloud,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/context/LanguageContext";
@@ -32,7 +35,8 @@ interface AdminTabProps {
 export function ProductsTab({ onNavigate }: AdminTabProps) {
   const { language } = useLanguage();
   const isRTL = language === "ar";
-  const { products, isLoading, refreshProducts, addProduct, updateProduct, deleteProduct } = useProducts();
+  const { products, isLoading, refreshProducts, addProduct, updateProduct, deleteProduct, resetToDefaults, exportProducts, importProducts } = useProducts();
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // Translations
   const t = {
@@ -84,6 +88,14 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
     deleteWarning: isRTL ? "سيتم حذف هذا المنتج نهائياً ولا يمكن استرجاعه." : "This product will be permanently deleted and cannot be recovered.",
     description: isRTL ? "الوصف" : "Description",
     image: isRTL ? "الصورة" : "Image",
+    exportProducts: isRTL ? "تصدير المنتجات" : "Export Products",
+    importProducts: isRTL ? "استيراد المنتجات" : "Import Products",
+    resetToDefaults: isRTL ? "إعادة التعيين" : "Reset to Defaults",
+    exportSuccess: isRTL ? "تم تصدير المنتجات بنجاح" : "Products exported successfully",
+    importSuccess: isRTL ? "تم استيراد المنتجات بنجاح" : "Products imported successfully",
+    importError: isRTL ? "فشل في استيراد المنتجات" : "Failed to import products",
+    resetConfirm: isRTL ? "هل أنت متأكد؟ سيتم استعادة جميع المنتجات الافتراضية وستفقد أي تغييرات." : "Are you sure? This will restore all default products and you will lose any changes.",
+    syncInfo: isRTL ? "لمزامنة المنتجات بين الأجهزة، قم بتصدير المنتجات ثم استيرادها على الجهاز الآخر" : "To sync products between devices, export products and import them on the other device",
   };
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -92,6 +104,52 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
   const [addModal, setAddModal] = useState(false);
   const [deleteModal, setDeleteModal] = useState<Product | null>(null);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showSyncMenu, setShowSyncMenu] = useState(false);
+
+  // Handle export products
+  const handleExportProducts = () => {
+    const jsonData = exportProducts();
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `butcher-products-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setShowSyncMenu(false);
+  };
+
+  // Handle import products
+  const handleImportProducts = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const jsonData = event.target?.result as string;
+        const success = importProducts(jsonData);
+        if (success) {
+          alert(t.importSuccess);
+        } else {
+          alert(t.importError);
+        }
+      };
+      reader.readAsText(file);
+    }
+    setShowSyncMenu(false);
+    if (importInputRef.current) {
+      importInputRef.current.value = '';
+    }
+  };
+
+  // Handle reset to defaults
+  const handleResetToDefaults = () => {
+    resetToDefaults();
+    setShowResetConfirm(false);
+    setShowSyncMenu(false);
+  };
 
   // Use shared categories for the filter dropdown
   const filterCategories = PRODUCT_CATEGORIES;
@@ -135,7 +193,57 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
             {products.length} {t.products} • {availableCount} {t.available} • {unavailableCount} {t.unavailable}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Sync Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSyncMenu(!showSyncMenu)}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-sm"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            {showSyncMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowSyncMenu(false)} />
+                <div className={cn(
+                  "absolute top-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg z-50 min-w-[220px] py-2",
+                  isRTL ? "left-0" : "right-0"
+                )}>
+                  <p className="px-4 py-2 text-xs text-slate-500">{t.syncInfo}</p>
+                  <hr className="my-1 border-slate-200" />
+                  <button
+                    onClick={handleExportProducts}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 text-sm"
+                  >
+                    <Download className="w-4 h-4 text-blue-600" />
+                    <span>{t.exportProducts}</span>
+                  </button>
+                  <label className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 text-sm cursor-pointer">
+                    <UploadCloud className="w-4 h-4 text-green-600" />
+                    <span>{t.importProducts}</span>
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept=".json"
+                      onChange={handleImportProducts}
+                      className="hidden"
+                    />
+                  </label>
+                  <hr className="my-1 border-slate-200" />
+                  <button
+                    onClick={() => {
+                      setShowSyncMenu(false);
+                      setShowResetConfirm(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-sm text-red-600"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>{t.resetToDefaults}</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => setAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
@@ -385,6 +493,40 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
           isRTL={isRTL}
           t={t}
         />
+      )}
+
+      {/* Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full" dir={isRTL ? "rtl" : "ltr"}>
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-red-600">{t.resetToDefaults}</h2>
+              <button onClick={() => setShowResetConfirm(false)} className="p-2 hover:bg-slate-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-red-50 border border-red-100 rounded-lg p-4">
+                <p className="text-sm text-red-700">{t.resetConfirm}</p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirm(false)}
+                  className="flex-1 py-2.5 border border-slate-300 rounded-lg font-medium hover:bg-slate-50 transition-colors"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  onClick={handleResetToDefaults}
+                  className="flex-1 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+                >
+                  {t.resetToDefaults}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
