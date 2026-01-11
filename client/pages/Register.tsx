@@ -333,7 +333,7 @@ export default function RegisterPage() {
     });
 
     if (result.success) {
-      navigate("/products");
+      navigate("/home");
     } else {
       setApiError(result.error || "Registration failed. Please try again.");
     }

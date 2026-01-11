@@ -40,10 +40,10 @@ export default function VisitorPage() {
             isVisitor: true,
           });
 
-          // Redirect to products page
+          // Redirect to home page
           setLoading(false);
           setTimeout(() => {
-            navigate("/products");
+            navigate("/home");
           }, 500);
         },
         (error) => {
@@ -91,7 +91,7 @@ export default function VisitorPage() {
 
           // Auto redirect after 2 seconds
           setTimeout(() => {
-            navigate("/products");
+            navigate("/home");
           }, 2000);
         }
       );
@@ -114,7 +114,7 @@ export default function VisitorPage() {
 
       // Auto redirect after 2 seconds
       setTimeout(() => {
-        navigate("/products");
+        navigate("/home");
       }, 2000);
     }
   }, [login, navigate]);
@@ -163,7 +163,7 @@ export default function VisitorPage() {
                 address: "Manual entry",
                 isVisitor: true,
               });
-              navigate("/products");
+              navigate("/home");
             }}
             className="btn-secondary w-full py-2 rounded-lg text-xs sm:text-sm font-semibold"
           >
