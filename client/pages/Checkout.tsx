@@ -701,6 +701,21 @@ export default function CheckoutPage() {
     return language === "ar" && item.nameAr ? item.nameAr : item.name;
   };
 
+  // Smart weight display - converts to Kg when >= 1 Kg
+  const formatWeightDisplay = (weight: number) => {
+    if (weight >= 1) {
+      // Display as Kg
+      const kgValue = weight.toFixed(3);
+      const kgUnit = language === "ar" ? "كجم" : "Kg";
+      return `${kgValue} ${kgUnit}`;
+    } else {
+      // Display as grams (multiply by 1000 for display)
+      const gramsValue = Math.round(weight * 1000);
+      const grUnit = language === "ar" ? "جرام" : "gr";
+      return `${gramsValue} ${grUnit}`;
+    }
+  };
+
   // Fetch user addresses on mount
   useEffect(() => {
     const fetchAddresses = async () => {
@@ -1653,7 +1668,7 @@ export default function CheckoutPage() {
                       className="flex justify-between items-center text-xs sm:text-sm"
                     >
                       <span className="text-muted-foreground line-clamp-1 flex-1 mr-2">
-                        {getItemName(item)} x {item.quantity.toFixed(3)} {language === "ar" ? "جرام" : "gr"}
+                        {getItemName(item)} x {formatWeightDisplay(item.quantity)}
                       </span>
                       <span className="font-semibold whitespace-nowrap">
                         <PriceDisplay price={item.price * item.quantity} size="sm" />

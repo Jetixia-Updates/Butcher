@@ -61,7 +61,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   showDiscount = false,
 }) => {
   const { t, language } = useLanguage();
-  const [quantity, setQuantity] = useState(0.500);
+  const [quantity, setQuantity] = useState(0.250);
   const [isAdding, setIsAdding] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<ProductOptions>({
@@ -69,8 +69,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     cutType: [],
   });
 
-  // Format weight to 3 decimal places
+  // Format weight to 3 decimal places (for internal use)
   const formatWeight = (weight: number) => weight.toFixed(3);
+
+  // Smart weight display - converts to Kg when >= 1 Kg
+  const formatWeightDisplay = (weight: number) => {
+    if (weight >= 1) {
+      // Convert to Kg
+      const kgValue = weight.toFixed(3);
+      const kgUnit = language === "ar" ? "كجم" : "Kg";
+      return `${kgValue} ${kgUnit}`;
+    } else {
+      // Display as grams (multiply by 1000 for display)
+      const gramsValue = Math.round(weight * 1000);
+      const grUnit = language === "ar" ? "جرام" : "gr";
+      return `${gramsValue} ${grUnit}`;
+    }
+  };
 
   // Get localized product name and description
   const productName = language === "ar" && product.nameAr ? product.nameAr : product.name;
@@ -133,7 +148,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     // Reset after animation
     setTimeout(() => {
       setIsAdding(false);
-      setQuantity(0.500);
+      setQuantity(0.250);
       setSelectedOptions({ boneType: [], cutType: [] });
       setShowOptionsModal(false);
     }, 300);
@@ -249,7 +264,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 </button>
                 <div className="flex items-center justify-center flex-1 min-w-0">
                   <span className="text-xs sm:text-sm font-semibold text-foreground whitespace-nowrap">
-                    {formatWeight(quantity)} {weightUnit}
+                    {formatWeightDisplay(quantity)}
                   </span>
                 </div>
                 <button
@@ -315,7 +330,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   <div>
                     <h3 className="font-bold text-foreground">{productName}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {formatWeight(quantity)} {weightUnit} • <PriceDisplay price={product.price * quantity} size="sm" />
+                      {formatWeightDisplay(quantity)} • <PriceDisplay price={product.price * quantity} size="sm" />
                     </p>
                   </div>
                 </div>

@@ -126,6 +126,21 @@ export default function OrdersPage() {
 
   const t = translations[language];
 
+  // Smart weight display - converts to Kg when >= 1 Kg
+  const formatWeightDisplay = (weight: number) => {
+    if (weight >= 1) {
+      // Display as Kg
+      const kgValue = weight.toFixed(3);
+      const kgUnit = isRTL ? "كجم" : "Kg";
+      return `${kgValue} ${kgUnit}`;
+    } else {
+      // Display as grams (multiply by 1000 for display)
+      const gramsValue = Math.round(weight * 1000);
+      const grUnit = isRTL ? "جرام" : "gr";
+      return `${gramsValue} ${grUnit}`;
+    }
+  };
+
   const statusConfig: Record<string, { icon: React.ElementType; color: string; bgColor: string }> = {
     pending: { icon: Clock, color: "text-yellow-600", bgColor: "bg-yellow-100 dark:bg-yellow-900/30" },
     confirmed: { icon: CheckCircle, color: "text-blue-600", bgColor: "bg-blue-100 dark:bg-blue-900/30" },
@@ -366,7 +381,7 @@ Total: AED ${order.total.toFixed(2)}
                                 {item.notes && <p className="text-xs text-muted-foreground truncate">🔪 {item.notes}</p>}
                               </div>
                               <div className="text-right">
-                                <p className="text-sm text-muted-foreground">x{item.quantity.toFixed(3)}</p>
+                                <p className="text-sm text-muted-foreground">x{formatWeightDisplay(item.quantity)}</p>
                                 <p className="font-medium text-foreground">
                                   <PriceDisplay price={item.price * item.quantity} size="sm" />
                                 </p>

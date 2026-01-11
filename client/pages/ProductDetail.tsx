@@ -54,7 +54,7 @@ export default function ProductDetailPage() {
   const { language, t } = useLanguage();
   const isRTL = language === "ar";
 
-  const [quantity, setQuantity] = useState(0.5);
+  const [quantity, setQuantity] = useState(0.25);
   const [selectedBone, setSelectedBone] = useState<string[]>([]);
   const [selectedCut, setSelectedCut] = useState<string[]>([]);
   const [isAdding, setIsAdding] = useState(false);
@@ -164,6 +164,21 @@ export default function ProductDetailPage() {
 
   const formatWeight = (weight: number) => weight.toFixed(3);
   const weightUnit = isRTL ? "جرام" : "gr";
+
+  // Smart weight display - converts to Kg when >= 1 Kg
+  const formatWeightDisplay = (weight: number) => {
+    if (weight >= 1) {
+      // Display as Kg
+      const kgValue = weight.toFixed(3);
+      const kgUnit = isRTL ? "كجم" : "Kg";
+      return `${kgValue} ${kgUnit}`;
+    } else {
+      // Display as grams (multiply by 1000 for display)
+      const gramsValue = Math.round(weight * 1000);
+      const grUnit = isRTL ? "جرام" : "gr";
+      return `${gramsValue} ${grUnit}`;
+    }
+  };
 
   const handleAddToCart = () => {
     if (!product || !product.available) return;
@@ -474,7 +489,7 @@ export default function ProductDetailPage() {
                         <Minus className="w-4 h-4" />
                       </button>
                       <span className="w-24 text-center font-semibold">
-                        {formatWeight(quantity)} {weightUnit}
+                        {formatWeightDisplay(quantity)}
                       </span>
                       <button
                         onClick={() => setQuantity(parseFloat((quantity + 0.25).toFixed(3)))}

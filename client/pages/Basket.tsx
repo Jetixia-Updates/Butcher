@@ -17,6 +17,21 @@ export default function BasketPage() {
   const isRTL = language === 'ar';
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
+  // Smart weight display - converts to Kg when >= 1 Kg
+  const formatWeightDisplay = (weight: number) => {
+    if (weight >= 1) {
+      // Display as Kg
+      const kgValue = weight.toFixed(3);
+      const kgUnit = language === "ar" ? "كجم" : "Kg";
+      return `${kgValue} ${kgUnit}`;
+    } else {
+      // Display as grams (multiply by 1000 for display)
+      const gramsValue = Math.round(weight * 1000);
+      const grUnit = language === "ar" ? "جرام" : "gr";
+      return `${gramsValue} ${grUnit}`;
+    }
+  };
+
   // Helper function to get localized item name
   const getItemName = (item: typeof items[0]) => {
     return language === "ar" && item.nameAr ? item.nameAr : item.name;
@@ -135,7 +150,7 @@ export default function BasketPage() {
                           </svg>
                         </button>
                         <span className="w-16 sm:w-20 text-center font-semibold text-xs sm:text-sm">
-                          {item.quantity.toFixed(3)} {language === "ar" ? "جرام" : "gr"}
+                          {formatWeightDisplay(item.quantity)}
                         </span>
                         <button
                           onClick={() =>
