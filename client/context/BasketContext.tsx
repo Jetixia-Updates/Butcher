@@ -157,7 +157,8 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  // Count the number of unique items in the basket (not the weight)
+  const itemCount = items.length;
 
   return (
     <BasketContext.Provider

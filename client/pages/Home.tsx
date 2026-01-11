@@ -133,7 +133,6 @@ export default function HomePage() {
       beef: "Beef",
       lamb: "Lamb",
       chicken: "Chicken",
-      seafood: "Seafood",
       marinated: "Marinated",
       premium: "Premium",
       quickReorder: "Quick Reorder",
@@ -166,7 +165,6 @@ export default function HomePage() {
       beef: "لحم بقري",
       lamb: "لحم ضأن",
       chicken: "دجاج",
-      seafood: "مأكولات بحرية",
       marinated: "متبل",
       premium: "فاخر",
       quickReorder: "إعادة طلب سريع",
@@ -181,7 +179,6 @@ export default function HomePage() {
     { id: "beef", nameEn: "Beef", nameAr: "لحم بقري", icon: "🥩", color: "bg-red-100 text-red-600" },
     { id: "lamb", nameEn: "Lamb", nameAr: "لحم ضأن", icon: "🍖", color: "bg-orange-100 text-orange-600" },
     { id: "chicken", nameEn: "Chicken", nameAr: "دجاج", icon: "🍗", color: "bg-yellow-100 text-yellow-600" },
-    { id: "seafood", nameEn: "Seafood", nameAr: "مأكولات بحرية", icon: "🦐", color: "bg-blue-100 text-blue-600" },
     { id: "marinated", nameEn: "Marinated", nameAr: "متبل", icon: "🌿", color: "bg-green-100 text-green-600" },
     { id: "premium", nameEn: "Premium", nameAr: "فاخر", icon: "⭐", color: "bg-purple-100 text-purple-600" },
   ];

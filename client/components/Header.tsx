@@ -225,7 +225,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
           {/* Center: Logo */}
           <Link
-            to="/"
+            to="/home"
             className="flex-shrink-0 text-center"
           >
             <div className="inline-block">
