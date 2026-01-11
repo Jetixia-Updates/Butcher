@@ -658,17 +658,9 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
                 <span className="font-medium text-purple-900">{t.premiumProduct}</span>
               </div>
             </label>
-            <p className="text-xs text-purple-600 {isRTL ? 'mr-8' : 'ml-8'}">
+            <p className={cn("text-xs text-purple-600", isRTL ? 'mr-8' : 'ml-8')}>
               {t.premiumDescription}
             </p>
-          </div> 
-                  ? "bg-green-100 text-green-700" 
-                  : "bg-red-100 text-red-700"
-              )}>
-                {available ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                {available ? t.productAvailable : t.outOfStock}
-              </span>
-            </div>
           </div>
 
           {/* Action Buttons */}
