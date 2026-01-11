@@ -40,7 +40,7 @@ const INITIAL_PRODUCTS: Product[] = [
     category: "Beef",
     description: "Aged premium ribeye steak, perfect for grilling",
     descriptionAr: "ستيك ريب آي معتق ممتاز، مثالي للشوي",
-    image: "https://images.unsplash.com/photo-1600891964092-4316c288032e?w=400&h=300&fit=crop",
+    image: "https://images.unsplash.com/photo-1588347818036-558601350947?w=400&h=300&fit=crop",
     available: true,
     discount: 15,
     rating: 4.8,
@@ -54,7 +54,7 @@ const INITIAL_PRODUCTS: Product[] = [
     category: "Lamb",
     description: "Fresh lamb chops, ideal for Mediterranean cuisine",
     descriptionAr: "ريش لحم ضأن طازجة، مثالية للمطبخ المتوسطي",
-    image: "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=400&h=300&fit=crop",
+    image: "https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?w=400&h=300&fit=crop",
     available: true,
     discount: 10,
     rating: 4.6,
@@ -68,7 +68,7 @@ const INITIAL_PRODUCTS: Product[] = [
     category: "Goat",
     description: "Whole goat leg, perfect for traditional dishes",
     descriptionAr: "فخذ ماعز كامل، مثالي للأطباق التقليدية",
-    image: "https://images.unsplash.com/photo-1588168333986-5078d3ae3976?w=400&h=300&fit=crop",
+    image: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400&h=300&fit=crop",
     available: true,
     discount: 20,
     rating: 4.9,
@@ -95,7 +95,7 @@ const INITIAL_PRODUCTS: Product[] = [
     category: "Beef",
     description: "Lean ground beef for burgers and meatballs",
     descriptionAr: "لحم بقري مفروم قليل الدهن للبرغر وكرات اللحم",
-    image: "https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?w=400&h=300&fit=crop",
+    image: "https://images.unsplash.com/photo-1551028150-64b9f398f678?w=400&h=300&fit=crop",
     available: true,
     discount: 5,
     rating: 4.4,
@@ -109,7 +109,7 @@ const INITIAL_PRODUCTS: Product[] = [
     category: "Beef",
     description: "Slow-cooked perfection for your BBQ",
     descriptionAr: "مثالي للطهي البطيء والشواء",
-    image: "https://images.unsplash.com/photo-1544025162-d76694265947?w=400&h=300&fit=crop",
+    image: "https://images.unsplash.com/photo-1594041680534-e8c8cdebd659?w=400&h=300&fit=crop",
     available: true,
     rating: 4.7,
     badges: ["halal", "grass-fed"],
@@ -122,7 +122,7 @@ const INITIAL_PRODUCTS: Product[] = [
     category: "Lamb",
     description: "Whole lamb leg, perfect for family dinners",
     descriptionAr: "فخذ ضأن كامل، مثالي لعشاء العائلة",
-    image: "https://images.unsplash.com/photo-1608039829572-ffbd6f3cdb84?w=400&h=300&fit=crop",
+    image: "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=400&h=300&fit=crop",
     available: false,
     rating: 4.6,
     badges: ["halal", "premium"],
@@ -149,7 +149,7 @@ const INITIAL_PRODUCTS: Product[] = [
     category: "Beef",
     description: "Premium Australian Wagyu A5, melt-in-your-mouth texture",
     descriptionAr: "واغيو أسترالي ممتاز A5، قوام يذوب في الفم",
-    image: "https://images.unsplash.com/photo-1558030006-450675393462?w=400&h=300&fit=crop",
+    image: "https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=400&h=300&fit=crop",
     available: true,
     discount: 30,
     rating: 5.0,
@@ -170,29 +170,29 @@ const INITIAL_PRODUCTS: Product[] = [
   },
 ];
 
-// Create a map of default images by product id
+// Create a map of default images by product id - RAW MEAT IMAGES
 const DEFAULT_IMAGES: Record<string, string> = {
-  prod_1: "https://images.unsplash.com/photo-1600891964092-4316c288032e?w=400&h=300&fit=crop",
-  prod_2: "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=400&h=300&fit=crop",
-  prod_3: "https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&h=300&fit=crop",
-  prod_4: "https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?w=400&h=300&fit=crop",
-  prod_5: "https://images.unsplash.com/photo-1544025162-d76694265947?w=400&h=300&fit=crop",
-  prod_6: "https://images.unsplash.com/photo-1588168333986-5078d3ae3976?w=400&h=300&fit=crop",
-  prod_7: "https://images.unsplash.com/photo-1608039829572-ffbd6f3cdb84?w=400&h=300&fit=crop",
-  prod_8: "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=400&h=300&fit=crop",
-  prod_9: "https://images.unsplash.com/photo-1558030006-450675393462?w=400&h=300&fit=crop",
-  prod_10: "https://images.unsplash.com/photo-1587593810167-a84920ea0781?w=400&h=300&fit=crop",
+  prod_1: "https://images.unsplash.com/photo-1588347818036-558601350947?w=400&h=300&fit=crop", // Raw beef steak
+  prod_2: "https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?w=400&h=300&fit=crop", // Raw lamb chops
+  prod_3: "https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&h=300&fit=crop", // Raw chicken breast
+  prod_4: "https://images.unsplash.com/photo-1551028150-64b9f398f678?w=400&h=300&fit=crop", // Raw ground beef
+  prod_5: "https://images.unsplash.com/photo-1594041680534-e8c8cdebd659?w=400&h=300&fit=crop", // Raw beef brisket
+  prod_6: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400&h=300&fit=crop", // Raw goat/sheep leg
+  prod_7: "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=400&h=300&fit=crop", // Raw lamb leg
+  prod_8: "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=400&h=300&fit=crop", // Raw ribs
+  prod_9: "https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=400&h=300&fit=crop", // Raw wagyu
+  prod_10: "https://images.unsplash.com/photo-1587593810167-a84920ea0781?w=400&h=300&fit=crop", // Raw chicken thighs
 };
 
-// Category-based fallback images
+// Category-based fallback images - RAW MEAT
 const CATEGORY_IMAGES: Record<string, string> = {
-  beef: "https://images.unsplash.com/photo-1600891964092-4316c288032e?w=400&h=300&fit=crop",
-  lamb: "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=400&h=300&fit=crop",
-  chicken: "https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&h=300&fit=crop",
-  goat: "https://images.unsplash.com/photo-1588168333986-5078d3ae3976?w=400&h=300&fit=crop",
-  sheep: "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=400&h=300&fit=crop",
-  marinated: "https://images.unsplash.com/photo-1544025162-d76694265947?w=400&h=300&fit=crop",
-  premium: "https://images.unsplash.com/photo-1558030006-450675393462?w=400&h=300&fit=crop",
+  beef: "https://images.unsplash.com/photo-1588347818036-558601350947?w=400&h=300&fit=crop", // Raw beef
+  lamb: "https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?w=400&h=300&fit=crop", // Raw lamb
+  chicken: "https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&h=300&fit=crop", // Raw chicken
+  goat: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400&h=300&fit=crop", // Raw goat
+  sheep: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400&h=300&fit=crop", // Raw sheep
+  marinated: "https://images.unsplash.com/photo-1603360946369-dc9bb6258143?w=400&h=300&fit=crop", // Marinated meat
+  premium: "https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=400&h=300&fit=crop", // Premium raw meat
 };
 
 // Helper function to ensure product has an image
