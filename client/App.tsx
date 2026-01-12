@@ -40,6 +40,7 @@ import Deals from "./pages/Deals";
 import TrackOrder from "./pages/TrackOrder";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
+import DriverDashboard from "./pages/DriverDashboard";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Returns from "./pages/Returns";
@@ -103,6 +104,9 @@ const App = () => {
                                   {/* Admin Routes - No header/footer for login, custom layout for dashboard */}
                                   <Route path="/admin/login" element={<AdminLogin />} />
                                   <Route path="/admin/dashboard" element={<AdminDashboard />} />
+
+                                  {/* Driver Dashboard - No header/footer, custom layout */}
+                                  <Route path="/driver" element={<DriverDashboard />} />
 
                                   {/* Legal Pages - With header/footer */}
                                   <Route path="/terms" element={<Layout><Terms /></Layout>} />

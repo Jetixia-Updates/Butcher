@@ -1991,6 +1991,13 @@ function createApp() {
       driverName: `${driver.firstName} ${driver.familyName}`,
       driverMobile: driver.mobile,
       status: 'assigned',
+      // Customer info for driver app
+      customerName: order.customerName,
+      customerMobile: order.customerMobile,
+      deliveryAddress: order.deliveryAddress,
+      deliveryNotes: order.deliveryNotes,
+      items: order.items.map(i => ({ name: i.productName, quantity: i.quantity })),
+      total: order.total,
       estimatedArrival: estimatedArrival || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       timeline: [{
         status: 'assigned',
