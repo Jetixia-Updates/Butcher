@@ -934,9 +934,9 @@ router.post("/check-availability", checkDeliveryAvailability);
 // Delivery tracking routes
 router.get("/tracking", getDeliveryTrackings);
 router.get("/tracking/by-order/:orderId", getTrackingByOrderId);
-router.get("/tracking/:id", getTrackingById);
 router.get("/tracking/order/:orderNumber", getTrackingByOrderNumber);
 router.post("/tracking/assign", assignDelivery);
+router.get("/tracking/:id", getTrackingById);
 router.patch("/tracking/:id/location", updateDriverLocation);
 router.patch("/tracking/:id/status", updateDeliveryStatus);
 router.post("/tracking/:id/complete", completeDelivery);

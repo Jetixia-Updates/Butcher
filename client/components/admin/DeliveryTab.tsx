@@ -24,6 +24,7 @@ import type { DeliveryZone, DeliveryTracking, Order, User as UserType } from "@s
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useLanguage } from "@/context/LanguageContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -83,6 +84,8 @@ const translations = {
     mobile: "Mobile",
     reassign: "Reassign",
     notAssigned: "Not Assigned",
+    assignSuccess: "Driver assigned successfully",
+    assignFailed: "Failed to assign driver",
   },
   ar: {
     deliveryManagement: "إدارة التوصيل",
@@ -136,6 +139,8 @@ const translations = {
     mobile: "الجوال",
     reassign: "إعادة تعيين",
     notAssigned: "غير معين",
+    assignSuccess: "تم تعيين السائق بنجاح",
+    assignFailed: "فشل تعيين السائق",
   },
 };
 
@@ -143,6 +148,7 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
   const { language } = useLanguage();
   const isRTL = language === 'ar';
   const t = translations[language] || translations.en;
+  const { toast } = useToast();
 
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [pendingDeliveries, setPendingDeliveries] = useState<Order[]>([]);
@@ -211,10 +217,21 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
   };
 
   const handleAssignDriver = async (orderId: string, driverId: string) => {
-    const response = await deliveryApi.assignDriver(orderId, driverId);
-    if (response.success) {
-      await fetchData();
-      setAssignModal(null);
+    try {
+      const response = await deliveryApi.assignDriver(orderId, driverId);
+      if (response.success) {
+        await fetchData();
+        setAssignModal(null);
+        toast({ title: t.assignSuccess });
+        return true;
+      }
+
+      toast({ title: t.assignFailed, description: response.error || undefined, variant: "destructive" });
+      return false;
+    } catch (error) {
+      const description = error instanceof Error ? error.message : String(error);
+      toast({ title: t.assignFailed, description, variant: "destructive" });
+      return false;
     }
   };
 
@@ -787,7 +804,7 @@ function AssignDriverModal({
   order: Order;
   drivers: UserType[];
   onClose: () => void;
-  onAssign: (orderId: string, driverId: string) => void;
+  onAssign: (orderId: string, driverId: string) => Promise<boolean>;
   isRTL: boolean;
   t: typeof translations.en;
 }) {
@@ -798,8 +815,9 @@ function AssignDriverModal({
     e.preventDefault();
     if (!selectedDriver) return;
     setSubmitting(true);
-    await onAssign(order.id, selectedDriver);
+    const success = await onAssign(order.id, selectedDriver);
     setSubmitting(false);
+    if (!success) return;
   };
 
   return (
