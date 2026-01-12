@@ -908,28 +908,28 @@ function AssignDriverModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full" dir={isRTL ? 'rtl' : 'ltr'}>
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-900">{t.assignDriver}</h2>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full my-auto max-h-[90vh] flex flex-col" dir={isRTL ? 'rtl' : 'ltr'}>
+        <div className="p-4 sm:p-6 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900">{t.assignDriver}</h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="bg-slate-50 rounded-lg p-4">
-            <p className="text-sm text-slate-500">{t.order}</p>
-            <p className="font-medium">{order.orderNumber}</p>
-            <p className="text-sm text-slate-500 mt-2">{t.deliveryTo}</p>
-            <p className="font-medium">{order.customerName}</p>
-            <p className="text-sm text-slate-500">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+          <div className="bg-slate-50 rounded-lg p-3 sm:p-4">
+            <p className="text-xs sm:text-sm text-slate-500">{t.order}</p>
+            <p className="font-medium text-sm sm:text-base">{order.orderNumber}</p>
+            <p className="text-xs sm:text-sm text-slate-500 mt-2">{t.deliveryTo}</p>
+            <p className="font-medium text-sm sm:text-base">{order.customerName}</p>
+            <p className="text-xs sm:text-sm text-slate-500">
               {order.deliveryAddress.area}, {order.deliveryAddress.emirate}
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               {t.selectDriver} *
             </label>
             {drivers.length === 0 ? (
@@ -937,15 +937,15 @@ function AssignDriverModal({
                 {t.noDriversAvailable}
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[40vh] overflow-y-auto">
                 {drivers.map((driver) => (
                   <label
                     key={driver.id}
                     className={cn(
-                      "flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors",
+                      "flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors touch-manipulation",
                       selectedDriver === driver.id
                         ? "border-primary bg-primary/5"
-                        : "border-slate-200 hover:border-slate-300"
+                        : "border-slate-200 hover:border-slate-300 active:bg-slate-50"
                     )}
                   >
                     <input
@@ -956,41 +956,45 @@ function AssignDriverModal({
                       onChange={() => setSelectedDriver(driver.id)}
                       className="sr-only"
                     />
-                    <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center">
+                    <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center flex-shrink-0">
                       <Truck className="w-5 h-5 text-slate-600" />
                     </div>
-                    <div className="flex-1">
-                      <p className="font-medium">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm sm:text-base truncate">
                         {driver.firstName} {driver.familyName}
                       </p>
-                      <p className="text-sm text-slate-500">{driver.mobile}</p>
+                      <p className="text-xs sm:text-sm text-slate-500" dir="ltr">{driver.mobile}</p>
                     </div>
                     {selectedDriver === driver.id && (
-                      <Check className="w-5 h-5 text-primary" />
+                      <Check className="w-5 h-5 text-primary flex-shrink-0" />
                     )}
                   </label>
                 ))}
               </div>
             )}
           </div>
-
-          <div className="flex gap-3 pt-4">
+        </form>
+        
+        {/* Sticky Footer Buttons */}
+        <div className="p-4 sm:p-6 border-t border-slate-200 flex-shrink-0 bg-white">
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-slate-300 rounded-lg font-medium hover:bg-slate-50"
+              className="flex-1 py-3 border border-slate-300 rounded-lg font-medium hover:bg-slate-50 active:bg-slate-100 text-sm sm:text-base"
             >
               {t.cancel}
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={handleSubmit}
               disabled={submitting || !selectedDriver}
-              className="flex-1 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
+              className="flex-1 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 text-sm sm:text-base"
             >
               {submitting ? t.assigning : t.assignDriver}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

@@ -625,9 +625,11 @@ const getTrackingByOrderId: RequestHandler = (req, res) => {
 
 // POST /api/delivery/tracking/assign - Assign delivery to driver
 const assignDelivery: RequestHandler = async (req, res) => {
+  console.log("[ASSIGN DELIVERY] Request received:", JSON.stringify(req.body));
   try {
     const validation = assignDeliverySchema.safeParse(req.body);
     if (!validation.success) {
+      console.log("[ASSIGN DELIVERY] Validation failed:", validation.error.errors);
       const response: ApiResponse<null> = {
         success: false,
         error: validation.error.errors.map((e) => e.message).join(", "),
@@ -636,26 +638,31 @@ const assignDelivery: RequestHandler = async (req, res) => {
     }
 
     const { orderId, driverId, estimatedArrival } = validation.data;
+    console.log("[ASSIGN DELIVERY] Validated data:", { orderId, driverId, estimatedArrival });
 
     // Validate order
     const order = db.orders.get(orderId);
     if (!order) {
+      console.log("[ASSIGN DELIVERY] Order not found:", orderId);
       const response: ApiResponse<null> = {
         success: false,
         error: "Order not found",
       };
       return res.status(404).json(response);
     }
+    console.log("[ASSIGN DELIVERY] Found order:", order.orderNumber);
 
     // Validate driver
     const driver = db.users.get(driverId);
     if (!driver || driver.role !== "delivery") {
+      console.log("[ASSIGN DELIVERY] Invalid driver:", driverId, driver?.role);
       const response: ApiResponse<null> = {
         success: false,
         error: "Invalid delivery driver",
       };
       return res.status(400).json(response);
     }
+    console.log("[ASSIGN DELIVERY] Found driver:", driver.firstName, driver.familyName);
 
     // Check if tracking already exists
     let tracking = Array.from(db.deliveryTracking.values()).find((t) => t.orderId === orderId);
@@ -713,6 +720,7 @@ const assignDelivery: RequestHandler = async (req, res) => {
       driverPhone: driver.mobile,
     }).catch(console.error);
 
+    console.log("[ASSIGN DELIVERY] Success! Tracking ID:", tracking.id);
     const response: ApiResponse<DeliveryTracking> = {
       success: true,
       data: tracking,
@@ -720,6 +728,7 @@ const assignDelivery: RequestHandler = async (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("[ASSIGN DELIVERY] Error:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to assign delivery",
