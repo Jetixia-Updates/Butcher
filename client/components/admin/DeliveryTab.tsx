@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useLanguage } from "@/context/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
+import { useNotifications, createDriverAssignedNotification, createUserOrderNotification } from "@/context/NotificationContext";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -157,6 +158,7 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
   const isRTL = language === 'ar';
   const t = translations[language] || translations.en;
   const { toast } = useToast();
+  const { addUserNotification } = useNotifications();
 
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [pendingDeliveries, setPendingDeliveries] = useState<Order[]>([]);
@@ -244,6 +246,20 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
         await fetchData();
         setAssignModal(null);
         toast({ title: t.assignSuccess });
+        
+        // Send notification to driver about the assignment
+        const order = pendingDeliveries.find(o => o.id === orderId);
+        if (order) {
+          const addressStr = `${order.deliveryAddress.building}, ${order.deliveryAddress.street}, ${order.deliveryAddress.area}`;
+          const notification = createDriverAssignedNotification(order.orderNumber, order.customerName, addressStr);
+          addUserNotification(driverId, notification);
+          
+          // Also notify customer that their order is ready for delivery
+          if (order.userId) {
+            addUserNotification(order.userId, createUserOrderNotification(order.orderNumber, "ready"));
+          }
+        }
+        
         return true;
       }
 

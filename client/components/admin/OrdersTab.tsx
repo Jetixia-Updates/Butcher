@@ -14,13 +14,15 @@ import {
   ChevronDown,
   RefreshCw,
   Package,
+  UserPlus,
+  DollarSign,
 } from "lucide-react";
-import { ordersApi } from "@/lib/api";
+import { ordersApi, deliveryApi } from "@/lib/api";
 import type { Order, OrderStatus } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useLanguage } from "@/context/LanguageContext";
-import { useNotifications, createUserOrderNotification } from "@/context/NotificationContext";
+import { useNotifications, createUserOrderNotification, createDeliveryNotification } from "@/context/NotificationContext";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -78,6 +80,9 @@ const translations = {
     delivered: "Delivered",
     cancelled: "Cancelled",
     refunded: "Refunded",
+    assignDriver: "Assign Driver",
+    paymentReceived: "Payment Received",
+    confirmPayment: "Confirm Payment",
     // Payment status labels
     authorized: "Authorized",
     captured: "Captured",
@@ -133,6 +138,9 @@ const translations = {
     delivered: "تم التوصيل",
     cancelled: "ملغي",
     refunded: "مسترد",
+    assignDriver: "تعيين سائق",
+    paymentReceived: "تم استلام الدفع",
+    confirmPayment: "تأكيد الدفع",
     // Payment status labels
     authorized: "مصرح",
     captured: "تم الدفع",
@@ -152,6 +160,8 @@ const getStatusLabel = (status: string, t: typeof translations.en): string => {
     delivered: "delivered",
     cancelled: "cancelled",
     refunded: "refunded",
+    assign_driver: "assignDriver",
+    payment_received: "paymentReceived",
     authorized: "authorized",
     captured: "captured",
     failed: "failed",
@@ -171,10 +181,10 @@ const ORDER_STATUSES: { value: OrderStatus | "all"; labelKey: keyof typeof trans
   { value: "cancelled", labelKey: "cancelled" },
 ];
 
-const STATUS_ACTIONS: Record<OrderStatus, OrderStatus[]> = {
+const STATUS_ACTIONS: Record<OrderStatus, (OrderStatus | "assign_driver")[]> = {
   pending: ["confirmed", "cancelled"],
   confirmed: ["processing", "cancelled"],
-  processing: ["out_for_delivery", "cancelled"],
+  processing: ["assign_driver", "cancelled"],
   ready_for_pickup: ["out_for_delivery", "cancelled"],
   out_for_delivery: ["delivered", "cancelled"],
   delivered: [],
@@ -224,7 +234,28 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
     }
   }, [selectedOrderId, orders, onClearSelection]);
 
-  const handleStatusUpdate = async (orderId: string, newStatus: OrderStatus) => {
+  const handleStatusUpdate = async (orderId: string, newStatus: OrderStatus | "assign_driver") => {
+    // Handle special "assign_driver" action - navigate to delivery tab
+    if (newStatus === "assign_driver") {
+      // First update status to ready_for_pickup, then navigate
+      setUpdating(orderId);
+      const response = await ordersApi.updateStatus(orderId, "ready_for_pickup");
+      if (response.success && response.data) {
+        await fetchOrders();
+        if (selectedOrder?.id === orderId) {
+          setSelectedOrder(response.data);
+        }
+        // Close modal if open
+        setSelectedOrder(null);
+        // Navigate to delivery tab with order ID
+        if (onNavigate) {
+          onNavigate("delivery", orderId);
+        }
+      }
+      setUpdating(null);
+      return;
+    }
+
     setUpdating(orderId);
     const response = await ordersApi.updateStatus(orderId, newStatus);
     if (response.success) {
@@ -255,6 +286,34 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
           addUserNotification(order.userId, notification);
         }
       }
+    }
+    setUpdating(null);
+  };
+
+  // Handle COD payment confirmation
+  const handleConfirmPayment = async (orderId: string) => {
+    setUpdating(orderId);
+    try {
+      // Update payment status to captured via API
+      const response = await fetch(`/api/orders/${orderId}/payment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "captured" }),
+      });
+      
+      if (response.ok) {
+        await fetchOrders();
+        if (selectedOrder?.id === orderId) {
+          const orderResponse = await ordersApi.getById(orderId);
+          if (orderResponse.success && orderResponse.data) {
+            setSelectedOrder(orderResponse.data);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error confirming payment:", error);
     }
     setUpdating(null);
   };
@@ -401,7 +460,12 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
                       </div>
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-slate-500 hidden md:table-cell">
-                      {new Date(order.createdAt).toLocaleDateString(isRTL ? 'ar-AE' : 'en-AE')}
+                      <div>
+                        <p>{new Date(order.createdAt).toLocaleDateString(isRTL ? 'ar-AE' : 'en-AE')}</p>
+                        <p className="text-xs text-slate-400">
+                          {new Date(order.createdAt).toLocaleTimeString(isRTL ? 'ar-AE' : 'en-AE', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
                       <div className={cn("flex items-center gap-1 sm:gap-2", isRTL ? "justify-start" : "justify-end")}>
@@ -439,6 +503,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onStatusUpdate={(status) => handleStatusUpdate(selectedOrder.id, status)}
+          onConfirmPayment={() => handleConfirmPayment(selectedOrder.id)}
           updating={updating === selectedOrder.id}
           t={t}
           isRTL={isRTL}
@@ -459,13 +524,28 @@ function StatusDropdown({
 }: {
   orderId: string;
   currentStatus: OrderStatus;
-  availableStatuses: OrderStatus[];
-  onUpdate: (orderId: string, status: OrderStatus) => void;
+  availableStatuses: (OrderStatus | "assign_driver")[];
+  onUpdate: (orderId: string, status: OrderStatus | "assign_driver") => void;
   updating: boolean;
   t: typeof translations.en;
   isRTL: boolean;
 }) {
   const [open, setOpen] = useState(false);
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "cancelled":
+        return <X className="w-4 h-4 text-red-500" />;
+      case "delivered":
+        return <Check className="w-4 h-4 text-green-500" />;
+      case "out_for_delivery":
+        return <Truck className="w-4 h-4 text-blue-500" />;
+      case "assign_driver":
+        return <UserPlus className="w-4 h-4 text-indigo-500" />;
+      default:
+        return <Package className="w-4 h-4 text-slate-500" />;
+    }
+  };
 
   return (
     <div className="relative">
@@ -499,15 +579,7 @@ function StatusDropdown({
                 }}
                 className={cn("w-full px-4 py-2 text-sm hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg flex items-center gap-2", isRTL ? "text-right flex-row-reverse" : "text-left")}
               >
-                {status === "cancelled" ? (
-                  <X className="w-4 h-4 text-red-500" />
-                ) : status === "delivered" ? (
-                  <Check className="w-4 h-4 text-green-500" />
-                ) : status === "out_for_delivery" ? (
-                  <Truck className="w-4 h-4 text-blue-500" />
-                ) : (
-                  <Package className="w-4 h-4 text-slate-500" />
-                )}
+                {getStatusIcon(status)}
                 <span>{getStatusLabel(status, t)}</span>
               </button>
             ))}
@@ -522,17 +594,26 @@ function OrderDetailsModal({
   order,
   onClose,
   onStatusUpdate,
+  onConfirmPayment,
   updating,
   t,
   isRTL,
 }: {
   order: Order;
   onClose: () => void;
-  onStatusUpdate: (status: OrderStatus) => void;
+  onStatusUpdate: (status: OrderStatus | "assign_driver") => void;
+  onConfirmPayment?: () => void;
   updating: boolean;
   t: typeof translations.en;
   isRTL: boolean;
 }) {
+  // Check if COD payment confirmation should be shown
+  // Show when order is delivered, payment method is COD, and payment is still pending
+  const showCodPaymentConfirmation = 
+    order.status === "delivered" && 
+    order.paymentMethod === "cod" && 
+    order.paymentStatus === "pending";
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" dir={isRTL ? 'rtl' : 'ltr'}>
@@ -700,22 +781,48 @@ function OrderDetailsModal({
 
           {/* Status Actions */}
           {STATUS_ACTIONS[order.status]?.length > 0 && (
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {STATUS_ACTIONS[order.status].map((status) => (
                 <button
                   key={status}
                   onClick={() => onStatusUpdate(status)}
                   disabled={updating}
                   className={cn(
-                    "flex-1 py-3 rounded-lg font-medium transition-colors disabled:opacity-50",
+                    "flex-1 min-w-[140px] py-3 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2",
                     status === "cancelled"
                       ? "bg-red-100 text-red-700 hover:bg-red-200"
+                      : status === "assign_driver"
+                      ? "bg-indigo-600 text-white hover:bg-indigo-700"
                       : "bg-primary text-white hover:bg-primary/90"
                   )}
                 >
-                  {updating ? t.updating : `${t.markAs} ${getStatusLabel(status, t)}`}
+                  {status === "assign_driver" && <UserPlus className="w-4 h-4" />}
+                  {updating ? t.updating : status === "assign_driver" ? t.assignDriver : `${t.markAs} ${getStatusLabel(status, t)}`}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* COD Payment Confirmation - Only admin can confirm after delivery */}
+          {showCodPaymentConfirmation && onConfirmPayment && (
+            <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-amber-600" />
+                  <div>
+                    <p className="font-medium text-amber-800">{t.confirmPayment}</p>
+                    <p className="text-sm text-amber-600">COD - {order.total.toFixed(2)} AED</p>
+                  </div>
+                </div>
+                <button
+                  onClick={onConfirmPayment}
+                  disabled={updating}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  {t.paymentReceived}
+                </button>
+              </div>
             </div>
           )}
 

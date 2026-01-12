@@ -269,6 +269,15 @@ export const createStockNotification = (productName: string, currentStock: numbe
   linkTab: "stock",
 });
 
+// Notification for drivers when order is assigned
+export const createDriverAssignedNotification = (orderNumber: string, customerName: string, deliveryAddress: string) => ({
+  type: "delivery" as NotificationType,
+  title: "New Delivery Assigned",
+  titleAr: "تم تعيين توصيل جديد",
+  message: `Order ${orderNumber} assigned to you. Customer: ${customerName}. Address: ${deliveryAddress}`,
+  messageAr: `تم تعيين الطلب ${orderNumber} لك. العميل: ${customerName}. العنوان: ${deliveryAddress}`,
+});
+
 export const createPaymentNotification = (orderNumber: string, amount: number, status: "received" | "failed" | "refunded") => {
   const notifications: Record<string, { title: string; titleAr: string; message: string; messageAr: string }> = {
     received: {

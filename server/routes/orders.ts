@@ -570,6 +570,51 @@ const getOrderStats: RequestHandler = (req, res) => {
   }
 };
 
+// POST /api/orders/:id/payment - Update payment status
+const updatePaymentStatus: RequestHandler = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const order = db.orders.get(id);
+
+    if (!order) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: "Order not found",
+      };
+      return res.status(404).json(response);
+    }
+
+    // Validate payment status
+    const validStatuses = ["pending", "authorized", "captured", "failed", "refunded", "partially_refunded"];
+    if (!validStatuses.includes(status)) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: "Invalid payment status",
+      };
+      return res.status(400).json(response);
+    }
+
+    // Update payment status
+    order.paymentStatus = status;
+    order.updatedAt = new Date().toISOString();
+
+    const response: ApiResponse<Order> = {
+      success: true,
+      data: order,
+      message: `Payment status updated to ${status}`,
+    };
+    res.json(response);
+  } catch (error) {
+    const response: ApiResponse<null> = {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update payment status",
+    };
+    res.status(500).json(response);
+  }
+};
+
 // Register routes
 router.get("/", getOrders);
 router.get("/stats", getOrderStats);
@@ -577,6 +622,7 @@ router.get("/:id", getOrderById);
 router.get("/number/:orderNumber", getOrderByNumber);
 router.post("/", createOrder);
 router.patch("/:id/status", updateOrderStatus);
+router.post("/:id/payment", updatePaymentStatus);
 router.delete("/:id", cancelOrder);
 
 export default router;
