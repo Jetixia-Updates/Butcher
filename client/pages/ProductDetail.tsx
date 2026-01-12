@@ -393,12 +393,23 @@ export default function ProductDetailPage() {
             )}
 
             {/* Price */}
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-baseline gap-2 flex-wrap">
               <span className="text-3xl sm:text-4xl font-bold text-primary">
-                <PriceDisplay price={product.price} size="lg" />
+                <PriceDisplay price={product.discount ? product.price * (1 - product.discount / 100) : product.price} size="lg" />
               </span>
               <span className="text-muted-foreground">/ {isRTL ? "كجم" : "Kg"}</span>
+              {product.discount && product.discount > 0 && (
+                <span className="text-lg text-muted-foreground line-through">
+                  <PriceDisplay price={product.price} size="md" />
+                </span>
+              )}
             </div>
+            {/* Discount Badge */}
+            {product.discount && product.discount > 0 && (
+              <span className="inline-block bg-red-500 text-white text-sm font-bold px-3 py-1 rounded-full">
+                -{product.discount}% {isRTL ? "خصم" : "OFF"}
+              </span>
+            )}
 
             {/* Stock Status */}
             <div className="flex items-center gap-2">
@@ -499,7 +510,7 @@ export default function ProductDetailPage() {
                       </button>
                     </div>
                     <span className="text-muted-foreground">
-                      = <PriceDisplay price={product.price * quantity} size="md" className="font-bold text-foreground" />
+                      = <PriceDisplay price={(product.discount ? product.price * (1 - product.discount / 100) : product.price) * quantity} size="md" className="font-bold text-foreground" />
                     </span>
                   </div>
                 </div>
