@@ -926,20 +926,48 @@ router.post("/addresses/:id/set-default", setDefaultAddress);
 
 // Delivery zone routes
 router.get("/zones", getDeliveryZones);
-router.get("/zones/:id", getDeliveryZoneById);
 router.post("/zones", createDeliveryZone);
+router.get("/zones/:id", getDeliveryZoneById);
 router.put("/zones/:id", updateDeliveryZone);
+router.delete("/zones/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const zone = db.deliveryZones.get(id);
+
+    if (!zone) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: "Delivery zone not found",
+      };
+      return res.status(404).json(response);
+    }
+
+    db.deliveryZones.delete(id);
+
+    const response: ApiResponse<null> = {
+      success: true,
+      message: "Delivery zone deleted successfully",
+    };
+    res.json(response);
+  } catch (error) {
+    const response: ApiResponse<null> = {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete delivery zone",
+    };
+    res.status(500).json(response);
+  }
+});
 router.post("/check-availability", checkDeliveryAvailability);
 
 // Delivery tracking routes
 router.get("/tracking", getDeliveryTrackings);
+router.post("/tracking/assign", assignDelivery);
 router.get("/tracking/by-order/:orderId", getTrackingByOrderId);
 router.get("/tracking/order/:orderNumber", getTrackingByOrderNumber);
-router.post("/tracking/assign", assignDelivery);
-router.get("/tracking/:id", getTrackingById);
 router.patch("/tracking/:id/location", updateDriverLocation);
 router.patch("/tracking/:id/status", updateDeliveryStatus);
 router.post("/tracking/:id/complete", completeDelivery);
+router.get("/tracking/:id", getTrackingById);
 
 // Driver routes
 router.get("/drivers", getDeliveryDrivers);
