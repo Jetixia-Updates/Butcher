@@ -524,9 +524,26 @@ const getDeliveryTrackings: RequestHandler = (req, res) => {
     // Sort by creation date (newest first)
     trackings.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    const response: ApiResponse<DeliveryTracking[]> = {
+    // Enrich tracking data with order details for driver dashboard
+    const enrichedTrackings = trackings.map((tracking) => {
+      const order = db.orders.get(tracking.orderId);
+      if (order) {
+        return {
+          ...tracking,
+          customerName: order.customerName,
+          customerMobile: order.customerMobile,
+          customerId: order.userId,
+          deliveryAddress: order.deliveryAddress,
+          items: order.items.map((item) => ({ name: item.productName, quantity: item.quantity })),
+          total: order.total,
+        };
+      }
+      return tracking;
+    });
+
+    const response: ApiResponse<any[]> = {
       success: true,
-      data: trackings,
+      data: enrichedTrackings,
     };
     res.json(response);
   } catch (error) {

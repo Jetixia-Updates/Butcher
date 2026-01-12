@@ -20,10 +20,12 @@ import {
   AlertCircle,
   Camera,
   FileSignature,
+  Bell,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { useNotifications, createUserOrderNotification, createUserDeliveryNotification } from "@/context/NotificationContext";
+import { useNotifications, createUserOrderNotification, createUserDeliveryNotification, formatRelativeTime } from "@/context/NotificationContext";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 
@@ -95,6 +97,10 @@ const translations = {
     password: "Password",
     loginError: "Invalid credentials",
     loggingIn: "Logging in...",
+    notifications: "Notifications",
+    noNotifications: "No notifications",
+    markAllRead: "Mark all read",
+    newDeliveryAssigned: "New Delivery Assigned",
   },
   ar: {
     driverDashboard: "لوحة تحكم السائق",
@@ -139,6 +145,10 @@ const translations = {
     password: "كلمة المرور",
     loginError: "بيانات غير صحيحة",
     loggingIn: "جاري تسجيل الدخول...",
+    notifications: "الإشعارات",
+    noNotifications: "لا توجد إشعارات",
+    markAllRead: "تحديد الكل كمقروء",
+    newDeliveryAssigned: "توصيل جديد",
   },
 };
 
@@ -149,7 +159,7 @@ export default function DriverDashboardPage() {
   const navigate = useNavigate();
   const { user, loginWithCredentials, logout, isLoggedIn } = useAuth();
   const { language } = useLanguage();
-  const { addUserNotification } = useNotifications();
+  const { notifications, unreadCount, addUserNotification, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const isRTL = language === "ar";
   const t = translations[language];
 
@@ -160,6 +170,7 @@ export default function DriverDashboardPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [nextStatus, setNextStatus] = useState<string>("");
   const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // Login form state
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
@@ -462,6 +473,97 @@ export default function DriverDashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors relative"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notifications Dropdown */}
+              {showNotifications && (
+                <div className={`absolute top-full mt-2 ${isRTL ? "left-0" : "right-0"} w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden`}>
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+                    <h3 className="font-semibold text-gray-900 text-sm">
+                      {t.notifications}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={() => markAllAsRead()}
+                          className="text-xs text-primary hover:underline whitespace-nowrap"
+                        >
+                          {t.markAllRead}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notification List */}
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-gray-500">
+                        <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                        <p>{t.noNotifications}</p>
+                      </div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`flex items-start gap-3 px-4 py-3 border-b hover:bg-gray-50 cursor-pointer transition-colors ${
+                            notification.unread ? "bg-blue-50/50" : ""
+                          }`}
+                          onClick={() => {
+                            markAsRead(notification.id);
+                            if (notification.link) {
+                              navigate(notification.link);
+                            }
+                            setShowNotifications(false);
+                          }}
+                        >
+                          <div className="flex-shrink-0 mt-1">
+                            <Package className="w-4 h-4 text-orange-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className={`text-sm ${notification.unread ? "font-semibold" : "font-medium"} text-gray-900`}>
+                                {isRTL ? notification.titleAr : notification.title}
+                              </p>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteNotification(notification.id);
+                                }}
+                                className="flex-shrink-0 p-1 hover:bg-gray-200 rounded"
+                              >
+                                <X className="w-3 h-3 text-gray-400" />
+                              </button>
+                            </div>
+                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
+                              {isRTL ? notification.messageAr : notification.message}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {formatRelativeTime(notification.createdAt, language)}
+                            </p>
+                          </div>
+                          {notification.unread && (
+                            <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={fetchDeliveries}
               className="p-2 hover:bg-white/10 rounded-lg transition-colors"
