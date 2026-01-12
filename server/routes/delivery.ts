@@ -961,13 +961,13 @@ router.post("/check-availability", checkDeliveryAvailability);
 
 // Delivery tracking routes
 router.get("/tracking", getDeliveryTrackings);
-router.post("/tracking/assign", assignDelivery);
+router.post("/tracking/assign", assignDelivery); // Specific route before parametric
 router.get("/tracking/by-order/:orderId", getTrackingByOrderId);
 router.get("/tracking/order/:orderNumber", getTrackingByOrderNumber);
 router.patch("/tracking/:id/location", updateDriverLocation);
 router.patch("/tracking/:id/status", updateDeliveryStatus);
 router.post("/tracking/:id/complete", completeDelivery);
-router.get("/tracking/:id", getTrackingById);
+router.get("/tracking/:id", getTrackingById); // Parametric route last
 
 // Driver routes
 router.get("/drivers", getDeliveryDrivers);
