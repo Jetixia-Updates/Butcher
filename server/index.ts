@@ -72,7 +72,7 @@ export function createServer() {
   // POST /api/delivery/check-availability - Check delivery availability
   // GET /api/delivery/tracking/:orderId - Get delivery tracking
   // POST /api/delivery/tracking/:orderId/update - Update tracking
-  // POST /api/delivery/tracking/:orderId/assign - Assign driver
+  // POST /api/delivery/tracking/assign - Assign driver
   // POST /api/delivery/tracking/:orderId/proof - Upload proof of delivery
   app.use("/api/delivery", deliveryRouter);
 
