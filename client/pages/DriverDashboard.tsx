@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useNotifications, createUserOrderNotification, createUserDeliveryNotification } from "@/context/NotificationContext";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 
@@ -30,6 +31,7 @@ interface DeliveryOrder {
   id: string;
   orderId: string;
   orderNumber: string;
+  customerId: string;
   status: string;
   customerName: string;
   customerMobile: string;
@@ -147,6 +149,7 @@ export default function DriverDashboardPage() {
   const navigate = useNavigate();
   const { user, loginWithCredentials, logout, isLoggedIn } = useAuth();
   const { language } = useLanguage();
+  const { addUserNotification } = useNotifications();
   const isRTL = language === "ar";
   const t = translations[language];
 
@@ -302,6 +305,22 @@ export default function DriverDashboardPage() {
 
       if (response.ok) {
         await fetchDeliveries();
+        
+        // Send notification to customer about delivery status
+        const driverName = user?.firstName || "Driver";
+        if (nextStatus === "in_transit" || nextStatus === "picked_up") {
+          // Order is out for delivery
+          const notification = createUserOrderNotification(selectedDelivery.orderNumber, "outForDelivery");
+          addUserNotification(selectedDelivery.customerId, notification);
+        } else if (nextStatus === "nearby") {
+          // Driver is arriving
+          const notification = createUserDeliveryNotification(selectedDelivery.orderNumber, driverName, "arriving");
+          addUserNotification(selectedDelivery.customerId, notification);
+        } else if (nextStatus === "delivered") {
+          // Order delivered
+          const notification = createUserOrderNotification(selectedDelivery.orderNumber, "delivered");
+          addUserNotification(selectedDelivery.customerId, notification);
+        }
       }
     } catch (error) {
       console.error("Error updating status:", error);

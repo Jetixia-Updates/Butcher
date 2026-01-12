@@ -19,7 +19,7 @@ export default function PaymentCardPage() {
   const location = useLocation();
   const { items, subtotal, vat, total, clearBasket } = useBasket();
   const { user } = useAuth();
-  const { addNotification } = useNotifications();
+  const { addNotification, addAdminNotification } = useNotifications();
   
   // Get addressId and delivery time slot from navigation state (passed from Checkout)
   const addressId = (location.state as { addressId?: string; deliveryTimeSlot?: string })?.addressId || "";
@@ -228,9 +228,9 @@ export default function PaymentCardPage() {
 
       if (response.success && response.data) {
         // Add notification for the admin (include order ID for navigation)
-        addNotification(createOrderNotification(response.data.orderNumber, "new", response.data.id));
+        addAdminNotification(createOrderNotification(response.data.orderNumber, "new", response.data.id));
         
-        // Add notification for the user
+        // Add notification for the user (current logged-in user)
         addNotification(createUserOrderNotification(response.data.orderNumber, "placed"));
         
         // Generate TAX invoice

@@ -186,7 +186,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   const { language } = useLanguage();
   const isRTL = language === 'ar';
   const t = translations[language];
-  const { addNotification } = useNotifications();
+  const { addUserNotification } = useNotifications();
   
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,9 +249,10 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
         };
         
         const notificationStatus = statusMap[newStatus];
-        if (notificationStatus) {
+        if (notificationStatus && order.userId) {
           const notification = createUserOrderNotification(order.orderNumber, notificationStatus);
-          addNotification(notification);
+          // Send notification to the specific customer who placed the order
+          addUserNotification(order.userId, notification);
         }
       }
     }

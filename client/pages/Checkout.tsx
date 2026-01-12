@@ -533,7 +533,7 @@ export default function CheckoutPage() {
   const { user } = useAuth();
   const { language } = useLanguage();
   const isRTL = language === 'ar';
-  const { addNotification } = useNotifications();
+  const { addNotification, addAdminNotification } = useNotifications();
   const { validatePromoCode, settings, timeSlots: adminTimeSlots } = useSettings();
   
   // Promo code state
@@ -1076,9 +1076,9 @@ export default function CheckoutPage() {
 
       if (response.success && response.data) {
         // Add notification for the admin (include order ID for navigation)
-        addNotification(createOrderNotification(response.data.orderNumber, "new", response.data.id));
+        addAdminNotification(createOrderNotification(response.data.orderNumber, "new", response.data.id));
         
-        // Add notification for the user
+        // Add notification for the user (current logged-in user)
         addNotification(createUserOrderNotification(response.data.orderNumber, "placed"));
         
         // Generate TAX invoice

@@ -23,6 +23,7 @@ interface NotificationContextType {
   unreadCount: number;
   addNotification: (notification: Omit<Notification, "id" | "createdAt" | "unread">) => void;
   addUserNotification: (userId: string, notification: Omit<Notification, "id" | "createdAt" | "unread" | "userId">) => void;
+  addAdminNotification: (notification: Omit<Notification, "id" | "createdAt" | "unread">) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   deleteNotification: (id: string) => void;
@@ -152,6 +153,26 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, []);
 
+  // Add notification to admin storage (called from customer actions like placing an order)
+  const addAdminNotification = useCallback((notification: Omit<Notification, "id" | "createdAt" | "unread">) => {
+    try {
+      const stored = localStorage.getItem(ADMIN_STORAGE_KEY);
+      const existing = stored ? JSON.parse(stored) as Notification[] : [];
+      
+      const newNotification: Notification = {
+        ...notification,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        unread: true,
+      };
+      
+      const updated = [newNotification, ...existing].slice(0, 50);
+      localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
   const markAsRead = useCallback((id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, unread: false } : n))
@@ -179,6 +200,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         unreadCount,
         addNotification,
         addUserNotification,
+        addAdminNotification,
         markAsRead,
         markAllAsRead,
         deleteNotification,
