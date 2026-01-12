@@ -966,6 +966,71 @@ const updateDeliveryStatus: RequestHandler = async (req, res) => {
   }
 };
 
+// POST /api/delivery/tracking/:orderId/update - Update delivery status by order ID (used by driver dashboard)
+const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status, notes, location } = req.body;
+
+    // Find tracking by order ID
+    const tracking = Array.from(db.deliveryTracking.values()).find((t) => t.orderId === orderId);
+    if (!tracking) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: "Tracking not found for this order",
+      };
+      return res.status(404).json(response);
+    }
+
+    tracking.status = status;
+    tracking.updatedAt = new Date().toISOString();
+    tracking.timeline.push({
+      status,
+      timestamp: new Date().toISOString(),
+      location,
+      notes,
+    });
+
+    // Update order status based on delivery tracking status
+    const order = db.orders.get(tracking.orderId);
+    if (order) {
+      // When driver marks as delivered, update order status
+      if (status === "delivered") {
+        tracking.actualArrival = new Date().toISOString();
+        order.status = "delivered";
+        order.actualDeliveryAt = new Date().toISOString();
+        // Only capture payment if it was COD, card payments already captured
+        if (order.paymentMethod === "cod") {
+          order.paymentStatus = "captured";
+        }
+        order.statusHistory.push({
+          status: "delivered",
+          changedBy: tracking.driverId || "driver",
+          changedAt: new Date().toISOString(),
+          notes: notes || "Delivered successfully",
+        });
+        order.updatedAt = new Date().toISOString();
+
+        // Send notification
+        sendOrderNotification(order, "order_delivered").catch(console.error);
+      }
+    }
+
+    const response: ApiResponse<DeliveryTracking> = {
+      success: true,
+      data: tracking,
+      message: `Delivery status updated to ${status}`,
+    };
+    res.json(response);
+  } catch (error) {
+    const response: ApiResponse<null> = {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update delivery status",
+    };
+    res.status(500).json(response);
+  }
+};
+
 // POST /api/delivery/tracking/:id/complete - Complete delivery with proof
 const completeDelivery: RequestHandler = async (req, res) => {
   try {
@@ -1106,6 +1171,7 @@ router.get("/tracking", getDeliveryTrackings);
 router.post("/tracking/assign", assignDelivery); // Specific route before parametric
 router.get("/tracking/by-order/:orderId", getTrackingByOrderId);
 router.get("/tracking/order/:orderNumber", getTrackingByOrderNumber);
+router.post("/tracking/:orderId/update", updateDeliveryStatusByOrderId); // Update by order ID (used by driver dashboard)
 router.patch("/tracking/:id/location", updateDriverLocation);
 router.patch("/tracking/:id/status", updateDeliveryStatus);
 router.post("/tracking/:id/complete", completeDelivery);

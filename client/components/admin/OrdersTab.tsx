@@ -176,6 +176,7 @@ const ORDER_STATUSES: { value: OrderStatus | "all"; labelKey: keyof typeof trans
   { value: "pending", labelKey: "pending" },
   { value: "confirmed", labelKey: "confirmed" },
   { value: "processing", labelKey: "processing" },
+  { value: "ready_for_pickup", labelKey: "readyForPickup" },
   { value: "out_for_delivery", labelKey: "outForDelivery" },
   { value: "delivered", labelKey: "delivered" },
   { value: "cancelled", labelKey: "cancelled" },
@@ -184,8 +185,8 @@ const ORDER_STATUSES: { value: OrderStatus | "all"; labelKey: keyof typeof trans
 const STATUS_ACTIONS: Record<OrderStatus, (OrderStatus | "assign_driver")[]> = {
   pending: ["confirmed", "cancelled"],
   confirmed: ["processing", "cancelled"],
-  processing: ["assign_driver", "cancelled"],
-  ready_for_pickup: ["out_for_delivery", "cancelled"],
+  processing: ["ready_for_pickup", "cancelled"],
+  ready_for_pickup: ["assign_driver", "cancelled"],
   out_for_delivery: ["delivered", "cancelled"],
   delivered: [],
   cancelled: [],

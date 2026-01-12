@@ -193,8 +193,6 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
 
     if (zonesRes.success && zonesRes.data) setZones(zonesRes.data);
     if (ordersRes.success && ordersRes.data) {
-      setPendingDeliveries(ordersRes.data);
-      
       // Fetch tracking info for each order
       const trackingPromises = ordersRes.data.map(order => 
         deliveryApi.getTracking(order.id)
@@ -208,6 +206,14 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
         }
       });
       setTrackingInfo(trackingMap);
+      
+      // Filter out orders where tracking status is 'delivered' - they should not appear in active deliveries
+      const activeDeliveries = ordersRes.data.filter(order => {
+        const tracking = trackingMap[order.id];
+        // Keep orders that have no tracking yet, or tracking status is not 'delivered'
+        return !tracking || tracking.status !== 'delivered';
+      });
+      setPendingDeliveries(activeDeliveries);
     }
     if (usersRes.success && usersRes.data) setDrivers(usersRes.data);
     setLoading(false);
