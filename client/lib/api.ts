@@ -664,6 +664,12 @@ export const deliveryApi = {
       method: "POST",
       body: JSON.stringify({ status, notes }),
     }),
+
+  // Get all delivery drivers
+  getDrivers: () =>
+    fetchApi<{ id: string; name: string; mobile: string; email: string; activeDeliveries: number }[]>(
+      "/delivery/drivers"
+    ),
 };
 
 // =====================================================

@@ -379,28 +379,54 @@ export function seedDatabase() {
     });
   });
 
-  // Seed delivery driver
-  db.users.set("driver_1", {
-    id: "driver_1",
-    username: "driver",
-    email: "driver@butcher.ae",
-    mobile: "+971504444444",
-    password: "driver123",
-    firstName: "Hassan",
-    familyName: "Driver",
-    role: "delivery",
-    isActive: true,
-    isVerified: true,
-    emirate: "Dubai",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    preferences: {
-      language: "en",
-      currency: "AED",
-      emailNotifications: true,
-      smsNotifications: true,
-      marketingEmails: false,
+  // Seed delivery drivers
+  const deliveryDrivers = [
+    {
+      id: "driver_1",
+      username: "driver1",
+      email: "hassan@butcher.ae",
+      mobile: "+971504444444",
+      password: "driver123",
+      firstName: "Hassan",
+      familyName: "Al Rashid",
     },
+    {
+      id: "driver_2",
+      username: "driver2",
+      email: "omar@butcher.ae",
+      mobile: "+971505555555",
+      password: "driver123",
+      firstName: "Omar",
+      familyName: "Al Farsi",
+    },
+    {
+      id: "driver_3",
+      username: "driver3",
+      email: "khalid@butcher.ae",
+      mobile: "+971506666666",
+      password: "driver123",
+      firstName: "Khalid",
+      familyName: "Al Mazrouei",
+    },
+  ];
+
+  deliveryDrivers.forEach((driver) => {
+    db.users.set(driver.id, {
+      ...driver,
+      role: "delivery",
+      isActive: true,
+      isVerified: true,
+      emirate: "Dubai",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      preferences: {
+        language: "en",
+        currency: "AED",
+        emailNotifications: true,
+        smsNotifications: true,
+        marketingEmails: false,
+      },
+    });
   });
 
   // Seed addresses

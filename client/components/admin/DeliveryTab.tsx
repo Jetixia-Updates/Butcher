@@ -162,11 +162,24 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
 
   const fetchData = async () => {
     setLoading(true);
-    const [zonesRes, ordersRes, usersRes] = await Promise.all([
+    // Fetch orders that need delivery (confirmed, processing, ready_for_pickup, out_for_delivery)
+    const [zonesRes, confirmedRes, processingRes, readyRes, outForDeliveryRes, usersRes] = await Promise.all([
       deliveryApi.getZones(),
+      ordersApi.getAll({ status: "confirmed" }),
+      ordersApi.getAll({ status: "processing" }),
+      ordersApi.getAll({ status: "ready_for_pickup" }),
       ordersApi.getAll({ status: "out_for_delivery" }),
       usersApi.getAll({ role: "delivery" }),
     ]);
+    
+    // Combine all orders that need delivery management
+    const allDeliveryOrders: Order[] = [];
+    if (confirmedRes.success && confirmedRes.data) allDeliveryOrders.push(...confirmedRes.data);
+    if (processingRes.success && processingRes.data) allDeliveryOrders.push(...processingRes.data);
+    if (readyRes.success && readyRes.data) allDeliveryOrders.push(...readyRes.data);
+    if (outForDeliveryRes.success && outForDeliveryRes.data) allDeliveryOrders.push(...outForDeliveryRes.data);
+    
+    const ordersRes = { success: true, data: allDeliveryOrders };
 
     if (zonesRes.success && zonesRes.data) setZones(zonesRes.data);
     if (ordersRes.success && ordersRes.data) {
