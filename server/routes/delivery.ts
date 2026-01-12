@@ -594,6 +594,35 @@ const getTrackingByOrderNumber: RequestHandler = (req, res) => {
   }
 };
 
+// GET /api/delivery/tracking/by-order/:orderId - Get tracking by order ID
+const getTrackingByOrderId: RequestHandler = (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const tracking = Array.from(db.deliveryTracking.values()).find((t) => t.orderId === orderId);
+
+    if (!tracking) {
+      // Return empty success response instead of error (order may not have tracking yet)
+      const response: ApiResponse<null> = {
+        success: true,
+        data: null,
+      };
+      return res.json(response);
+    }
+
+    const response: ApiResponse<DeliveryTracking> = {
+      success: true,
+      data: tracking,
+    };
+    res.json(response);
+  } catch (error) {
+    const response: ApiResponse<null> = {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch tracking",
+    };
+    res.status(500).json(response);
+  }
+};
+
 // POST /api/delivery/tracking/assign - Assign delivery to driver
 const assignDelivery: RequestHandler = async (req, res) => {
   try {
@@ -904,6 +933,7 @@ router.post("/check-availability", checkDeliveryAvailability);
 
 // Delivery tracking routes
 router.get("/tracking", getDeliveryTrackings);
+router.get("/tracking/by-order/:orderId", getTrackingByOrderId);
 router.get("/tracking/:id", getTrackingById);
 router.get("/tracking/order/:orderNumber", getTrackingByOrderNumber);
 router.post("/tracking/assign", assignDelivery);

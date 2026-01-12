@@ -16,6 +16,8 @@ import {
   Clock,
   Package,
   User,
+  Calendar,
+  Phone,
 } from "lucide-react";
 import { deliveryApi, ordersApi, usersApi } from "@/lib/api";
 import type { DeliveryZone, DeliveryTracking, Order, User as UserType } from "@shared/api";
@@ -76,6 +78,11 @@ const translations = {
     fujairah: "Fujairah",
     rasAlKhaimah: "Ras Al Khaimah",
     ummAlQuwain: "Umm Al Quwain",
+    assignedDriver: "Assigned Driver",
+    assignedAt: "Assigned at",
+    mobile: "Mobile",
+    reassign: "Reassign",
+    notAssigned: "Not Assigned",
   },
   ar: {
     deliveryManagement: "إدارة التوصيل",
@@ -124,6 +131,11 @@ const translations = {
     fujairah: "الفجيرة",
     rasAlKhaimah: "رأس الخيمة",
     ummAlQuwain: "أم القيوين",
+    assignedDriver: "السائق المعين",
+    assignedAt: "تم التعيين في",
+    mobile: "الجوال",
+    reassign: "إعادة تعيين",
+    notAssigned: "غير معين",
   },
 };
 
@@ -134,6 +146,7 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
 
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [pendingDeliveries, setPendingDeliveries] = useState<Order[]>([]);
+  const [trackingInfo, setTrackingInfo] = useState<Record<string, DeliveryTracking>>({});
   const [drivers, setDrivers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<"zones" | "deliveries">("deliveries");
@@ -150,7 +163,23 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
     ]);
 
     if (zonesRes.success && zonesRes.data) setZones(zonesRes.data);
-    if (ordersRes.success && ordersRes.data) setPendingDeliveries(ordersRes.data);
+    if (ordersRes.success && ordersRes.data) {
+      setPendingDeliveries(ordersRes.data);
+      
+      // Fetch tracking info for each order
+      const trackingPromises = ordersRes.data.map(order => 
+        deliveryApi.getTracking(order.id)
+      );
+      const trackingResults = await Promise.all(trackingPromises);
+      
+      const trackingMap: Record<string, DeliveryTracking> = {};
+      trackingResults.forEach((result, index) => {
+        if (result.success && result.data) {
+          trackingMap[ordersRes.data[index].id] = result.data;
+        }
+      });
+      setTrackingInfo(trackingMap);
+    }
     if (usersRes.success && usersRes.data) setDrivers(usersRes.data);
     setLoading(false);
   };
@@ -245,6 +274,7 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
             <DeliveriesList
               deliveries={pendingDeliveries}
               drivers={drivers}
+              trackingInfo={trackingInfo}
               onAssign={(order) => setAssignModal(order)}
               isRTL={isRTL}
               t={t}
@@ -301,16 +331,29 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
 function DeliveriesList({
   deliveries,
   drivers,
+  trackingInfo,
   onAssign,
   isRTL,
   t,
 }: {
   deliveries: Order[];
   drivers: UserType[];
+  trackingInfo: Record<string, DeliveryTracking>;
   onAssign: (order: Order) => void;
   isRTL: boolean;
   t: typeof translations.en;
 }) {
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString(isRTL ? 'ar-AE' : 'en-AE', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   if (deliveries.length === 0) {
     return (
       <div className="text-center py-12">
@@ -322,43 +365,93 @@ function DeliveriesList({
 
   return (
     <div className="space-y-4">
-      {deliveries.map((order) => (
-        <div
-          key={order.id}
-          className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 bg-slate-50 rounded-lg gap-3"
-        >
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Truck className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+      {deliveries.map((order) => {
+        const tracking = trackingInfo[order.id];
+        const hasDriver = tracking?.driverId && tracking?.driverName;
+        const assignedTime = tracking?.timeline?.find(t => t.status === 'assigned')?.timestamp;
+        
+        return (
+          <div
+            key={order.id}
+            className="p-3 sm:p-4 bg-slate-50 rounded-lg"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Truck className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900 text-sm sm:text-base">{order.orderNumber}</p>
+                  <p className="text-xs sm:text-sm text-slate-500 truncate">{order.customerName}</p>
+                  <p className="text-xs text-slate-400 truncate">
+                    {order.deliveryAddress.area}, {order.deliveryAddress.emirate}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+                <div className={cn(isRTL ? "text-left" : "text-right sm:text-right", "text-left")}>
+                  <p className={cn("text-sm font-medium text-slate-900 flex items-center gap-1", isRTL ? "justify-start" : "justify-start sm:justify-end")}>
+                    <CurrencySymbol size="sm" /> {order.total.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {order.items.length} {t.items}
+                  </p>
+                </div>
+                <button
+                  onClick={() => onAssign(order)}
+                  className={cn(
+                    "flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm flex-shrink-0",
+                    hasDriver 
+                      ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                      : "bg-primary text-white hover:bg-primary/90"
+                  )}
+                >
+                  <User className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">{hasDriver ? t.reassign : t.assignDriver}</span>
+                  <span className="sm:hidden">{hasDriver ? t.reassign : "Assign"}</span>
+                </button>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="font-medium text-slate-900 text-sm sm:text-base">{order.orderNumber}</p>
-              <p className="text-xs sm:text-sm text-slate-500 truncate">{order.customerName}</p>
-              <p className="text-xs text-slate-400 truncate">
-                {order.deliveryAddress.area}, {order.deliveryAddress.emirate}
-              </p>
-            </div>
+            
+            {/* Driver Assignment Info */}
+            {hasDriver && (
+              <div className="mt-3 pt-3 border-t border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">{t.assignedDriver}</p>
+                      <p className="text-sm font-medium text-slate-900">{tracking.driverName}</p>
+                    </div>
+                  </div>
+                  
+                  {tracking.driverMobile && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-slate-400" />
+                      <div>
+                        <p className="text-xs text-slate-500">{t.mobile}</p>
+                        <p className="text-sm font-medium text-slate-900" dir="ltr">{tracking.driverMobile}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {assignedTime && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-slate-400" />
+                      <div>
+                        <p className="text-xs text-slate-500">{t.assignedAt}</p>
+                        <p className="text-sm font-medium text-slate-900">{formatDateTime(assignedTime)}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
-            <div className={cn(isRTL ? "text-left" : "text-right sm:text-right", "text-left")}>
-              <p className={cn("text-sm font-medium text-slate-900 flex items-center gap-1", isRTL ? "justify-start" : "justify-start sm:justify-end")}>
-                <CurrencySymbol size="sm" /> {order.total.toFixed(2)}
-              </p>
-              <p className="text-xs text-slate-500">
-                {order.items.length} {t.items}
-              </p>
-            </div>
-            <button
-              onClick={() => onAssign(order)}
-              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-primary text-white rounded-lg text-xs sm:text-sm hover:bg-primary/90 flex-shrink-0"
-            >
-              <User className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">{t.assignDriver}</span>
-              <span className="sm:hidden">Assign</span>
-            </button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

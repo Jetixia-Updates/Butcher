@@ -651,12 +651,12 @@ export const deliveryApi = {
 
   // Tracking
   getTracking: (orderId: string) =>
-    fetchApi<DeliveryTracking>(`/delivery/tracking/${orderId}`),
+    fetchApi<DeliveryTracking>(`/delivery/tracking/by-order/${orderId}`),
 
   assignDriver: (orderId: string, driverId: string, estimatedArrival?: string) =>
-    fetchApi<DeliveryTracking>(`/delivery/tracking/${orderId}/assign`, {
+    fetchApi<DeliveryTracking>(`/delivery/tracking/assign`, {
       method: "POST",
-      body: JSON.stringify({ driverId, estimatedArrival }),
+      body: JSON.stringify({ orderId, driverId, estimatedArrival }),
     }),
 
   updateTracking: (orderId: string, status: string, notes?: string) =>
