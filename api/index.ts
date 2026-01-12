@@ -1531,6 +1531,73 @@ function createApp() {
     res.json({ success: true, message: 'Address deleted' });
   });
 
+  // Get delivery drivers
+  app.get('/api/delivery/drivers', (req, res) => {
+    const drivers = Array.from(users.values())
+      .filter(u => u.role === 'delivery' && u.isActive)
+      .map(d => ({
+        id: d.id,
+        name: `${d.firstName} ${d.familyName}`,
+        mobile: d.mobile,
+        email: d.email,
+        activeDeliveries: 0,
+      }));
+    res.json({ success: true, data: drivers });
+  });
+
+  // Assign delivery to driver (orderId in body)
+  app.post('/api/delivery/tracking/assign', (req, res) => {
+    const { orderId, driverId, estimatedArrival } = req.body;
+    
+    if (!orderId || !driverId) {
+      return res.status(400).json({ success: false, error: 'orderId and driverId are required' });
+    }
+
+    const order = orders.get(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    const driver = users.get(driverId);
+    if (!driver || driver.role !== 'delivery') {
+      return res.status(400).json({ success: false, error: 'Invalid delivery driver' });
+    }
+
+    // Update order status
+    order.status = 'out_for_delivery';
+    order.updatedAt = new Date().toISOString();
+    order.statusHistory.push({
+      status: 'out_for_delivery',
+      changedAt: new Date().toISOString(),
+      changedBy: driverId,
+    });
+
+    const tracking = {
+      id: `track_${Date.now()}`,
+      orderId,
+      orderNumber: order.orderNumber,
+      driverId,
+      driverName: `${driver.firstName} ${driver.familyName}`,
+      driverMobile: driver.mobile,
+      status: 'assigned',
+      estimatedArrival: estimatedArrival || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      timeline: [{
+        status: 'assigned',
+        timestamp: new Date().toISOString(),
+        notes: `Assigned to driver: ${driver.firstName}`,
+      }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    res.json({
+      success: true,
+      data: tracking,
+      message: 'Delivery assigned successfully',
+    });
+  });
+
+  // Legacy route with orderId in path
   app.post('/api/delivery/tracking/:orderId/assign', (req, res) => {
     const { driverId, estimatedArrival } = req.body;
     res.json({
@@ -1782,6 +1849,220 @@ function createApp() {
     }
 
     res.json({ success: true, data: sanitizeUser(user) });
+  });
+
+  // =====================================================
+  // FINANCE API
+  // =====================================================
+
+  // Finance accounts mock data
+  const financeAccounts = [
+    { id: 'acc-001', name: 'Main Business Account', nameAr: 'الحساب التجاري الرئيسي', type: 'bank', balance: 125000, currency: 'AED', isActive: true, bankName: 'Emirates NBD', accountNumber: '****4521' },
+    { id: 'acc-002', name: 'Card Payments', nameAr: 'مدفوعات البطاقات', type: 'card_payments', balance: 45000, currency: 'AED', isActive: true },
+    { id: 'acc-003', name: 'COD Collections', nameAr: 'تحصيلات الدفع عند الاستلام', type: 'cod_collections', balance: 8500, currency: 'AED', isActive: true },
+    { id: 'acc-004', name: 'Petty Cash', nameAr: 'النثرية', type: 'petty_cash', balance: 2500, currency: 'AED', isActive: true },
+  ];
+
+  const financeExpenses = [
+    { id: 'exp-001', category: 'utilities', amount: 1500, currency: 'AED', description: 'Monthly Electricity Bill', vendor: 'DEWA', status: 'paid', paidAt: '2026-01-10T09:00:00Z', createdAt: '2026-01-05T10:00:00Z' },
+    { id: 'exp-002', category: 'rent', amount: 15000, currency: 'AED', description: 'Shop Rent - January', vendor: 'Emirates Properties', status: 'paid', paidAt: '2026-01-03T10:00:00Z', createdAt: '2026-01-01T08:00:00Z' },
+    { id: 'exp-003', category: 'salaries', amount: 35000, currency: 'AED', description: 'Staff Salaries - January', status: 'pending', createdAt: '2026-01-01T08:00:00Z' },
+    { id: 'exp-004', category: 'delivery', amount: 2500, currency: 'AED', description: 'Delivery Vehicle Fuel', vendor: 'ADNOC', status: 'paid', paidAt: '2026-01-08T14:00:00Z', createdAt: '2026-01-08T14:00:00Z' },
+    { id: 'exp-005', category: 'marketing', amount: 5000, currency: 'AED', description: 'Social Media Advertising', vendor: 'Meta Ads', status: 'overdue', createdAt: '2026-01-01T08:00:00Z' },
+  ];
+
+  // Finance summary
+  app.get('/api/finance/summary', (req, res) => {
+    const allOrders = Array.from(orders.values());
+    const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
+    const totalVAT = allOrders.reduce((sum, o) => sum + o.vatAmount, 0);
+    const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
+    const grossProfit = totalRevenue * 0.35; // 35% margin
+    const netProfit = grossProfit - totalExpenses;
+
+    res.json({
+      success: true,
+      data: {
+        period: req.query.period || 'month',
+        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        endDate: new Date().toISOString(),
+        totalRevenue,
+        totalCOGS: totalRevenue * 0.65,
+        grossProfit,
+        grossProfitMargin: 35,
+        totalExpenses,
+        netProfit,
+        netProfitMargin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
+        totalRefunds: 0,
+        totalVAT,
+        vatCollected: totalVAT,
+        vatPaid: 0,
+        vatDue: totalVAT,
+        cashFlow: { inflow: totalRevenue, outflow: totalExpenses, net: totalRevenue - totalExpenses },
+        revenueByPaymentMethod: [
+          { method: 'card', amount: totalRevenue * 0.6, count: Math.floor(allOrders.length * 0.6) },
+          { method: 'cod', amount: totalRevenue * 0.35, count: Math.floor(allOrders.length * 0.35) },
+          { method: 'bank_transfer', amount: totalRevenue * 0.05, count: Math.floor(allOrders.length * 0.05) },
+        ],
+        expensesByCategory: [
+          { category: 'rent', amount: 15000, count: 1 },
+          { category: 'salaries', amount: 35000, count: 1 },
+          { category: 'utilities', amount: 1500, count: 1 },
+          { category: 'marketing', amount: 5000, count: 1 },
+          { category: 'delivery', amount: 2500, count: 1 },
+        ],
+        accountBalances: financeAccounts.map(a => ({ accountId: a.id, accountName: a.name, balance: a.balance })),
+      },
+    });
+  });
+
+  // Finance transactions
+  app.get('/api/finance/transactions', (req, res) => {
+    const allOrders = Array.from(orders.values());
+    const transactions = allOrders.slice(0, 10).map((o, i) => ({
+      id: `txn-${i + 1}`,
+      type: 'sale',
+      status: 'completed',
+      amount: o.total,
+      currency: 'AED',
+      description: `Order #${o.orderNumber}`,
+      reference: o.orderNumber,
+      referenceType: 'order',
+      referenceId: o.id,
+      accountId: o.paymentMethod === 'card' ? 'acc-002' : 'acc-003',
+      accountName: o.paymentMethod === 'card' ? 'Card Payments' : 'COD Collections',
+      createdBy: 'system',
+      createdAt: o.createdAt,
+      updatedAt: o.createdAt,
+    }));
+    res.json({ success: true, data: transactions });
+  });
+
+  // Finance accounts
+  app.get('/api/finance/accounts', (req, res) => {
+    res.json({ success: true, data: financeAccounts });
+  });
+
+  app.post('/api/finance/accounts', (req, res) => {
+    const newAccount = { id: `acc-${Date.now()}`, ...req.body, balance: 0, createdAt: new Date().toISOString() };
+    res.status(201).json({ success: true, data: newAccount });
+  });
+
+  app.post('/api/finance/accounts/transfer', (req, res) => {
+    const { fromAccountId, toAccountId, amount } = req.body;
+    res.json({ success: true, data: { fromAccountId, toAccountId, amount, transferredAt: new Date().toISOString() } });
+  });
+
+  app.post('/api/finance/accounts/:id/reconcile', (req, res) => {
+    const account = financeAccounts.find(a => a.id === req.params.id);
+    if (!account) return res.status(404).json({ success: false, error: 'Account not found' });
+    res.json({ success: true, data: { ...account, lastReconciled: new Date().toISOString() } });
+  });
+
+  // Finance expenses
+  app.get('/api/finance/expenses', (req, res) => {
+    res.json({ success: true, data: financeExpenses });
+  });
+
+  app.post('/api/finance/expenses', (req, res) => {
+    const newExpense = { id: `exp-${Date.now()}`, ...req.body, status: 'pending', createdAt: new Date().toISOString() };
+    res.status(201).json({ success: true, data: newExpense });
+  });
+
+  app.post('/api/finance/expenses/:id/pay', (req, res) => {
+    const expense = financeExpenses.find(e => e.id === req.params.id);
+    if (!expense) return res.status(404).json({ success: false, error: 'Expense not found' });
+    res.json({ success: true, data: { ...expense, status: 'paid', paidAt: new Date().toISOString() } });
+  });
+
+  // Finance reports
+  app.get('/api/finance/reports/profit-loss', (req, res) => {
+    const allOrders = Array.from(orders.values());
+    const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
+    const totalCOGS = totalRevenue * 0.65;
+    const grossProfit = totalRevenue - totalCOGS;
+    const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
+    const netProfit = grossProfit - totalExpenses;
+
+    res.json({
+      success: true,
+      data: {
+        period: req.query.period || 'month',
+        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        endDate: new Date().toISOString(),
+        revenue: { sales: totalRevenue, otherIncome: 0, totalRevenue },
+        costOfGoodsSold: { inventoryCost: totalCOGS, supplierPurchases: 0, totalCOGS },
+        grossProfit,
+        grossProfitMargin: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,
+        operatingExpenses: [
+          { category: 'rent', amount: 15000 },
+          { category: 'salaries', amount: 35000 },
+          { category: 'utilities', amount: 1500 },
+        ],
+        totalOperatingExpenses: totalExpenses,
+        operatingProfit: grossProfit - totalExpenses,
+        otherExpenses: { vatPaid: 0, refunds: 0, totalOther: 0 },
+        netProfit,
+        netProfitMargin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
+      },
+    });
+  });
+
+  app.get('/api/finance/reports/cash-flow', (req, res) => {
+    const allOrders = Array.from(orders.values());
+    const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
+    const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
+
+    res.json({
+      success: true,
+      data: {
+        period: req.query.period || 'month',
+        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        endDate: new Date().toISOString(),
+        openingBalance: 100000,
+        closingBalance: 100000 + totalRevenue - totalExpenses,
+        operatingActivities: {
+          cashFromSales: totalRevenue * 0.6,
+          cashFromCOD: totalRevenue * 0.35,
+          cashFromRefunds: 0,
+          cashToSuppliers: totalRevenue * 0.5,
+          cashToExpenses: totalExpenses,
+          netOperating: totalRevenue - totalExpenses - totalRevenue * 0.5,
+        },
+        investingActivities: { equipmentPurchases: 0, netInvesting: 0 },
+        financingActivities: { ownerDrawings: 0, capitalInjection: 0, netFinancing: 0 },
+        netCashFlow: totalRevenue - totalExpenses,
+        dailyCashFlow: [],
+      },
+    });
+  });
+
+  app.get('/api/finance/reports/vat', (req, res) => {
+    const allOrders = Array.from(orders.values());
+    const salesVAT = allOrders.reduce((sum, o) => sum + o.vatAmount, 0);
+    const salesTaxable = allOrders.reduce((sum, o) => sum + (o.total - o.vatAmount), 0);
+
+    res.json({
+      success: true,
+      data: {
+        period: req.query.period || 'month',
+        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        endDate: new Date().toISOString(),
+        salesVAT: { taxableAmount: salesTaxable, vatAmount: salesVAT, exemptAmount: 0 },
+        purchasesVAT: { taxableAmount: 0, vatAmount: 0 },
+        vatDue: salesVAT,
+        vatRefund: 0,
+        netVAT: salesVAT,
+        transactionDetails: allOrders.slice(0, 10).map(o => ({
+          date: o.createdAt,
+          type: 'sale',
+          reference: o.orderNumber,
+          taxableAmount: o.total - o.vatAmount,
+          vatAmount: o.vatAmount,
+          vatRate: 5,
+        })),
+      },
+    });
   });
 
   // Catch all for unhandled routes
