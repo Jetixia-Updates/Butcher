@@ -196,7 +196,7 @@ function seedData() {
   // Delivery staff
   users.set("driver_1", {
     id: "driver_1",
-    username: "driver",
+    username: "driver1",
     email: "driver1@butcher.ae",
     mobile: "+971509999999",
     password: "driver123",

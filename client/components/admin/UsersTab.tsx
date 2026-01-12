@@ -67,6 +67,7 @@ const translations = {
     confirmDelete: "Are you sure you want to delete this user?",
     editUser: "Edit User",
     createUser: "Create User",
+    username: "Username",
     firstName: "First Name",
     familyName: "Family Name",
     email: "Email",
@@ -116,6 +117,7 @@ const translations = {
     confirmDelete: "هل أنت متأكد من حذف هذا المستخدم؟",
     editUser: "تعديل المستخدم",
     createUser: "إنشاء مستخدم",
+    username: "اسم المستخدم",
     firstName: "الاسم الأول",
     familyName: "اسم العائلة",
     email: "البريد الإلكتروني",
@@ -196,6 +198,7 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
   };
 
   const handleCreateUser = async (userData: {
+    username: string;
     email: string;
     mobile: string;
     password: string;
@@ -534,6 +537,7 @@ function UserFormModal({
 }) {
   const ROLE_CONFIG = getRoleConfig(isRTL);
   const [formData, setFormData] = useState({
+    username: user?.username || "",
     firstName: user?.firstName || "",
     familyName: user?.familyName || "",
     email: user?.email || "",
@@ -552,6 +556,7 @@ function UserFormModal({
 
     const data = user
       ? {
+          username: formData.username,
           firstName: formData.firstName,
           familyName: formData.familyName,
           email: formData.email,
@@ -589,6 +594,21 @@ function UserFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Username field */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t.username} *
+            </label>
+            <input
+              type="text"
+              value={formData.username}
+              onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s/g, '') })}
+              required
+              placeholder={isRTL ? "مثال: user123" : "e.g., user123"}
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
