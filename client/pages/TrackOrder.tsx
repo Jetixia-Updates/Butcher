@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -18,6 +18,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useOrders } from "@/context/OrdersContext";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { deliveryApi } from "@/lib/api";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -175,59 +176,132 @@ export default function TrackOrderPage() {
 
   const tt = t[language];
 
-  // Demo tracking data
-  useEffect(() => {
+  // Fetch real tracking data from API
+  const fetchTrackingData = useCallback(async () => {
     if (!order) return;
 
-    // Simulate tracking based on order status
-    const statusMap: Record<string, TrackingInfo["status"]> = {
-      pending: "preparing",
-      confirmed: "preparing",
-      processing: "preparing",
-      out_for_delivery: "on_the_way",
-      delivered: "delivered",
-    };
+    try {
+      const response = await deliveryApi.getTracking(order.id);
+      
+      if (response.success && response.data) {
+        // Map API tracking data to component's TrackingInfo format
+        const apiTracking = response.data;
+        
+        const statusMap: Record<string, TrackingInfo["status"]> = {
+          assigned: "picked_up",
+          picked_up: "picked_up",
+          in_transit: "on_the_way",
+          nearby: "nearby",
+          delivered: "delivered",
+        };
+        
+        const mappedStatus = statusMap[apiTracking.status] || "on_the_way";
+        
+        // Build timeline from API data
+        const timeline = [
+          { status: "preparing", timestamp: order.createdAt, completed: true },
+          { status: "ready", timestamp: order.createdAt, completed: true },
+          { 
+            status: "picked_up", 
+            timestamp: apiTracking.timeline?.find(t => t.status === 'assigned')?.timestamp || '', 
+            completed: true 
+          },
+          { 
+            status: "on_the_way", 
+            timestamp: apiTracking.timeline?.find(t => t.status === 'in_transit')?.timestamp || '', 
+            completed: ['in_transit', 'nearby', 'delivered'].includes(apiTracking.status) 
+          },
+          { 
+            status: "delivered", 
+            timestamp: apiTracking.timeline?.find(t => t.status === 'delivered')?.timestamp || '', 
+            completed: apiTracking.status === 'delivered' 
+          },
+        ];
 
-    const currentStatus = statusMap[order.status] || "preparing";
-    
-    // Demo driver info (in production, fetch from API)
-    const demoDriver = {
-      name: "Ahmed Hassan",
-      phone: "+971 50 123 4567",
-      rating: 4.8,
-      vehicleType: "Motorcycle",
-      vehiclePlate: "DXB A 12345",
-    };
+        setTracking({
+          status: mappedStatus,
+          driver: {
+            name: apiTracking.driverName,
+            phone: apiTracking.driverMobile,
+            rating: 4.8,
+            vehicleType: "Motorcycle",
+            vehiclePlate: "DXB A 12345",
+          },
+          estimatedArrival: apiTracking.estimatedArrival,
+          currentLocation: undefined, // Would come from real-time tracking
+          timeline,
+        });
+      } else {
+        // Fall back to order status-based tracking if no API tracking exists
+        const statusMap: Record<string, TrackingInfo["status"]> = {
+          pending: "preparing",
+          confirmed: "preparing",
+          processing: "preparing",
+          ready_for_pickup: "ready",
+          out_for_delivery: "on_the_way",
+          delivered: "delivered",
+        };
 
-    // Demo timeline
-    const now = new Date();
-    const timeline = [
-      { status: "preparing", timestamp: new Date(now.getTime() - 30 * 60000).toISOString(), completed: true },
-      { status: "ready", timestamp: new Date(now.getTime() - 15 * 60000).toISOString(), completed: currentStatus !== "preparing" },
-      { status: "picked_up", timestamp: new Date(now.getTime() - 10 * 60000).toISOString(), completed: ["on_the_way", "nearby", "delivered"].includes(currentStatus) },
-      { status: "on_the_way", timestamp: new Date(now.getTime() - 5 * 60000).toISOString(), completed: ["on_the_way", "nearby", "delivered"].includes(currentStatus) },
-      { status: "delivered", timestamp: "", completed: currentStatus === "delivered" },
-    ];
+        const currentStatus = statusMap[order.status] || "preparing";
+        
+        const now = new Date();
+        const timeline = [
+          { status: "preparing", timestamp: order.createdAt, completed: true },
+          { status: "ready", timestamp: new Date(now.getTime() - 15 * 60000).toISOString(), completed: currentStatus !== "preparing" },
+          { status: "picked_up", timestamp: "", completed: ["on_the_way", "nearby", "delivered"].includes(currentStatus) },
+          { status: "on_the_way", timestamp: "", completed: ["on_the_way", "nearby", "delivered"].includes(currentStatus) },
+          { status: "delivered", timestamp: "", completed: currentStatus === "delivered" },
+        ];
 
-    // Demo location (Dubai coordinates)
-    const driverLocation = currentStatus === "on_the_way" || currentStatus === "nearby" 
-      ? { latitude: 25.2048 + (Math.random() - 0.5) * 0.02, longitude: 55.2708 + (Math.random() - 0.5) * 0.02 }
-      : undefined;
+        setTracking({
+          status: currentStatus,
+          driver: undefined,
+          estimatedArrival: undefined,
+          currentLocation: undefined,
+          timeline,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching tracking data:', error);
+      // Fallback to basic status
+      const statusMap: Record<string, TrackingInfo["status"]> = {
+        pending: "preparing",
+        confirmed: "preparing",
+        processing: "preparing",
+        out_for_delivery: "on_the_way",
+        delivered: "delivered",
+      };
 
-    const estimatedArrival = currentStatus === "on_the_way" 
-      ? new Date(now.getTime() + 15 * 60000).toISOString()
-      : currentStatus === "nearby"
-      ? new Date(now.getTime() + 5 * 60000).toISOString()
-      : undefined;
+      const currentStatus = statusMap[order.status] || "preparing";
+      
+      const now = new Date();
+      const timeline = [
+        { status: "preparing", timestamp: order.createdAt, completed: true },
+        { status: "ready", timestamp: new Date(now.getTime() - 15 * 60000).toISOString(), completed: currentStatus !== "preparing" },
+        { status: "picked_up", timestamp: "", completed: ["on_the_way", "nearby", "delivered"].includes(currentStatus) },
+        { status: "on_the_way", timestamp: "", completed: ["on_the_way", "nearby", "delivered"].includes(currentStatus) },
+        { status: "delivered", timestamp: "", completed: currentStatus === "delivered" },
+      ];
 
-    setTracking({
-      status: currentStatus,
-      driver: ["on_the_way", "nearby", "delivered"].includes(currentStatus) ? demoDriver : undefined,
-      estimatedArrival,
-      currentLocation: driverLocation,
-      timeline,
-    });
+      setTracking({
+        status: currentStatus,
+        driver: undefined,
+        estimatedArrival: undefined,
+        currentLocation: undefined,
+        timeline,
+      });
+    }
   }, [order]);
+
+  // Fetch tracking data on mount and when order changes
+  useEffect(() => {
+    fetchTrackingData();
+    
+    // Set up polling for real-time updates (every 30 seconds)
+    const interval = setInterval(fetchTrackingData, 30000);
+    
+    return () => clearInterval(interval);
+  }, [fetchTrackingData]);
 
   // Countdown timer
   useEffect(() => {
@@ -336,9 +410,10 @@ export default function TrackOrderPage() {
     return () => clearInterval(interval);
   }, [tracking?.currentLocation, tracking?.status]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 1000);
+    await fetchTrackingData();
+    setIsRefreshing(false);
   };
 
   const getStatusInfo = (status: string) => {
