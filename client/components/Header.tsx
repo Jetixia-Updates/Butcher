@@ -205,14 +205,14 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
   return (
     <header className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-border shadow-sm">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center py-3 sm:py-4">
+      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center py-2 sm:py-4">
           {/* Left: Language Switcher & Dark Mode */}
-          <div className="flex-1 flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <LanguageSwitcher variant="compact" />
             <button
               onClick={toggleDarkMode}
-              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="hidden sm:flex p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
             >
               {isDark ? (
@@ -226,29 +226,29 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
           {/* Center: Logo */}
           <Link
             to="/home"
-            className="flex-shrink-0 text-center"
+            className="flex-shrink-0 text-center mx-1 sm:mx-4"
           >
             <div className="inline-block">
-              <h1 className="text-lg sm:text-2xl font-bold text-primary">
+              <h1 className="text-base sm:text-2xl font-bold text-primary whitespace-nowrap">
                 🥩 {t("header.title")}
               </h1>
-              <p className="text-[10px] sm:text-xs text-muted-foreground font-medium hidden xs:block">
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-medium hidden sm:block">
                 {t("header.subtitle")}
               </p>
             </div>
           </Link>
 
           {/* Right: Auth & Basket */}
-          <div className="flex-1 flex justify-end items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1 sm:gap-4">
             {/* Chat Icon - Only for logged in users */}
             {isLoggedIn && (
               <div className="relative" ref={chatRef}>
                 <button
                   onClick={() => setShowChat(!showChat)}
-                  className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+                  className="relative p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-colors"
                   aria-label="Chat with Admin"
                 >
-                  <MessageCircle className="w-5 h-5 text-primary" />
+                  <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                   {chatUnreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                       {chatUnreadCount > 9 ? "9+" : chatUnreadCount}
@@ -427,10 +427,10 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
               <div className="relative" ref={notificationRef}>
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+                  className="relative p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-colors"
                   aria-label="Notifications"
                 >
-                  <Bell className="w-5 h-5 text-primary" />
+                  <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                   {userUnreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                       {userUnreadCount > 9 ? "9+" : userUnreadCount}
@@ -537,9 +537,9 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
             )}
 
             {showBasketIcon && (
-              <Link to="/basket" className="relative group">
+              <Link to="/basket" className="relative group p-1">
                 <svg
-                  className="w-6 h-6 text-primary group-hover:text-primary/80 transition-colors"
+                  className="w-5 h-5 sm:w-6 sm:h-6 text-primary group-hover:text-primary/80 transition-colors"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -575,9 +575,9 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center gap-1 sm:gap-2 p-2 sm:px-3 sm:py-1.5 rounded-full sm:rounded-lg hover:bg-gray-100 transition-colors"
+                  className="flex items-center gap-1 p-1.5 sm:p-2 sm:px-3 sm:py-1.5 rounded-full sm:rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  <User className="w-5 h-5 text-primary" />
+                  <User className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                   <span className="hidden sm:inline text-sm text-muted-foreground max-w-[80px] truncate">
                     {user?.firstName}
                   </span>
@@ -685,12 +685,12 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <Link to="/login" className="text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-1.5 text-primary hover:text-primary/80 font-medium">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <Link to="/login" className="text-[11px] sm:text-sm px-1.5 py-1 sm:px-3 sm:py-1.5 text-primary hover:text-primary/80 font-medium whitespace-nowrap">
                   {language === "ar" ? "دخول" : "Login"}
                 </Link>
-                <Link to="/register" className="btn-primary text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-1.5">
-                  {language === "ar" ? "تسجيل" : "Register"}
+                <Link to="/register" className="btn-primary text-[11px] sm:text-sm px-1.5 py-1 sm:px-3 sm:py-1.5 whitespace-nowrap">
+                  {language === "ar" ? "سجل" : "Register"}
                 </Link>
               </div>
             )}
