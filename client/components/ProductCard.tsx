@@ -1,7 +1,9 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { PriceDisplay } from "@/components/CurrencySymbol";
 import { BasketItem } from "@/context/BasketContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { X, Plus, Minus, ShoppingCart, Check, Star, Eye, ExternalLink } from "lucide-react";
 
 // Product options types
 interface ProductOptions {
@@ -64,6 +66,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const [quantity, setQuantity] = useState(0.250);
   const [isAdding, setIsAdding] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showQuickView, setShowQuickView] = useState(false);
+  const [quickViewQuantity, setQuickViewQuantity] = useState(0.250);
+  const [quickViewOptions, setQuickViewOptions] = useState<ProductOptions>({
+    boneType: [],
+    cutType: [],
+  });
   const [selectedOptions, setSelectedOptions] = useState<ProductOptions>({
     boneType: [],
     cutType: [],
@@ -159,11 +167,85 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     setSelectedOptions({ boneType: [], cutType: [] });
   };
 
+  // Quick view handlers
+  const handleImageClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowQuickView(true);
+    setQuickViewQuantity(0.250);
+    setQuickViewOptions({ boneType: [], cutType: [] });
+  };
+
+  const handleQuickViewOptionToggle = (type: "boneType" | "cutType", optionId: string) => {
+    setQuickViewOptions(prev => {
+      const current = prev[type];
+      if (current.includes(optionId)) {
+        return { ...prev, [type]: current.filter(id => id !== optionId) };
+      } else {
+        return { ...prev, [type]: [...current, optionId] };
+      }
+    });
+  };
+
+  const handleQuickViewAddToBasket = () => {
+    setIsAdding(true);
+    
+    // Build notes from selected options
+    const boneLabels = quickViewOptions.boneType.map(id => {
+      const opt = BONE_OPTIONS.find(o => o.id === id);
+      return language === "ar" ? opt?.labelAr : opt?.label;
+    }).filter(Boolean);
+    
+    const cutLabels = quickViewOptions.cutType.map(id => {
+      const opt = CUT_OPTIONS.find(o => o.id === id);
+      return language === "ar" ? opt?.labelAr : opt?.label;
+    }).filter(Boolean);
+    
+    const notes = [
+      boneLabels.length > 0 ? boneLabels.join(", ") : null,
+      cutLabels.length > 0 ? cutLabels.join(", ") : null,
+    ].filter(Boolean).join(" | ");
+
+    if (onAddToBasket) {
+      onAddToBasket({
+        id: product.id,
+        productId: product.id,
+        name: product.name,
+        nameAr: product.nameAr,
+        price: product.price,
+        quantity: quickViewQuantity,
+        image: product.image,
+        category: product.category,
+        notes: notes || undefined,
+      });
+    }
+
+    // Reset after animation
+    setTimeout(() => {
+      setIsAdding(false);
+      setShowQuickView(false);
+      setQuickViewQuantity(0.250);
+      setQuickViewOptions({ boneType: [], cutType: [] });
+    }, 800);
+  };
+
+  const handleCloseQuickView = () => {
+    setShowQuickView(false);
+    setQuickViewQuantity(0.250);
+    setQuickViewOptions({ boneType: [], cutType: [] });
+  };
+
+  // Calculate discounted price
+  const discountedPrice = product.discount ? product.price * (1 - product.discount / 100) : product.price;
+
   return (
     <>
       <div className="card-premium overflow-hidden group h-full flex flex-col">
-        {/* Product Image */}
-        <div className={`relative overflow-hidden bg-muted ${compact ? "h-24 sm:h-32" : "h-32 sm:h-48"} w-full flex items-center justify-center`}>
+        {/* Product Image - Clickable for Quick View */}
+        <div 
+          className={`relative overflow-hidden bg-muted ${compact ? "h-24 sm:h-32" : "h-32 sm:h-48"} w-full flex items-center justify-center cursor-pointer`}
+          onClick={handleImageClick}
+        >
           {product.image ? (
             <img
               src={product.image}
@@ -174,9 +256,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <div className={`${compact ? "text-3xl sm:text-4xl" : "text-4xl sm:text-6xl"}`}>🥩</div>
           )}
           
+          {/* Quick View Overlay */}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+            <div className="bg-white/90 dark:bg-gray-800/90 rounded-full p-3 transform scale-75 group-hover:scale-100 transition-transform duration-300">
+              <Eye className="w-5 h-5 text-primary" />
+            </div>
+          </div>
+          
           {/* Discount Badge */}
           {product.discount && product.discount > 0 && (
-            <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+            <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
               -{product.discount}%
             </div>
           )}
@@ -458,6 +547,241 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick View Modal */}
+      {showQuickView && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={handleCloseQuickView}
+        >
+          <div 
+            className="bg-background rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={handleCloseQuickView}
+              className="absolute top-4 right-4 z-10 p-2 bg-background/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-background rounded-full transition-colors shadow-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex flex-col md:flex-row max-h-[90vh]">
+              {/* Product Image */}
+              <div className="relative w-full md:w-1/2 h-64 md:h-auto bg-muted flex-shrink-0">
+                {product.image ? (
+                  <img
+                    src={product.image}
+                    alt={productName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-8xl">🥩</div>
+                )}
+                
+                {/* Discount Badge */}
+                {product.discount && product.discount > 0 && (
+                  <div className="absolute top-4 left-4 bg-red-500 text-white text-sm font-bold px-3 py-1.5 rounded-full">
+                    -{product.discount}% {language === "ar" ? "خصم" : "OFF"}
+                  </div>
+                )}
+
+                {/* Badges */}
+                {product.badges && product.badges.length > 0 && (
+                  <div className="absolute bottom-4 left-4 flex flex-wrap gap-2">
+                    {product.badges.map((badge) => {
+                      const config = BADGE_CONFIG[badge];
+                      if (!config) return null;
+                      return (
+                        <span
+                          key={badge}
+                          className={`text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1 ${config.color}`}
+                        >
+                          <span>{config.icon}</span>
+                          <span>{language === "ar" ? config.labelAr : config.label}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Product Details */}
+              <div className="flex-1 p-6 overflow-y-auto">
+                {/* Category */}
+                <p className="text-xs font-semibold text-secondary uppercase tracking-wide">
+                  {t(`category.${product.category.toLowerCase()}`)}
+                </p>
+
+                {/* Name */}
+                <h2 className="text-2xl md:text-3xl font-bold text-foreground mt-2">
+                  {productName}
+                </h2>
+
+                {/* Rating */}
+                {product.rating && product.rating > 0 && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-1">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${i < Math.round(product.rating!) ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm text-muted-foreground">({product.rating.toFixed(1)})</span>
+                  </div>
+                )}
+
+                {/* Price */}
+                <div className="flex items-baseline gap-3 mt-4">
+                  <span className="text-3xl font-bold text-primary">
+                    <PriceDisplay price={discountedPrice} size="lg" />
+                  </span>
+                  <span className="text-muted-foreground">/ {priceUnit}</span>
+                  {product.discount && product.discount > 0 && (
+                    <span className="text-lg text-muted-foreground line-through">
+                      <PriceDisplay price={product.price} size="md" />
+                    </span>
+                  )}
+                </div>
+
+                {/* Description */}
+                <p className="text-muted-foreground mt-4 leading-relaxed">
+                  {productDescription}
+                </p>
+
+                {/* Stock Status */}
+                <div className="flex items-center gap-2 mt-4">
+                  <div className={`w-3 h-3 rounded-full ${product.available ? "bg-green-500" : "bg-red-500"}`} />
+                  <span className={`font-medium ${product.available ? "text-green-600" : "text-red-600"}`}>
+                    {product.available ? (language === "ar" ? "متوفر" : "In Stock") : (language === "ar" ? "غير متوفر" : "Out of Stock")}
+                  </span>
+                </div>
+
+                {/* Options Section */}
+                {product.available && (
+                  <div className="mt-6 space-y-4 border-t border-border pt-6">
+                    {/* Bone Options */}
+                    <div>
+                      <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                        <span>🦴</span>
+                        {language === "ar" ? "تفاصيل المنتج" : "Product Details"}
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {BONE_OPTIONS.map((option) => (
+                          <button
+                            key={option.id}
+                            onClick={() => handleQuickViewOptionToggle("boneType", option.id)}
+                            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all text-sm ${
+                              quickViewOptions.boneType.includes(option.id)
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border hover:border-primary/50"
+                            }`}
+                          >
+                            {language === "ar" ? option.labelAr : option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Cut Options */}
+                    <div>
+                      <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                        <span>🔪</span>
+                        {language === "ar" ? "نوع القطع" : "Cut Type"}
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {CUT_OPTIONS.map((option) => (
+                          <button
+                            key={option.id}
+                            onClick={() => handleQuickViewOptionToggle("cutType", option.id)}
+                            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all text-sm ${
+                              quickViewOptions.cutType.includes(option.id)
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border hover:border-primary/50"
+                            }`}
+                          >
+                            {language === "ar" ? option.labelAr : option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Quantity */}
+                    <div>
+                      <h4 className="font-semibold text-foreground mb-2">
+                        {language === "ar" ? "الكمية" : "Quantity"}
+                      </h4>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center border border-border rounded-lg">
+                          <button
+                            onClick={() => setQuickViewQuantity(Math.max(0.25, parseFloat((quickViewQuantity - 0.25).toFixed(3))))}
+                            className="p-3 hover:bg-muted transition-colors"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="w-24 text-center font-semibold">
+                            {formatWeightDisplay(quickViewQuantity)}
+                          </span>
+                          <button
+                            onClick={() => setQuickViewQuantity(parseFloat((quickViewQuantity + 0.25).toFixed(3)))}
+                            className="p-3 hover:bg-muted transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <span className="text-muted-foreground">
+                          = <PriceDisplay price={discountedPrice * quickViewQuantity} size="md" className="font-bold text-foreground" />
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Add to Cart Button */}
+                    <button
+                      onClick={handleQuickViewAddToBasket}
+                      disabled={isAdding}
+                      className="w-full btn-primary py-4 text-lg font-semibold flex items-center justify-center gap-3 mt-4"
+                    >
+                      {isAdding ? (
+                        <>
+                          <Check className="w-6 h-6" />
+                          {language === "ar" ? "تمت الإضافة!" : "Added to Cart!"}
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingCart className="w-6 h-6" />
+                          {language === "ar" ? "أضف للسلة" : "Add to Cart"}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Out of Stock */}
+                {!product.available && (
+                  <button
+                    className="w-full btn-outline py-4 text-lg font-semibold mt-6"
+                    disabled
+                  >
+                    {language === "ar" ? "غير متوفر" : "Out of Stock"}
+                  </button>
+                )}
+
+                {/* View Full Details Link */}
+                <Link
+                  to={`/product/${product.id}`}
+                  className="flex items-center justify-center gap-2 text-primary hover:underline mt-4 text-sm font-medium"
+                  onClick={handleCloseQuickView}
+                >
+                  {language === "ar" ? "عرض كل التفاصيل" : "View Full Details"}
+                  <ExternalLink className="w-4 h-4" />
+                </Link>
+              </div>
             </div>
           </div>
         </div>
