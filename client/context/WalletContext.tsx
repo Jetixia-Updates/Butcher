@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useAuth } from "./AuthContext";
+import { useSettings } from "./SettingsContext";
 
 export interface WalletTransaction {
   id: string;
@@ -38,9 +39,13 @@ interface WalletProviderProps {
 
 export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Get welcome bonus from settings
+  const welcomeBonus = settings?.enableWelcomeBonus ? (settings?.welcomeBonus || 50) : 0;
 
   // Storage key based on user
   const getStorageKey = () => `aljazira_wallet_${user?.id || "guest"}`;
@@ -54,9 +59,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       
       if (savedBalance) {
         setBalance(parseFloat(savedBalance));
-      } else {
-        // Demo: Give new users AED 50 welcome bonus
-        const welcomeBonus = 50;
+      } else if (welcomeBonus > 0) {
+        // Demo: Give new users welcome bonus from settings
         setBalance(welcomeBonus);
         localStorage.setItem(getStorageKey(), welcomeBonus.toString());
         
@@ -79,7 +83,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       setBalance(0);
       setTransactions([]);
     }
-  }, [user?.id]);
+  }, [user?.id, welcomeBonus]);
 
   // Save to storage when balance or transactions change
   useEffect(() => {

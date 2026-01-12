@@ -1,9 +1,5 @@
-/**
- * Notification Context
- * Manages admin notifications for orders, stock alerts, and system events
- */
-
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useAuth } from "./AuthContext";
 
 export type NotificationType = "order" | "stock" | "delivery" | "payment" | "system";
 
@@ -19,12 +15,14 @@ export interface Notification {
   linkId?: string; // Optional ID (e.g., orderId, productId) to navigate to
   unread: boolean;
   createdAt: string;
+  userId?: string; // Optional user ID for user-specific notifications
 }
 
 interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
   addNotification: (notification: Omit<Notification, "id" | "createdAt" | "unread">) => void;
+  addUserNotification: (userId: string, notification: Omit<Notification, "id" | "createdAt" | "unread" | "userId">) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   deleteNotification: (id: string) => void;
@@ -33,7 +31,8 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const STORAGE_KEY = "butcher_admin_notifications";
+const ADMIN_STORAGE_KEY = "butcher_admin_notifications";
+const USER_STORAGE_KEY_PREFIX = "butcher_user_notifications_";
 
 // Helper to generate unique ID
 const generateId = () => `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -64,12 +63,30 @@ export function formatRelativeTime(dateString: string, language: "en" | "ar" = "
 }
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isAdmin } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Load notifications from localStorage on mount
+  // Get appropriate storage key based on user role
+  const getStorageKey = useCallback(() => {
+    if (isAdmin) {
+      return ADMIN_STORAGE_KEY;
+    }
+    if (user?.id) {
+      return `${USER_STORAGE_KEY_PREFIX}${user.id}`;
+    }
+    return null;
+  }, [isAdmin, user?.id]);
+
+  // Load notifications from localStorage on mount or user change
   useEffect(() => {
+    const storageKey = getStorageKey();
+    if (!storageKey) {
+      setNotifications([]);
+      return;
+    }
+
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(storageKey);
       if (stored) {
         const parsed = JSON.parse(stored) as Notification[];
         // Sort by date (newest first) and limit to 50
@@ -77,21 +94,27 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         ).slice(0, 50);
         setNotifications(sorted);
+      } else {
+        setNotifications([]);
       }
     } catch {
-      // Ignore parse errors
+      setNotifications([]);
     }
-  }, []);
+  }, [getStorageKey]);
 
   // Save to localStorage whenever notifications change
   useEffect(() => {
+    const storageKey = getStorageKey();
+    if (!storageKey) return;
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
+      localStorage.setItem(storageKey, JSON.stringify(notifications));
     } catch {
       // Ignore storage errors
     }
-  }, [notifications]);
+  }, [notifications, getStorageKey]);
 
+  // Add notification for current user/admin
   const addNotification = useCallback((notification: Omit<Notification, "id" | "createdAt" | "unread">) => {
     const newNotification: Notification = {
       ...notification,
@@ -101,11 +124,32 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
 
     setNotifications((prev) => {
-      // Add new notification at the beginning
       const updated = [newNotification, ...prev];
-      // Keep only the latest 50
       return updated.slice(0, 50);
     });
+  }, []);
+
+  // Add notification for a specific user (called from admin actions)
+  const addUserNotification = useCallback((userId: string, notification: Omit<Notification, "id" | "createdAt" | "unread" | "userId">) => {
+    const storageKey = `${USER_STORAGE_KEY_PREFIX}${userId}`;
+    
+    try {
+      const stored = localStorage.getItem(storageKey);
+      const existing = stored ? JSON.parse(stored) as Notification[] : [];
+      
+      const newNotification: Notification = {
+        ...notification,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        unread: true,
+        userId,
+      };
+      
+      const updated = [newNotification, ...existing].slice(0, 50);
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+    } catch {
+      // Ignore storage errors
+    }
   }, []);
 
   const markAsRead = useCallback((id: string) => {
@@ -134,6 +178,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         notifications,
         unreadCount,
         addNotification,
+        addUserNotification,
         markAsRead,
         markAllAsRead,
         deleteNotification,

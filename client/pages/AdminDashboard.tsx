@@ -10,6 +10,7 @@ import { ProductsTab } from "@/components/admin/ProductsTab";
 import { StockTab } from "@/components/admin/StockTab";
 import { SuppliersTab } from "@/components/admin/SuppliersTab";
 import { UsersTab } from "@/components/admin/UsersTab";
+import { CustomersTab } from "@/components/admin/CustomersTab";
 import { DeliveryTab } from "@/components/admin/DeliveryTab";
 import { FinanceTab } from "@/components/admin/FinanceTab";
 import { PaymentsTab } from "@/components/admin/PaymentsTab";
@@ -64,6 +65,8 @@ export default function AdminDashboardPage() {
         return <SuppliersTab onNavigate={handleTabNavigate} />;
       case "users":
         return <UsersTab onNavigate={handleTabNavigate} />;
+      case "customers":
+        return <CustomersTab onNavigate={handleTabNavigate} />;
       case "delivery":
         return <DeliveryTab onNavigate={handleTabNavigate} />;
       case "finance":

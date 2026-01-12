@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
+import { useSettings } from "./SettingsContext";
 
 export interface LoyaltyTransaction {
   id: string;
@@ -83,14 +84,16 @@ const TIERS: LoyaltyTier[] = [
   },
 ];
 
-// Points conversion: 100 points = 10 AED
-const POINTS_TO_AED = 0.1;
-
 export const LoyaltyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [points, setPoints] = useState(0);
   const [totalEarned, setTotalEarned] = useState(0);
   const [transactions, setTransactions] = useState<LoyaltyTransaction[]>([]);
+
+  // Get settings values with fallbacks
+  const pointsToAedRate = settings.pointsToAedRate ?? 0.1; // 100 points = 10 AED
+  const referralBonusPoints = settings.referralBonus ?? 100;
 
   // Load loyalty data from localStorage
   useEffect(() => {
@@ -162,8 +165,8 @@ export const LoyaltyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [points, user?.id]);
 
   const calculatePointsValue = useCallback((pointsAmount: number): number => {
-    return parseFloat((pointsAmount * POINTS_TO_AED).toFixed(2));
-  }, []);
+    return parseFloat((pointsAmount * pointsToAedRate).toFixed(2));
+  }, [pointsToAedRate]);
 
   const calculatePointsFromOrder = useCallback((orderTotal: number): number => {
     return Math.floor(orderTotal * currentTier.multiplier);
@@ -192,8 +195,8 @@ export const LoyaltyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return { success: false, message: "Invalid referral code" };
     }
 
-    // Add bonus points for referral
-    const bonusPoints = 100;
+    // Add bonus points for referral using settings value
+    const bonusPoints = referralBonusPoints;
     const transaction: LoyaltyTransaction = {
       id: `trans_${Date.now()}`,
       userId: user.id,
@@ -211,7 +214,7 @@ export const LoyaltyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem(`applied_referrals_${user.id}`, JSON.stringify(referralsList));
 
     return { success: true, message: `You earned ${bonusPoints} bonus points!` };
-  }, [user?.id, referralCode]);
+  }, [user?.id, referralCode, referralBonusPoints]);
 
   return (
     <LoyaltyContext.Provider

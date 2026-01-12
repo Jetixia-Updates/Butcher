@@ -198,10 +198,23 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // Load demo orders for first time
         setOrders(INITIAL_ORDERS);
       }
+      // Also fetch from API to get latest updates
+      fetchOrders();
     } else {
       setOrders([]);
     }
   }, [user?.id]);
+
+  // Poll for order updates every 30 seconds
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 30000); // Poll every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [user?.id, fetchOrders]);
 
   // Save to localStorage
   useEffect(() => {
@@ -211,16 +224,73 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [orders, user?.id]);
 
   const fetchOrders = useCallback(async () => {
+    if (!user?.id) return;
+    
     setIsLoading(true);
     try {
-      // In production, fetch from API
-      // const response = await ordersApi.getMyOrders();
-      // For now, use localStorage
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate API delay
+      // Fetch orders from API
+      const response = await fetch(`/api/orders?userId=${user.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          // Transform API orders to CustomerOrder format
+          const apiOrders: CustomerOrder[] = data.data.map((order: any) => ({
+            id: order.id,
+            orderNumber: order.orderNumber,
+            items: order.items.map((item: any) => ({
+              id: item.id,
+              productId: item.productId,
+              name: item.productName,
+              nameAr: item.productNameAr,
+              quantity: item.quantity,
+              price: item.unitPrice,
+              image: item.image,
+              notes: item.notes,
+            })),
+            subtotal: order.subtotal,
+            vat: order.vatAmount,
+            deliveryFee: order.deliveryFee,
+            discount: order.discount,
+            total: order.total,
+            status: order.status === "ready_for_pickup" ? "processing" : order.status,
+            paymentStatus: order.paymentStatus === "captured" ? "paid" : order.paymentStatus,
+            paymentMethod: order.paymentMethod,
+            deliveryAddress: order.deliveryAddress ? {
+              fullName: order.customerName || order.deliveryAddress.label,
+              mobile: order.customerMobile || order.deliveryAddress.phone,
+              emirate: order.deliveryAddress.emirate || order.deliveryAddress.city,
+              area: order.deliveryAddress.city,
+              street: order.deliveryAddress.street,
+              building: order.deliveryAddress.building || "",
+              floor: order.deliveryAddress.floor || "",
+              apartment: order.deliveryAddress.apartment || "",
+            } : {
+              fullName: order.customerName || "",
+              mobile: order.customerMobile || "",
+              emirate: "",
+              area: "",
+              street: "",
+              building: "",
+            },
+            deliveryTimeSlot: order.deliveryTimeSlot,
+            estimatedDelivery: order.estimatedDeliveryAt,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt,
+          }));
+          
+          // Merge with localStorage orders (for demo purposes)
+          const localOrders = orders.filter(o => !apiOrders.find(ao => ao.id === o.id));
+          const mergedOrders = [...apiOrders, ...localOrders];
+          setOrders(mergedOrders);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch orders from API:", error);
+      // Keep using localStorage orders as fallback
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user?.id, orders]);
 
   const getOrderById = useCallback((orderId: string): CustomerOrder | undefined => {
     return orders.find((o) => o.id === orderId);
