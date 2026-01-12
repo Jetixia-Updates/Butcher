@@ -241,14 +241,17 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
 
   const handleAssignDriver = async (orderId: string, driverId: string) => {
     try {
-      const response = await deliveryApi.assignDriver(orderId, driverId);
+      // Get the order to pass along with the request
+      const order = pendingDeliveries.find(o => o.id === orderId);
+      
+      // Pass order data to ensure server has access even if order is from localStorage
+      const response = await deliveryApi.assignDriver(orderId, driverId, undefined, order);
       if (response.success) {
         await fetchData();
         setAssignModal(null);
         toast({ title: t.assignSuccess });
         
         // Send notification to driver about the assignment
-        const order = pendingDeliveries.find(o => o.id === orderId);
         if (order) {
           const addressStr = `${order.deliveryAddress.building}, ${order.deliveryAddress.street}, ${order.deliveryAddress.area}`;
           const notification = createDriverAssignedNotification(order.orderNumber, order.customerName, addressStr);

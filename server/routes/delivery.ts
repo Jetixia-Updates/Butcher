@@ -40,6 +40,57 @@ const assignDeliverySchema = z.object({
   orderId: z.string(),
   driverId: z.string(),
   estimatedArrival: z.string().optional(),
+  // Optional order data for when order doesn't exist in server memory
+  orderData: z.object({
+    orderNumber: z.string(),
+    userId: z.string(),
+    customerName: z.string(),
+    customerEmail: z.string().optional(),
+    customerMobile: z.string(),
+    items: z.array(z.object({
+      id: z.string(),
+      productId: z.string(),
+      productName: z.string(),
+      productNameAr: z.string().optional(),
+      sku: z.string().optional(),
+      quantity: z.number(),
+      unitPrice: z.number(),
+      totalPrice: z.number(),
+      notes: z.string().optional(),
+    })),
+    subtotal: z.number(),
+    discount: z.number().optional(),
+    deliveryFee: z.number(),
+    vatAmount: z.number(),
+    vatRate: z.number().optional(),
+    total: z.number(),
+    status: z.string(),
+    paymentStatus: z.string(),
+    paymentMethod: z.enum(["card", "cod", "bank_transfer"]),
+    addressId: z.string(),
+    deliveryAddress: z.object({
+      id: z.string().optional(),
+      userId: z.string().optional(),
+      label: z.string().optional(),
+      fullName: z.string(),
+      mobile: z.string(),
+      emirate: z.string(),
+      area: z.string(),
+      street: z.string(),
+      building: z.string(),
+      floor: z.string().optional(),
+      apartment: z.string().optional(),
+      landmark: z.string().optional(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
+      isDefault: z.boolean().optional(),
+      createdAt: z.string().optional(),
+      updatedAt: z.string().optional(),
+    }),
+    deliveryNotes: z.string().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }).optional(),
 });
 
 // =====================================================
@@ -654,11 +705,76 @@ const assignDelivery: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    const { orderId, driverId, estimatedArrival } = validation.data;
+    const { orderId, driverId, estimatedArrival, orderData } = validation.data;
     console.log("[ASSIGN DELIVERY] Validated data:", { orderId, driverId, estimatedArrival });
 
-    // Validate order
-    const order = db.orders.get(orderId);
+    // Validate or create order
+    let order = db.orders.get(orderId);
+    if (!order && orderData) {
+      // Create order from provided data (for localStorage orders not in server memory)
+      console.log("[ASSIGN DELIVERY] Order not in db, creating from orderData");
+      order = {
+        id: orderId,
+        orderNumber: orderData.orderNumber,
+        userId: orderData.userId,
+        customerName: orderData.customerName,
+        customerEmail: orderData.customerEmail || "",
+        customerMobile: orderData.customerMobile,
+        items: orderData.items.map(item => ({
+          id: item.id,
+          productId: item.productId,
+          productName: item.productName,
+          productNameAr: item.productNameAr,
+          sku: item.sku || "",
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          notes: item.notes,
+        })),
+        subtotal: orderData.subtotal,
+        discount: orderData.discount || 0,
+        deliveryFee: orderData.deliveryFee,
+        vatAmount: orderData.vatAmount,
+        vatRate: orderData.vatRate || 5,
+        total: orderData.total,
+        status: orderData.status as any,
+        paymentStatus: orderData.paymentStatus as any,
+        paymentMethod: orderData.paymentMethod,
+        addressId: orderData.addressId,
+        deliveryAddress: {
+          id: orderData.deliveryAddress.id || orderData.addressId,
+          userId: orderData.deliveryAddress.userId || orderData.userId,
+          label: orderData.deliveryAddress.label || "Delivery",
+          fullName: orderData.deliveryAddress.fullName,
+          mobile: orderData.deliveryAddress.mobile,
+          emirate: orderData.deliveryAddress.emirate,
+          area: orderData.deliveryAddress.area,
+          street: orderData.deliveryAddress.street,
+          building: orderData.deliveryAddress.building,
+          floor: orderData.deliveryAddress.floor,
+          apartment: orderData.deliveryAddress.apartment,
+          landmark: orderData.deliveryAddress.landmark,
+          latitude: orderData.deliveryAddress.latitude,
+          longitude: orderData.deliveryAddress.longitude,
+          isDefault: orderData.deliveryAddress.isDefault || false,
+          createdAt: orderData.deliveryAddress.createdAt || orderData.createdAt,
+          updatedAt: orderData.deliveryAddress.updatedAt || orderData.updatedAt,
+        },
+        deliveryNotes: orderData.deliveryNotes,
+        source: "web" as const,
+        statusHistory: [{
+          status: orderData.status as any,
+          changedBy: "system",
+          changedAt: orderData.createdAt,
+          notes: "Order synced from client",
+        }],
+        createdAt: orderData.createdAt,
+        updatedAt: orderData.updatedAt,
+      };
+      db.orders.set(orderId, order);
+      console.log("[ASSIGN DELIVERY] Created order in db:", order.orderNumber);
+    }
+    
     if (!order) {
       console.log("[ASSIGN DELIVERY] Order not found:", orderId);
       const response: ApiResponse<null> = {
