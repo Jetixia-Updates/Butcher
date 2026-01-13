@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
+import { X } from "lucide-react";
 
 interface ContactLink {
   icon: React.ReactNode;
@@ -19,8 +20,82 @@ const WhatsAppIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+// Coming Soon Modal Component
+const ComingSoonModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+  const { language } = useLanguage();
+  
+  if (!isOpen) return null;
+  
+  return (
+    <div 
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-gradient-to-br from-primary/10 via-background to-secondary/10 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300 border border-primary/20"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        
+        {/* Content */}
+        <div className="p-8 text-center relative overflow-hidden">
+          {/* Decorative elements */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-full blur-3xl -z-10" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-r from-secondary/20 to-primary/20 rounded-full blur-2xl -z-10" />
+          
+          {/* Icon */}
+          <div className="mb-6 inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-primary to-secondary text-white text-4xl animate-pulse">
+            🚀
+          </div>
+          
+          {/* Title with shiny effect */}
+          <h2 
+            className="text-2xl md:text-3xl font-bold mb-4 bg-gradient-to-r from-primary via-secondary to-primary bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] bg-clip-text text-transparent"
+            style={{
+              backgroundSize: "200% auto",
+            }}
+          >
+            {language === "ar" ? "قريباً!" : "Coming Soon!"}
+          </h2>
+          
+          {/* Message */}
+          <p className="text-foreground/80 text-lg leading-relaxed mb-6">
+            {language === "ar" 
+              ? "هذه الصفحة قيد التطوير حالياً. سنكون متاحين قريباً. شكراً لصبرك!"
+              : "This page is currently under development. We will be live soon. Thank you for your patience!"
+            }
+          </p>
+          
+          {/* Decorative stars */}
+          <div className="flex justify-center gap-2 text-2xl">
+            <span className="animate-bounce" style={{ animationDelay: "0s" }}>✨</span>
+            <span className="animate-bounce" style={{ animationDelay: "0.1s" }}>⭐</span>
+            <span className="animate-bounce" style={{ animationDelay: "0.2s" }}>✨</span>
+          </div>
+          
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="mt-6 px-8 py-3 bg-gradient-to-r from-primary to-secondary text-white font-semibold rounded-full hover:opacity-90 transition-opacity shadow-lg hover:shadow-xl"
+          >
+            {language === "ar" ? "حسناً" : "Got it!"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const Footer: React.FC = () => {
   const { t } = useLanguage();
+  const [showComingSoon, setShowComingSoon] = useState(false);
+  
   const contacts: ContactLink[] = [
     {
       icon: <span className="text-2xl">📍</span>,
@@ -69,19 +144,28 @@ export const Footer: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a href="/about" className="hover:underline">
+                <button 
+                  onClick={() => setShowComingSoon(true)} 
+                  className="hover:underline text-left"
+                >
                   {t("footer.about")}
-                </a>
+                </button>
               </li>
               <li>
-                <a href="/faq" className="hover:underline">
+                <button 
+                  onClick={() => setShowComingSoon(true)} 
+                  className="hover:underline text-left"
+                >
                   {t("footer.faq")}
-                </a>
+                </button>
               </li>
               <li>
-                <a href="/contact" className="hover:underline">
+                <button 
+                  onClick={() => setShowComingSoon(true)} 
+                  className="hover:underline text-left"
+                >
                   {t("footer.contact")}
-                </a>
+                </button>
               </li>
             </ul>
           </div>
@@ -130,6 +214,8 @@ export const Footer: React.FC = () => {
           </p>
         </div>
       </div>
+      {/* Coming Soon Modal */}
+      <ComingSoonModal isOpen={showComingSoon} onClose={() => setShowComingSoon(false)} />
     </footer>
   );
 };
