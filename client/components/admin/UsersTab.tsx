@@ -14,7 +14,6 @@ import {
   Users,
   Shield,
   Truck,
-  User,
   RefreshCw,
   X,
   Eye,
@@ -29,8 +28,10 @@ interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
 }
 
-const getRoleConfig = (isRTL: boolean): Record<UserRole, { label: string; icon: React.ElementType; color: string }> => ({
-  customer: { label: isRTL ? "عميل" : "Customer", icon: User, color: "bg-blue-100 text-blue-700" },
+// Staff roles only - customers are managed in CustomersTab
+type StaffRole = Exclude<UserRole, 'customer'>;
+
+const getStaffRoleConfig = (isRTL: boolean): Record<StaffRole, { label: string; icon: React.ElementType; color: string }> => ({
   admin: { label: isRTL ? "مدير" : "Admin", icon: Shield, color: "bg-purple-100 text-purple-700" },
   staff: { label: isRTL ? "موظف" : "Staff", icon: Users, color: "bg-green-100 text-green-700" },
   delivery: { label: isRTL ? "سائق" : "Driver", icon: Truck, color: "bg-orange-100 text-orange-700" },
@@ -38,25 +39,24 @@ const getRoleConfig = (isRTL: boolean): Record<UserRole, { label: string; icon: 
 
 const translations = {
   en: {
-    usersManagement: "Users Management",
-    totalUsers: "total users",
+    usersManagement: "Staff Management",
+    totalUsers: "total staff",
     active: "active",
     refresh: "Refresh",
-    addUser: "Add User",
+    addUser: "Add Staff",
     searchPlaceholder: "Search by name, email, or phone...",
-    all: "All",
-    customers: "Customers",
+    all: "All Staff",
     admins: "Admins",
     staffMembers: "Staff",
     drivers: "Drivers",
-    user: "User",
+    user: "Staff Member",
     contact: "Contact",
     role: "Role",
     emirate: "Emirate",
     status: "Status",
     joined: "Joined",
     actions: "Actions",
-    noUsersFound: "No users found",
+    noUsersFound: "No staff members found",
     activeStatus: "Active",
     inactiveStatus: "Inactive",
     verified: "Verified",
@@ -64,9 +64,9 @@ const translations = {
     activate: "Activate",
     deactivate: "Deactivate",
     delete: "Delete",
-    confirmDelete: "Are you sure you want to delete this user?",
-    editUser: "Edit User",
-    createUser: "Create User",
+    confirmDelete: "Are you sure you want to delete this staff member?",
+    editUser: "Edit Staff Member",
+    createUser: "Create Staff Member",
     username: "Username",
     firstName: "First Name",
     familyName: "Family Name",
@@ -88,25 +88,24 @@ const translations = {
     ummAlQuwain: "Umm Al Quwain",
   },
   ar: {
-    usersManagement: "إدارة المستخدمين",
-    totalUsers: "إجمالي المستخدمين",
+    usersManagement: "إدارة الموظفين",
+    totalUsers: "إجمالي الموظفين",
     active: "نشط",
     refresh: "تحديث",
-    addUser: "إضافة مستخدم",
+    addUser: "إضافة موظف",
     searchPlaceholder: "البحث بالاسم أو البريد الإلكتروني أو الهاتف...",
-    all: "الكل",
-    customers: "العملاء",
+    all: "كل الموظفين",
     admins: "المديرون",
     staffMembers: "الموظفون",
     drivers: "السائقون",
-    user: "المستخدم",
+    user: "عضو الفريق",
     contact: "التواصل",
     role: "الدور",
     emirate: "الإمارة",
     status: "الحالة",
     joined: "تاريخ الانضمام",
     actions: "الإجراءات",
-    noUsersFound: "لم يتم العثور على مستخدمين",
+    noUsersFound: "لم يتم العثور على موظفين",
     activeStatus: "نشط",
     inactiveStatus: "غير نشط",
     verified: "موثق",
@@ -114,9 +113,9 @@ const translations = {
     activate: "تفعيل",
     deactivate: "إلغاء التفعيل",
     delete: "حذف",
-    confirmDelete: "هل أنت متأكد من حذف هذا المستخدم؟",
-    editUser: "تعديل المستخدم",
-    createUser: "إنشاء مستخدم",
+    confirmDelete: "هل أنت متأكد من حذف هذا الموظف؟",
+    editUser: "تعديل الموظف",
+    createUser: "إنشاء موظف",
     username: "اسم المستخدم",
     firstName: "الاسم الأول",
     familyName: "اسم العائلة",
@@ -143,7 +142,7 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
   const { language } = useLanguage();
   const isRTL = language === 'ar';
   const t = translations[language];
-  const ROLE_CONFIG = getRoleConfig(isRTL);
+  const STAFF_ROLE_CONFIG = getStaffRoleConfig(isRTL);
   
   const [users, setUsers] = useState<UserType[]>([]);
   const [stats, setStats] = useState<{
@@ -157,7 +156,7 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
     newThisMonth: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all");
+  const [roleFilter, setRoleFilter] = useState<StaffRole | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [editModal, setEditModal] = useState<UserType | null>(null);
   const [createModal, setCreateModal] = useState(false);
@@ -165,15 +164,22 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
 
   const fetchData = async () => {
     setLoading(true);
-    const params: { role?: string } = {};
-    if (roleFilter !== "all") params.role = roleFilter;
+    // Only fetch staff roles (exclude customers)
+    const params: { role?: string; excludeRole?: string } = {};
+    if (roleFilter !== "all") {
+      params.role = roleFilter;
+    }
 
     const [usersRes, statsRes] = await Promise.all([
       usersApi.getAll(params),
       usersApi.getStats(),
     ]);
 
-    if (usersRes.success && usersRes.data) setUsers(usersRes.data);
+    if (usersRes.success && usersRes.data) {
+      // Filter out customers from the users list
+      const staffUsers = usersRes.data.filter((u: UserType) => u.role !== 'customer');
+      setUsers(staffUsers);
+    }
     if (statsRes.success && statsRes.data) setStats(statsRes.data);
     setLoading(false);
   };
@@ -263,8 +269,8 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          {Object.entries(ROLE_CONFIG).map(([role, config]) => {
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          {Object.entries(STAFF_ROLE_CONFIG).map(([role, config]) => {
             const count = stats[role as keyof typeof stats] || 0;
             const Icon = config.icon;
             return (
@@ -315,10 +321,10 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
             >
               {t.all}
             </button>
-            {Object.entries(ROLE_CONFIG).map(([role, config]) => (
+            {Object.entries(STAFF_ROLE_CONFIG).map(([role, config]) => (
               <button
                 key={role}
-                onClick={() => setRoleFilter(role as UserRole)}
+                onClick={() => setRoleFilter(role as StaffRole)}
                 className={cn(
                   "px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0",
                   roleFilter === role
@@ -395,8 +401,6 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {filteredUsers.map((user) => {
-                  const roleConfig = ROLE_CONFIG[user.role];
-                  const RoleIcon = roleConfig.icon;
                   return (
                     <tr key={user.id} className="hover:bg-slate-50">
                       <td className="px-3 sm:px-6 py-3 sm:py-4">
@@ -419,13 +423,20 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
                         <p className="text-xs text-slate-500">{user.mobile}</p>
                       </td>
                       <td className="px-3 sm:px-6 py-3 sm:py-4">
-                        <span className={cn(
-                          "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium",
-                          roleConfig.color
-                        )}>
-                          <RoleIcon className="w-3 h-3" />
-                          <span className="hidden sm:inline">{roleConfig.label}</span>
-                        </span>
+                        {(() => {
+                          const roleConfig = STAFF_ROLE_CONFIG[user.role as StaffRole];
+                          if (!roleConfig) return null;
+                          const RoleIcon = roleConfig.icon;
+                          return (
+                            <span className={cn(
+                              "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium",
+                              roleConfig.color
+                            )}>
+                              <RoleIcon className="w-3 h-3" />
+                              <span className="hidden sm:inline">{roleConfig.label}</span>
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-slate-500 hidden lg:table-cell">
                         {user.emirate}
@@ -535,7 +546,7 @@ function UserFormModal({
   isRTL: boolean;
   t: typeof translations.en;
 }) {
-  const ROLE_CONFIG = getRoleConfig(isRTL);
+  const STAFF_ROLE_CONFIG = getStaffRoleConfig(isRTL);
   const [formData, setFormData] = useState({
     username: user?.username || "",
     firstName: user?.firstName || "",
@@ -543,7 +554,7 @@ function UserFormModal({
     email: user?.email || "",
     mobile: user?.mobile || "",
     emirate: user?.emirate || "Dubai",
-    role: user?.role || "customer",
+    role: user?.role || "staff", // Default to staff role for admin-created users
     password: "",
     isActive: user?.isActive ?? true,
   });
@@ -717,10 +728,10 @@ function UserFormModal({
               </label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as StaffRole })}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
               >
-                {Object.entries(ROLE_CONFIG).map(([role, config]) => (
+                {Object.entries(STAFF_ROLE_CONFIG).map(([role, config]) => (
                   <option key={role} value={role}>
                     {config.label}
                   </option>
