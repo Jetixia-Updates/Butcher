@@ -99,7 +99,7 @@ const translations = {
     expressDeliveryFee: "Express Delivery Fee",
     expressDeliveryDesc: "Additional fee for express delivery option",
     expressDeliveryTime: "Express Delivery Time",
-    expressDeliveryTimeDesc: "Estimated delivery time for express orders",
+    expressDeliveryTimeDesc: "Estimated delivery time for express orders (hours)",
     expressDeliveryEnabled: "Enable Express Delivery",
     expressDeliveryEnabledDesc: "Allow customers to choose express delivery at checkout",
     saveSettings: "Save Settings",
@@ -166,7 +166,7 @@ const translations = {
     expressDeliveryFee: "رسوم التوصيل السريع",
     expressDeliveryDesc: "رسوم إضافية لخيار التوصيل السريع",
     expressDeliveryTime: "وقت التوصيل السريع",
-    expressDeliveryTimeDesc: "الوقت المقدر للطلبات السريعة",
+    expressDeliveryTimeDesc: "الوقت المقدر للطلبات السريعة (ساعات)",
     expressDeliveryEnabled: "تفعيل التوصيل السريع",
     expressDeliveryEnabledDesc: "السماح للعملاء باختيار التوصيل السريع عند الدفع",
     saveSettings: "حفظ الإعدادات",
@@ -826,7 +826,7 @@ function ExpressDeliverySettings({
   toast: (props: { title: string; description?: string; variant?: "default" | "destructive" }) => void;
 }) {
   const [fee, setFee] = useState(settings.expressDeliveryFee.toString());
-  const [estimatedTime, setEstimatedTime] = useState("30");
+  const [estimatedTime, setEstimatedTime] = useState("1");
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -917,11 +917,11 @@ function ExpressDeliverySettings({
                 type="number"
                 value={estimatedTime}
                 onChange={(e) => setEstimatedTime(e.target.value)}
-                min="10"
-                max="120"
+                min="1"
+                max="24"
                 className="w-20 py-2.5 px-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-lg font-semibold text-center"
               />
-              <span className="text-slate-600 font-medium">{t.mins}</span>
+              <span className="text-slate-600 font-medium">{isRTL ? "ساعات" : "hours"}</span>
             </div>
           </div>
         </div>
@@ -951,7 +951,7 @@ function ExpressDeliverySettings({
                 </span>
                 {enabled && (
                   <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
-                    ⚡ {estimatedTime} {t.mins}
+                    ⚡ {estimatedTime} {isRTL ? "ساعات" : "hours"}
                   </span>
                 )}
               </div>
