@@ -34,6 +34,34 @@ export type Language = "en" | "ar";
 
 export type UserRole = "customer" | "admin" | "staff" | "delivery";
 
+// Staff permissions for backend access control
+export interface StaffPermissions {
+  // Products
+  canViewProducts: boolean;
+  canEditProducts: boolean;
+  canEditPrices: boolean;
+  canManageStock: boolean;
+  // Orders
+  canViewOrders: boolean;
+  canManageOrders: boolean;
+  canCancelOrders: boolean;
+  // Customers
+  canViewCustomers: boolean;
+  canManageCustomers: boolean;
+  // Payments
+  canViewPayments: boolean;
+  canProcessRefunds: boolean;
+  // Delivery
+  canViewDelivery: boolean;
+  canManageDelivery: boolean;
+  canAssignDrivers: boolean;
+  // Reports
+  canViewReports: boolean;
+  // Settings
+  canViewSettings: boolean;
+  canManageSettings: boolean;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -50,6 +78,7 @@ export interface User {
   updatedAt: string;
   lastLoginAt?: string;
   preferences: UserPreferences;
+  permissions?: StaffPermissions;
 }
 
 export interface UserPreferences {

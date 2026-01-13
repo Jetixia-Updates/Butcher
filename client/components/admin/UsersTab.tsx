@@ -18,15 +18,64 @@ import {
   X,
   Eye,
   EyeOff,
+  ChevronDown,
+  ChevronUp,
+  Package,
+  ShoppingCart,
+  CreditCard,
+  BarChart3,
+  Settings,
 } from "lucide-react";
 import { usersApi } from "@/lib/api";
-import type { User as UserType, UserRole } from "@shared/api";
+import type { User as UserType, UserRole, StaffPermissions } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/context/LanguageContext";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
 }
+
+// Default permissions for new staff
+const getDefaultPermissions = (): StaffPermissions => ({
+  canViewProducts: true,
+  canEditProducts: false,
+  canEditPrices: false,
+  canManageStock: false,
+  canViewOrders: true,
+  canManageOrders: false,
+  canCancelOrders: false,
+  canViewCustomers: false,
+  canManageCustomers: false,
+  canViewPayments: false,
+  canProcessRefunds: false,
+  canViewDelivery: false,
+  canManageDelivery: false,
+  canAssignDrivers: false,
+  canViewReports: false,
+  canViewSettings: false,
+  canManageSettings: false,
+});
+
+// Full permissions for admin
+const getFullPermissions = (): StaffPermissions => ({
+  canViewProducts: true,
+  canEditProducts: true,
+  canEditPrices: true,
+  canManageStock: true,
+  canViewOrders: true,
+  canManageOrders: true,
+  canCancelOrders: true,
+  canViewCustomers: true,
+  canManageCustomers: true,
+  canViewPayments: true,
+  canProcessRefunds: true,
+  canViewDelivery: true,
+  canManageDelivery: true,
+  canAssignDrivers: true,
+  canViewReports: true,
+  canViewSettings: true,
+  canManageSettings: true,
+});
 
 // Staff roles only - customers are managed in CustomersTab
 type StaffRole = Exclude<UserRole, 'customer'>;
@@ -86,6 +135,39 @@ const translations = {
     fujairah: "Fujairah",
     rasAlKhaimah: "Ras Al Khaimah",
     ummAlQuwain: "Umm Al Quwain",
+    // Permissions
+    permissions: "Backend Access Permissions",
+    permissionsDesc: "Select what this staff member can access",
+    // Permission categories
+    productsPermissions: "Products",
+    ordersPermissions: "Orders",
+    customersPermissions: "Customers",
+    paymentsPermissions: "Payments",
+    deliveryPermissions: "Delivery",
+    reportsPermissions: "Reports",
+    settingsPermissions: "Settings",
+    // Individual permissions
+    canViewProducts: "View Products",
+    canEditProducts: "Edit Products",
+    canEditPrices: "Edit Prices",
+    canManageStock: "Manage Stock",
+    canViewOrders: "View Orders",
+    canManageOrders: "Manage Orders",
+    canCancelOrders: "Cancel Orders",
+    canViewCustomers: "View Customers",
+    canManageCustomers: "Manage Customers",
+    canViewPayments: "View Payments",
+    canProcessRefunds: "Process Refunds",
+    canViewDelivery: "View Delivery",
+    canManageDelivery: "Manage Delivery",
+    canAssignDrivers: "Assign Drivers",
+    canViewReports: "View Reports",
+    canViewSettings: "View Settings",
+    canManageSettings: "Manage Settings",
+    selectAll: "Select All",
+    deselectAll: "Deselect All",
+    staffPermissions: "Staff Permissions",
+    adminFullAccess: "Admins have full access to all features.",
   },
   ar: {
     usersManagement: "إدارة الموظفين",
@@ -135,6 +217,39 @@ const translations = {
     fujairah: "الفجيرة",
     rasAlKhaimah: "رأس الخيمة",
     ummAlQuwain: "أم القيوين",
+    // Permissions
+    permissions: "صلاحيات الوصول للنظام",
+    permissionsDesc: "اختر ما يمكن لهذا الموظف الوصول إليه",
+    // Permission categories
+    productsPermissions: "المنتجات",
+    ordersPermissions: "الطلبات",
+    customersPermissions: "العملاء",
+    paymentsPermissions: "المدفوعات",
+    deliveryPermissions: "التوصيل",
+    reportsPermissions: "التقارير",
+    settingsPermissions: "الإعدادات",
+    // Individual permissions
+    canViewProducts: "عرض المنتجات",
+    canEditProducts: "تعديل المنتجات",
+    canEditPrices: "تعديل الأسعار",
+    canManageStock: "إدارة المخزون",
+    canViewOrders: "عرض الطلبات",
+    canManageOrders: "إدارة الطلبات",
+    canCancelOrders: "إلغاء الطلبات",
+    canViewCustomers: "عرض العملاء",
+    canManageCustomers: "إدارة العملاء",
+    canViewPayments: "عرض المدفوعات",
+    canProcessRefunds: "معالجة المبالغ المستردة",
+    canViewDelivery: "عرض التوصيل",
+    canManageDelivery: "إدارة التوصيل",
+    canAssignDrivers: "تعيين السائقين",
+    canViewReports: "عرض التقارير",
+    canViewSettings: "عرض الإعدادات",
+    canManageSettings: "إدارة الإعدادات",
+    selectAll: "تحديد الكل",
+    deselectAll: "إلغاء تحديد الكل",
+    staffPermissions: "صلاحيات الموظف",
+    adminFullAccess: "المديرون لديهم وصول كامل لجميع الميزات.",
   },
 };
 
@@ -558,8 +673,27 @@ function UserFormModal({
     password: "",
     isActive: user?.isActive ?? true,
   });
+  const [permissions, setPermissions] = useState<StaffPermissions>(
+    user?.permissions || (user?.role === "admin" ? getFullPermissions() : getDefaultPermissions())
+  );
+  const [showPermissions, setShowPermissions] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Update permissions when role changes
+  const handleRoleChange = (newRole: string) => {
+    setFormData({ ...formData, role: newRole as StaffRole });
+    if (newRole === "admin") {
+      setPermissions(getFullPermissions());
+    } else if (newRole === "delivery") {
+      // Delivery drivers have limited permissions
+      setPermissions({
+        ...getDefaultPermissions(),
+        canViewOrders: true,
+        canViewDelivery: true,
+      });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -575,12 +709,109 @@ function UserFormModal({
           emirate: formData.emirate,
           role: formData.role,
           isActive: formData.isActive,
+          permissions: formData.role !== "admin" ? permissions : getFullPermissions(),
         }
-      : formData;
+      : {
+          ...formData,
+          permissions: formData.role !== "admin" ? permissions : getFullPermissions(),
+        };
 
     await onSave(data);
     setSubmitting(false);
   };
+
+  const toggleAllPermissions = (selectAll: boolean) => {
+    const newPermissions = selectAll ? getFullPermissions() : {
+      canViewProducts: false,
+      canEditProducts: false,
+      canEditPrices: false,
+      canManageStock: false,
+      canViewOrders: false,
+      canManageOrders: false,
+      canCancelOrders: false,
+      canViewCustomers: false,
+      canManageCustomers: false,
+      canViewPayments: false,
+      canProcessRefunds: false,
+      canViewDelivery: false,
+      canManageDelivery: false,
+      canAssignDrivers: false,
+      canViewReports: false,
+      canViewSettings: false,
+      canManageSettings: false,
+    };
+    setPermissions(newPermissions);
+  };
+
+  // Permission groups for organized display
+  const permissionGroups = [
+    {
+      key: "products",
+      label: t.productsPermissions,
+      icon: Package,
+      permissions: [
+        { key: "canViewProducts", label: t.canViewProducts },
+        { key: "canEditProducts", label: t.canEditProducts },
+        { key: "canEditPrices", label: t.canEditPrices },
+        { key: "canManageStock", label: t.canManageStock },
+      ],
+    },
+    {
+      key: "orders",
+      label: t.ordersPermissions,
+      icon: ShoppingCart,
+      permissions: [
+        { key: "canViewOrders", label: t.canViewOrders },
+        { key: "canManageOrders", label: t.canManageOrders },
+        { key: "canCancelOrders", label: t.canCancelOrders },
+      ],
+    },
+    {
+      key: "customers",
+      label: t.customersPermissions,
+      icon: Users,
+      permissions: [
+        { key: "canViewCustomers", label: t.canViewCustomers },
+        { key: "canManageCustomers", label: t.canManageCustomers },
+      ],
+    },
+    {
+      key: "payments",
+      label: t.paymentsPermissions,
+      icon: CreditCard,
+      permissions: [
+        { key: "canViewPayments", label: t.canViewPayments },
+        { key: "canProcessRefunds", label: t.canProcessRefunds },
+      ],
+    },
+    {
+      key: "delivery",
+      label: t.deliveryPermissions,
+      icon: Truck,
+      permissions: [
+        { key: "canViewDelivery", label: t.canViewDelivery },
+        { key: "canManageDelivery", label: t.canManageDelivery },
+        { key: "canAssignDrivers", label: t.canAssignDrivers },
+      ],
+    },
+    {
+      key: "reports",
+      label: t.reportsPermissions,
+      icon: BarChart3,
+      permissions: [
+        { key: "canViewReports", label: t.canViewReports },
+      ],
+    },
+    {
+      key: "settings",
+      label: t.settingsPermissions,
+      icon: Settings,
+      permissions: [
+        { key: "canViewSettings", label: t.canViewSettings },
+        { key: "canManageSettings", label: t.canManageSettings },
+      ],
+    },
+  ];
 
   const emirates = [
     { value: "Dubai", label: t.dubai },
@@ -728,7 +959,7 @@ function UserFormModal({
               </label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as StaffRole })}
+                onChange={(e) => handleRoleChange(e.target.value)}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
               >
                 {Object.entries(STAFF_ROLE_CONFIG).map(([role, config]) => (
@@ -739,6 +970,95 @@ function UserFormModal({
               </select>
             </div>
           </div>
+
+          {/* Staff Permissions Section - Only show for non-admin roles */}
+          {formData.role !== "admin" && (
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowPermissions(!showPermissions)}
+                className="w-full px-4 py-3 bg-slate-50 flex items-center justify-between hover:bg-slate-100 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  <span className="font-medium text-slate-700">{t.staffPermissions}</span>
+                </div>
+                {showPermissions ? (
+                  <ChevronUp className="w-5 h-5 text-slate-500" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-slate-500" />
+                )}
+              </button>
+
+              {showPermissions && (
+                <div className="p-4 space-y-4 bg-white">
+                  {/* Quick Actions */}
+                  <div className="flex gap-2 pb-3 border-b border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => toggleAllPermissions(true)}
+                      className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
+                    >
+                      {t.selectAll}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleAllPermissions(false)}
+                      className="px-3 py-1.5 text-xs font-medium bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
+                    >
+                      {t.deselectAll}
+                    </button>
+                  </div>
+
+                  {/* Permission Groups */}
+                  <div className="space-y-4">
+                    {permissionGroups.map((group) => {
+                      const GroupIcon = group.icon;
+                      return (
+                        <div key={group.key} className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                            <GroupIcon className="w-4 h-4 text-slate-500" />
+                            {group.label}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 pl-6">
+                            {group.permissions.map((perm) => (
+                              <label
+                                key={perm.key}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={permissions[perm.key as keyof StaffPermissions]}
+                                  onChange={(e) =>
+                                    setPermissions({
+                                      ...permissions,
+                                      [perm.key]: e.target.checked,
+                                    })
+                                  }
+                                  className="w-4 h-4 text-primary border-slate-300 rounded focus:ring-primary"
+                                />
+                                <span className="text-sm text-slate-600">
+                                  {perm.label}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Admin role notice */}
+          {formData.role === "admin" && (
+            <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <Shield className="w-5 h-5 text-amber-600" />
+              <span className="text-sm text-amber-800">{t.adminFullAccess}</span>
+            </div>
+          )}
 
           {user && (
             <div className="flex items-center gap-3">
