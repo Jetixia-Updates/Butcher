@@ -70,6 +70,8 @@ const translations = {
     vat: "VAT",
     statusHistory: "Status History",
     by: "by",
+    estimatedDelivery: "Estimated Delivery",
+    orderTime: "Order Time",
     // Status labels
     allOrders: "All Orders",
     pending: "Pending",
@@ -128,6 +130,8 @@ const translations = {
     vat: "ضريبة القيمة المضافة",
     statusHistory: "سجل الحالات",
     by: "بواسطة",
+    estimatedDelivery: "التوصيل المتوقع",
+    orderTime: "وقت الطلب",
     // Status labels
     allOrders: "جميع الطلبات",
     pending: "قيد الانتظار",
@@ -650,6 +654,27 @@ function OrderDetailsModal({
               <p className="text-xs text-slate-500 mb-1">{t.paymentMethod}</p>
               <span className="text-sm font-medium capitalize">{order.paymentMethod}</span>
             </div>
+            <div>
+              <p className="text-xs text-slate-500 mb-1">{t.orderTime}</p>
+              <span className="text-sm font-medium">
+                {new Date(order.createdAt).toLocaleTimeString(isRTL ? 'ar-AE' : 'en-AE', { 
+                  hour: '2-digit', 
+                  minute: '2-digit',
+                  hour12: true 
+                })}
+              </span>
+            </div>
+            {order.estimatedDeliveryAt && (
+              <div>
+                <p className="text-xs text-slate-500 mb-1">{t.estimatedDelivery}</p>
+                <span className="text-sm font-medium">
+                  {new Date(order.estimatedDeliveryAt).toLocaleString(isRTL ? 'ar-AE' : 'en-AE', {
+                    dateStyle: 'short',
+                    timeStyle: 'short'
+                  })}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Customer Info */}

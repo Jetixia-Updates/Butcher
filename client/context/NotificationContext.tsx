@@ -103,6 +103,59 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [getStorageKey]);
 
+  // Listen for storage events to sync notifications across tabs
+  useEffect(() => {
+    const storageKey = getStorageKey();
+    if (!storageKey) return;
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === storageKey && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue) as Notification[];
+          const sorted = parsed.sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          ).slice(0, 50);
+          setNotifications(sorted);
+        } catch {
+          // Ignore parsing errors
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [getStorageKey]);
+
+  // Poll for new notifications periodically (for same-tab scenarios)
+  useEffect(() => {
+    const storageKey = getStorageKey();
+    if (!storageKey) return;
+
+    const checkForNewNotifications = () => {
+      try {
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          const parsed = JSON.parse(stored) as Notification[];
+          const sorted = parsed.sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          ).slice(0, 50);
+          
+          // Only update if there are new notifications (compare by length and first item id)
+          if (sorted.length !== notifications.length || 
+              (sorted.length > 0 && notifications.length > 0 && sorted[0].id !== notifications[0].id)) {
+            setNotifications(sorted);
+          }
+        }
+      } catch {
+        // Ignore errors
+      }
+    };
+
+    // Poll every 3 seconds for admin users to catch new order notifications
+    const intervalId = setInterval(checkForNewNotifications, 3000);
+    return () => clearInterval(intervalId);
+  }, [getStorageKey, notifications.length, notifications[0]?.id]);
+
   // Save to localStorage whenever notifications change
   useEffect(() => {
     const storageKey = getStorageKey();
