@@ -479,8 +479,12 @@ export interface InvoiceData {
   customerAddress: string;
   items: InvoiceItem[];
   subtotal: number;
+  discount?: number;
+  discountCode?: string;
   vatRate: number;
   vatAmount: number;
+  expressDeliveryFee?: number;
+  driverTip?: number;
   total: number;
   paymentMethod: "card" | "cod";
   vatReference?: string;
@@ -508,6 +512,20 @@ export const formatInvoiceForNotification = (invoice: InvoiceData, language: "en
       `• ${item.nameAr || item.name} × ${item.quantity.toFixed(3)} جم\n  ${item.totalPrice.toFixed(2)} د.إ`
     ).join('\n');
 
+    // Build breakdown lines
+    const breakdownLines: string[] = [];
+    breakdownLines.push(`المجموع الفرعي: ${invoice.subtotal.toFixed(2)} د.إ`);
+    if (invoice.discount && invoice.discount > 0) {
+      breakdownLines.push(`الخصم${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -${invoice.discount.toFixed(2)} د.إ`);
+    }
+    breakdownLines.push(`ضريبة القيمة المضافة (${invoice.vatRate}%): ${invoice.vatAmount.toFixed(2)} د.إ`);
+    if (invoice.expressDeliveryFee && invoice.expressDeliveryFee > 0) {
+      breakdownLines.push(`⚡ توصيل سريع: ${invoice.expressDeliveryFee.toFixed(2)} د.إ`);
+    }
+    if (invoice.driverTip && invoice.driverTip > 0) {
+      breakdownLines.push(`💚 إكرامية السائق: ${invoice.driverTip.toFixed(2)} د.إ`);
+    }
+
     return `
 ${doubleSeparator}
       فاتورة ضريبية
@@ -523,8 +541,7 @@ ${separator}
 المنتجات:
 ${itemsList}
 ${separator}
-المجموع الفرعي: ${invoice.subtotal.toFixed(2)} د.إ
-ضريبة القيمة المضافة (${invoice.vatRate}%): ${invoice.vatAmount.toFixed(2)} د.إ
+${breakdownLines.join('\n')}
 ${doubleSeparator}
 الإجمالي: ${invoice.total.toFixed(2)} د.إ
 ${doubleSeparator}
@@ -538,6 +555,20 @@ ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatRef
   const itemsList = invoice.items.map(item => 
     `• ${item.name} × ${item.quantity.toFixed(3)} gr\n  AED ${item.totalPrice.toFixed(2)}`
   ).join('\n');
+
+  // Build breakdown lines
+  const breakdownLines: string[] = [];
+  breakdownLines.push(`Subtotal: AED ${invoice.subtotal.toFixed(2)}`);
+  if (invoice.discount && invoice.discount > 0) {
+    breakdownLines.push(`Discount${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -AED ${invoice.discount.toFixed(2)}`);
+  }
+  breakdownLines.push(`VAT (${invoice.vatRate}%): AED ${invoice.vatAmount.toFixed(2)}`);
+  if (invoice.expressDeliveryFee && invoice.expressDeliveryFee > 0) {
+    breakdownLines.push(`⚡ Express Delivery: AED ${invoice.expressDeliveryFee.toFixed(2)}`);
+  }
+  if (invoice.driverTip && invoice.driverTip > 0) {
+    breakdownLines.push(`💚 Driver Tip: AED ${invoice.driverTip.toFixed(2)}`);
+  }
 
   return `
 ${doubleSeparator}
@@ -554,8 +585,7 @@ ${separator}
 Items:
 ${itemsList}
 ${separator}
-Subtotal: AED ${invoice.subtotal.toFixed(2)}
-VAT (${invoice.vatRate}%): AED ${invoice.vatAmount.toFixed(2)}
+${breakdownLines.join('\n')}
 ${doubleSeparator}
 TOTAL: AED ${invoice.total.toFixed(2)}
 ${doubleSeparator}

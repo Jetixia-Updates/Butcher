@@ -313,6 +313,8 @@ export interface CreateOrderRequest {
   paymentMethod: "card" | "cod" | "bank_transfer";
   deliveryNotes?: string;
   discountCode?: string;
+  expressDeliveryFee?: number;
+  driverTip?: number;
 }
 
 export interface UpdateOrderStatusRequest {

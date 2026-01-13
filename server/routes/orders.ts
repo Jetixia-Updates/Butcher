@@ -24,6 +24,8 @@ const createOrderSchema = z.object({
   paymentMethod: z.enum(["card", "cod", "bank_transfer"]),
   deliveryNotes: z.string().optional(),
   discountCode: z.string().optional(),
+  expressDeliveryFee: z.number().min(0).optional(),
+  driverTip: z.number().min(0).optional(),
   // Fallback delivery address for when user/address not in server memory
   deliveryAddress: z.object({
     id: z.string().optional(),
@@ -177,7 +179,7 @@ const createOrder: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    const { userId, items, addressId, paymentMethod, deliveryNotes, discountCode, deliveryAddress } = validation.data;
+    const { userId, items, addressId, paymentMethod, deliveryNotes, discountCode, deliveryAddress, expressDeliveryFee, driverTip } = validation.data;
 
     // Validate user - create minimal user if not found but deliveryAddress provided
     let user = db.users.get(userId);
@@ -312,12 +314,16 @@ const createOrder: RequestHandler = async (req, res) => {
     const zone = Array.from(db.deliveryZones.values()).find(
       (z) => z.emirate === address.emirate && z.isActive
     );
-    const deliveryFee = zone?.deliveryFee || 20;
+    const baseDeliveryFee = zone?.deliveryFee || 0;
+    // Include express delivery fee if provided
+    const deliveryFee = baseDeliveryFee + (expressDeliveryFee || 0);
+    // Driver tip (not included in taxable amount)
+    const tipAmount = driverTip || 0;
 
     // Calculate VAT
     const vatRate = 0.05;
     const vatAmount = (subtotal - discount) * vatRate;
-    const total = subtotal - discount + vatAmount + deliveryFee;
+    const total = subtotal - discount + vatAmount + deliveryFee + tipAmount;
 
     // Create order
     const order: Order = {

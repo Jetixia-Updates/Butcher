@@ -247,6 +247,8 @@ export default function PaymentCardPage() {
         paymentMethod: "card",
         deliveryNotes: deliveryNotes,
         discountCode: promoCode,
+        expressDeliveryFee: expressDeliveryFee,
+        driverTip: driverTip,
       });
 
       if (response.success && response.data) {
@@ -280,9 +282,13 @@ export default function PaymentCardPage() {
             unitPrice: item.price,
             totalPrice: item.price * item.quantity,
           })),
-          subtotal: adjustedSubtotal,
+          subtotal: subtotal,
+          discount: discountAmount > 0 ? discountAmount : undefined,
+          discountCode: promoCode,
           vatRate: 5,
           vatAmount: adjustedVat,
+          expressDeliveryFee: expressDeliveryFee > 0 ? expressDeliveryFee : undefined,
+          driverTip: driverTip > 0 ? driverTip : undefined,
           total: adjustedTotal,
           paymentMethod: "card",
           vatReference: formData.vat_reference || undefined,

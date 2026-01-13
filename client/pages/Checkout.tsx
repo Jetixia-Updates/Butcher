@@ -1078,6 +1078,8 @@ export default function CheckoutPage() {
         paymentMethod: "cod",
         deliveryNotes: deliveryNotes,
         discountCode: promoApplied?.code,
+        expressDeliveryFee: isExpressDelivery ? expressDeliveryFee : 0,
+        driverTip: driverTip,
       });
 
       if (response.success && response.data) {
@@ -1118,9 +1120,13 @@ export default function CheckoutPage() {
             unitPrice: item.price,
             totalPrice: item.price * item.quantity,
           })),
-          subtotal: invoiceSubtotal,
+          subtotal: subtotal,
+          discount: discountAmount > 0 ? discountAmount : undefined,
+          discountCode: promoApplied?.code,
           vatRate: 5,
           vatAmount: invoiceVat,
+          expressDeliveryFee: invoiceDeliveryFee > 0 ? invoiceDeliveryFee : undefined,
+          driverTip: driverTip > 0 ? driverTip : undefined,
           total: invoiceTotal,
           paymentMethod: "cod",
         };
