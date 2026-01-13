@@ -50,8 +50,12 @@ const ComingSoonModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ i
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-r from-secondary/20 to-primary/20 rounded-full blur-2xl -z-10" />
           
           {/* Icon */}
-          <div className="mb-6 inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-primary to-secondary text-white text-4xl animate-pulse">
-            🚀
+          <div className="mb-6 inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-primary to-secondary p-1 animate-pulse">
+            <img 
+              src="https://images.unsplash.com/photo-1600891964092-4316c288032e?w=200&h=200&fit=crop" 
+              alt="Steak" 
+              className="w-full h-full rounded-full object-cover"
+            />
           </div>
           
           {/* Title with shiny effect */}
