@@ -536,7 +536,8 @@ export interface InvoiceData {
   discountCode?: string;
   vatRate: number;
   vatAmount: number;
-  expressDeliveryFee?: number;
+  deliveryFee?: number; // Total delivery fee (base + express)
+  expressDeliveryFee?: number; // Express delivery fee only (legacy, kept for compatibility)
   driverTip?: number;
   total: number;
   paymentMethod: "card" | "cod";
@@ -572,8 +573,10 @@ export const formatInvoiceForNotification = (invoice: InvoiceData, language: "en
       breakdownLines.push(`الخصم${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -${invoice.discount.toFixed(2)} د.إ`);
     }
     breakdownLines.push(`ضريبة القيمة المضافة (${invoice.vatRate}%): ${invoice.vatAmount.toFixed(2)} د.إ`);
-    if (invoice.expressDeliveryFee && invoice.expressDeliveryFee > 0) {
-      breakdownLines.push(`⚡ توصيل سريع: ${invoice.expressDeliveryFee.toFixed(2)} د.إ`);
+    // Use deliveryFee (total) if provided, otherwise fall back to expressDeliveryFee for backward compatibility
+    const deliveryFeeAmount = invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0;
+    if (deliveryFeeAmount > 0) {
+      breakdownLines.push(`🚚 رسوم التوصيل: ${deliveryFeeAmount.toFixed(2)} د.إ`);
     }
     if (invoice.driverTip && invoice.driverTip > 0) {
       breakdownLines.push(`💚 إكرامية السائق: ${invoice.driverTip.toFixed(2)} د.إ`);
@@ -616,8 +619,10 @@ ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatRef
     breakdownLines.push(`Discount${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -AED ${invoice.discount.toFixed(2)}`);
   }
   breakdownLines.push(`VAT (${invoice.vatRate}%): AED ${invoice.vatAmount.toFixed(2)}`);
-  if (invoice.expressDeliveryFee && invoice.expressDeliveryFee > 0) {
-    breakdownLines.push(`⚡ Express Delivery: AED ${invoice.expressDeliveryFee.toFixed(2)}`);
+  // Use deliveryFee (total) if provided, otherwise fall back to expressDeliveryFee for backward compatibility
+  const deliveryFeeAmountEn = invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0;
+  if (deliveryFeeAmountEn > 0) {
+    breakdownLines.push(`🚚 Delivery Fee: AED ${deliveryFeeAmountEn.toFixed(2)}`);
   }
   if (invoice.driverTip && invoice.driverTip > 0) {
     breakdownLines.push(`💚 Driver Tip: AED ${invoice.driverTip.toFixed(2)}`);

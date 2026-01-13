@@ -17,11 +17,12 @@ import {
   Eye,
   Filter,
 } from "lucide-react";
-import { paymentsApi } from "@/lib/api";
+import { paymentsApi, ordersApi } from "@/lib/api";
 import type { Payment, PaymentStatus } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useLanguage } from "@/context/LanguageContext";
+import { useNotifications, createUserPaymentNotification } from "@/context/NotificationContext";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -31,6 +32,7 @@ type FilterStatus = PaymentStatus | "all";
 
 export function PaymentsTab({ onNavigate }: AdminTabProps) {
   const { language, t } = useLanguage();
+  const { addUserNotification } = useNotifications();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterStatus>("all");
@@ -52,8 +54,26 @@ export function PaymentsTab({ onNavigate }: AdminTabProps) {
   }, [filter]);
 
   const handleRefund = async (paymentId: string, amount: number, reason: string) => {
+    // Find the payment to get order info
+    const payment = payments.find(p => p.id === paymentId);
+    
     const response = await paymentsApi.refund(paymentId, amount, reason);
-    if (response.success) {
+    if (response.success && response.data) {
+      // Get the order to find the userId for notification
+      if (payment?.orderId) {
+        const orderResponse = await ordersApi.getById(payment.orderId);
+        if (orderResponse.success && orderResponse.data) {
+          const order = orderResponse.data;
+          // Send refund notification to the customer
+          const notification = createUserPaymentNotification(
+            order.orderNumber,
+            amount,
+            "refunded"
+          );
+          addUserNotification(order.userId, notification);
+        }
+      }
+      
       await fetchPayments();
       setRefundModal(null);
     }

@@ -462,6 +462,8 @@ export const ordersApi = {
     paymentMethod: "card" | "cod" | "bank_transfer";
     deliveryNotes?: string;
     discountCode?: string;
+    expressDeliveryFee?: number;
+    driverTip?: number;
   }): Promise<ApiResponse<Order>> => {
     const response = await fetchApi<Order>("/orders", {
       method: "POST",

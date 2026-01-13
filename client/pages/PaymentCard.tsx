@@ -258,11 +258,13 @@ export default function PaymentCardPage() {
         // Add notification for the user (current logged-in user)
         addNotification(createUserOrderNotification(response.data.orderNumber, "placed"));
         
-        // Generate TAX invoice with correct adjusted values
+        // Generate TAX invoice using server-calculated values for accuracy
         const invoiceNumber = generateInvoiceNumber(response.data.orderNumber);
+        const orderData = response.data;
+        
         const invoiceData: InvoiceData = {
           invoiceNumber,
-          orderNumber: response.data.orderNumber,
+          orderNumber: orderData.orderNumber,
           date: new Date().toLocaleDateString("en-AE", {
             year: "numeric",
             month: "long",
@@ -270,26 +272,28 @@ export default function PaymentCardPage() {
             hour: "2-digit",
             minute: "2-digit",
           }),
-          customerName: selectedAddress?.fullName || formData.cardholderName || user?.firstName + " " + user?.familyName || "Customer",
-          customerMobile: selectedAddress?.mobile || user?.mobile || "",
-          customerAddress: selectedAddress 
-            ? `${selectedAddress.building}, ${selectedAddress.street}, ${selectedAddress.area}, ${selectedAddress.emirate}`
-            : formData.billingAddress,
-          items: items.map((item) => ({
-            name: item.name,
-            nameAr: item.nameAr,
+          customerName: orderData.customerName || selectedAddress?.fullName || formData.cardholderName || "Customer",
+          customerMobile: orderData.customerMobile || selectedAddress?.mobile || user?.mobile || "",
+          customerAddress: orderData.deliveryAddress 
+            ? `${orderData.deliveryAddress.building}, ${orderData.deliveryAddress.street}, ${orderData.deliveryAddress.area}, ${orderData.deliveryAddress.emirate}`
+            : (selectedAddress 
+              ? `${selectedAddress.building}, ${selectedAddress.street}, ${selectedAddress.area}, ${selectedAddress.emirate}`
+              : formData.billingAddress),
+          items: orderData.items.map((item) => ({
+            name: item.productName,
+            nameAr: item.productNameAr,
             quantity: item.quantity,
-            unitPrice: item.price,
-            totalPrice: item.price * item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
           })),
-          subtotal: subtotal,
-          discount: discountAmount > 0 ? discountAmount : undefined,
-          discountCode: promoCode,
+          subtotal: orderData.subtotal,
+          discount: orderData.discount > 0 ? orderData.discount : undefined,
+          discountCode: orderData.discountCode,
           vatRate: 5,
-          vatAmount: adjustedVat,
-          expressDeliveryFee: expressDeliveryFee > 0 ? expressDeliveryFee : undefined,
+          vatAmount: orderData.vatAmount,
+          deliveryFee: orderData.deliveryFee > 0 ? orderData.deliveryFee : undefined,
           driverTip: driverTip > 0 ? driverTip : undefined,
-          total: adjustedTotal,
+          total: orderData.total,
           paymentMethod: "card",
           vatReference: formData.vat_reference || undefined,
         };
