@@ -1,16 +1,21 @@
 /**
  * Order Management Routes
- * Full CRUD operations for orders with status management and notifications
+ * Full CRUD operations for orders with status management using PostgreSQL
  */
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
-import type { Order, OrderItem, CreateOrderRequest, UpdateOrderStatusRequest, ApiResponse, PaginatedResponse } from "@shared/api";
-import { db, generateId, generateOrderNumber } from "../db";
-import { sendOrderNotification } from "../services/notifications";
-import { reduceStockForOrder, releaseStockForOrder } from "./stock";
+import { eq, desc, and, gte, lte } from "drizzle-orm";
+import type { Order, OrderItem, ApiResponse, PaginatedResponse } from "@shared/api";
+import { db, orders, orderItems, products, users, addresses, discountCodes, deliveryZones, stock, payments } from "../db/connection";
 
 const router = Router();
+
+// Helper to generate unique IDs
+const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+let orderCounter = 1000;
+const generateOrderNumber = () => `ORD-${String(++orderCounter).padStart(6, "0")}`;
 
 // Validation schemas
 const createOrderSchema = z.object({
@@ -26,7 +31,6 @@ const createOrderSchema = z.object({
   discountCode: z.string().optional(),
   expressDeliveryFee: z.number().min(0).optional(),
   driverTip: z.number().min(0).optional(),
-  // Fallback delivery address for when user/address not in server memory
   deliveryAddress: z.object({
     id: z.string().optional(),
     userId: z.string().optional(),
@@ -52,47 +56,100 @@ const updateStatusSchema = z.object({
   notes: z.string().optional(),
 });
 
-// GET /api/orders - Get all orders (admin) or user orders
-const getOrders: RequestHandler = (req, res) => {
+// Helper to convert DB order to API order
+function toApiOrder(dbOrder: typeof orders.$inferSelect, items: OrderItem[]): Order {
+  return {
+    id: dbOrder.id,
+    orderNumber: dbOrder.orderNumber,
+    userId: dbOrder.userId,
+    customerName: dbOrder.customerName,
+    customerEmail: dbOrder.customerEmail,
+    customerMobile: dbOrder.customerMobile,
+    items,
+    subtotal: parseFloat(dbOrder.subtotal),
+    discount: parseFloat(dbOrder.discount),
+    discountCode: dbOrder.discountCode || undefined,
+    deliveryFee: parseFloat(dbOrder.deliveryFee),
+    vatAmount: parseFloat(dbOrder.vatAmount),
+    vatRate: parseFloat(dbOrder.vatRate),
+    total: parseFloat(dbOrder.total),
+    status: dbOrder.status,
+    paymentStatus: dbOrder.paymentStatus,
+    paymentMethod: dbOrder.paymentMethod,
+    addressId: dbOrder.addressId,
+    deliveryAddress: dbOrder.deliveryAddress as Order["deliveryAddress"],
+    deliveryNotes: dbOrder.deliveryNotes || undefined,
+    deliveryZoneId: dbOrder.deliveryZoneId || undefined,
+    estimatedDeliveryAt: dbOrder.estimatedDeliveryAt?.toISOString(),
+    actualDeliveryAt: dbOrder.actualDeliveryAt?.toISOString(),
+    statusHistory: (dbOrder.statusHistory as Order["statusHistory"]) || [],
+    source: dbOrder.source as Order["source"],
+    ipAddress: dbOrder.ipAddress || undefined,
+    userAgent: dbOrder.userAgent || undefined,
+    createdAt: dbOrder.createdAt.toISOString(),
+    updatedAt: dbOrder.updatedAt.toISOString(),
+  };
+}
+
+// GET /api/orders - Get all orders
+const getOrders: RequestHandler = async (req, res) => {
   try {
     const { userId, status, page = "1", limit = "20", startDate, endDate } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
 
-    let orders = Array.from(db.orders.values());
+    let ordersResult = await db.select().from(orders).orderBy(desc(orders.createdAt));
 
     // Filter by user if specified
     if (userId) {
-      orders = orders.filter((o) => o.userId === userId);
+      ordersResult = ordersResult.filter((o) => o.userId === userId);
     }
 
     // Filter by status
     if (status) {
-      orders = orders.filter((o) => o.status === status);
+      ordersResult = ordersResult.filter((o) => o.status === status);
     }
 
     // Filter by date range
     if (startDate) {
       const start = new Date(startDate as string);
-      orders = orders.filter((o) => new Date(o.createdAt) >= start);
+      ordersResult = ordersResult.filter((o) => new Date(o.createdAt) >= start);
     }
     if (endDate) {
       const end = new Date(endDate as string);
-      orders = orders.filter((o) => new Date(o.createdAt) <= end);
+      ordersResult = ordersResult.filter((o) => new Date(o.createdAt) <= end);
     }
 
-    // Sort by date (newest first)
-    orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    // Get items for each order
+    const allItems = await db.select().from(orderItems);
+    const itemsByOrderId = new Map<string, OrderItem[]>();
+    allItems.forEach(item => {
+      const items = itemsByOrderId.get(item.orderId) || [];
+      items.push({
+        id: item.id,
+        productId: item.productId,
+        productName: item.productName,
+        productNameAr: item.productNameAr || undefined,
+        sku: item.sku,
+        quantity: parseFloat(item.quantity),
+        unitPrice: parseFloat(item.unitPrice),
+        totalPrice: parseFloat(item.totalPrice),
+        notes: item.notes || undefined,
+      });
+      itemsByOrderId.set(item.orderId, items);
+    });
 
     // Pagination
-    const total = orders.length;
+    const total = ordersResult.length;
     const totalPages = Math.ceil(total / limitNum);
     const startIndex = (pageNum - 1) * limitNum;
-    const paginatedOrders = orders.slice(startIndex, startIndex + limitNum);
+    const paginatedOrders = ordersResult.slice(startIndex, startIndex + limitNum);
+
+    const apiOrders = paginatedOrders.map(o => toApiOrder(o, itemsByOrderId.get(o.id) || []));
 
     const response: PaginatedResponse<Order> = {
       success: true,
-      data: paginatedOrders,
+      data: apiOrders,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -103,6 +160,7 @@ const getOrders: RequestHandler = (req, res) => {
 
     res.json(response);
   } catch (error) {
+    console.error("Error fetching orders:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to fetch orders",
@@ -112,12 +170,12 @@ const getOrders: RequestHandler = (req, res) => {
 };
 
 // GET /api/orders/:id - Get order by ID
-const getOrderById: RequestHandler = (req, res) => {
+const getOrderById: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const order = db.orders.get(id);
+    const orderResult = await db.select().from(orders).where(eq(orders.id, id));
 
-    if (!order) {
+    if (orderResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Order not found",
@@ -125,12 +183,26 @@ const getOrderById: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
+    const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    const items: OrderItem[] = itemsResult.map(item => ({
+      id: item.id,
+      productId: item.productId,
+      productName: item.productName,
+      productNameAr: item.productNameAr || undefined,
+      sku: item.sku,
+      quantity: parseFloat(item.quantity),
+      unitPrice: parseFloat(item.unitPrice),
+      totalPrice: parseFloat(item.totalPrice),
+      notes: item.notes || undefined,
+    }));
+
     const response: ApiResponse<Order> = {
       success: true,
-      data: order,
+      data: toApiOrder(orderResult[0], items),
     };
     res.json(response);
   } catch (error) {
+    console.error("Error fetching order:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to fetch order",
@@ -140,12 +212,12 @@ const getOrderById: RequestHandler = (req, res) => {
 };
 
 // GET /api/orders/number/:orderNumber - Get order by order number
-const getOrderByNumber: RequestHandler = (req, res) => {
+const getOrderByNumber: RequestHandler = async (req, res) => {
   try {
     const { orderNumber } = req.params;
-    const order = Array.from(db.orders.values()).find((o) => o.orderNumber === orderNumber);
+    const orderResult = await db.select().from(orders).where(eq(orders.orderNumber, orderNumber));
 
-    if (!order) {
+    if (orderResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Order not found",
@@ -153,12 +225,26 @@ const getOrderByNumber: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
+    const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, orderResult[0].id));
+    const items: OrderItem[] = itemsResult.map(item => ({
+      id: item.id,
+      productId: item.productId,
+      productName: item.productName,
+      productNameAr: item.productNameAr || undefined,
+      sku: item.sku,
+      quantity: parseFloat(item.quantity),
+      unitPrice: parseFloat(item.unitPrice),
+      totalPrice: parseFloat(item.totalPrice),
+      notes: item.notes || undefined,
+    }));
+
     const response: ApiResponse<Order> = {
       success: true,
-      data: order,
+      data: toApiOrder(orderResult[0], items),
     };
     res.json(response);
   } catch (error) {
+    console.error("Error fetching order:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to fetch order",
@@ -179,85 +265,90 @@ const createOrder: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    const { userId, items, addressId, paymentMethod, deliveryNotes, discountCode, deliveryAddress, expressDeliveryFee, driverTip } = validation.data;
+    const { userId, items, addressId, paymentMethod, deliveryNotes, discountCode: discountCodeStr, deliveryAddress, expressDeliveryFee, driverTip } = validation.data;
 
-    // Validate user - create minimal user if not found but deliveryAddress provided
-    let user = db.users.get(userId);
-    if (!user) {
-      if (deliveryAddress) {
-        // Create a minimal user object from the delivery address
-        user = {
-          id: userId,
-          email: `user-${userId}@temp.local`,
-          username: deliveryAddress.label || 'Customer',
-          password: '', // Empty password for temp users
-          mobile: deliveryAddress.phone || '',
-          firstName: deliveryAddress.label?.split(' ')[0] || 'Customer',
-          familyName: deliveryAddress.label?.split(' ').slice(1).join(' ') || '',
-          emirate: deliveryAddress.emirate || 'Dubai',
-          role: 'customer' as const,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          isActive: true,
-          isVerified: false,
-          preferences: {
-            language: 'en' as const,
-            currency: 'AED' as const,
-            emailNotifications: true,
-            smsNotifications: true,
-            marketingEmails: false,
-          },
-        };
-        db.users.set(userId, user);
-      } else {
-        const response: ApiResponse<null> = {
-          success: false,
-          error: "User not found",
-        };
-        return res.status(404).json(response);
-      }
+    // Get user
+    let userResult = await db.select().from(users).where(eq(users.id, userId));
+    let user = userResult[0];
+    
+    if (!user && deliveryAddress) {
+      // Create a minimal user
+      const newUser = {
+        id: userId,
+        email: `user-${userId}@temp.local`,
+        username: deliveryAddress.label || 'Customer',
+        password: '',
+        mobile: deliveryAddress.phone || '',
+        firstName: deliveryAddress.label?.split(' ')[0] || 'Customer',
+        familyName: deliveryAddress.label?.split(' ').slice(1).join(' ') || '',
+        emirate: deliveryAddress.emirate || 'Dubai',
+        role: 'customer' as const,
+        isActive: true,
+        isVerified: false,
+        preferences: {
+          language: 'en' as const,
+          currency: 'AED' as const,
+          emailNotifications: true,
+          smsNotifications: true,
+          marketingEmails: false,
+        },
+      };
+      await db.insert(users).values(newUser);
+      userResult = await db.select().from(users).where(eq(users.id, userId));
+      user = userResult[0];
     }
 
-    // Validate address - use deliveryAddress as fallback
-    let address = db.addresses.get(addressId);
+    if (!user) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: "User not found",
+      };
+      return res.status(404).json(response);
+    }
+
+    // Get address
+    let addressResult = await db.select().from(addresses).where(eq(addresses.id, addressId));
+    let address = addressResult[0];
+
+    if (!address && deliveryAddress) {
+      // Create address from the provided delivery address data
+      const newAddress = {
+        id: addressId || generateId("addr"),
+        userId: userId,
+        label: deliveryAddress.label || 'Delivery Address',
+        fullName: deliveryAddress.label || 'Customer',
+        mobile: deliveryAddress.phone || '',
+        street: deliveryAddress.street || '',
+        building: deliveryAddress.building || '',
+        apartment: deliveryAddress.apartment || '',
+        area: deliveryAddress.city || '',
+        emirate: deliveryAddress.emirate || 'Dubai',
+        latitude: deliveryAddress.location?.lat,
+        longitude: deliveryAddress.location?.lng,
+        isDefault: deliveryAddress.isDefault || true,
+      };
+      await db.insert(addresses).values(newAddress);
+      addressResult = await db.select().from(addresses).where(eq(addresses.id, newAddress.id));
+      address = addressResult[0];
+    }
+
     if (!address) {
-      if (deliveryAddress) {
-        // Create address from the provided delivery address data
-        address = {
-          id: addressId || generateId("addr"),
-          userId: userId,
-          label: deliveryAddress.label || 'Delivery Address',
-          fullName: deliveryAddress.label || 'Customer',
-          mobile: deliveryAddress.phone || '',
-          street: deliveryAddress.street || '',
-          building: deliveryAddress.building || '',
-          floor: '',
-          apartment: deliveryAddress.apartment || '',
-          area: deliveryAddress.city || '',
-          emirate: deliveryAddress.emirate || 'Dubai',
-          landmark: '',
-          latitude: deliveryAddress.location?.lat,
-          longitude: deliveryAddress.location?.lng,
-          isDefault: deliveryAddress.isDefault || true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        db.addresses.set(address.id, address);
-      } else {
-        const response: ApiResponse<null> = {
-          success: false,
-          error: "Address not found",
-        };
-        return res.status(404).json(response);
-      }
+      const response: ApiResponse<null> = {
+        success: false,
+        error: "Address not found",
+      };
+      return res.status(404).json(response);
     }
 
     // Build order items and calculate totals
-    const orderItems: OrderItem[] = [];
+    const orderItemsData: { id: string; productId: string; productName: string; productNameAr?: string; sku: string; quantity: string; unitPrice: string; totalPrice: string; notes?: string; }[] = [];
     let subtotal = 0;
 
+    const allProducts = await db.select().from(products);
+    const productsMap = new Map(allProducts.map(p => [p.id, p]));
+
     for (const item of items) {
-      const product = db.products.get(item.productId);
+      const product = productsMap.get(item.productId);
       if (!product) {
         const response: ApiResponse<null> = {
           success: false,
@@ -274,50 +365,47 @@ const createOrder: RequestHandler = async (req, res) => {
         return res.status(400).json(response);
       }
 
-      const totalPrice = product.price * item.quantity;
+      const unitPrice = parseFloat(product.price);
+      const totalPrice = unitPrice * item.quantity;
       subtotal += totalPrice;
 
-      orderItems.push({
+      orderItemsData.push({
         id: generateId("item"),
         productId: product.id,
         productName: product.name,
-        productNameAr: product.nameAr,
+        productNameAr: product.nameAr || undefined,
         sku: product.sku,
-        quantity: item.quantity,
+        quantity: String(item.quantity),
         unitPrice: product.price,
-        totalPrice: Math.round(totalPrice * 100) / 100,
+        totalPrice: String(Math.round(totalPrice * 100) / 100),
         notes: item.notes,
       });
     }
 
     // Calculate discount
     let discount = 0;
-    if (discountCode) {
-      const code = Array.from(db.discountCodes.values()).find(
-        (c) => c.code.toUpperCase() === discountCode.toUpperCase() && c.isActive
-      );
-      if (code && subtotal >= code.minimumOrder) {
+    if (discountCodeStr) {
+      const codes = await db.select().from(discountCodes);
+      const code = codes.find(c => c.code.toUpperCase() === discountCodeStr.toUpperCase() && c.isActive);
+      if (code && subtotal >= parseFloat(code.minimumOrder)) {
         if (code.type === "percentage") {
-          discount = subtotal * (code.value / 100);
+          discount = subtotal * (parseFloat(code.value) / 100);
           if (code.maximumDiscount) {
-            discount = Math.min(discount, code.maximumDiscount);
+            discount = Math.min(discount, parseFloat(code.maximumDiscount));
           }
         } else {
-          discount = code.value;
+          discount = parseFloat(code.value);
         }
         // Increment usage
-        code.usageCount++;
+        await db.update(discountCodes).set({ usageCount: code.usageCount + 1 }).where(eq(discountCodes.id, code.id));
       }
     }
 
     // Get delivery zone and fee
-    const zone = Array.from(db.deliveryZones.values()).find(
-      (z) => z.emirate === address.emirate && z.isActive
-    );
-    const baseDeliveryFee = zone?.deliveryFee || 0;
-    // Include express delivery fee if provided
+    const zones = await db.select().from(deliveryZones);
+    const zone = zones.find(z => z.emirate === address.emirate && z.isActive);
+    const baseDeliveryFee = zone ? parseFloat(zone.deliveryFee) : 0;
     const deliveryFee = baseDeliveryFee + (expressDeliveryFee || 0);
-    // Driver tip (not included in taxable amount)
     const tipAmount = driverTip || 0;
 
     // Calculate VAT
@@ -326,29 +414,51 @@ const createOrder: RequestHandler = async (req, res) => {
     const total = subtotal - discount + vatAmount + deliveryFee + tipAmount;
 
     // Create order
-    const order: Order = {
-      id: generateId("order"),
-      orderNumber: generateOrderNumber(),
+    const orderId = generateId("order");
+    const orderNumber = generateOrderNumber();
+    
+    const deliveryAddressData = {
+      id: address.id,
+      userId: address.userId,
+      label: address.label,
+      fullName: address.fullName,
+      mobile: address.mobile,
+      emirate: address.emirate,
+      area: address.area,
+      street: address.street,
+      building: address.building,
+      floor: address.floor || undefined,
+      apartment: address.apartment || undefined,
+      landmark: address.landmark || undefined,
+      latitude: address.latitude || undefined,
+      longitude: address.longitude || undefined,
+      isDefault: address.isDefault,
+      createdAt: address.createdAt.toISOString(),
+      updatedAt: address.updatedAt.toISOString(),
+    };
+
+    const newOrder = {
+      id: orderId,
+      orderNumber,
       userId,
       customerName: `${user.firstName} ${user.familyName}`,
       customerEmail: user.email,
       customerMobile: user.mobile,
-      items: orderItems,
-      subtotal: Math.round(subtotal * 100) / 100,
-      discount: Math.round(discount * 100) / 100,
-      discountCode,
-      deliveryFee,
-      vatAmount: Math.round(vatAmount * 100) / 100,
-      vatRate,
-      total: Math.round(total * 100) / 100,
-      status: "pending",
-      paymentStatus: paymentMethod === "cod" ? "pending" : "pending",
+      subtotal: String(Math.round(subtotal * 100) / 100),
+      discount: String(Math.round(discount * 100) / 100),
+      discountCode: discountCodeStr || null,
+      deliveryFee: String(deliveryFee),
+      vatAmount: String(Math.round(vatAmount * 100) / 100),
+      vatRate: String(vatRate),
+      total: String(Math.round(total * 100) / 100),
+      status: "pending" as const,
+      paymentStatus: "pending" as const,
       paymentMethod,
       addressId,
-      deliveryAddress: address,
-      deliveryNotes,
-      deliveryZoneId: zone?.id,
-      estimatedDeliveryAt: new Date(Date.now() + (zone?.estimatedMinutes || 60) * 60 * 1000).toISOString(),
+      deliveryAddress: deliveryAddressData,
+      deliveryNotes: deliveryNotes || null,
+      deliveryZoneId: zone?.id || null,
+      estimatedDeliveryAt: zone ? new Date(Date.now() + zone.estimatedMinutes * 60 * 1000) : null,
       statusHistory: [
         {
           status: "pending",
@@ -357,33 +467,42 @@ const createOrder: RequestHandler = async (req, res) => {
         },
       ],
       source: "web",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
 
-    // Reduce stock (reserve inventory)
-    const stockResult = reduceStockForOrder(order);
-    if (!stockResult.success) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: stockResult.error || "Failed to reserve inventory",
-      };
-      return res.status(400).json(response);
+    await db.insert(orders).values(newOrder);
+
+    // Insert order items
+    for (const item of orderItemsData) {
+      await db.insert(orderItems).values({
+        ...item,
+        orderId,
+      });
     }
 
-    // Save order
-    db.orders.set(order.id, order);
-
-    // Send notifications (async, don't wait)
-    sendOrderNotification(order, "order_placed").catch(console.error);
+    // Get the created order
+    const createdOrderResult = await db.select().from(orders).where(eq(orders.id, orderId));
+    const createdItemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+    
+    const apiItems: OrderItem[] = createdItemsResult.map(item => ({
+      id: item.id,
+      productId: item.productId,
+      productName: item.productName,
+      productNameAr: item.productNameAr || undefined,
+      sku: item.sku,
+      quantity: parseFloat(item.quantity),
+      unitPrice: parseFloat(item.unitPrice),
+      totalPrice: parseFloat(item.totalPrice),
+      notes: item.notes || undefined,
+    }));
 
     const response: ApiResponse<Order> = {
       success: true,
-      data: order,
+      data: toApiOrder(createdOrderResult[0], apiItems),
       message: "Order created successfully",
     };
     res.status(201).json(response);
   } catch (error) {
+    console.error("Error creating order:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to create order",
@@ -408,9 +527,9 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     }
 
     const { status, notes } = validation.data;
-    const order = db.orders.get(id);
+    const orderResult = await db.select().from(orders).where(eq(orders.id, id));
 
-    if (!order) {
+    if (orderResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Order not found",
@@ -418,51 +537,53 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    const previousStatus = order.status;
-
-    // Update order
-    order.status = status;
-    order.updatedAt = new Date().toISOString();
-    order.statusHistory.push({
+    const order = orderResult[0];
+    const statusHistory = (order.statusHistory as Order["statusHistory"]) || [];
+    
+    statusHistory.push({
       status,
       changedBy,
       changedAt: new Date().toISOString(),
       notes,
     });
 
-    // Handle status-specific logic
-    if (status === "delivered") {
-      order.actualDeliveryAt = new Date().toISOString();
-      order.paymentStatus = "captured";
-    }
-
-    if (status === "cancelled" && previousStatus !== "cancelled") {
-      // Release reserved stock
-      releaseStockForOrder(order);
-    }
-
-    // Send appropriate notification
-    const notificationTypeMap: Record<string, string> = {
-      confirmed: "order_confirmed",
-      processing: "order_processing",
-      ready_for_pickup: "order_ready",
-      out_for_delivery: "order_shipped",
-      delivered: "order_delivered",
-      cancelled: "order_cancelled",
+    const updateData: Partial<typeof orders.$inferInsert> = {
+      status,
+      statusHistory,
+      updatedAt: new Date(),
     };
 
-    const notificationType = notificationTypeMap[status];
-    if (notificationType) {
-      sendOrderNotification(order, notificationType as any).catch(console.error);
+    // Handle status-specific logic
+    if (status === "delivered") {
+      updateData.actualDeliveryAt = new Date();
+      updateData.paymentStatus = "captured";
     }
+
+    await db.update(orders).set(updateData).where(eq(orders.id, id));
+
+    const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
+    const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    
+    const items: OrderItem[] = itemsResult.map(item => ({
+      id: item.id,
+      productId: item.productId,
+      productName: item.productName,
+      productNameAr: item.productNameAr || undefined,
+      sku: item.sku,
+      quantity: parseFloat(item.quantity),
+      unitPrice: parseFloat(item.unitPrice),
+      totalPrice: parseFloat(item.totalPrice),
+      notes: item.notes || undefined,
+    }));
 
     const response: ApiResponse<Order> = {
       success: true,
-      data: order,
+      data: toApiOrder(updatedOrderResult[0], items),
       message: `Order status updated to ${status}`,
     };
     res.json(response);
   } catch (error) {
+    console.error("Error updating order status:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to update order status",
@@ -478,15 +599,17 @@ const cancelOrder: RequestHandler = async (req, res) => {
     const { reason } = req.body;
     const cancelledBy = req.headers["x-user-id"] as string || "admin";
 
-    const order = db.orders.get(id);
+    const orderResult = await db.select().from(orders).where(eq(orders.id, id));
 
-    if (!order) {
+    if (orderResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Order not found",
       };
       return res.status(404).json(response);
     }
+
+    const order = orderResult[0];
 
     // Check if order can be cancelled
     if (["delivered", "cancelled", "refunded"].includes(order.status)) {
@@ -497,29 +620,43 @@ const cancelOrder: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    // Update order
-    order.status = "cancelled";
-    order.updatedAt = new Date().toISOString();
-    order.statusHistory.push({
+    const statusHistory = (order.statusHistory as Order["statusHistory"]) || [];
+    statusHistory.push({
       status: "cancelled",
       changedBy: cancelledBy,
       changedAt: new Date().toISOString(),
       notes: reason,
     });
 
-    // Release reserved stock
-    releaseStockForOrder(order);
+    await db.update(orders).set({
+      status: "cancelled",
+      statusHistory,
+      updatedAt: new Date(),
+    }).where(eq(orders.id, id));
 
-    // Send notification
-    sendOrderNotification(order, "order_cancelled").catch(console.error);
+    const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
+    const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    
+    const items: OrderItem[] = itemsResult.map(item => ({
+      id: item.id,
+      productId: item.productId,
+      productName: item.productName,
+      productNameAr: item.productNameAr || undefined,
+      sku: item.sku,
+      quantity: parseFloat(item.quantity),
+      unitPrice: parseFloat(item.unitPrice),
+      totalPrice: parseFloat(item.totalPrice),
+      notes: item.notes || undefined,
+    }));
 
     const response: ApiResponse<Order> = {
       success: true,
-      data: order,
+      data: toApiOrder(updatedOrderResult[0], items),
       message: "Order cancelled successfully",
     };
     res.json(response);
   } catch (error) {
+    console.error("Error cancelling order:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to cancel order",
@@ -529,36 +666,36 @@ const cancelOrder: RequestHandler = async (req, res) => {
 };
 
 // GET /api/orders/stats - Get order statistics
-const getOrderStats: RequestHandler = (req, res) => {
+const getOrderStats: RequestHandler = async (req, res) => {
   try {
-    const orders = Array.from(db.orders.values());
+    const allOrders = await db.select().from(orders);
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const stats = {
-      total: orders.length,
-      pending: orders.filter((o) => o.status === "pending").length,
-      confirmed: orders.filter((o) => o.status === "confirmed").length,
-      processing: orders.filter((o) => o.status === "processing").length,
-      outForDelivery: orders.filter((o) => o.status === "out_for_delivery").length,
-      delivered: orders.filter((o) => o.status === "delivered").length,
-      cancelled: orders.filter((o) => o.status === "cancelled").length,
-      todayOrders: orders.filter((o) => new Date(o.createdAt) >= today).length,
-      weekOrders: orders.filter((o) => new Date(o.createdAt) >= weekAgo).length,
-      monthOrders: orders.filter((o) => new Date(o.createdAt) >= monthAgo).length,
-      todaySales: orders
+      total: allOrders.length,
+      pending: allOrders.filter((o) => o.status === "pending").length,
+      confirmed: allOrders.filter((o) => o.status === "confirmed").length,
+      processing: allOrders.filter((o) => o.status === "processing").length,
+      outForDelivery: allOrders.filter((o) => o.status === "out_for_delivery").length,
+      delivered: allOrders.filter((o) => o.status === "delivered").length,
+      cancelled: allOrders.filter((o) => o.status === "cancelled").length,
+      todayOrders: allOrders.filter((o) => new Date(o.createdAt) >= today).length,
+      weekOrders: allOrders.filter((o) => new Date(o.createdAt) >= weekAgo).length,
+      monthOrders: allOrders.filter((o) => new Date(o.createdAt) >= monthAgo).length,
+      todaySales: allOrders
         .filter((o) => new Date(o.createdAt) >= today && o.status !== "cancelled")
-        .reduce((sum, o) => sum + o.total, 0),
-      weekSales: orders
+        .reduce((sum, o) => sum + parseFloat(o.total), 0),
+      weekSales: allOrders
         .filter((o) => new Date(o.createdAt) >= weekAgo && o.status !== "cancelled")
-        .reduce((sum, o) => sum + o.total, 0),
-      monthSales: orders
+        .reduce((sum, o) => sum + parseFloat(o.total), 0),
+      monthSales: allOrders
         .filter((o) => new Date(o.createdAt) >= monthAgo && o.status !== "cancelled")
-        .reduce((sum, o) => sum + o.total, 0),
-      averageOrderValue: orders.length > 0
-        ? orders.reduce((sum, o) => sum + o.total, 0) / orders.length
+        .reduce((sum, o) => sum + parseFloat(o.total), 0),
+      averageOrderValue: allOrders.length > 0
+        ? allOrders.reduce((sum, o) => sum + parseFloat(o.total), 0) / allOrders.length
         : 0,
     };
 
@@ -568,6 +705,7 @@ const getOrderStats: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Error getting order stats:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to fetch order stats",
@@ -582,9 +720,9 @@ const updatePaymentStatus: RequestHandler = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const order = db.orders.get(id);
+    const orderResult = await db.select().from(orders).where(eq(orders.id, id));
 
-    if (!order) {
+    if (orderResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Order not found",
@@ -602,17 +740,34 @@ const updatePaymentStatus: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    // Update payment status
-    order.paymentStatus = status;
-    order.updatedAt = new Date().toISOString();
+    await db.update(orders).set({
+      paymentStatus: status,
+      updatedAt: new Date(),
+    }).where(eq(orders.id, id));
+
+    const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
+    const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    
+    const items: OrderItem[] = itemsResult.map(item => ({
+      id: item.id,
+      productId: item.productId,
+      productName: item.productName,
+      productNameAr: item.productNameAr || undefined,
+      sku: item.sku,
+      quantity: parseFloat(item.quantity),
+      unitPrice: parseFloat(item.unitPrice),
+      totalPrice: parseFloat(item.totalPrice),
+      notes: item.notes || undefined,
+    }));
 
     const response: ApiResponse<Order> = {
       success: true,
-      data: order,
+      data: toApiOrder(updatedOrderResult[0], items),
       message: `Payment status updated to ${status}`,
     };
     res.json(response);
   } catch (error) {
+    console.error("Error updating payment status:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to update payment status",

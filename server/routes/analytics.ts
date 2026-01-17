@@ -1,21 +1,29 @@
 /**
  * Admin Analytics Dashboard Routes
- * Real-time dashboard metrics and analytics
+ * Real-time dashboard metrics and analytics (PostgreSQL version)
  */
 
 import { Router, RequestHandler } from "express";
+import { eq, ne, gte, lte, and, sql, count, sum } from "drizzle-orm";
 import type { 
   DashboardStats, 
   RecentOrder, 
   LowStockItem,
   ApiResponse 
 } from "@shared/api";
-import { db } from "../db";
+import { db, orders, orderItems, users, stock, products, addresses } from "../db/connection";
 
 const router = Router();
 
+// Helper to convert decimal strings to numbers
+function toNumber(value: string | number | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return value;
+  return parseFloat(value) || 0;
+}
+
 // GET /api/analytics/dashboard - Get dashboard stats
-const getDashboardStats: RequestHandler = (req, res) => {
+const getDashboardStats: RequestHandler = async (req, res) => {
   try {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -26,37 +34,39 @@ const getDashboardStats: RequestHandler = (req, res) => {
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    const orders = Array.from(db.orders.values());
-    const users = Array.from(db.users.values());
-    const stock = Array.from(db.stock.values());
+    // Get all orders
+    const allOrders = await db.select().from(orders);
+    const allUsers = await db.select().from(users);
+    const allStock = await db.select().from(stock);
+    const allProducts = await db.select().from(products);
 
     // Filter orders
-    const todayOrders = orders.filter((o) => new Date(o.createdAt) >= today && o.status !== "cancelled");
-    const yesterdayOrders = orders.filter((o) => 
+    const todayOrders = allOrders.filter((o) => new Date(o.createdAt) >= today && o.status !== "cancelled");
+    const yesterdayOrders = allOrders.filter((o) => 
       new Date(o.createdAt) >= yesterday && 
       new Date(o.createdAt) < today && 
       o.status !== "cancelled"
     );
-    const thisWeekOrders = orders.filter((o) => new Date(o.createdAt) >= thisWeek && o.status !== "cancelled");
-    const lastWeekOrders = orders.filter((o) => 
+    const thisWeekOrders = allOrders.filter((o) => new Date(o.createdAt) >= thisWeek && o.status !== "cancelled");
+    const lastWeekOrders = allOrders.filter((o) => 
       new Date(o.createdAt) >= lastWeek && 
       new Date(o.createdAt) < thisWeek && 
       o.status !== "cancelled"
     );
-    const thisMonthOrders = orders.filter((o) => new Date(o.createdAt) >= thisMonth && o.status !== "cancelled");
-    const lastMonthOrders = orders.filter((o) => 
+    const thisMonthOrders = allOrders.filter((o) => new Date(o.createdAt) >= thisMonth && o.status !== "cancelled");
+    const lastMonthOrders = allOrders.filter((o) => 
       new Date(o.createdAt) >= lastMonth && 
       new Date(o.createdAt) <= lastMonthEnd && 
       o.status !== "cancelled"
     );
 
     // Calculate revenue
-    const todayRevenue = todayOrders.reduce((sum, o) => sum + o.total, 0);
-    const yesterdayRevenue = yesterdayOrders.reduce((sum, o) => sum + o.total, 0);
-    const weekRevenue = thisWeekOrders.reduce((sum, o) => sum + o.total, 0);
-    const lastWeekRevenue = lastWeekOrders.reduce((sum, o) => sum + o.total, 0);
-    const monthRevenue = thisMonthOrders.reduce((sum, o) => sum + o.total, 0);
-    const lastMonthRevenue = lastMonthOrders.reduce((sum, o) => sum + o.total, 0);
+    const todayRevenue = todayOrders.reduce((sum, o) => sum + Number(o.total), 0);
+    const yesterdayRevenue = yesterdayOrders.reduce((sum, o) => sum + Number(o.total), 0);
+    const weekRevenue = thisWeekOrders.reduce((sum, o) => sum + Number(o.total), 0);
+    const lastWeekRevenue = lastWeekOrders.reduce((sum, o) => sum + Number(o.total), 0);
+    const monthRevenue = thisMonthOrders.reduce((sum, o) => sum + Number(o.total), 0);
+    const lastMonthRevenue = lastMonthOrders.reduce((sum, o) => sum + Number(o.total), 0);
 
     // Calculate changes
     const revenueChangeDaily = yesterdayRevenue > 0 
@@ -86,20 +96,20 @@ const getDashboardStats: RequestHandler = (req, res) => {
       : 0;
 
     // Customers
-    const totalCustomers = users.filter((u) => u.role === "customer").length;
-    const newCustomers = users.filter(
+    const totalCustomers = allUsers.filter((u) => u.role === "customer").length;
+    const newCustomers = allUsers.filter(
       (u) => u.role === "customer" && new Date(u.createdAt) >= thisMonth
     ).length;
 
     // Low stock items
-    const lowStockItems: LowStockItem[] = stock
-      .filter((s) => s.availableQuantity <= s.lowStockThreshold)
+    const lowStockItems: LowStockItem[] = allStock
+      .filter((s) => toNumber(s.availableQuantity) <= s.lowStockThreshold)
       .map((s) => {
-        const product = db.products.get(s.productId);
+        const product = allProducts.find((p) => p.id === s.productId);
         return {
           productId: s.productId,
           productName: product?.name || "Unknown",
-          currentQuantity: s.availableQuantity,
+          currentQuantity: toNumber(s.availableQuantity),
           threshold: s.lowStockThreshold,
           reorderPoint: s.reorderPoint,
           suggestedReorderQuantity: s.reorderQuantity,
@@ -108,24 +118,30 @@ const getDashboardStats: RequestHandler = (req, res) => {
       .sort((a, b) => a.currentQuantity - b.currentQuantity);
 
     // Pending orders
-    const pendingOrders = orders.filter(
+    const pendingOrders = allOrders.filter(
       (o) => o.status === "pending" || o.status === "confirmed"
     ).length;
 
+    // Get order items for recent orders
+    const allOrderItems = await db.select().from(orderItems);
+
     // Recent orders
-    const recentOrders: RecentOrder[] = orders
+    const recentOrders: RecentOrder[] = allOrders
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 10)
-      .map((o) => ({
-        id: o.id,
-        orderNumber: o.orderNumber,
-        customerName: o.customerName,
-        total: o.total,
-        status: o.status,
-        createdAt: o.createdAt,
-        itemCount: o.items.length,
-        paymentStatus: o.paymentStatus,
-      }));
+      .map((o) => {
+        const items = allOrderItems.filter((i) => i.orderId === o.id);
+        return {
+          id: o.id,
+          orderNumber: o.orderNumber,
+          customerName: o.customerName,
+          total: Number(o.total),
+          status: o.status,
+          createdAt: o.createdAt.toISOString(),
+          itemCount: items.length,
+          paymentStatus: o.paymentStatus,
+        };
+      });
 
     const stats: DashboardStats = {
       todayRevenue: Math.round(todayRevenue * 100) / 100,
@@ -160,6 +176,7 @@ const getDashboardStats: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Dashboard stats error:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to get dashboard stats",
@@ -169,7 +186,7 @@ const getDashboardStats: RequestHandler = (req, res) => {
 };
 
 // GET /api/analytics/charts/revenue - Get revenue chart data
-const getRevenueChart: RequestHandler = (req, res) => {
+const getRevenueChart: RequestHandler = async (req, res) => {
   try {
     const { period = "week" } = req.query;
     const now = new Date();
@@ -192,7 +209,7 @@ const getRevenueChart: RequestHandler = (req, res) => {
         days = 7;
     }
 
-    const orders = Array.from(db.orders.values()).filter((o) => o.status !== "cancelled");
+    const allOrders = await db.select().from(orders).where(ne(orders.status, "cancelled"));
     const chartData: { date: string; revenue: number; orders: number }[] = [];
 
     for (let i = days - 1; i >= 0; i--) {
@@ -201,13 +218,13 @@ const getRevenueChart: RequestHandler = (req, res) => {
       const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
-      const dayOrders = orders.filter(
+      const dayOrders = allOrders.filter(
         (o) => new Date(o.createdAt) >= dayStart && new Date(o.createdAt) < dayEnd
       );
 
       chartData.push({
         date: dateStr,
-        revenue: Math.round(dayOrders.reduce((sum, o) => sum + o.total, 0) * 100) / 100,
+        revenue: Math.round(dayOrders.reduce((sum, o) => sum + Number(o.total), 0) * 100) / 100,
         orders: dayOrders.length,
       });
     }
@@ -227,23 +244,23 @@ const getRevenueChart: RequestHandler = (req, res) => {
 };
 
 // GET /api/analytics/charts/orders-by-status - Get orders by status chart
-const getOrdersByStatusChart: RequestHandler = (req, res) => {
+const getOrdersByStatusChart: RequestHandler = async (req, res) => {
   try {
-    const orders = Array.from(db.orders.values());
+    const allOrders = await db.select().from(orders);
     
     const statusCounts = {
-      pending: orders.filter((o) => o.status === "pending").length,
-      confirmed: orders.filter((o) => o.status === "confirmed").length,
-      processing: orders.filter((o) => o.status === "processing").length,
-      out_for_delivery: orders.filter((o) => o.status === "out_for_delivery").length,
-      delivered: orders.filter((o) => o.status === "delivered").length,
-      cancelled: orders.filter((o) => o.status === "cancelled").length,
+      pending: allOrders.filter((o) => o.status === "pending").length,
+      confirmed: allOrders.filter((o) => o.status === "confirmed").length,
+      processing: allOrders.filter((o) => o.status === "processing").length,
+      out_for_delivery: allOrders.filter((o) => o.status === "out_for_delivery").length,
+      delivered: allOrders.filter((o) => o.status === "delivered").length,
+      cancelled: allOrders.filter((o) => o.status === "cancelled").length,
     };
 
     const chartData = Object.entries(statusCounts).map(([status, count]) => ({
       status,
       count,
-      percentage: orders.length > 0 ? Math.round((count / orders.length) * 10000) / 100 : 0,
+      percentage: allOrders.length > 0 ? Math.round((count / allOrders.length) * 10000) / 100 : 0,
     }));
 
     const response: ApiResponse<typeof chartData> = {
@@ -261,7 +278,7 @@ const getOrdersByStatusChart: RequestHandler = (req, res) => {
 };
 
 // GET /api/analytics/charts/top-products - Get top products chart
-const getTopProductsChart: RequestHandler = (req, res) => {
+const getTopProductsChart: RequestHandler = async (req, res) => {
   try {
     const { limit = "10", period = "month" } = req.query;
     const now = new Date();
@@ -282,24 +299,29 @@ const getTopProductsChart: RequestHandler = (req, res) => {
     }
 
     const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    const orders = Array.from(db.orders.values()).filter(
-      (o) => new Date(o.createdAt) >= startDate && o.status !== "cancelled"
+    const allOrders = await db.select().from(orders).where(
+      and(
+        gte(orders.createdAt, startDate),
+        ne(orders.status, "cancelled")
+      )
     );
+
+    const orderIds = allOrders.map((o) => o.id);
+    const allOrderItems = await db.select().from(orderItems);
+    const relevantItems = allOrderItems.filter((i) => orderIds.includes(i.orderId));
 
     const productSales: Record<string, { name: string; sales: number; quantity: number }> = {};
 
-    orders.forEach((order) => {
-      order.items.forEach((item) => {
-        if (!productSales[item.productId]) {
-          productSales[item.productId] = {
-            name: item.productName,
-            sales: 0,
-            quantity: 0,
-          };
-        }
-        productSales[item.productId].sales += item.totalPrice;
-        productSales[item.productId].quantity += item.quantity;
-      });
+    relevantItems.forEach((item) => {
+      if (!productSales[item.productId]) {
+        productSales[item.productId] = {
+          name: item.productName,
+          sales: 0,
+          quantity: 0,
+        };
+      }
+      productSales[item.productId].sales += Number(item.totalPrice);
+      productSales[item.productId].quantity += Number(item.quantity);
     });
 
     const chartData = Object.entries(productSales)
@@ -327,7 +349,7 @@ const getTopProductsChart: RequestHandler = (req, res) => {
 };
 
 // GET /api/analytics/charts/sales-by-emirate - Get sales by emirate
-const getSalesByEmirateChart: RequestHandler = (req, res) => {
+const getSalesByEmirateChart: RequestHandler = async (req, res) => {
   try {
     const { period = "month" } = req.query;
     const now = new Date();
@@ -348,14 +370,18 @@ const getSalesByEmirateChart: RequestHandler = (req, res) => {
     }
 
     const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    const orders = Array.from(db.orders.values()).filter(
-      (o) => new Date(o.createdAt) >= startDate && o.status !== "cancelled"
+    const allOrders = await db.select().from(orders).where(
+      and(
+        gte(orders.createdAt, startDate),
+        ne(orders.status, "cancelled")
+      )
     );
+    const allAddresses = await db.select().from(addresses);
 
     const emirateSales: Record<string, { orders: number; revenue: number }> = {};
 
-    orders.forEach((order) => {
-      const address = db.addresses.get(order.addressId);
+    allOrders.forEach((order) => {
+      const address = allAddresses.find((a) => a.id === order.addressId);
       const emirate = address?.emirate || "Unknown";
 
       if (!emirateSales[emirate]) {
@@ -363,7 +389,7 @@ const getSalesByEmirateChart: RequestHandler = (req, res) => {
       }
 
       emirateSales[emirate].orders += 1;
-      emirateSales[emirate].revenue += order.total;
+      emirateSales[emirate].revenue += Number(order.total);
     });
 
     const chartData = Object.entries(emirateSales)
@@ -389,7 +415,7 @@ const getSalesByEmirateChart: RequestHandler = (req, res) => {
 };
 
 // GET /api/analytics/charts/payment-methods - Get payment methods breakdown
-const getPaymentMethodsChart: RequestHandler = (req, res) => {
+const getPaymentMethodsChart: RequestHandler = async (req, res) => {
   try {
     const { period = "month" } = req.query;
     const now = new Date();
@@ -410,8 +436,11 @@ const getPaymentMethodsChart: RequestHandler = (req, res) => {
     }
 
     const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    const orders = Array.from(db.orders.values()).filter(
-      (o) => new Date(o.createdAt) >= startDate && o.status !== "cancelled"
+    const allOrders = await db.select().from(orders).where(
+      and(
+        gte(orders.createdAt, startDate),
+        ne(orders.status, "cancelled")
+      )
     );
 
     const paymentMethods: Record<string, { count: number; revenue: number }> = {
@@ -420,15 +449,15 @@ const getPaymentMethodsChart: RequestHandler = (req, res) => {
       bank_transfer: { count: 0, revenue: 0 },
     };
 
-    orders.forEach((order) => {
+    allOrders.forEach((order) => {
       const method = order.paymentMethod;
       if (paymentMethods[method]) {
         paymentMethods[method].count += 1;
-        paymentMethods[method].revenue += order.total;
+        paymentMethods[method].revenue += Number(order.total);
       }
     });
 
-    const totalOrders = orders.length;
+    const totalOrders = allOrders.length;
     const chartData = Object.entries(paymentMethods).map(([method, data]) => ({
       method,
       count: data.count,
@@ -451,7 +480,7 @@ const getPaymentMethodsChart: RequestHandler = (req, res) => {
 };
 
 // GET /api/analytics/charts/hourly-orders - Get orders by hour of day
-const getHourlyOrdersChart: RequestHandler = (req, res) => {
+const getHourlyOrdersChart: RequestHandler = async (req, res) => {
   try {
     const { period = "week" } = req.query;
     const now = new Date();
@@ -469,13 +498,16 @@ const getHourlyOrdersChart: RequestHandler = (req, res) => {
     }
 
     const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    const orders = Array.from(db.orders.values()).filter(
-      (o) => new Date(o.createdAt) >= startDate && o.status !== "cancelled"
+    const allOrders = await db.select().from(orders).where(
+      and(
+        gte(orders.createdAt, startDate),
+        ne(orders.status, "cancelled")
+      )
     );
 
     const hourlyData: number[] = Array(24).fill(0);
 
-    orders.forEach((order) => {
+    allOrders.forEach((order) => {
       const hour = new Date(order.createdAt).getHours();
       hourlyData[hour] += 1;
     });
@@ -500,45 +532,45 @@ const getHourlyOrdersChart: RequestHandler = (req, res) => {
 };
 
 // GET /api/analytics/real-time - Get real-time stats for live dashboard
-const getRealTimeStats: RequestHandler = (req, res) => {
+const getRealTimeStats: RequestHandler = async (req, res) => {
   try {
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const orders = Array.from(db.orders.values());
-    const recentOrders = orders.filter(
+    const allOrders = await db.select().from(orders);
+    const recentOrders = allOrders.filter(
       (o) => new Date(o.createdAt) >= oneHourAgo && o.status !== "cancelled"
     );
-    const todayOrders = orders.filter(
+    const todayOrders = allOrders.filter(
       (o) => new Date(o.createdAt) >= today && o.status !== "cancelled"
     );
 
     // Active orders (not delivered or cancelled)
-    const activeOrders = orders.filter(
+    const activeOrders = allOrders.filter(
       (o) => !["delivered", "cancelled"].includes(o.status)
     );
 
     // Out for delivery
-    const outForDelivery = orders.filter((o) => o.status === "out_for_delivery");
+    const outForDelivery = allOrders.filter((o) => o.status === "out_for_delivery");
 
     // Processing
-    const processing = orders.filter((o) => o.status === "processing");
+    const processing = allOrders.filter((o) => o.status === "processing");
 
     const stats = {
       timestamp: now.toISOString(),
       lastHour: {
         orders: recentOrders.length,
-        revenue: Math.round(recentOrders.reduce((sum, o) => sum + o.total, 0) * 100) / 100,
+        revenue: Math.round(recentOrders.reduce((sum, o) => sum + Number(o.total), 0) * 100) / 100,
       },
       today: {
         orders: todayOrders.length,
-        revenue: Math.round(todayOrders.reduce((sum, o) => sum + o.total, 0) * 100) / 100,
+        revenue: Math.round(todayOrders.reduce((sum, o) => sum + Number(o.total), 0) * 100) / 100,
       },
       activeOrders: activeOrders.length,
       outForDelivery: outForDelivery.length,
       processing: processing.length,
-      pendingOrders: orders.filter((o) => o.status === "pending").length,
+      pendingOrders: allOrders.filter((o) => o.status === "pending").length,
     };
 
     const response: ApiResponse<typeof stats> = {

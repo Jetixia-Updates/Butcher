@@ -1,15 +1,29 @@
 /**
  * Stock Management Routes
- * Inventory tracking, auto-reduction, and low stock alerts
+ * Inventory tracking, auto-reduction, and low stock alerts (PostgreSQL version)
  */
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
-import type { StockItem, StockMovement, UpdateStockRequest, LowStockAlert, ApiResponse, Order } from "@shared/api";
-import { db, generateId } from "../db";
+import { eq } from "drizzle-orm";
+import type { StockItem, StockMovement, LowStockAlert, ApiResponse, Order } from "@shared/api";
+import { db, stock, stockMovements, products } from "../db/connection";
 import { sendLowStockNotifications } from "../services/notifications";
+import { randomUUID } from "crypto";
 
 const router = Router();
+
+// Helper to generate IDs
+function generateId(prefix: string): string {
+  return `${prefix}-${randomUUID().slice(0, 8)}`;
+}
+
+// Helper to convert decimal strings to numbers
+function toNumber(value: string | number | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return value;
+  return parseFloat(value) || 0;
+}
 
 // Validation schemas
 const updateStockSchema = z.object({
@@ -22,10 +36,10 @@ const updateStockSchema = z.object({
 const bulkUpdateSchema = z.array(updateStockSchema);
 
 // GET /api/stock - Get all stock items
-const getStock: RequestHandler = (req, res) => {
+const getStock: RequestHandler = async (req, res) => {
   try {
     const { lowStockOnly, productId } = req.query;
-    let stockItems = Array.from(db.stock.values());
+    let stockItems = await db.select().from(stock);
 
     // Filter by product
     if (productId) {
@@ -34,18 +48,32 @@ const getStock: RequestHandler = (req, res) => {
 
     // Filter low stock only
     if (lowStockOnly === "true") {
-      stockItems = stockItems.filter((s) => s.availableQuantity <= s.lowStockThreshold);
+      stockItems = stockItems.filter((s) => toNumber(s.availableQuantity) <= s.lowStockThreshold);
     }
 
-    // Enrich with product info
-    const enrichedStock = stockItems.map((stock) => {
-      const product = db.products.get(stock.productId);
+    // Get all products for enrichment
+    const allProducts = await db.select().from(products);
+
+    // Enrich with product info and convert decimals
+    const enrichedStock = stockItems.map((stockItem) => {
+      const product = allProducts.find((p) => p.id === stockItem.productId);
       return {
-        ...stock,
+        id: stockItem.id,
+        productId: stockItem.productId,
+        quantity: toNumber(stockItem.quantity),
+        reservedQuantity: toNumber(stockItem.reservedQuantity),
+        availableQuantity: toNumber(stockItem.availableQuantity),
+        lowStockThreshold: stockItem.lowStockThreshold,
+        reorderPoint: stockItem.reorderPoint,
+        reorderQuantity: stockItem.reorderQuantity,
+        lastRestockedAt: stockItem.lastRestockedAt,
+        expiryDate: stockItem.expiryDate,
+        batchNumber: stockItem.batchNumber,
+        updatedAt: stockItem.updatedAt,
         productName: product?.name || "Unknown",
         productNameAr: product?.nameAr,
         productSku: product?.sku,
-        productPrice: product?.price,
+        productPrice: product?.price ? toNumber(product.price) : undefined,
       };
     });
 
@@ -64,12 +92,12 @@ const getStock: RequestHandler = (req, res) => {
 };
 
 // GET /api/stock/:productId - Get stock for specific product
-const getStockByProduct: RequestHandler = (req, res) => {
+const getStockByProduct: RequestHandler = async (req, res) => {
   try {
     const { productId } = req.params;
-    const stockItem = Array.from(db.stock.values()).find((s) => s.productId === productId);
+    const stockItems = await db.select().from(stock).where(eq(stock.productId, productId));
 
-    if (!stockItem) {
+    if (stockItems.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Stock item not found",
@@ -77,14 +105,29 @@ const getStockByProduct: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    const product = db.products.get(productId);
+    const stockItem = stockItems[0];
+    const productResults = await db.select().from(products).where(eq(products.id, productId));
+    const product = productResults[0];
 
-    const response: ApiResponse<StockItem & { productName?: string }> = {
+    const data: StockItem & { productName?: string } = {
+      id: stockItem.id,
+      productId: stockItem.productId,
+      quantity: toNumber(stockItem.quantity),
+      reservedQuantity: toNumber(stockItem.reservedQuantity),
+      availableQuantity: toNumber(stockItem.availableQuantity),
+      lowStockThreshold: stockItem.lowStockThreshold,
+      reorderPoint: stockItem.reorderPoint,
+      reorderQuantity: stockItem.reorderQuantity,
+      lastRestockedAt: stockItem.lastRestockedAt?.toISOString(),
+      expiryDate: stockItem.expiryDate?.toISOString(),
+      batchNumber: stockItem.batchNumber || undefined,
+      updatedAt: stockItem.updatedAt.toISOString(),
+      productName: product?.name,
+    };
+
+    const response: ApiResponse<typeof data> = {
       success: true,
-      data: {
-        ...stockItem,
-        productName: product?.name,
-      },
+      data,
     };
     res.json(response);
   } catch (error) {
@@ -183,21 +226,25 @@ const bulkUpdateStock: RequestHandler = async (req, res) => {
 };
 
 // GET /api/stock/alerts - Get low stock alerts
-const getLowStockAlerts: RequestHandler = (req, res) => {
+const getLowStockAlerts: RequestHandler = async (req, res) => {
   try {
+    const allStock = await db.select().from(stock);
+    const allProducts = await db.select().from(products);
+    
     const alerts: LowStockAlert[] = [];
 
-    for (const stock of db.stock.values()) {
-      if (stock.availableQuantity <= stock.lowStockThreshold) {
-        const product = db.products.get(stock.productId);
+    for (const stockItem of allStock) {
+      const availQty = toNumber(stockItem.availableQuantity);
+      if (availQty <= stockItem.lowStockThreshold) {
+        const product = allProducts.find((p) => p.id === stockItem.productId);
         if (product) {
           alerts.push({
-            productId: stock.productId,
+            productId: stockItem.productId,
             productName: product.name,
-            currentQuantity: stock.availableQuantity,
-            threshold: stock.lowStockThreshold,
-            reorderPoint: stock.reorderPoint,
-            suggestedReorderQuantity: stock.reorderQuantity,
+            currentQuantity: availQty,
+            threshold: stockItem.lowStockThreshold,
+            reorderPoint: stockItem.reorderPoint,
+            suggestedReorderQuantity: stockItem.reorderQuantity,
           });
         }
       }
@@ -221,10 +268,10 @@ const getLowStockAlerts: RequestHandler = (req, res) => {
 };
 
 // GET /api/stock/movements - Get stock movement history
-const getStockMovements: RequestHandler = (req, res) => {
+const getStockMovements: RequestHandler = async (req, res) => {
   try {
     const { productId, type, startDate, endDate, limit = "100" } = req.query;
-    let movements = [...db.stockMovements];
+    let movements = await db.select().from(stockMovements);
 
     // Filter by product
     if (productId) {
@@ -252,11 +299,22 @@ const getStockMovements: RequestHandler = (req, res) => {
     // Limit results
     movements = movements.slice(0, parseInt(limit as string));
 
-    // Enrich with product names
+    // Enrich with product names and convert decimals
+    const allProducts = await db.select().from(products);
     const enrichedMovements = movements.map((m) => {
-      const product = db.products.get(m.productId);
+      const product = allProducts.find((p) => p.id === m.productId);
       return {
-        ...m,
+        id: m.id,
+        productId: m.productId,
+        type: m.type,
+        quantity: toNumber(m.quantity),
+        previousQuantity: toNumber(m.previousQuantity),
+        newQuantity: toNumber(m.newQuantity),
+        reason: m.reason,
+        referenceType: m.referenceType,
+        referenceId: m.referenceId,
+        performedBy: m.performedBy,
+        createdAt: m.createdAt,
         productName: product?.name || "Unknown",
       };
     });
@@ -290,8 +348,8 @@ const restockProduct: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    const stockItem = Array.from(db.stock.values()).find((s) => s.productId === productId);
-    if (!stockItem) {
+    const stockItems = await db.select().from(stock).where(eq(stock.productId, productId));
+    if (stockItems.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Stock item not found",
@@ -299,33 +357,54 @@ const restockProduct: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    // Update stock
-    stockItem.quantity += quantity;
-    stockItem.availableQuantity = stockItem.quantity - stockItem.reservedQuantity;
-    stockItem.lastRestockedAt = new Date().toISOString();
-    stockItem.updatedAt = new Date().toISOString();
+    const stockItem = stockItems[0];
+    const previousQuantity = toNumber(stockItem.quantity);
+    const newQuantity = previousQuantity + quantity;
+    const newAvailable = newQuantity - toNumber(stockItem.reservedQuantity);
 
-    if (batchNumber) stockItem.batchNumber = batchNumber;
-    if (expiryDate) stockItem.expiryDate = expiryDate;
+    // Update stock
+    const [updatedStock] = await db.update(stock)
+      .set({
+        quantity: String(newQuantity),
+        availableQuantity: String(newAvailable),
+        lastRestockedAt: new Date(),
+        updatedAt: new Date(),
+        batchNumber: batchNumber || stockItem.batchNumber,
+        expiryDate: expiryDate ? new Date(expiryDate) : stockItem.expiryDate,
+      })
+      .where(eq(stock.id, stockItem.id))
+      .returning();
 
     // Record movement
-    const movement: StockMovement = {
+    await db.insert(stockMovements).values({
       id: generateId("mov"),
       productId,
       type: "in",
-      quantity,
-      previousQuantity: stockItem.quantity - quantity,
-      newQuantity: stockItem.quantity,
+      quantity: String(quantity),
+      previousQuantity: String(previousQuantity),
+      newQuantity: String(newQuantity),
       reason: `Restock - Batch: ${batchNumber || "N/A"}`,
       referenceType: "manual",
       performedBy,
-      createdAt: new Date().toISOString(),
-    };
-    db.stockMovements.push(movement);
+      createdAt: new Date(),
+    });
 
     const response: ApiResponse<StockItem> = {
       success: true,
-      data: stockItem,
+      data: {
+        id: updatedStock.id,
+        productId: updatedStock.productId,
+        quantity: toNumber(updatedStock.quantity),
+        reservedQuantity: toNumber(updatedStock.reservedQuantity),
+        availableQuantity: toNumber(updatedStock.availableQuantity),
+        lowStockThreshold: updatedStock.lowStockThreshold,
+        reorderPoint: updatedStock.reorderPoint,
+        reorderQuantity: updatedStock.reorderQuantity,
+        lastRestockedAt: updatedStock.lastRestockedAt?.toISOString(),
+        expiryDate: updatedStock.expiryDate?.toISOString(),
+        batchNumber: updatedStock.batchNumber || undefined,
+        updatedAt: updatedStock.updatedAt.toISOString(),
+      },
       message: `Successfully restocked ${quantity} units`,
     };
     res.json(response);
@@ -339,13 +418,13 @@ const restockProduct: RequestHandler = async (req, res) => {
 };
 
 // PATCH /api/stock/:productId/thresholds - Update stock thresholds
-const updateStockThresholds: RequestHandler = (req, res) => {
+const updateStockThresholds: RequestHandler = async (req, res) => {
   try {
     const { productId } = req.params;
     const { lowStockThreshold, reorderPoint, reorderQuantity } = req.body;
 
-    const stockItem = Array.from(db.stock.values()).find((s) => s.productId === productId);
-    if (!stockItem) {
+    const stockItems = await db.select().from(stock).where(eq(stock.productId, productId));
+    if (stockItems.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Stock item not found",
@@ -353,14 +432,34 @@ const updateStockThresholds: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    if (lowStockThreshold !== undefined) stockItem.lowStockThreshold = lowStockThreshold;
-    if (reorderPoint !== undefined) stockItem.reorderPoint = reorderPoint;
-    if (reorderQuantity !== undefined) stockItem.reorderQuantity = reorderQuantity;
-    stockItem.updatedAt = new Date().toISOString();
+    const stockItem = stockItems[0];
+    const updateData: Partial<typeof stock.$inferInsert> = { updatedAt: new Date() };
+
+    if (lowStockThreshold !== undefined) updateData.lowStockThreshold = lowStockThreshold;
+    if (reorderPoint !== undefined) updateData.reorderPoint = reorderPoint;
+    if (reorderQuantity !== undefined) updateData.reorderQuantity = reorderQuantity;
+
+    const [updatedStock] = await db.update(stock)
+      .set(updateData)
+      .where(eq(stock.id, stockItem.id))
+      .returning();
 
     const response: ApiResponse<StockItem> = {
       success: true,
-      data: stockItem,
+      data: {
+        id: updatedStock.id,
+        productId: updatedStock.productId,
+        quantity: toNumber(updatedStock.quantity),
+        reservedQuantity: toNumber(updatedStock.reservedQuantity),
+        availableQuantity: toNumber(updatedStock.availableQuantity),
+        lowStockThreshold: updatedStock.lowStockThreshold,
+        reorderPoint: updatedStock.reorderPoint,
+        reorderQuantity: updatedStock.reorderQuantity,
+        lastRestockedAt: updatedStock.lastRestockedAt?.toISOString(),
+        expiryDate: updatedStock.expiryDate?.toISOString(),
+        batchNumber: updatedStock.batchNumber || undefined,
+        updatedAt: updatedStock.updatedAt.toISOString(),
+      },
       message: "Stock thresholds updated",
     };
     res.json(response);
@@ -387,91 +486,123 @@ export async function updateStockItem(
   referenceType?: "order" | "return" | "waste" | "transfer" | "manual",
   referenceId?: string
 ): Promise<{ success: boolean; stockItem?: StockItem; error?: string }> {
-  const stockItem = Array.from(db.stock.values()).find((s) => s.productId === productId);
+  const stockItems = await db.select().from(stock).where(eq(stock.productId, productId));
 
-  if (!stockItem) {
+  if (stockItems.length === 0) {
     return { success: false, error: `Stock item not found for product ${productId}` };
   }
 
-  const previousQuantity = stockItem.quantity;
+  const stockItem = stockItems[0];
+  const previousQuantity = toNumber(stockItem.quantity);
+  const currentReserved = toNumber(stockItem.reservedQuantity);
+  const currentAvailable = toNumber(stockItem.availableQuantity);
+  
+  let newQuantity = previousQuantity;
+  let newReserved = currentReserved;
 
   // Apply change based on type
   switch (type) {
     case "in":
-      stockItem.quantity += quantity;
+      newQuantity += quantity;
       break;
     case "out":
-      if (stockItem.availableQuantity < quantity) {
+      if (currentAvailable < quantity) {
         return { success: false, error: `Insufficient stock for product ${productId}` };
       }
-      stockItem.quantity -= quantity;
+      newQuantity -= quantity;
       break;
     case "reserved":
-      if (stockItem.availableQuantity < quantity) {
+      if (currentAvailable < quantity) {
         return { success: false, error: `Insufficient stock to reserve for product ${productId}` };
       }
-      stockItem.reservedQuantity += quantity;
+      newReserved += quantity;
       break;
     case "released":
-      stockItem.reservedQuantity = Math.max(0, stockItem.reservedQuantity - quantity);
+      newReserved = Math.max(0, newReserved - quantity);
       break;
     case "adjustment":
-      stockItem.quantity = quantity;
+      newQuantity = quantity;
       break;
   }
 
   // Recalculate available
-  stockItem.availableQuantity = stockItem.quantity - stockItem.reservedQuantity;
-  stockItem.updatedAt = new Date().toISOString();
+  const newAvailable = newQuantity - newReserved;
+
+  // Update in database
+  const [updatedStock] = await db.update(stock)
+    .set({
+      quantity: String(newQuantity),
+      reservedQuantity: String(newReserved),
+      availableQuantity: String(newAvailable),
+      updatedAt: new Date(),
+    })
+    .where(eq(stock.id, stockItem.id))
+    .returning();
 
   // Record movement
-  const movement: StockMovement = {
+  await db.insert(stockMovements).values({
     id: generateId("mov"),
     productId,
     type,
-    quantity: Math.abs(quantity),
-    previousQuantity,
-    newQuantity: stockItem.quantity,
+    quantity: String(Math.abs(quantity)),
+    previousQuantity: String(previousQuantity),
+    newQuantity: String(newQuantity),
     reason,
     referenceType,
     referenceId,
     performedBy,
-    createdAt: new Date().toISOString(),
-  };
-  db.stockMovements.push(movement);
+    createdAt: new Date(),
+  });
 
   // Check for low stock alert
-  if (stockItem.availableQuantity <= stockItem.lowStockThreshold) {
-    const product = db.products.get(productId);
+  if (newAvailable <= stockItem.lowStockThreshold) {
+    const productResults = await db.select().from(products).where(eq(products.id, productId));
+    const product = productResults[0];
     if (product) {
       // Send low stock notification (async)
-      sendLowStockNotifications(product.name, stockItem.availableQuantity, stockItem.lowStockThreshold)
+      sendLowStockNotifications(product.name, newAvailable, stockItem.lowStockThreshold)
         .catch(console.error);
     }
   }
 
-  return { success: true, stockItem };
+  const resultStockItem: StockItem = {
+    id: updatedStock.id,
+    productId: updatedStock.productId,
+    quantity: toNumber(updatedStock.quantity),
+    reservedQuantity: toNumber(updatedStock.reservedQuantity),
+    availableQuantity: toNumber(updatedStock.availableQuantity),
+    lowStockThreshold: updatedStock.lowStockThreshold,
+    reorderPoint: updatedStock.reorderPoint,
+    reorderQuantity: updatedStock.reorderQuantity,
+    lastRestockedAt: updatedStock.lastRestockedAt?.toISOString(),
+    expiryDate: updatedStock.expiryDate?.toISOString(),
+    batchNumber: updatedStock.batchNumber || undefined,
+    updatedAt: updatedStock.updatedAt.toISOString(),
+  };
+
+  return { success: true, stockItem: resultStockItem };
 }
 
 // Reduce stock when order is placed (reserve stock)
-export function reduceStockForOrder(order: Order): { success: boolean; error?: string } {
+export async function reduceStockForOrder(order: Order): Promise<{ success: boolean; error?: string }> {
   // First, validate all items have sufficient stock
   for (const item of order.items) {
-    const stockItem = Array.from(db.stock.values()).find((s) => s.productId === item.productId);
-    if (!stockItem) {
+    const stockItems = await db.select().from(stock).where(eq(stock.productId, item.productId));
+    if (stockItems.length === 0) {
       return { success: false, error: `Stock not found for product: ${item.productName}` };
     }
-    if (stockItem.availableQuantity < item.quantity) {
+    const availQty = toNumber(stockItems[0].availableQuantity);
+    if (availQty < item.quantity) {
       return { 
         success: false, 
-        error: `Insufficient stock for ${item.productName}. Available: ${stockItem.availableQuantity}, Requested: ${item.quantity}` 
+        error: `Insufficient stock for ${item.productName}. Available: ${availQty}, Requested: ${item.quantity}` 
       };
     }
   }
 
   // Reserve stock for each item
   for (const item of order.items) {
-    updateStockItem(
+    await updateStockItem(
       item.productId,
       item.quantity,
       "reserved",
@@ -486,9 +617,9 @@ export function reduceStockForOrder(order: Order): { success: boolean; error?: s
 }
 
 // Release stock when order is cancelled
-export function releaseStockForOrder(order: Order): { success: boolean; error?: string } {
+export async function releaseStockForOrder(order: Order): Promise<{ success: boolean; error?: string }> {
   for (const item of order.items) {
-    updateStockItem(
+    await updateStockItem(
       item.productId,
       item.quantity,
       "released",
@@ -503,29 +634,37 @@ export function releaseStockForOrder(order: Order): { success: boolean; error?: 
 }
 
 // Confirm stock reduction when order is delivered
-export function confirmStockReductionForOrder(order: Order): { success: boolean; error?: string } {
+export async function confirmStockReductionForOrder(order: Order): Promise<{ success: boolean; error?: string }> {
   for (const item of order.items) {
-    const stockItem = Array.from(db.stock.values()).find((s) => s.productId === item.productId);
-    if (stockItem) {
-      // Move from reserved to sold (reduce reserved, reduce quantity)
-      stockItem.reservedQuantity = Math.max(0, stockItem.reservedQuantity - item.quantity);
-      stockItem.updatedAt = new Date().toISOString();
+    const stockItems = await db.select().from(stock).where(eq(stock.productId, item.productId));
+    if (stockItems.length > 0) {
+      const stockItem = stockItems[0];
+      const currentReserved = toNumber(stockItem.reservedQuantity);
+      const currentQuantity = toNumber(stockItem.quantity);
+      const newReserved = Math.max(0, currentReserved - item.quantity);
+
+      // Update stock
+      await db.update(stock)
+        .set({
+          reservedQuantity: String(newReserved),
+          updatedAt: new Date(),
+        })
+        .where(eq(stock.id, stockItem.id));
 
       // Record movement
-      const movement: StockMovement = {
+      await db.insert(stockMovements).values({
         id: generateId("mov"),
         productId: item.productId,
         type: "out",
-        quantity: item.quantity,
-        previousQuantity: stockItem.quantity + item.quantity,
-        newQuantity: stockItem.quantity,
+        quantity: String(item.quantity),
+        previousQuantity: String(currentQuantity + item.quantity),
+        newQuantity: String(currentQuantity),
         reason: `Sold via order ${order.orderNumber}`,
         referenceType: "order",
         referenceId: order.id,
         performedBy: "system",
-        createdAt: new Date().toISOString(),
-      };
-      db.stockMovements.push(movement);
+        createdAt: new Date(),
+      });
     }
   }
 

@@ -1,15 +1,22 @@
 /**
  * Payment Routes
- * Payment processing, refunds, and payment history
+ * Payment processing, refunds, and payment history (PostgreSQL version)
  */
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
-import type { Payment, PaymentRefund, ProcessPaymentRequest, SavedCard, ApiResponse, PaginatedResponse } from "@shared/api";
-import { db, generateId } from "../db";
+import { eq, gte, lte, and } from "drizzle-orm";
+import type { Payment, PaymentRefund, SavedCard, ApiResponse, PaginatedResponse } from "@shared/api";
+import { db, payments, orders } from "../db/connection";
 import { sendOrderNotification } from "../services/notifications";
+import { randomUUID } from "crypto";
 
 const router = Router();
+
+// Helper to generate IDs
+function generateId(prefix: string): string {
+  return `${prefix}-${randomUUID().slice(0, 8)}`;
+}
 
 // Validation schemas
 const processPaymentSchema = z.object({
@@ -31,12 +38,6 @@ async function processWithGateway(
   method: string,
   cardToken?: string
 ): Promise<{ success: boolean; transactionId?: string; error?: string }> {
-  // In production, integrate with actual payment gateway:
-  // - Stripe: https://stripe.com/docs
-  // - PayTabs: https://site.paytabs.com/en/
-  // - Telr: https://telr.com/
-  // - Network International: https://www.network.ae/
-
   console.log(`💳 Processing payment: AED ${amount} via ${method}`);
 
   // Simulate API call
@@ -79,57 +80,56 @@ async function processRefundWithGateway(
 }
 
 // GET /api/payments - Get all payments (admin)
-const getPayments: RequestHandler = (req, res) => {
+const getPayments: RequestHandler = async (req, res) => {
   try {
     const { userId, orderId, status, method, page = "1", limit = "20", startDate, endDate } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
 
-    let payments = Array.from(db.payments.values());
+    let allPayments = await db.select().from(payments);
 
     // Filter by user (through orders)
     if (userId) {
-      const userOrderIds = Array.from(db.orders.values())
-        .filter((o) => o.userId === userId)
-        .map((o) => o.id);
-      payments = payments.filter((p) => userOrderIds.includes(p.orderId));
+      const userOrders = await db.select().from(orders).where(eq(orders.userId, userId as string));
+      const userOrderIds = userOrders.map((o) => o.id);
+      allPayments = allPayments.filter((p) => userOrderIds.includes(p.orderId));
     }
 
     // Filter by order
     if (orderId) {
-      payments = payments.filter((p) => p.orderId === orderId);
+      allPayments = allPayments.filter((p) => p.orderId === orderId);
     }
 
     // Filter by status
     if (status) {
-      payments = payments.filter((p) => p.status === status);
+      allPayments = allPayments.filter((p) => p.status === status);
     }
 
     // Filter by method
     if (method) {
-      payments = payments.filter((p) => p.method === method);
+      allPayments = allPayments.filter((p) => p.method === method);
     }
 
     // Filter by date range
     if (startDate) {
       const start = new Date(startDate as string);
-      payments = payments.filter((p) => new Date(p.createdAt) >= start);
+      allPayments = allPayments.filter((p) => new Date(p.createdAt) >= start);
     }
     if (endDate) {
       const end = new Date(endDate as string);
-      payments = payments.filter((p) => new Date(p.createdAt) <= end);
+      allPayments = allPayments.filter((p) => new Date(p.createdAt) <= end);
     }
 
     // Sort by date (newest first)
-    payments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    allPayments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     // Pagination
-    const total = payments.length;
+    const total = allPayments.length;
     const totalPages = Math.ceil(total / limitNum);
     const startIndex = (pageNum - 1) * limitNum;
-    const paginatedPayments = payments.slice(startIndex, startIndex + limitNum);
+    const paginatedPayments = allPayments.slice(startIndex, startIndex + limitNum);
 
-    const response: PaginatedResponse<Payment> = {
+    const response: PaginatedResponse<typeof paginatedPayments[0]> = {
       success: true,
       data: paginatedPayments,
       pagination: {
@@ -150,12 +150,12 @@ const getPayments: RequestHandler = (req, res) => {
 };
 
 // GET /api/payments/:id - Get payment by ID
-const getPaymentById: RequestHandler = (req, res) => {
+const getPaymentById: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const payment = db.payments.get(id);
+    const result = await db.select().from(payments).where(eq(payments.id, id));
 
-    if (!payment) {
+    if (result.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Payment not found",
@@ -163,9 +163,9 @@ const getPaymentById: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    const response: ApiResponse<Payment> = {
+    const response: ApiResponse<typeof result[0]> = {
       success: true,
-      data: payment,
+      data: result[0],
     };
     res.json(response);
   } catch (error) {
@@ -178,12 +178,12 @@ const getPaymentById: RequestHandler = (req, res) => {
 };
 
 // GET /api/payments/order/:orderId - Get payment by order ID
-const getPaymentByOrderId: RequestHandler = (req, res) => {
+const getPaymentByOrderId: RequestHandler = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const payment = Array.from(db.payments.values()).find((p) => p.orderId === orderId);
+    const result = await db.select().from(payments).where(eq(payments.orderId, orderId));
 
-    if (!payment) {
+    if (result.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Payment not found for this order",
@@ -191,9 +191,9 @@ const getPaymentByOrderId: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    const response: ApiResponse<Payment> = {
+    const response: ApiResponse<typeof result[0]> = {
       success: true,
-      data: payment,
+      data: result[0],
     };
     res.json(response);
   } catch (error) {
@@ -220,8 +220,8 @@ const processPayment: RequestHandler = async (req, res) => {
     const { orderId, amount, method, cardToken, saveCard } = validation.data;
 
     // Validate order
-    const order = db.orders.get(orderId);
-    if (!order) {
+    const orderResult = await db.select().from(orders).where(eq(orders.id, orderId));
+    if (orderResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Order not found",
@@ -229,9 +229,11 @@ const processPayment: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
+    const order = orderResult[0];
+
     // Check if payment already exists
-    const existingPayment = Array.from(db.payments.values()).find((p) => p.orderId === orderId);
-    if (existingPayment && existingPayment.status === "captured") {
+    const existingPayment = await db.select().from(payments).where(eq(payments.orderId, orderId));
+    if (existingPayment.length > 0 && existingPayment[0].status === "captured") {
       const response: ApiResponse<null> = {
         success: false,
         error: "Payment already processed for this order",
@@ -246,11 +248,9 @@ const processPayment: RequestHandler = async (req, res) => {
 
       if (!gatewayResult.success) {
         // Update order payment status
-        order.paymentStatus = "failed";
-        order.updatedAt = new Date().toISOString();
-
-        // Send failure notification
-        sendOrderNotification(order, "payment_failed").catch(console.error);
+        await db.update(orders)
+          .set({ paymentStatus: "failed", updatedAt: new Date() })
+          .where(eq(orders.id, orderId));
 
         const response: ApiResponse<null> = {
           success: false,
@@ -263,62 +263,52 @@ const processPayment: RequestHandler = async (req, res) => {
     }
 
     // Create or update payment record
-    const payment: Payment = existingPayment || {
-      id: generateId("pay"),
-      orderId,
-      orderNumber: order.orderNumber,
-      amount,
-      currency: "AED",
-      method,
-      status: "pending",
-      refundedAmount: 0,
-      refunds: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    // Update payment status
-    payment.status = method === "cod" ? "pending" : "captured";
-    payment.updatedAt = new Date().toISOString();
-
-    if (method === "card") {
-      payment.gatewayTransactionId = gatewayTransactionId;
-      // Mock card details
-      payment.cardBrand = "Visa";
-      payment.cardLast4 = "4242";
-      payment.cardExpiryMonth = 12;
-      payment.cardExpiryYear = 2028;
+    let payment;
+    if (existingPayment.length > 0) {
+      // Update existing payment
+      [payment] = await db.update(payments)
+        .set({
+          status: method === "cod" ? "pending" : "captured",
+          gatewayTransactionId,
+          cardBrand: method === "card" ? "Visa" : null,
+          cardLast4: method === "card" ? "4242" : null,
+          cardExpiryMonth: method === "card" ? 12 : null,
+          cardExpiryYear: method === "card" ? 2028 : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, existingPayment[0].id))
+        .returning();
+    } else {
+      // Create new payment
+      [payment] = await db.insert(payments).values({
+        id: generateId("pay"),
+        orderId,
+        orderNumber: order.orderNumber,
+        amount: String(amount),
+        currency: "AED",
+        method,
+        status: method === "cod" ? "pending" : "captured",
+        gatewayTransactionId,
+        cardBrand: method === "card" ? "Visa" : null,
+        cardLast4: method === "card" ? "4242" : null,
+        cardExpiryMonth: method === "card" ? 12 : null,
+        cardExpiryYear: method === "card" ? 2028 : null,
+        refundedAmount: "0",
+        refunds: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
     }
-
-    db.payments.set(payment.id, payment);
 
     // Update order
-    order.paymentStatus = payment.status;
-    order.updatedAt = new Date().toISOString();
+    await db.update(orders)
+      .set({
+        paymentStatus: payment.status,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId));
 
-    // Send payment confirmation notification
-    if (payment.status === "captured") {
-      sendOrderNotification(order, "payment_received").catch(console.error);
-    }
-
-    // Save card if requested
-    if (saveCard && cardToken && method === "card") {
-      const savedCard: SavedCard = {
-        id: generateId("card"),
-        userId: order.userId,
-        brand: "Visa",
-        last4: "4242",
-        expiryMonth: 12,
-        expiryYear: 2028,
-        isDefault: true,
-        token: `tok_saved_${Date.now()}`,
-        createdAt: new Date().toISOString(),
-      };
-      // In production, store saved cards in database
-      console.log("Saved card:", savedCard.id);
-    }
-
-    const response: ApiResponse<Payment> = {
+    const response: ApiResponse<typeof payment> = {
       success: true,
       data: payment,
       message: method === "cod" ? "Order confirmed. Pay on delivery." : "Payment successful",
@@ -350,8 +340,8 @@ const refundPayment: RequestHandler = async (req, res) => {
 
     const { amount, reason } = validation.data;
 
-    const payment = db.payments.get(id);
-    if (!payment) {
+    const paymentResult = await db.select().from(payments).where(eq(payments.id, id));
+    if (paymentResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Payment not found",
@@ -359,8 +349,10 @@ const refundPayment: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
+    const payment = paymentResult[0];
+
     // Validate refund amount
-    const maxRefundable = payment.amount - payment.refundedAmount;
+    const maxRefundable = Number(payment.amount) - Number(payment.refundedAmount || 0);
     if (amount > maxRefundable) {
       const response: ApiResponse<null> = {
         success: false,
@@ -391,33 +383,33 @@ const refundPayment: RequestHandler = async (req, res) => {
       createdAt: new Date().toISOString(),
     };
 
-    payment.refunds.push(refund);
-    payment.refundedAmount += amount;
-    payment.status = payment.refundedAmount >= payment.amount ? "refunded" : "partially_refunded";
-    payment.updatedAt = new Date().toISOString();
+    const existingRefunds = (payment.refunds as PaymentRefund[]) || [];
+    const newRefunds = [...existingRefunds, refund];
+    const newRefundedAmount = Number(payment.refundedAmount || 0) + amount;
+    const newStatus = newRefundedAmount >= Number(payment.amount) ? "refunded" : "partially_refunded";
+
+    const [updated] = await db.update(payments)
+      .set({
+        refunds: newRefunds,
+        refundedAmount: String(newRefundedAmount),
+        status: newStatus,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.id, id))
+      .returning();
 
     // Update order
-    const order = db.orders.get(payment.orderId);
-    if (order) {
-      order.paymentStatus = payment.status;
-      if (payment.status === "refunded") {
-        order.status = "refunded";
-        order.statusHistory.push({
-          status: "refunded",
-          changedBy: processedBy,
-          changedAt: new Date().toISOString(),
-          notes: `Full refund: ${reason}`,
-        });
-      }
-      order.updatedAt = new Date().toISOString();
+    await db.update(orders)
+      .set({
+        paymentStatus: newStatus,
+        status: newStatus === "refunded" ? "refunded" : undefined,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, payment.orderId));
 
-      // Send refund notification
-      sendOrderNotification(order, "refund_processed", { amount }).catch(console.error);
-    }
-
-    const response: ApiResponse<Payment> = {
+    const response: ApiResponse<typeof updated> = {
       success: true,
-      data: payment,
+      data: updated,
       message: `Refund of AED ${amount.toFixed(2)} processed successfully`,
     };
     res.json(response);
@@ -431,43 +423,43 @@ const refundPayment: RequestHandler = async (req, res) => {
 };
 
 // GET /api/payments/stats - Get payment statistics
-const getPaymentStats: RequestHandler = (req, res) => {
+const getPaymentStats: RequestHandler = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    let payments = Array.from(db.payments.values());
+    let allPayments = await db.select().from(payments);
 
     // Filter by date range
     if (startDate) {
       const start = new Date(startDate as string);
-      payments = payments.filter((p) => new Date(p.createdAt) >= start);
+      allPayments = allPayments.filter((p) => new Date(p.createdAt) >= start);
     }
     if (endDate) {
       const end = new Date(endDate as string);
-      payments = payments.filter((p) => new Date(p.createdAt) <= end);
+      allPayments = allPayments.filter((p) => new Date(p.createdAt) <= end);
     }
 
     const stats = {
-      totalPayments: payments.length,
-      totalAmount: payments.reduce((sum, p) => sum + p.amount, 0),
-      capturedAmount: payments
+      totalPayments: allPayments.length,
+      totalAmount: allPayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      capturedAmount: allPayments
         .filter((p) => p.status === "captured")
-        .reduce((sum, p) => sum + p.amount, 0),
-      refundedAmount: payments.reduce((sum, p) => sum + p.refundedAmount, 0),
-      pendingAmount: payments
+        .reduce((sum, p) => sum + Number(p.amount), 0),
+      refundedAmount: allPayments.reduce((sum, p) => sum + Number(p.refundedAmount || 0), 0),
+      pendingAmount: allPayments
         .filter((p) => p.status === "pending")
-        .reduce((sum, p) => sum + p.amount, 0),
-      failedPayments: payments.filter((p) => p.status === "failed").length,
+        .reduce((sum, p) => sum + Number(p.amount), 0),
+      failedPayments: allPayments.filter((p) => p.status === "failed").length,
       byMethod: {
-        card: payments.filter((p) => p.method === "card").length,
-        cod: payments.filter((p) => p.method === "cod").length,
-        bankTransfer: payments.filter((p) => p.method === "bank_transfer").length,
+        card: allPayments.filter((p) => p.method === "card").length,
+        cod: allPayments.filter((p) => p.method === "cod").length,
+        bankTransfer: allPayments.filter((p) => p.method === "bank_transfer").length,
       },
       byStatus: {
-        pending: payments.filter((p) => p.status === "pending").length,
-        captured: payments.filter((p) => p.status === "captured").length,
-        failed: payments.filter((p) => p.status === "failed").length,
-        refunded: payments.filter((p) => p.status === "refunded").length,
-        partiallyRefunded: payments.filter((p) => p.status === "partially_refunded").length,
+        pending: allPayments.filter((p) => p.status === "pending").length,
+        captured: allPayments.filter((p) => p.status === "captured").length,
+        failed: allPayments.filter((p) => p.status === "failed").length,
+        refunded: allPayments.filter((p) => p.status === "refunded").length,
+        partiallyRefunded: allPayments.filter((p) => p.status === "partially_refunded").length,
       },
     };
 
@@ -489,15 +481,17 @@ const getPaymentStats: RequestHandler = (req, res) => {
 const capturePayment: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const payment = db.payments.get(id);
+    const paymentResult = await db.select().from(payments).where(eq(payments.id, id));
 
-    if (!payment) {
+    if (paymentResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Payment not found",
       };
       return res.status(404).json(response);
     }
+
+    const payment = paymentResult[0];
 
     if (payment.status !== "authorized" && payment.status !== "pending") {
       const response: ApiResponse<null> = {
@@ -507,23 +501,26 @@ const capturePayment: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    // For COD payments, mark as captured when delivery is complete
-    payment.status = "captured";
-    payment.updatedAt = new Date().toISOString();
+    // Update payment status
+    const [updated] = await db.update(payments)
+      .set({
+        status: "captured",
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.id, id))
+      .returning();
 
     // Update order
-    const order = db.orders.get(payment.orderId);
-    if (order) {
-      order.paymentStatus = "captured";
-      order.updatedAt = new Date().toISOString();
+    await db.update(orders)
+      .set({
+        paymentStatus: "captured",
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, payment.orderId));
 
-      // Send confirmation
-      sendOrderNotification(order, "payment_received").catch(console.error);
-    }
-
-    const response: ApiResponse<Payment> = {
+    const response: ApiResponse<typeof updated> = {
       success: true,
-      data: payment,
+      data: updated,
       message: "Payment captured successfully",
     };
     res.json(response);

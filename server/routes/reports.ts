@@ -1,9 +1,10 @@
 /**
  * Sales Reports Routes
- * Comprehensive reporting with export functionality
+ * Comprehensive reporting with export functionality (PostgreSQL version)
  */
 
 import { Router, RequestHandler } from "express";
+import { eq, ne, gte, lte, and } from "drizzle-orm";
 import type { 
   SalesReportData, 
   SalesByCategory, 
@@ -13,9 +14,16 @@ import type {
   CustomerAnalytics,
   ApiResponse 
 } from "@shared/api";
-import { db } from "../db";
+import { db, orders, orderItems, products, users, stock, stockMovements } from "../db/connection";
 
 const router = Router();
+
+// Helper to convert decimal strings to numbers
+function toNumber(value: string | number | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return value;
+  return parseFloat(value) || 0;
+}
 
 // Helper to get date range
 function getDateRange(period: string): { start: Date; end: Date } {
@@ -51,7 +59,7 @@ function getDateRange(period: string): { start: Date; end: Date } {
 }
 
 // GET /api/reports/sales - Get sales report
-const getSalesReport: RequestHandler = (req, res) => {
+const getSalesReport: RequestHandler = async (req, res) => {
   try {
     const { period = "month", startDate, endDate } = req.query;
 
@@ -68,31 +76,40 @@ const getSalesReport: RequestHandler = (req, res) => {
     }
 
     // Get orders in date range (excluding cancelled)
-    const orders = Array.from(db.orders.values()).filter(
+    const allOrders = await db.select().from(orders);
+    const filteredOrders = allOrders.filter(
       (o) => 
         new Date(o.createdAt) >= start && 
         new Date(o.createdAt) <= end &&
         o.status !== "cancelled"
     );
 
+    // Get products for cost calculation
+    const allProducts = await db.select().from(products);
+    const productMap = new Map(allProducts.map((p) => [p.id, p]));
+
+    // Get order items
+    const allOrderItems = await db.select().from(orderItems);
+
     // Calculate metrics
-    const totalSales = orders.reduce((sum, o) => sum + o.total, 0);
-    const totalOrders = orders.length;
+    const totalSales = filteredOrders.reduce((sum, o) => sum + Number(o.total), 0);
+    const totalOrders = filteredOrders.length;
     const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
-    const totalDiscount = orders.reduce((sum, o) => sum + o.discount, 0);
-    const totalVat = orders.reduce((sum, o) => sum + o.vatAmount, 0);
-    const totalDeliveryFees = orders.reduce((sum, o) => sum + o.deliveryFee, 0);
+    const totalDiscount = filteredOrders.reduce((sum, o) => sum + Number(o.discount || 0), 0);
+    const totalVat = filteredOrders.reduce((sum, o) => sum + Number(o.vatAmount), 0);
+    const totalDeliveryFees = filteredOrders.reduce((sum, o) => sum + Number(o.deliveryFee), 0);
     const netRevenue = totalSales - totalVat - totalDeliveryFees;
 
-    // Calculate cost of goods (sum of item costs)
+    // Calculate cost of goods
     let costOfGoods = 0;
-    orders.forEach((order) => {
-      order.items.forEach((item) => {
-        const product = db.products.get(item.productId);
-        if (product) {
-          costOfGoods += product.costPrice * item.quantity;
-        }
-      });
+    const orderIds = filteredOrders.map((o) => o.id);
+    const relevantItems = allOrderItems.filter((i) => orderIds.includes(i.orderId));
+    
+    relevantItems.forEach((item) => {
+      const product = productMap.get(item.productId);
+      if (product) {
+        costOfGoods += Number(product.costPrice) * Number(item.quantity);
+      }
     });
 
     const grossProfit = netRevenue - costOfGoods;
@@ -129,7 +146,7 @@ const getSalesReport: RequestHandler = (req, res) => {
 };
 
 // GET /api/reports/sales-by-category - Get sales by category
-const getSalesByCategory: RequestHandler = (req, res) => {
+const getSalesByCategory: RequestHandler = async (req, res) => {
   try {
     const { period = "month", startDate, endDate } = req.query;
 
@@ -146,28 +163,34 @@ const getSalesByCategory: RequestHandler = (req, res) => {
     }
 
     // Get orders in date range
-    const orders = Array.from(db.orders.values()).filter(
+    const allOrders = await db.select().from(orders);
+    const filteredOrders = allOrders.filter(
       (o) => 
         new Date(o.createdAt) >= start && 
         new Date(o.createdAt) <= end &&
         o.status !== "cancelled"
     );
 
+    // Get products and order items
+    const allProducts = await db.select().from(products);
+    const productMap = new Map(allProducts.map((p) => [p.id, p]));
+    const allOrderItems = await db.select().from(orderItems);
+
     // Aggregate by category
     const categoryMap: Record<string, { sales: number; quantity: number }> = {};
+    const orderIds = filteredOrders.map((o) => o.id);
+    const relevantItems = allOrderItems.filter((i) => orderIds.includes(i.orderId));
 
-    orders.forEach((order) => {
-      order.items.forEach((item) => {
-        const product = db.products.get(item.productId);
-        const category = product?.category || "Other";
+    relevantItems.forEach((item) => {
+      const product = productMap.get(item.productId);
+      const category = product?.category || "Other";
 
-        if (!categoryMap[category]) {
-          categoryMap[category] = { sales: 0, quantity: 0 };
-        }
+      if (!categoryMap[category]) {
+        categoryMap[category] = { sales: 0, quantity: 0 };
+      }
 
-        categoryMap[category].sales += item.totalPrice;
-        categoryMap[category].quantity += item.quantity;
-      });
+      categoryMap[category].sales += Number(item.totalPrice);
+      categoryMap[category].quantity += Number(item.quantity);
     });
 
     const totalSales = Object.values(categoryMap).reduce((sum, c) => sum + c.sales, 0);
@@ -196,7 +219,7 @@ const getSalesByCategory: RequestHandler = (req, res) => {
 };
 
 // GET /api/reports/sales-by-product - Get sales by product
-const getSalesByProduct: RequestHandler = (req, res) => {
+const getSalesByProduct: RequestHandler = async (req, res) => {
   try {
     const { period = "month", startDate, endDate, limit = "20" } = req.query;
 
@@ -213,29 +236,33 @@ const getSalesByProduct: RequestHandler = (req, res) => {
     }
 
     // Get orders in date range
-    const orders = Array.from(db.orders.values()).filter(
+    const allOrders = await db.select().from(orders);
+    const filteredOrders = allOrders.filter(
       (o) => 
         new Date(o.createdAt) >= start && 
         new Date(o.createdAt) <= end &&
         o.status !== "cancelled"
     );
 
+    // Get order items
+    const allOrderItems = await db.select().from(orderItems);
+    const orderIds = filteredOrders.map((o) => o.id);
+    const relevantItems = allOrderItems.filter((i) => orderIds.includes(i.orderId));
+
     // Aggregate by product
     const productMap: Record<string, { name: string; sales: number; quantity: number }> = {};
 
-    orders.forEach((order) => {
-      order.items.forEach((item) => {
-        if (!productMap[item.productId]) {
-          productMap[item.productId] = {
-            name: item.productName,
-            sales: 0,
-            quantity: 0,
-          };
-        }
+    relevantItems.forEach((item) => {
+      if (!productMap[item.productId]) {
+        productMap[item.productId] = {
+          name: item.productName,
+          sales: 0,
+          quantity: 0,
+        };
+      }
 
-        productMap[item.productId].sales += item.totalPrice;
-        productMap[item.productId].quantity += item.quantity;
-      });
+      productMap[item.productId].sales += Number(item.totalPrice);
+      productMap[item.productId].quantity += Number(item.quantity);
     });
 
     const salesByProduct: SalesByProduct[] = Object.entries(productMap)
@@ -264,13 +291,14 @@ const getSalesByProduct: RequestHandler = (req, res) => {
 };
 
 // GET /api/reports/sales-timeseries - Get sales time series
-const getSalesTimeSeries: RequestHandler = (req, res) => {
+const getSalesTimeSeries: RequestHandler = async (req, res) => {
   try {
     const { period = "month", groupBy = "day" } = req.query;
     const range = getDateRange(period as string);
 
     // Get orders in date range
-    const orders = Array.from(db.orders.values()).filter(
+    const allOrders = await db.select().from(orders);
+    const filteredOrders = allOrders.filter(
       (o) => 
         new Date(o.createdAt) >= range.start && 
         new Date(o.createdAt) <= range.end &&
@@ -280,7 +308,7 @@ const getSalesTimeSeries: RequestHandler = (req, res) => {
     // Group by date
     const dateMap: Record<string, { sales: number; orders: number; customers: Set<string> }> = {};
 
-    orders.forEach((order) => {
+    filteredOrders.forEach((order) => {
       const date = new Date(order.createdAt);
       let key: string;
 
@@ -304,7 +332,7 @@ const getSalesTimeSeries: RequestHandler = (req, res) => {
         dateMap[key] = { sales: 0, orders: 0, customers: new Set() };
       }
 
-      dateMap[key].sales += order.total;
+      dateMap[key].sales += Number(order.total);
       dateMap[key].orders += 1;
       dateMap[key].customers.add(order.userId);
     });
@@ -333,13 +361,14 @@ const getSalesTimeSeries: RequestHandler = (req, res) => {
 };
 
 // GET /api/reports/customers - Get customer analytics
-const getCustomerAnalytics: RequestHandler = (req, res) => {
+const getCustomerAnalytics: RequestHandler = async (req, res) => {
   try {
     const { period = "month" } = req.query;
     const range = getDateRange(period as string);
 
     // Get orders in date range
-    const orders = Array.from(db.orders.values()).filter(
+    const allOrders = await db.select().from(orders);
+    const filteredOrders = allOrders.filter(
       (o) => 
         new Date(o.createdAt) >= range.start && 
         new Date(o.createdAt) <= range.end &&
@@ -354,21 +383,21 @@ const getCustomerAnalytics: RequestHandler = (req, res) => {
       lastOrder: string 
     }> = {};
 
-    orders.forEach((order) => {
+    filteredOrders.forEach((order) => {
       if (!customerMap[order.userId]) {
         customerMap[order.userId] = {
           name: order.customerName,
           orders: 0,
           spent: 0,
-          lastOrder: order.createdAt,
+          lastOrder: order.createdAt.toISOString(),
         };
       }
 
       customerMap[order.userId].orders += 1;
-      customerMap[order.userId].spent += order.total;
+      customerMap[order.userId].spent += Number(order.total);
 
-      if (order.createdAt > customerMap[order.userId].lastOrder) {
-        customerMap[order.userId].lastOrder = order.createdAt;
+      if (order.createdAt.toISOString() > customerMap[order.userId].lastOrder) {
+        customerMap[order.userId].lastOrder = order.createdAt.toISOString();
       }
     });
 
@@ -386,15 +415,15 @@ const getCustomerAnalytics: RequestHandler = (req, res) => {
       .slice(0, 10);
 
     // Customers by emirate
-    const users = Array.from(db.users.values()).filter((u) => u.role === "customer");
+    const allUsers = await db.select().from(users).where(eq(users.role, "customer"));
     const emirateMap: Record<string, number> = {};
 
-    users.forEach((u) => {
+    allUsers.forEach((u) => {
       const emirate = u.emirate || "Unknown";
       emirateMap[emirate] = (emirateMap[emirate] || 0) + 1;
     });
 
-    const totalCustomers = users.length;
+    const totalCustomers = allUsers.length;
     const customersByEmirate = Object.entries(emirateMap)
       .map(([emirate, count]) => ({
         emirate,
@@ -403,8 +432,7 @@ const getCustomerAnalytics: RequestHandler = (req, res) => {
       }))
       .sort((a, b) => b.count - a.count);
 
-    // Customer retention (simplified)
-    const allOrders = Array.from(db.orders.values()).filter((o) => o.status !== "cancelled");
+    // Customer retention
     const returningCustomers = new Set(
       Object.entries(customerMap)
         .filter(([_, data]) => data.orders > 1)
@@ -416,7 +444,7 @@ const getCustomerAnalytics: RequestHandler = (req, res) => {
         period: period as string,
         newCustomers: Object.keys(customerMap).length,
         returningCustomers,
-        churnedCustomers: 0, // Would need historical data to calculate
+        churnedCustomers: 0,
       },
     ];
 
@@ -441,29 +469,32 @@ const getCustomerAnalytics: RequestHandler = (req, res) => {
 };
 
 // GET /api/reports/inventory - Get inventory report
-const getInventoryReport: RequestHandler = (req, res) => {
+const getInventoryReport: RequestHandler = async (req, res) => {
   try {
-    const products = Array.from(db.products.values());
-    const stock = Array.from(db.stock.values());
+    const allProducts = await db.select().from(products);
+    const allStock = await db.select().from(stock);
+    const allMovements = await db.select().from(stockMovements);
+    const allOrders = await db.select().from(orders).where(ne(orders.status, "cancelled"));
+    const allOrderItems = await db.select().from(orderItems);
 
     // Total stock value
     let totalStockValue = 0;
-    stock.forEach((s) => {
-      const product = db.products.get(s.productId);
+    allStock.forEach((s) => {
+      const product = allProducts.find((p) => p.id === s.productId);
       if (product) {
-        totalStockValue += s.quantity * product.costPrice;
+        totalStockValue += toNumber(s.quantity) * toNumber(product.costPrice);
       }
     });
 
     // Low stock items
-    const lowStockItems = stock
-      .filter((s) => s.availableQuantity <= s.lowStockThreshold)
+    const lowStockItems = allStock
+      .filter((s) => toNumber(s.availableQuantity) <= s.lowStockThreshold)
       .map((s) => {
-        const product = db.products.get(s.productId);
+        const product = allProducts.find((p) => p.id === s.productId);
         return {
           productId: s.productId,
           productName: product?.name || "Unknown",
-          currentQuantity: s.availableQuantity,
+          currentQuantity: toNumber(s.availableQuantity),
           threshold: s.lowStockThreshold,
           reorderPoint: s.reorderPoint,
           suggestedReorderQuantity: s.reorderQuantity,
@@ -471,22 +502,21 @@ const getInventoryReport: RequestHandler = (req, res) => {
       })
       .sort((a, b) => a.currentQuantity - b.currentQuantity);
 
-    // Top selling products (from orders)
+    // Top selling products
     const productSales: Record<string, { name: string; quantity: number; sales: number }> = {};
-    const orders = Array.from(db.orders.values()).filter((o) => o.status !== "cancelled");
+    const orderIds = allOrders.map((o) => o.id);
+    const relevantItems = allOrderItems.filter((i) => orderIds.includes(i.orderId));
 
-    orders.forEach((order) => {
-      order.items.forEach((item) => {
-        if (!productSales[item.productId]) {
-          productSales[item.productId] = {
-            name: item.productName,
-            quantity: 0,
-            sales: 0,
-          };
-        }
-        productSales[item.productId].quantity += item.quantity;
-        productSales[item.productId].sales += item.totalPrice;
-      });
+    relevantItems.forEach((item) => {
+      if (!productSales[item.productId]) {
+        productSales[item.productId] = {
+          name: item.productName,
+          quantity: 0,
+          sales: 0,
+        };
+      }
+      productSales[item.productId].quantity += Number(item.quantity);
+      productSales[item.productId].sales += Number(item.totalPrice);
     });
 
     const topSellingProducts = Object.entries(productSales)
@@ -500,27 +530,24 @@ const getInventoryReport: RequestHandler = (req, res) => {
       .sort((a, b) => b.totalQuantity - a.totalQuantity)
       .slice(0, 10);
 
-    // Slow moving products (products with stock but no recent sales)
+    // Slow moving products
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const recentOrders = orders.filter((o) => new Date(o.createdAt) >= thirtyDaysAgo);
-    const recentProductIds = new Set<string>();
+    const recentOrders = allOrders.filter((o) => new Date(o.createdAt) >= thirtyDaysAgo);
+    const recentOrderIds = recentOrders.map((o) => o.id);
+    const recentItems = allOrderItems.filter((i) => recentOrderIds.includes(i.orderId));
+    const recentProductIds = new Set(recentItems.map((i) => i.productId));
 
-    recentOrders.forEach((order) => {
-      order.items.forEach((item) => {
-        recentProductIds.add(item.productId);
-      });
-    });
-
-    const slowMovingProducts = products
+    const slowMovingProducts = allProducts
       .filter((p) => !recentProductIds.has(p.id) && p.isActive)
       .map((p) => {
-        const stockItem = stock.find((s) => s.productId === p.id);
+        const stockItem = allStock.find((s) => s.productId === p.id);
+        const stockQty = stockItem ? toNumber(stockItem.quantity) : 0;
         return {
           productId: p.id,
           productName: p.name,
-          daysSinceLastSale: 30, // Simplified
-          currentStock: stockItem?.quantity || 0,
-          stockValue: (stockItem?.quantity || 0) * p.costPrice,
+          daysSinceLastSale: 30,
+          currentStock: stockQty,
+          stockValue: stockQty * toNumber(p.costPrice),
         };
       })
       .filter((p) => p.currentStock > 0)
@@ -528,15 +555,14 @@ const getInventoryReport: RequestHandler = (req, res) => {
       .slice(0, 10);
 
     // Stock movement summary
-    const movements = db.stockMovements;
     const movementSummary: Record<string, { count: number; quantity: number }> = {};
 
-    movements.forEach((m) => {
+    allMovements.forEach((m) => {
       if (!movementSummary[m.type]) {
         movementSummary[m.type] = { count: 0, quantity: 0 };
       }
       movementSummary[m.type].count += 1;
-      movementSummary[m.type].quantity += m.quantity;
+      movementSummary[m.type].quantity += toNumber(m.quantity);
     });
 
     const stockMovementSummary = Object.entries(movementSummary).map(([type, data]) => ({
@@ -546,7 +572,7 @@ const getInventoryReport: RequestHandler = (req, res) => {
     }));
 
     const report: InventoryReport = {
-      totalProducts: products.length,
+      totalProducts: allProducts.length,
       totalStockValue: Math.round(totalStockValue * 100) / 100,
       lowStockItems,
       topSellingProducts,
@@ -569,7 +595,7 @@ const getInventoryReport: RequestHandler = (req, res) => {
 };
 
 // GET /api/reports/orders - Get orders report
-const getOrdersReport: RequestHandler = (req, res) => {
+const getOrdersReport: RequestHandler = async (req, res) => {
   try {
     const { period = "month", startDate, endDate } = req.query;
 
@@ -585,29 +611,32 @@ const getOrdersReport: RequestHandler = (req, res) => {
       end = range.end;
     }
 
-    const orders = Array.from(db.orders.values()).filter(
+    const allOrders = await db.select().from(orders);
+    const filteredOrders = allOrders.filter(
       (o) => new Date(o.createdAt) >= start && new Date(o.createdAt) <= end
     );
 
     // Status breakdown
     const statusBreakdown = {
-      pending: orders.filter((o) => o.status === "pending").length,
-      confirmed: orders.filter((o) => o.status === "confirmed").length,
-      processing: orders.filter((o) => o.status === "processing").length,
-      outForDelivery: orders.filter((o) => o.status === "out_for_delivery").length,
-      delivered: orders.filter((o) => o.status === "delivered").length,
-      cancelled: orders.filter((o) => o.status === "cancelled").length,
+      pending: filteredOrders.filter((o) => o.status === "pending").length,
+      confirmed: filteredOrders.filter((o) => o.status === "confirmed").length,
+      processing: filteredOrders.filter((o) => o.status === "processing").length,
+      outForDelivery: filteredOrders.filter((o) => o.status === "out_for_delivery").length,
+      delivered: filteredOrders.filter((o) => o.status === "delivered").length,
+      cancelled: filteredOrders.filter((o) => o.status === "cancelled").length,
     };
 
     // Payment method breakdown
     const paymentBreakdown = {
-      card: orders.filter((o) => o.paymentMethod === "card").length,
-      cod: orders.filter((o) => o.paymentMethod === "cod").length,
-      bankTransfer: orders.filter((o) => o.paymentMethod === "bank_transfer").length,
+      card: filteredOrders.filter((o) => o.paymentMethod === "card").length,
+      cod: filteredOrders.filter((o) => o.paymentMethod === "cod").length,
+      bankTransfer: filteredOrders.filter((o) => o.paymentMethod === "bank_transfer").length,
     };
 
     // Delivery performance
-    const deliveredOrders = orders.filter((o) => o.status === "delivered" && o.actualDeliveryAt && o.estimatedDeliveryAt);
+    const deliveredOrders = filteredOrders.filter(
+      (o) => o.status === "delivered" && o.actualDeliveryAt && o.estimatedDeliveryAt
+    );
     let onTimeDeliveries = 0;
     let totalDeliveryTime = 0;
 
@@ -619,7 +648,7 @@ const getOrdersReport: RequestHandler = (req, res) => {
       if (actual <= estimated) {
         onTimeDeliveries++;
       }
-      totalDeliveryTime += (actual - created) / (1000 * 60); // minutes
+      totalDeliveryTime += (actual - created) / (1000 * 60);
     });
 
     const averageDeliveryTime = deliveredOrders.length > 0
@@ -632,17 +661,17 @@ const getOrdersReport: RequestHandler = (req, res) => {
 
     // Source breakdown
     const sourceBreakdown = {
-      web: orders.filter((o) => o.source === "web").length,
-      mobile: orders.filter((o) => o.source === "mobile").length,
-      phone: orders.filter((o) => o.source === "phone").length,
-      admin: orders.filter((o) => o.source === "admin").length,
+      web: filteredOrders.filter((o) => o.source === "web").length,
+      mobile: filteredOrders.filter((o) => o.source === "mobile").length,
+      phone: filteredOrders.filter((o) => o.source === "phone").length,
+      admin: filteredOrders.filter((o) => o.source === "admin").length,
     };
 
     const report = {
       period: period as string,
       startDate: start.toISOString(),
       endDate: end.toISOString(),
-      totalOrders: orders.length,
+      totalOrders: filteredOrders.length,
       statusBreakdown,
       paymentBreakdown,
       sourceBreakdown,
@@ -652,8 +681,8 @@ const getOrdersReport: RequestHandler = (req, res) => {
         onTimeDeliveryRate,
         averageDeliveryTime,
       },
-      cancellationRate: orders.length > 0
-        ? Math.round((statusBreakdown.cancelled / orders.length) * 10000) / 100
+      cancellationRate: filteredOrders.length > 0
+        ? Math.round((statusBreakdown.cancelled / filteredOrders.length) * 10000) / 100
         : 0,
     };
 
@@ -676,35 +705,42 @@ const exportReport: RequestHandler = async (req, res) => {
   try {
     const { reportType, format, startDate, endDate } = req.body;
 
-    // In production, generate actual files (CSV, Excel, PDF)
-    // For now, return JSON data
-
     let data: unknown;
 
     switch (reportType) {
       case "sales":
-        const orders = Array.from(db.orders.values()).filter(
+        const allOrders = await db.select().from(orders);
+        const filteredOrders = allOrders.filter(
           (o) => 
             new Date(o.createdAt) >= new Date(startDate) && 
             new Date(o.createdAt) <= new Date(endDate) &&
             o.status !== "cancelled"
         );
-        data = orders.map((o) => ({
-          orderNumber: o.orderNumber,
-          date: o.createdAt,
-          customer: o.customerName,
-          items: o.items.length,
-          subtotal: o.subtotal,
-          vat: o.vatAmount,
-          total: o.total,
-          paymentMethod: o.paymentMethod,
-          status: o.status,
-        }));
+        
+        const allOrderItems = await db.select().from(orderItems);
+        
+        data = filteredOrders.map((o) => {
+          const items = allOrderItems.filter((i) => i.orderId === o.id);
+          return {
+            orderNumber: o.orderNumber,
+            date: o.createdAt,
+            customer: o.customerName,
+            items: items.length,
+            subtotal: Number(o.subtotal),
+            vat: Number(o.vatAmount),
+            total: Number(o.total),
+            paymentMethod: o.paymentMethod,
+            status: o.status,
+          };
+        });
         break;
 
       case "inventory":
-        data = Array.from(db.stock.values()).map((s) => {
-          const product = db.products.get(s.productId);
+        const allStock = await db.select().from(stock);
+        const allProducts = await db.select().from(products);
+        
+        data = allStock.map((s) => {
+          const product = allProducts.find((p) => p.id === s.productId);
           return {
             productId: s.productId,
             productName: product?.name || "Unknown",
@@ -719,18 +755,18 @@ const exportReport: RequestHandler = async (req, res) => {
         break;
 
       case "customers":
-        data = Array.from(db.users.values())
-          .filter((u) => u.role === "customer")
-          .map((u) => ({
-            id: u.id,
-            name: `${u.firstName} ${u.familyName}`,
-            email: u.email,
-            mobile: u.mobile,
-            emirate: u.emirate,
-            createdAt: u.createdAt,
-            lastLogin: u.lastLoginAt,
-            isActive: u.isActive,
-          }));
+        const allUsers = await db.select().from(users).where(eq(users.role, "customer"));
+        
+        data = allUsers.map((u) => ({
+          id: u.id,
+          name: `${u.firstName} ${u.familyName}`,
+          email: u.email,
+          mobile: u.mobile,
+          emirate: u.emirate,
+          createdAt: u.createdAt,
+          lastLogin: u.lastLoginAt,
+          isActive: u.isActive,
+        }));
         break;
 
       default:
@@ -741,7 +777,6 @@ const exportReport: RequestHandler = async (req, res) => {
         return res.status(400).json(response);
     }
 
-    // In production, generate file and return download URL
     const response: ApiResponse<{ data: unknown; format: string; generatedAt: string }> = {
       success: true,
       data: {

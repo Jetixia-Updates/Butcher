@@ -1,23 +1,27 @@
 /**
  * Delivery and Address Management Routes
- * Address CRUD, delivery zones, and delivery tracking
+ * Address CRUD, delivery zones, and delivery tracking (PostgreSQL version)
  */
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
+import { eq, and } from "drizzle-orm";
 import type { 
   Address, 
-  CreateAddressRequest, 
   DeliveryZone, 
   DeliveryTracking, 
-  AssignDeliveryRequest,
-  CompleteDeliveryRequest,
   ApiResponse 
 } from "@shared/api";
-import { db, generateId } from "../db";
+import { db, addresses, deliveryZones, deliveryTracking, orders, users } from "../db/connection";
 import { sendOrderNotification } from "../services/notifications";
+import { randomUUID } from "crypto";
 
 const router = Router();
+
+// Helper to generate IDs
+function generateId(prefix: string): string {
+  return `${prefix}-${randomUUID().slice(0, 8)}`;
+}
 
 // Validation schemas
 const createAddressSchema = z.object({
@@ -40,24 +44,13 @@ const assignDeliverySchema = z.object({
   orderId: z.string(),
   driverId: z.string(),
   estimatedArrival: z.string().optional(),
-  // Optional order data for when order doesn't exist in server memory
   orderData: z.object({
     orderNumber: z.string(),
     userId: z.string(),
     customerName: z.string(),
     customerEmail: z.string().optional(),
     customerMobile: z.string(),
-    items: z.array(z.object({
-      id: z.string(),
-      productId: z.string(),
-      productName: z.string(),
-      productNameAr: z.string().optional(),
-      sku: z.string().optional(),
-      quantity: z.number(),
-      unitPrice: z.number(),
-      totalPrice: z.number(),
-      notes: z.string().optional(),
-    })),
+    items: z.array(z.any()),
     subtotal: z.number(),
     discount: z.number().optional(),
     deliveryFee: z.number(),
@@ -68,25 +61,7 @@ const assignDeliverySchema = z.object({
     paymentStatus: z.string(),
     paymentMethod: z.enum(["card", "cod", "bank_transfer"]),
     addressId: z.string(),
-    deliveryAddress: z.object({
-      id: z.string().optional(),
-      userId: z.string().optional(),
-      label: z.string().optional(),
-      fullName: z.string(),
-      mobile: z.string(),
-      emirate: z.string(),
-      area: z.string(),
-      street: z.string(),
-      building: z.string(),
-      floor: z.string().optional(),
-      apartment: z.string().optional(),
-      landmark: z.string().optional(),
-      latitude: z.number().optional(),
-      longitude: z.number().optional(),
-      isDefault: z.boolean().optional(),
-      createdAt: z.string().optional(),
-      updatedAt: z.string().optional(),
-    }),
+    deliveryAddress: z.any(),
     deliveryNotes: z.string().optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -98,7 +73,7 @@ const assignDeliverySchema = z.object({
 // =====================================================
 
 // GET /api/addresses - Get all addresses for a user
-const getUserAddresses: RequestHandler = (req, res) => {
+const getUserAddresses: RequestHandler = async (req, res) => {
   try {
     const userId = req.query.userId as string || req.headers["x-user-id"] as string;
 
@@ -110,18 +85,18 @@ const getUserAddresses: RequestHandler = (req, res) => {
       return res.status(400).json(response);
     }
 
-    const addresses = Array.from(db.addresses.values())
-      .filter((a) => a.userId === userId)
-      .sort((a, b) => {
-        // Default address first
-        if (a.isDefault && !b.isDefault) return -1;
-        if (!a.isDefault && b.isDefault) return 1;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
+    const userAddresses = await db.select().from(addresses).where(eq(addresses.userId, userId));
 
-    const response: ApiResponse<Address[]> = {
+    // Sort: default first, then by date
+    userAddresses.sort((a, b) => {
+      if (a.isDefault && !b.isDefault) return -1;
+      if (!a.isDefault && b.isDefault) return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    const response: ApiResponse<typeof userAddresses> = {
       success: true,
-      data: addresses,
+      data: userAddresses,
     };
     res.json(response);
   } catch (error) {
@@ -134,12 +109,12 @@ const getUserAddresses: RequestHandler = (req, res) => {
 };
 
 // GET /api/addresses/:id - Get address by ID
-const getAddressById: RequestHandler = (req, res) => {
+const getAddressById: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const address = db.addresses.get(id);
+    const result = await db.select().from(addresses).where(eq(addresses.id, id));
 
-    if (!address) {
+    if (result.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Address not found",
@@ -147,9 +122,9 @@ const getAddressById: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    const response: ApiResponse<Address> = {
+    const response: ApiResponse<typeof result[0]> = {
       success: true,
-      data: address,
+      data: result[0],
     };
     res.json(response);
   } catch (error) {
@@ -162,7 +137,7 @@ const getAddressById: RequestHandler = (req, res) => {
 };
 
 // POST /api/addresses - Create new address
-const createAddress: RequestHandler = (req, res) => {
+const createAddress: RequestHandler = async (req, res) => {
   try {
     const userId = req.body.userId || req.headers["x-user-id"] as string;
 
@@ -185,17 +160,18 @@ const createAddress: RequestHandler = (req, res) => {
 
     const data = validation.data;
 
-    // If this is the first address or is default, unset other defaults
-    const userAddresses = Array.from(db.addresses.values()).filter((a) => a.userId === userId);
+    // Check if this is the first address or is default
+    const userAddresses = await db.select().from(addresses).where(eq(addresses.userId, userId));
     const isFirstAddress = userAddresses.length === 0;
 
+    // If this is default or first, unset other defaults
     if (data.isDefault || isFirstAddress) {
-      userAddresses.forEach((a) => {
-        a.isDefault = false;
-      });
+      await db.update(addresses)
+        .set({ isDefault: false })
+        .where(eq(addresses.userId, userId));
     }
 
-    const address: Address = {
+    const [newAddress] = await db.insert(addresses).values({
       id: generateId("addr"),
       userId,
       label: data.label,
@@ -211,15 +187,13 @@ const createAddress: RequestHandler = (req, res) => {
       latitude: data.latitude,
       longitude: data.longitude,
       isDefault: data.isDefault || isFirstAddress,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
 
-    db.addresses.set(address.id, address);
-
-    const response: ApiResponse<Address> = {
+    const response: ApiResponse<typeof newAddress> = {
       success: true,
-      data: address,
+      data: newAddress,
       message: "Address created successfully",
     };
     res.status(201).json(response);
@@ -233,12 +207,12 @@ const createAddress: RequestHandler = (req, res) => {
 };
 
 // PUT /api/addresses/:id - Update address
-const updateAddress: RequestHandler = (req, res) => {
+const updateAddress: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const address = db.addresses.get(id);
+    const existing = await db.select().from(addresses).where(eq(addresses.id, id));
 
-    if (!address) {
+    if (existing.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Address not found",
@@ -256,21 +230,23 @@ const updateAddress: RequestHandler = (req, res) => {
     }
 
     const data = validation.data;
+    const address = existing[0];
 
     // Handle default setting
     if (data.isDefault) {
-      const userAddresses = Array.from(db.addresses.values()).filter((a) => a.userId === address.userId);
-      userAddresses.forEach((a) => {
-        if (a.id !== id) a.isDefault = false;
-      });
+      await db.update(addresses)
+        .set({ isDefault: false })
+        .where(and(eq(addresses.userId, address.userId), eq(addresses.id, id)));
     }
 
-    // Update address
-    Object.assign(address, data, { updatedAt: new Date().toISOString() });
+    const [updated] = await db.update(addresses)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(addresses.id, id))
+      .returning();
 
-    const response: ApiResponse<Address> = {
+    const response: ApiResponse<typeof updated> = {
       success: true,
-      data: address,
+      data: updated,
       message: "Address updated successfully",
     };
     res.json(response);
@@ -284,12 +260,12 @@ const updateAddress: RequestHandler = (req, res) => {
 };
 
 // DELETE /api/addresses/:id - Delete address
-const deleteAddress: RequestHandler = (req, res) => {
+const deleteAddress: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const address = db.addresses.get(id);
+    const existing = await db.select().from(addresses).where(eq(addresses.id, id));
 
-    if (!address) {
+    if (existing.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Address not found",
@@ -297,13 +273,16 @@ const deleteAddress: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    db.addresses.delete(id);
+    const address = existing[0];
+    await db.delete(addresses).where(eq(addresses.id, id));
 
     // If deleted address was default, set another as default
     if (address.isDefault) {
-      const userAddresses = Array.from(db.addresses.values()).filter((a) => a.userId === address.userId);
+      const userAddresses = await db.select().from(addresses).where(eq(addresses.userId, address.userId));
       if (userAddresses.length > 0) {
-        userAddresses[0].isDefault = true;
+        await db.update(addresses)
+          .set({ isDefault: true })
+          .where(eq(addresses.id, userAddresses[0].id));
       }
     }
 
@@ -322,12 +301,12 @@ const deleteAddress: RequestHandler = (req, res) => {
 };
 
 // POST /api/addresses/:id/set-default - Set address as default
-const setDefaultAddress: RequestHandler = (req, res) => {
+const setDefaultAddress: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const address = db.addresses.get(id);
+    const existing = await db.select().from(addresses).where(eq(addresses.id, id));
 
-    if (!address) {
+    if (existing.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Address not found",
@@ -335,15 +314,22 @@ const setDefaultAddress: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    // Unset other defaults
-    const userAddresses = Array.from(db.addresses.values()).filter((a) => a.userId === address.userId);
-    userAddresses.forEach((a) => {
-      a.isDefault = a.id === id;
-    });
+    const address = existing[0];
 
-    const response: ApiResponse<Address> = {
+    // Unset other defaults
+    await db.update(addresses)
+      .set({ isDefault: false })
+      .where(eq(addresses.userId, address.userId));
+
+    // Set this one as default
+    const [updated] = await db.update(addresses)
+      .set({ isDefault: true })
+      .where(eq(addresses.id, id))
+      .returning();
+
+    const response: ApiResponse<typeof updated> = {
       success: true,
-      data: address,
+      data: updated,
       message: "Default address updated",
     };
     res.json(response);
@@ -361,10 +347,10 @@ const setDefaultAddress: RequestHandler = (req, res) => {
 // =====================================================
 
 // GET /api/delivery/zones - Get all delivery zones
-const getDeliveryZones: RequestHandler = (req, res) => {
+const getDeliveryZones: RequestHandler = async (req, res) => {
   try {
     const { emirate, activeOnly } = req.query;
-    let zones = Array.from(db.deliveryZones.values());
+    let zones = await db.select().from(deliveryZones);
 
     if (emirate) {
       zones = zones.filter((z) => z.emirate === emirate);
@@ -374,7 +360,7 @@ const getDeliveryZones: RequestHandler = (req, res) => {
       zones = zones.filter((z) => z.isActive);
     }
 
-    const response: ApiResponse<DeliveryZone[]> = {
+    const response: ApiResponse<typeof zones> = {
       success: true,
       data: zones,
     };
@@ -389,12 +375,12 @@ const getDeliveryZones: RequestHandler = (req, res) => {
 };
 
 // GET /api/delivery/zones/:id - Get delivery zone by ID
-const getDeliveryZoneById: RequestHandler = (req, res) => {
+const getDeliveryZoneById: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const zone = db.deliveryZones.get(id);
+    const zones = await db.select().from(deliveryZones).where(eq(deliveryZones.id, id));
 
-    if (!zone) {
+    if (zones.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Delivery zone not found",
@@ -402,9 +388,9 @@ const getDeliveryZoneById: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    const response: ApiResponse<DeliveryZone> = {
+    const response: ApiResponse<typeof zones[0]> = {
       success: true,
-      data: zone,
+      data: zones[0],
     };
     res.json(response);
   } catch (error) {
@@ -417,11 +403,11 @@ const getDeliveryZoneById: RequestHandler = (req, res) => {
 };
 
 // POST /api/delivery/zones - Create delivery zone
-const createDeliveryZone: RequestHandler = (req, res) => {
+const createDeliveryZone: RequestHandler = async (req, res) => {
   try {
     const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive } = req.body;
 
-    const zone: DeliveryZone = {
+    const [zone] = await db.insert(deliveryZones).values({
       id: generateId("zone"),
       name,
       nameAr,
@@ -431,11 +417,9 @@ const createDeliveryZone: RequestHandler = (req, res) => {
       minimumOrder: minimumOrder || 50,
       estimatedMinutes: estimatedMinutes || 60,
       isActive: isActive ?? true,
-    };
+    }).returning();
 
-    db.deliveryZones.set(zone.id, zone);
-
-    const response: ApiResponse<DeliveryZone> = {
+    const response: ApiResponse<typeof zone> = {
       success: true,
       data: zone,
       message: "Delivery zone created",
@@ -451,12 +435,12 @@ const createDeliveryZone: RequestHandler = (req, res) => {
 };
 
 // PUT /api/delivery/zones/:id - Update delivery zone
-const updateDeliveryZone: RequestHandler = (req, res) => {
+const updateDeliveryZone: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const zone = db.deliveryZones.get(id);
+    const zones = await db.select().from(deliveryZones).where(eq(deliveryZones.id, id));
 
-    if (!zone) {
+    if (zones.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Delivery zone not found",
@@ -465,19 +449,25 @@ const updateDeliveryZone: RequestHandler = (req, res) => {
     }
 
     const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive } = req.body;
+    const updateData: Partial<typeof deliveryZones.$inferInsert> = {};
 
-    if (name !== undefined) zone.name = name;
-    if (nameAr !== undefined) zone.nameAr = nameAr;
-    if (emirate !== undefined) zone.emirate = emirate;
-    if (areas !== undefined) zone.areas = areas;
-    if (deliveryFee !== undefined) zone.deliveryFee = deliveryFee;
-    if (minimumOrder !== undefined) zone.minimumOrder = minimumOrder;
-    if (estimatedMinutes !== undefined) zone.estimatedMinutes = estimatedMinutes;
-    if (isActive !== undefined) zone.isActive = isActive;
+    if (name !== undefined) updateData.name = name;
+    if (nameAr !== undefined) updateData.nameAr = nameAr;
+    if (emirate !== undefined) updateData.emirate = emirate;
+    if (areas !== undefined) updateData.areas = areas;
+    if (deliveryFee !== undefined) updateData.deliveryFee = deliveryFee;
+    if (minimumOrder !== undefined) updateData.minimumOrder = minimumOrder;
+    if (estimatedMinutes !== undefined) updateData.estimatedMinutes = estimatedMinutes;
+    if (isActive !== undefined) updateData.isActive = isActive;
 
-    const response: ApiResponse<DeliveryZone> = {
+    const [updated] = await db.update(deliveryZones)
+      .set(updateData)
+      .where(eq(deliveryZones.id, id))
+      .returning();
+
+    const response: ApiResponse<typeof updated> = {
       success: true,
-      data: zone,
+      data: updated,
       message: "Delivery zone updated",
     };
     res.json(response);
@@ -491,7 +481,7 @@ const updateDeliveryZone: RequestHandler = (req, res) => {
 };
 
 // POST /api/delivery/check-availability - Check delivery availability
-const checkDeliveryAvailability: RequestHandler = (req, res) => {
+const checkDeliveryAvailability: RequestHandler = async (req, res) => {
   try {
     const { emirate, area, orderTotal } = req.body;
 
@@ -503,10 +493,15 @@ const checkDeliveryAvailability: RequestHandler = (req, res) => {
       return res.status(400).json(response);
     }
 
-    const zone = Array.from(db.deliveryZones.values()).find(
-      (z) => z.emirate === emirate && z.isActive && (
-        !area || z.areas.some((a) => a.toLowerCase().includes(area.toLowerCase()))
+    const zones = await db.select().from(deliveryZones).where(
+      and(
+        eq(deliveryZones.emirate, emirate),
+        eq(deliveryZones.isActive, true)
       )
+    );
+
+    const zone = zones.find((z) => 
+      !area || z.areas.some((a) => a.toLowerCase().includes(area.toLowerCase()))
     );
 
     if (!zone) {
@@ -520,11 +515,11 @@ const checkDeliveryAvailability: RequestHandler = (req, res) => {
       return res.json(response);
     }
 
-    const meetsMinimum = !orderTotal || orderTotal >= zone.minimumOrder;
+    const meetsMinimum = !orderTotal || orderTotal >= Number(zone.minimumOrder);
 
     const response: ApiResponse<{
       available: boolean;
-      zone: DeliveryZone;
+      zone: typeof zone;
       meetsMinimumOrder: boolean;
       minimumOrderRequired: number;
       message?: string;
@@ -534,7 +529,7 @@ const checkDeliveryAvailability: RequestHandler = (req, res) => {
         available: true,
         zone,
         meetsMinimumOrder: meetsMinimum,
-        minimumOrderRequired: zone.minimumOrder,
+        minimumOrderRequired: Number(zone.minimumOrder),
         message: meetsMinimum
           ? `Delivery available! Fee: AED ${zone.deliveryFee}, Est. time: ${zone.estimatedMinutes} mins`
           : `Minimum order of AED ${zone.minimumOrder} required for delivery`,
@@ -555,10 +550,10 @@ const checkDeliveryAvailability: RequestHandler = (req, res) => {
 // =====================================================
 
 // GET /api/delivery/tracking - Get all trackings (admin) or by order
-const getDeliveryTrackings: RequestHandler = (req, res) => {
+const getDeliveryTrackings: RequestHandler = async (req, res) => {
   try {
     const { orderId, driverId, status } = req.query;
-    let trackings = Array.from(db.deliveryTracking.values());
+    let trackings = await db.select().from(deliveryTracking);
 
     if (orderId) {
       trackings = trackings.filter((t) => t.orderId === orderId);
@@ -575,9 +570,10 @@ const getDeliveryTrackings: RequestHandler = (req, res) => {
     // Sort by creation date (newest first)
     trackings.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // Enrich tracking data with order details for driver dashboard
+    // Enrich tracking data with order details
+    const allOrders = await db.select().from(orders);
     const enrichedTrackings = trackings.map((tracking) => {
-      const order = db.orders.get(tracking.orderId);
+      const order = allOrders.find((o) => o.id === tracking.orderId);
       if (order) {
         return {
           ...tracking,
@@ -585,14 +581,13 @@ const getDeliveryTrackings: RequestHandler = (req, res) => {
           customerMobile: order.customerMobile,
           customerId: order.userId,
           deliveryAddress: order.deliveryAddress,
-          items: order.items.map((item) => ({ name: item.productName, quantity: item.quantity })),
-          total: order.total,
+          total: Number(order.total),
         };
       }
       return tracking;
     });
 
-    const response: ApiResponse<any[]> = {
+    const response: ApiResponse<typeof enrichedTrackings> = {
       success: true,
       data: enrichedTrackings,
     };
@@ -607,12 +602,12 @@ const getDeliveryTrackings: RequestHandler = (req, res) => {
 };
 
 // GET /api/delivery/tracking/:id - Get tracking by ID
-const getTrackingById: RequestHandler = (req, res) => {
+const getTrackingById: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const tracking = db.deliveryTracking.get(id);
+    const trackings = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, id));
 
-    if (!tracking) {
+    if (trackings.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Tracking not found",
@@ -620,9 +615,9 @@ const getTrackingById: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    const response: ApiResponse<DeliveryTracking> = {
+    const response: ApiResponse<typeof trackings[0]> = {
       success: true,
-      data: tracking,
+      data: trackings[0],
     };
     res.json(response);
   } catch (error) {
@@ -635,12 +630,12 @@ const getTrackingById: RequestHandler = (req, res) => {
 };
 
 // GET /api/delivery/tracking/order/:orderNumber - Get tracking by order number
-const getTrackingByOrderNumber: RequestHandler = (req, res) => {
+const getTrackingByOrderNumber: RequestHandler = async (req, res) => {
   try {
     const { orderNumber } = req.params;
-    const tracking = Array.from(db.deliveryTracking.values()).find((t) => t.orderNumber === orderNumber);
+    const trackings = await db.select().from(deliveryTracking).where(eq(deliveryTracking.orderNumber, orderNumber));
 
-    if (!tracking) {
+    if (trackings.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Tracking not found for this order",
@@ -648,9 +643,9 @@ const getTrackingByOrderNumber: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    const response: ApiResponse<DeliveryTracking> = {
+    const response: ApiResponse<typeof trackings[0]> = {
       success: true,
-      data: tracking,
+      data: trackings[0],
     };
     res.json(response);
   } catch (error) {
@@ -663,13 +658,12 @@ const getTrackingByOrderNumber: RequestHandler = (req, res) => {
 };
 
 // GET /api/delivery/tracking/by-order/:orderId - Get tracking by order ID
-const getTrackingByOrderId: RequestHandler = (req, res) => {
+const getTrackingByOrderId: RequestHandler = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const tracking = Array.from(db.deliveryTracking.values()).find((t) => t.orderId === orderId);
+    const trackings = await db.select().from(deliveryTracking).where(eq(deliveryTracking.orderId, orderId));
 
-    if (!tracking) {
-      // Return empty success response instead of error (order may not have tracking yet)
+    if (trackings.length === 0) {
       const response: ApiResponse<null> = {
         success: true,
         data: null,
@@ -677,9 +671,9 @@ const getTrackingByOrderId: RequestHandler = (req, res) => {
       return res.json(response);
     }
 
-    const response: ApiResponse<DeliveryTracking> = {
+    const response: ApiResponse<typeof trackings[0]> = {
       success: true,
-      data: tracking,
+      data: trackings[0],
     };
     res.json(response);
   } catch (error) {
@@ -705,77 +699,11 @@ const assignDelivery: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    const { orderId, driverId, estimatedArrival, orderData } = validation.data;
-    console.log("[ASSIGN DELIVERY] Validated data:", { orderId, driverId, estimatedArrival });
+    const { orderId, driverId, estimatedArrival } = validation.data;
 
-    // Validate or create order
-    let order = db.orders.get(orderId);
-    if (!order && orderData) {
-      // Create order from provided data (for localStorage orders not in server memory)
-      console.log("[ASSIGN DELIVERY] Order not in db, creating from orderData");
-      order = {
-        id: orderId,
-        orderNumber: orderData.orderNumber,
-        userId: orderData.userId,
-        customerName: orderData.customerName,
-        customerEmail: orderData.customerEmail || "",
-        customerMobile: orderData.customerMobile,
-        items: orderData.items.map(item => ({
-          id: item.id,
-          productId: item.productId,
-          productName: item.productName,
-          productNameAr: item.productNameAr,
-          sku: item.sku || "",
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-          notes: item.notes,
-        })),
-        subtotal: orderData.subtotal,
-        discount: orderData.discount || 0,
-        deliveryFee: orderData.deliveryFee,
-        vatAmount: orderData.vatAmount,
-        vatRate: orderData.vatRate || 5,
-        total: orderData.total,
-        status: orderData.status as any,
-        paymentStatus: orderData.paymentStatus as any,
-        paymentMethod: orderData.paymentMethod,
-        addressId: orderData.addressId,
-        deliveryAddress: {
-          id: orderData.deliveryAddress.id || orderData.addressId,
-          userId: orderData.deliveryAddress.userId || orderData.userId,
-          label: orderData.deliveryAddress.label || "Delivery",
-          fullName: orderData.deliveryAddress.fullName,
-          mobile: orderData.deliveryAddress.mobile,
-          emirate: orderData.deliveryAddress.emirate,
-          area: orderData.deliveryAddress.area,
-          street: orderData.deliveryAddress.street,
-          building: orderData.deliveryAddress.building,
-          floor: orderData.deliveryAddress.floor,
-          apartment: orderData.deliveryAddress.apartment,
-          landmark: orderData.deliveryAddress.landmark,
-          latitude: orderData.deliveryAddress.latitude,
-          longitude: orderData.deliveryAddress.longitude,
-          isDefault: orderData.deliveryAddress.isDefault || false,
-          createdAt: orderData.deliveryAddress.createdAt || orderData.createdAt,
-          updatedAt: orderData.deliveryAddress.updatedAt || orderData.updatedAt,
-        },
-        deliveryNotes: orderData.deliveryNotes,
-        source: "web" as const,
-        statusHistory: [{
-          status: orderData.status as any,
-          changedBy: "system",
-          changedAt: orderData.createdAt,
-          notes: "Order synced from client",
-        }],
-        createdAt: orderData.createdAt,
-        updatedAt: orderData.updatedAt,
-      };
-      db.orders.set(orderId, order);
-      console.log("[ASSIGN DELIVERY] Created order in db:", order.orderNumber);
-    }
-    
-    if (!order) {
+    // Validate order exists
+    const orderResults = await db.select().from(orders).where(eq(orders.id, orderId));
+    if (orderResults.length === 0) {
       console.log("[ASSIGN DELIVERY] Order not found:", orderId);
       const response: ApiResponse<null> = {
         success: false,
@@ -783,39 +711,50 @@ const assignDelivery: RequestHandler = async (req, res) => {
       };
       return res.status(404).json(response);
     }
-    console.log("[ASSIGN DELIVERY] Found order:", order.orderNumber);
+
+    const order = orderResults[0];
 
     // Validate driver
-    const driver = db.users.get(driverId);
-    if (!driver || driver.role !== "delivery") {
-      console.log("[ASSIGN DELIVERY] Invalid driver:", driverId, driver?.role);
+    const driverResults = await db.select().from(users).where(eq(users.id, driverId));
+    if (driverResults.length === 0 || driverResults[0].role !== "delivery") {
+      console.log("[ASSIGN DELIVERY] Invalid driver:", driverId);
       const response: ApiResponse<null> = {
         success: false,
         error: "Invalid delivery driver",
       };
       return res.status(400).json(response);
     }
-    console.log("[ASSIGN DELIVERY] Found driver:", driver.firstName, driver.familyName);
+
+    const driver = driverResults[0];
 
     // Check if tracking already exists
-    let tracking = Array.from(db.deliveryTracking.values()).find((t) => t.orderId === orderId);
+    const existingTrackings = await db.select().from(deliveryTracking).where(eq(deliveryTracking.orderId, orderId));
 
-    if (tracking) {
+    let tracking;
+    if (existingTrackings.length > 0) {
       // Update existing tracking
-      tracking.driverId = driverId;
-      tracking.driverName = `${driver.firstName} ${driver.familyName}`;
-      tracking.driverMobile = driver.mobile;
-      tracking.status = "assigned";
-      tracking.estimatedArrival = estimatedArrival || tracking.estimatedArrival;
-      tracking.updatedAt = new Date().toISOString();
-      tracking.timeline.push({
+      const existingTimeline = existingTrackings[0].timeline as any[] || [];
+      existingTimeline.push({
         status: "assigned",
         timestamp: new Date().toISOString(),
         notes: `Assigned to driver: ${driver.firstName}`,
       });
+
+      [tracking] = await db.update(deliveryTracking)
+        .set({
+          driverId,
+          driverName: `${driver.firstName} ${driver.familyName}`,
+          driverMobile: driver.mobile,
+          status: "assigned",
+          estimatedArrival: estimatedArrival ? new Date(estimatedArrival) : existingTrackings[0].estimatedArrival,
+          timeline: existingTimeline,
+          updatedAt: new Date(),
+        })
+        .where(eq(deliveryTracking.id, existingTrackings[0].id))
+        .returning();
     } else {
       // Create new tracking
-      tracking = {
+      [tracking] = await db.insert(deliveryTracking).values({
         id: generateId("track"),
         orderId,
         orderNumber: order.orderNumber,
@@ -823,7 +762,7 @@ const assignDelivery: RequestHandler = async (req, res) => {
         driverName: `${driver.firstName} ${driver.familyName}`,
         driverMobile: driver.mobile,
         status: "assigned",
-        estimatedArrival: estimatedArrival || order.estimatedDeliveryAt,
+        estimatedArrival: estimatedArrival ? new Date(estimatedArrival) : order.estimatedDeliveryAt,
         timeline: [
           {
             status: "assigned",
@@ -831,30 +770,21 @@ const assignDelivery: RequestHandler = async (req, res) => {
             notes: `Order assigned to driver: ${driver.firstName}`,
           },
         ],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      db.deliveryTracking.set(tracking.id, tracking);
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
     }
 
     // Update order status
-    order.status = "out_for_delivery";
-    order.statusHistory.push({
-      status: "out_for_delivery",
-      changedBy: driverId,
-      changedAt: new Date().toISOString(),
-      notes: `Assigned to ${driver.firstName}`,
-    });
-    order.updatedAt = new Date().toISOString();
-
-    // Send notification
-    sendOrderNotification(order, "order_shipped", {
-      driverName: `${driver.firstName}`,
-      driverPhone: driver.mobile,
-    }).catch(console.error);
+    await db.update(orders)
+      .set({
+        status: "out_for_delivery",
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId));
 
     console.log("[ASSIGN DELIVERY] Success! Tracking ID:", tracking.id);
-    const response: ApiResponse<DeliveryTracking> = {
+    const response: ApiResponse<typeof tracking> = {
       success: true,
       data: tracking,
       message: "Delivery assigned successfully",
@@ -871,13 +801,13 @@ const assignDelivery: RequestHandler = async (req, res) => {
 };
 
 // PATCH /api/delivery/tracking/:id/location - Update driver location
-const updateDriverLocation: RequestHandler = (req, res) => {
+const updateDriverLocation: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
     const { latitude, longitude } = req.body;
 
-    const tracking = db.deliveryTracking.get(id);
-    if (!tracking) {
+    const trackings = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, id));
+    if (trackings.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Tracking not found",
@@ -885,16 +815,21 @@ const updateDriverLocation: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    tracking.currentLocation = {
-      latitude,
-      longitude,
-      updatedAt: new Date().toISOString(),
-    };
-    tracking.updatedAt = new Date().toISOString();
+    const [updated] = await db.update(deliveryTracking)
+      .set({
+        currentLocation: {
+          latitude,
+          longitude,
+          updatedAt: new Date().toISOString(),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(deliveryTracking.id, id))
+      .returning();
 
-    const response: ApiResponse<DeliveryTracking> = {
+    const response: ApiResponse<typeof updated> = {
       success: true,
-      data: tracking,
+      data: updated,
     };
     res.json(response);
   } catch (error) {
@@ -912,8 +847,8 @@ const updateDeliveryStatus: RequestHandler = async (req, res) => {
     const { id } = req.params;
     const { status, notes, location } = req.body;
 
-    const tracking = db.deliveryTracking.get(id);
-    if (!tracking) {
+    const trackings = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, id));
+    if (trackings.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Tracking not found",
@@ -921,39 +856,45 @@ const updateDeliveryStatus: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    tracking.status = status;
-    tracking.updatedAt = new Date().toISOString();
-    tracking.timeline.push({
+    const tracking = trackings[0];
+    const timeline = (tracking.timeline as any[]) || [];
+    timeline.push({
       status,
       timestamp: new Date().toISOString(),
       location,
       notes,
     });
 
-    // Update order status if delivered
-    if (status === "delivered") {
-      tracking.actualArrival = new Date().toISOString();
-      const order = db.orders.get(tracking.orderId);
-      if (order) {
-        order.status = "delivered";
-        order.actualDeliveryAt = new Date().toISOString();
-        order.paymentStatus = "captured";
-        order.statusHistory.push({
-          status: "delivered",
-          changedBy: tracking.driverId || "driver",
-          changedAt: new Date().toISOString(),
-          notes: "Delivered successfully",
-        });
-        order.updatedAt = new Date().toISOString();
+    const updateData: any = {
+      status,
+      timeline,
+      updatedAt: new Date(),
+    };
 
-        // Send notification
-        sendOrderNotification(order, "order_delivered").catch(console.error);
-      }
+    if (status === "delivered") {
+      updateData.actualArrival = new Date();
     }
 
-    const response: ApiResponse<DeliveryTracking> = {
+    const [updated] = await db.update(deliveryTracking)
+      .set(updateData)
+      .where(eq(deliveryTracking.id, id))
+      .returning();
+
+    // Update order status if delivered
+    if (status === "delivered") {
+      await db.update(orders)
+        .set({
+          status: "delivered",
+          actualDeliveryAt: new Date(),
+          paymentStatus: "captured",
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, tracking.orderId));
+    }
+
+    const response: ApiResponse<typeof updated> = {
       success: true,
-      data: tracking,
+      data: updated,
       message: `Delivery status updated to ${status}`,
     };
     res.json(response);
@@ -966,15 +907,14 @@ const updateDeliveryStatus: RequestHandler = async (req, res) => {
   }
 };
 
-// POST /api/delivery/tracking/:orderId/update - Update delivery status by order ID (used by driver dashboard)
+// POST /api/delivery/tracking/:orderId/update - Update delivery status by order ID
 const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
   try {
     const { orderId } = req.params;
     const { status, notes, location } = req.body;
 
-    // Find tracking by order ID
-    const tracking = Array.from(db.deliveryTracking.values()).find((t) => t.orderId === orderId);
-    if (!tracking) {
+    const trackings = await db.select().from(deliveryTracking).where(eq(deliveryTracking.orderId, orderId));
+    if (trackings.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Tracking not found for this order",
@@ -982,43 +922,45 @@ const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    tracking.status = status;
-    tracking.updatedAt = new Date().toISOString();
-    tracking.timeline.push({
+    const tracking = trackings[0];
+    const timeline = (tracking.timeline as any[]) || [];
+    timeline.push({
       status,
       timestamp: new Date().toISOString(),
       location,
       notes,
     });
 
-    // Update order status based on delivery tracking status
-    const order = db.orders.get(tracking.orderId);
-    if (order) {
-      // When driver marks as delivered, update order status
-      if (status === "delivered") {
-        tracking.actualArrival = new Date().toISOString();
-        order.status = "delivered";
-        order.actualDeliveryAt = new Date().toISOString();
-        // Only capture payment if it was COD, card payments already captured
-        if (order.paymentMethod === "cod") {
-          order.paymentStatus = "captured";
-        }
-        order.statusHistory.push({
-          status: "delivered",
-          changedBy: tracking.driverId || "driver",
-          changedAt: new Date().toISOString(),
-          notes: notes || "Delivered successfully",
-        });
-        order.updatedAt = new Date().toISOString();
+    const updateData: any = {
+      status,
+      timeline,
+      updatedAt: new Date(),
+    };
 
-        // Send notification
-        sendOrderNotification(order, "order_delivered").catch(console.error);
-      }
+    if (status === "delivered") {
+      updateData.actualArrival = new Date();
     }
 
-    const response: ApiResponse<DeliveryTracking> = {
+    const [updated] = await db.update(deliveryTracking)
+      .set(updateData)
+      .where(eq(deliveryTracking.id, tracking.id))
+      .returning();
+
+    // Update order status if delivered
+    if (status === "delivered") {
+      await db.update(orders)
+        .set({
+          status: "delivered",
+          actualDeliveryAt: new Date(),
+          paymentStatus: "captured",
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, tracking.orderId));
+    }
+
+    const response: ApiResponse<typeof updated> = {
       success: true,
-      data: tracking,
+      data: updated,
       message: `Delivery status updated to ${status}`,
     };
     res.json(response);
@@ -1037,8 +979,8 @@ const completeDelivery: RequestHandler = async (req, res) => {
     const { id } = req.params;
     const { signature, photo, notes } = req.body;
 
-    const tracking = db.deliveryTracking.get(id);
-    if (!tracking) {
+    const trackings = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, id));
+    if (trackings.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Tracking not found",
@@ -1046,41 +988,38 @@ const completeDelivery: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    tracking.status = "delivered";
-    tracking.actualArrival = new Date().toISOString();
-    tracking.deliveryProof = {
-      signature,
-      photo,
-      notes,
-    };
-    tracking.updatedAt = new Date().toISOString();
-    tracking.timeline.push({
+    const tracking = trackings[0];
+    const timeline = (tracking.timeline as any[]) || [];
+    timeline.push({
       status: "delivered",
       timestamp: new Date().toISOString(),
       notes: "Delivery completed with proof",
     });
 
-    // Update order
-    const order = db.orders.get(tracking.orderId);
-    if (order) {
-      order.status = "delivered";
-      order.actualDeliveryAt = new Date().toISOString();
-      order.paymentStatus = "captured";
-      order.statusHistory.push({
+    const [updated] = await db.update(deliveryTracking)
+      .set({
         status: "delivered",
-        changedBy: tracking.driverId || "driver",
-        changedAt: new Date().toISOString(),
-        notes: "Delivered with proof",
-      });
-      order.updatedAt = new Date().toISOString();
+        actualArrival: new Date(),
+        deliveryProof: { signature, photo, notes },
+        timeline,
+        updatedAt: new Date(),
+      })
+      .where(eq(deliveryTracking.id, id))
+      .returning();
 
-      // Send notification
-      sendOrderNotification(order, "order_delivered").catch(console.error);
-    }
+    // Update order
+    await db.update(orders)
+      .set({
+        status: "delivered",
+        actualDeliveryAt: new Date(),
+        paymentStatus: "captured",
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, tracking.orderId));
 
-    const response: ApiResponse<DeliveryTracking> = {
+    const response: ApiResponse<typeof updated> = {
       success: true,
-      data: tracking,
+      data: updated,
       message: "Delivery completed successfully",
     };
     res.json(response);
@@ -1094,19 +1033,26 @@ const completeDelivery: RequestHandler = async (req, res) => {
 };
 
 // GET /api/delivery/drivers - Get all delivery drivers
-const getDeliveryDrivers: RequestHandler = (req, res) => {
+const getDeliveryDrivers: RequestHandler = async (req, res) => {
   try {
-    const drivers = Array.from(db.users.values())
-      .filter((u) => u.role === "delivery" && u.isActive)
-      .map((d) => ({
-        id: d.id,
-        name: `${d.firstName} ${d.familyName}`,
-        mobile: d.mobile,
-        email: d.email,
-        // Count active deliveries
-        activeDeliveries: Array.from(db.deliveryTracking.values())
-          .filter((t) => t.driverId === d.id && !["delivered", "failed"].includes(t.status)).length,
-      }));
+    const allUsers = await db.select().from(users).where(
+      and(
+        eq(users.role, "delivery"),
+        eq(users.isActive, true)
+      )
+    );
+
+    const allTrackings = await db.select().from(deliveryTracking);
+
+    const drivers = allUsers.map((d) => ({
+      id: d.id,
+      name: `${d.firstName} ${d.familyName}`,
+      mobile: d.mobile,
+      email: d.email,
+      activeDeliveries: allTrackings.filter(
+        (t) => t.driverId === d.id && !["delivered", "failed"].includes(t.status)
+      ).length,
+    }));
 
     const response: ApiResponse<typeof drivers> = {
       success: true,
@@ -1139,9 +1085,9 @@ router.put("/zones/:id", updateDeliveryZone);
 router.delete("/zones/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const zone = db.deliveryZones.get(id);
+    const zones = await db.select().from(deliveryZones).where(eq(deliveryZones.id, id));
 
-    if (!zone) {
+    if (zones.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Delivery zone not found",
@@ -1149,7 +1095,7 @@ router.delete("/zones/:id", async (req, res) => {
       return res.status(404).json(response);
     }
 
-    db.deliveryZones.delete(id);
+    await db.delete(deliveryZones).where(eq(deliveryZones.id, id));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -1168,14 +1114,14 @@ router.post("/check-availability", checkDeliveryAvailability);
 
 // Delivery tracking routes
 router.get("/tracking", getDeliveryTrackings);
-router.post("/tracking/assign", assignDelivery); // Specific route before parametric
+router.post("/tracking/assign", assignDelivery);
 router.get("/tracking/by-order/:orderId", getTrackingByOrderId);
 router.get("/tracking/order/:orderNumber", getTrackingByOrderNumber);
-router.post("/tracking/:orderId/update", updateDeliveryStatusByOrderId); // Update by order ID (used by driver dashboard)
+router.post("/tracking/:orderId/update", updateDeliveryStatusByOrderId);
 router.patch("/tracking/:id/location", updateDriverLocation);
 router.patch("/tracking/:id/status", updateDeliveryStatus);
 router.post("/tracking/:id/complete", completeDelivery);
-router.get("/tracking/:id", getTrackingById); // Parametric route last
+router.get("/tracking/:id", getTrackingById);
 
 // Driver routes
 router.get("/drivers", getDeliveryDrivers);

@@ -1,14 +1,19 @@
 /**
  * User Management Routes
- * User CRUD, authentication, and role management
+ * User CRUD, authentication, and role management using PostgreSQL
  */
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
-import type { User, CreateUserRequest, UpdateUserRequest, LoginRequest, LoginResponse, ApiResponse, PaginatedResponse } from "@shared/api";
-import { db, generateId, generateToken } from "../db";
+import { eq, and, or, ilike, desc } from "drizzle-orm";
+import type { User, LoginResponse, ApiResponse, PaginatedResponse } from "@shared/api";
+import { db, users, sessions, addresses } from "../db/connection";
 
 const router = Router();
+
+// Helper to generate unique IDs
+const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+const generateToken = () => `tok_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
 
 // Validation schemas
 const createUserSchema = z.object({
@@ -66,35 +71,57 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(6),
 });
 
-// Helper to exclude password from user
-function sanitizeUser(user: User & { password?: string }): User {
-  const { password, ...userWithoutPassword } = user;
-  return userWithoutPassword as User;
+// Helper to convert DB user to API user (excludes password)
+function toApiUser(dbUser: typeof users.$inferSelect): User {
+  return {
+    id: dbUser.id,
+    username: dbUser.username,
+    email: dbUser.email,
+    mobile: dbUser.mobile,
+    firstName: dbUser.firstName,
+    familyName: dbUser.familyName,
+    role: dbUser.role,
+    isActive: dbUser.isActive,
+    isVerified: dbUser.isVerified,
+    emirate: dbUser.emirate || "",
+    address: dbUser.address || undefined,
+    createdAt: dbUser.createdAt.toISOString(),
+    updatedAt: dbUser.updatedAt.toISOString(),
+    lastLoginAt: dbUser.lastLoginAt?.toISOString(),
+    preferences: (dbUser.preferences as User["preferences"]) || {
+      language: "en",
+      currency: "AED",
+      emailNotifications: true,
+      smsNotifications: true,
+      marketingEmails: true,
+    },
+    permissions: dbUser.permissions as User["permissions"],
+  };
 }
 
 // GET /api/users - Get all users (admin)
-const getUsers: RequestHandler = (req, res) => {
+const getUsers: RequestHandler = async (req, res) => {
   try {
     const { role, isActive, search, page = "1", limit = "20" } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
 
-    let users = Array.from(db.users.values()).map(sanitizeUser);
+    let result = await db.select().from(users).orderBy(desc(users.createdAt));
 
     // Filter by role
     if (role) {
-      users = users.filter((u) => u.role === role);
+      result = result.filter((u) => u.role === role);
     }
 
     // Filter by active status
     if (isActive !== undefined) {
-      users = users.filter((u) => u.isActive === (isActive === "true"));
+      result = result.filter((u) => u.isActive === (isActive === "true"));
     }
 
     // Search by name, email, or mobile
     if (search) {
       const searchLower = (search as string).toLowerCase();
-      users = users.filter((u) =>
+      result = result.filter((u) =>
         u.firstName.toLowerCase().includes(searchLower) ||
         u.familyName.toLowerCase().includes(searchLower) ||
         u.email.toLowerCase().includes(searchLower) ||
@@ -102,14 +129,11 @@ const getUsers: RequestHandler = (req, res) => {
       );
     }
 
-    // Sort by creation date (newest first)
-    users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
     // Pagination
-    const total = users.length;
+    const total = result.length;
     const totalPages = Math.ceil(total / limitNum);
     const startIndex = (pageNum - 1) * limitNum;
-    const paginatedUsers = users.slice(startIndex, startIndex + limitNum);
+    const paginatedUsers = result.slice(startIndex, startIndex + limitNum).map(toApiUser);
 
     const response: PaginatedResponse<User> = {
       success: true,
@@ -123,6 +147,7 @@ const getUsers: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Error fetching users:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to fetch users",
@@ -132,12 +157,12 @@ const getUsers: RequestHandler = (req, res) => {
 };
 
 // GET /api/users/:id - Get user by ID
-const getUserById: RequestHandler = (req, res) => {
+const getUserById: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = db.users.get(id);
+    const result = await db.select().from(users).where(eq(users.id, id));
 
-    if (!user) {
+    if (result.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "User not found",
@@ -147,10 +172,11 @@ const getUserById: RequestHandler = (req, res) => {
 
     const response: ApiResponse<User> = {
       success: true,
-      data: sanitizeUser(user),
+      data: toApiUser(result[0]),
     };
     res.json(response);
   } catch (error) {
+    console.error("Error fetching user:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to fetch user",
@@ -160,7 +186,7 @@ const getUserById: RequestHandler = (req, res) => {
 };
 
 // POST /api/users - Create new user (register)
-const createUser: RequestHandler = (req, res) => {
+const createUser: RequestHandler = async (req, res) => {
   try {
     const validation = createUserSchema.safeParse(req.body);
     if (!validation.success) {
@@ -174,10 +200,8 @@ const createUser: RequestHandler = (req, res) => {
     const data = validation.data;
 
     // Check if username already exists
-    const existingByUsername = Array.from(db.users.values()).find(
-      (u) => u.username?.toLowerCase() === data.username.toLowerCase()
-    );
-    if (existingByUsername) {
+    const existingByUsername = await db.select().from(users).where(eq(users.username, data.username.toLowerCase()));
+    if (existingByUsername.length > 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Username already taken",
@@ -186,10 +210,8 @@ const createUser: RequestHandler = (req, res) => {
     }
 
     // Check if email already exists
-    const existingByEmail = Array.from(db.users.values()).find(
-      (u) => u.email.toLowerCase() === data.email.toLowerCase()
-    );
-    if (existingByEmail) {
+    const existingByEmail = await db.select().from(users).where(eq(users.email, data.email.toLowerCase()));
+    if (existingByEmail.length > 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Email already registered",
@@ -199,10 +221,8 @@ const createUser: RequestHandler = (req, res) => {
 
     // Check if mobile already exists
     const normalizedMobile = data.mobile.replace(/\s/g, "");
-    const existingByMobile = Array.from(db.users.values()).find(
-      (u) => u.mobile.replace(/\s/g, "") === normalizedMobile
-    );
-    if (existingByMobile) {
+    const existingByMobile = await db.select().from(users).where(eq(users.mobile, normalizedMobile));
+    if (existingByMobile.length > 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Phone number already registered",
@@ -210,7 +230,7 @@ const createUser: RequestHandler = (req, res) => {
       return res.status(400).json(response);
     }
 
-    const user: User & { password: string } = {
+    const newUser = {
       id: generateId("user"),
       username: data.username,
       email: data.email,
@@ -218,31 +238,32 @@ const createUser: RequestHandler = (req, res) => {
       password: data.password, // In production, hash the password!
       firstName: data.firstName,
       familyName: data.familyName,
-      role: data.role || "customer",
+      role: data.role || "customer" as const,
       isActive: true,
       isVerified: false,
       emirate: data.emirate,
-      address: data.address,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      address: data.address || null,
       preferences: {
-        language: "en",
-        currency: "AED",
+        language: "en" as const,
+        currency: "AED" as const,
         emailNotifications: true,
         smsNotifications: true,
         marketingEmails: true,
       },
     };
 
-    db.users.set(user.id, user);
+    await db.insert(users).values(newUser);
+
+    const result = await db.select().from(users).where(eq(users.id, newUser.id));
 
     const response: ApiResponse<User> = {
       success: true,
-      data: sanitizeUser(user),
+      data: toApiUser(result[0]),
       message: "User registered successfully",
     };
     res.status(201).json(response);
   } catch (error) {
+    console.error("Error creating user:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to create user",
@@ -252,12 +273,12 @@ const createUser: RequestHandler = (req, res) => {
 };
 
 // PUT /api/users/:id - Update user
-const updateUser: RequestHandler = (req, res) => {
+const updateUser: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = db.users.get(id);
+    const existing = await db.select().from(users).where(eq(users.id, id));
 
-    if (!user) {
+    if (existing.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "User not found",
@@ -277,11 +298,9 @@ const updateUser: RequestHandler = (req, res) => {
     const data = validation.data;
 
     // Check email uniqueness if updating
-    if (data.email && data.email.toLowerCase() !== user.email.toLowerCase()) {
-      const existing = Array.from(db.users.values()).find(
-        (u) => u.id !== id && u.email.toLowerCase() === data.email!.toLowerCase()
-      );
-      if (existing) {
+    if (data.email && data.email.toLowerCase() !== existing[0].email.toLowerCase()) {
+      const emailCheck = await db.select().from(users).where(eq(users.email, data.email.toLowerCase()));
+      if (emailCheck.length > 0) {
         const response: ApiResponse<null> = {
           success: false,
           error: "Email already in use",
@@ -290,30 +309,50 @@ const updateUser: RequestHandler = (req, res) => {
       }
     }
 
-    // Update user fields
-    if (data.email !== undefined) user.email = data.email;
-    if (data.mobile !== undefined) user.mobile = data.mobile;
-    if (data.firstName !== undefined) user.firstName = data.firstName;
-    if (data.familyName !== undefined) user.familyName = data.familyName;
-    if (data.emirate !== undefined) user.emirate = data.emirate;
-    if (data.address !== undefined) user.address = data.address;
-    if (data.role !== undefined) user.role = data.role;
-    if (data.isActive !== undefined) user.isActive = data.isActive;
+    // Build update object
+    const updateData: Partial<typeof users.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.mobile !== undefined) updateData.mobile = data.mobile;
+    if (data.firstName !== undefined) updateData.firstName = data.firstName;
+    if (data.familyName !== undefined) updateData.familyName = data.familyName;
+    if (data.emirate !== undefined) updateData.emirate = data.emirate;
+    if (data.address !== undefined) updateData.address = data.address;
+    if (data.role !== undefined) updateData.role = data.role;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
     // Update preferences
     if (data.preferences) {
-      user.preferences = { ...user.preferences, ...data.preferences };
+      const currentPrefs = existing[0].preferences as User["preferences"] || {
+        language: "en",
+        currency: "AED",
+        emailNotifications: true,
+        smsNotifications: true,
+        marketingEmails: false,
+      };
+      updateData.preferences = { 
+        language: data.preferences.language ?? currentPrefs.language,
+        currency: data.preferences.currency ?? currentPrefs.currency,
+        emailNotifications: data.preferences.emailNotifications ?? currentPrefs.emailNotifications,
+        smsNotifications: data.preferences.smsNotifications ?? currentPrefs.smsNotifications,
+        marketingEmails: data.preferences.marketingEmails ?? currentPrefs.marketingEmails,
+      };
     }
 
-    user.updatedAt = new Date().toISOString();
+    await db.update(users).set(updateData).where(eq(users.id, id));
+
+    const result = await db.select().from(users).where(eq(users.id, id));
 
     const response: ApiResponse<User> = {
       success: true,
-      data: sanitizeUser(user),
+      data: toApiUser(result[0]),
       message: "User updated successfully",
     };
     res.json(response);
   } catch (error) {
+    console.error("Error updating user:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to update user",
@@ -323,12 +362,12 @@ const updateUser: RequestHandler = (req, res) => {
 };
 
 // DELETE /api/users/:id - Deactivate user
-const deleteUser: RequestHandler = (req, res) => {
+const deleteUser: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = db.users.get(id);
+    const existing = await db.select().from(users).where(eq(users.id, id));
 
-    if (!user) {
+    if (existing.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "User not found",
@@ -337,8 +376,10 @@ const deleteUser: RequestHandler = (req, res) => {
     }
 
     // Soft delete - just deactivate
-    user.isActive = false;
-    user.updatedAt = new Date().toISOString();
+    await db.update(users).set({ 
+      isActive: false,
+      updatedAt: new Date(),
+    }).where(eq(users.id, id));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -346,6 +387,7 @@ const deleteUser: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Error deleting user:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to delete user",
@@ -355,7 +397,7 @@ const deleteUser: RequestHandler = (req, res) => {
 };
 
 // POST /api/users/login - Login
-const login: RequestHandler = (req, res) => {
+const login: RequestHandler = async (req, res) => {
   try {
     const validation = loginSchema.safeParse(req.body);
     if (!validation.success) {
@@ -368,10 +410,9 @@ const login: RequestHandler = (req, res) => {
 
     const { username, password } = validation.data;
 
-    // Find user by username
-    const user = Array.from(db.users.values()).find(
-      (u) => u.username?.toLowerCase() === username.toLowerCase()
-    );
+    // Find user by username (case-insensitive)
+    const result = await db.select().from(users);
+    const user = result.find(u => u.username.toLowerCase() === username.toLowerCase());
 
     if (!user) {
       const response: ApiResponse<null> = {
@@ -400,21 +441,23 @@ const login: RequestHandler = (req, res) => {
 
     // Generate token
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Store session
-    db.sessions.set(token, {
+    await db.insert(sessions).values({
+      id: generateId("sess"),
       userId: user.id,
+      token,
       expiresAt,
     });
 
     // Update last login
-    user.lastLoginAt = new Date().toISOString();
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
     const loginResponse: LoginResponse = {
-      user: sanitizeUser(user),
+      user: toApiUser(user),
       token,
-      expiresAt,
+      expiresAt: expiresAt.toISOString(),
     };
 
     const response: ApiResponse<LoginResponse> = {
@@ -424,6 +467,7 @@ const login: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Error logging in:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Login failed",
@@ -433,7 +477,7 @@ const login: RequestHandler = (req, res) => {
 };
 
 // POST /api/users/admin-login - Admin login
-const adminLogin: RequestHandler = (req, res) => {
+const adminLogin: RequestHandler = async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -449,12 +493,12 @@ const adminLogin: RequestHandler = (req, res) => {
     }
 
     // Find admin user by username
-    const allUsers = Array.from(db.users.values());
+    const allUsers = await db.select().from(users);
     console.log("[Admin Login] Total users in DB:", allUsers.length);
     console.log("[Admin Login] Admin users:", allUsers.filter(u => u.role === "admin").map(u => ({ username: u.username, role: u.role })));
     
     const user = allUsers.find(
-      (u) => u.username?.toLowerCase() === username.toLowerCase() && u.role === "admin"
+      (u) => u.username.toLowerCase() === username.toLowerCase() && u.role === "admin"
     );
 
     if (!user) {
@@ -481,21 +525,23 @@ const adminLogin: RequestHandler = (req, res) => {
 
     // Generate token
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(); // 8 hours for admin
+    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours for admin
 
     // Store session
-    db.sessions.set(token, {
+    await db.insert(sessions).values({
+      id: generateId("sess"),
       userId: user.id,
+      token,
       expiresAt,
     });
 
     // Update last login
-    user.lastLoginAt = new Date().toISOString();
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
     const loginResponse: LoginResponse = {
-      user: sanitizeUser(user),
+      user: toApiUser(user),
       token,
-      expiresAt,
+      expiresAt: expiresAt.toISOString(),
     };
 
     const response: ApiResponse<LoginResponse> = {
@@ -505,6 +551,7 @@ const adminLogin: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Error in admin login:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Login failed",
@@ -514,12 +561,12 @@ const adminLogin: RequestHandler = (req, res) => {
 };
 
 // POST /api/users/logout - Logout
-const logout: RequestHandler = (req, res) => {
+const logout: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
 
     if (token) {
-      db.sessions.delete(token);
+      await db.delete(sessions).where(eq(sessions.token, token));
     }
 
     const response: ApiResponse<null> = {
@@ -528,6 +575,7 @@ const logout: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Error logging out:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Logout failed",
@@ -537,7 +585,7 @@ const logout: RequestHandler = (req, res) => {
 };
 
 // GET /api/users/me - Get current user
-const getCurrentUser: RequestHandler = (req, res) => {
+const getCurrentUser: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
 
@@ -549,9 +597,12 @@ const getCurrentUser: RequestHandler = (req, res) => {
       return res.status(401).json(response);
     }
 
-    const session = db.sessions.get(token);
-    if (!session || new Date(session.expiresAt) < new Date()) {
-      db.sessions.delete(token);
+    const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
+    
+    if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
+      if (sessionResult.length > 0) {
+        await db.delete(sessions).where(eq(sessions.token, token));
+      }
       const response: ApiResponse<null> = {
         success: false,
         error: "Session expired",
@@ -559,8 +610,9 @@ const getCurrentUser: RequestHandler = (req, res) => {
       return res.status(401).json(response);
     }
 
-    const user = db.users.get(session.userId);
-    if (!user) {
+    const userResult = await db.select().from(users).where(eq(users.id, sessionResult[0].userId));
+    
+    if (userResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "User not found",
@@ -570,10 +622,11 @@ const getCurrentUser: RequestHandler = (req, res) => {
 
     const response: ApiResponse<User> = {
       success: true,
-      data: sanitizeUser(user),
+      data: toApiUser(userResult[0]),
     };
     res.json(response);
   } catch (error) {
+    console.error("Error getting current user:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to get current user",
@@ -583,7 +636,7 @@ const getCurrentUser: RequestHandler = (req, res) => {
 };
 
 // POST /api/users/:id/change-password - Change password
-const changePassword: RequestHandler = (req, res) => {
+const changePassword: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -598,14 +651,17 @@ const changePassword: RequestHandler = (req, res) => {
 
     const { currentPassword, newPassword } = validation.data;
 
-    const user = db.users.get(id);
-    if (!user) {
+    const userResult = await db.select().from(users).where(eq(users.id, id));
+    
+    if (userResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "User not found",
       };
       return res.status(404).json(response);
     }
+
+    const user = userResult[0];
 
     // Verify current password
     if (user.password !== currentPassword) {
@@ -617,8 +673,10 @@ const changePassword: RequestHandler = (req, res) => {
     }
 
     // Update password
-    user.password = newPassword;
-    user.updatedAt = new Date().toISOString();
+    await db.update(users).set({ 
+      password: newPassword,
+      updatedAt: new Date(),
+    }).where(eq(users.id, id));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -626,6 +684,7 @@ const changePassword: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Error changing password:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to change password",
@@ -635,12 +694,12 @@ const changePassword: RequestHandler = (req, res) => {
 };
 
 // POST /api/users/:id/verify - Verify user (admin)
-const verifyUser: RequestHandler = (req, res) => {
+const verifyUser: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = db.users.get(id);
+    const userResult = await db.select().from(users).where(eq(users.id, id));
 
-    if (!user) {
+    if (userResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "User not found",
@@ -648,16 +707,21 @@ const verifyUser: RequestHandler = (req, res) => {
       return res.status(404).json(response);
     }
 
-    user.isVerified = true;
-    user.updatedAt = new Date().toISOString();
+    await db.update(users).set({ 
+      isVerified: true,
+      updatedAt: new Date(),
+    }).where(eq(users.id, id));
+
+    const result = await db.select().from(users).where(eq(users.id, id));
 
     const response: ApiResponse<User> = {
       success: true,
-      data: sanitizeUser(user),
+      data: toApiUser(result[0]),
       message: "User verified successfully",
     };
     res.json(response);
   } catch (error) {
+    console.error("Error verifying user:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to verify user",
@@ -667,31 +731,31 @@ const verifyUser: RequestHandler = (req, res) => {
 };
 
 // GET /api/users/stats - Get user statistics
-const getUserStats: RequestHandler = (req, res) => {
+const getUserStats: RequestHandler = async (req, res) => {
   try {
-    const users = Array.from(db.users.values());
+    const allUsers = await db.select().from(users);
     const now = new Date();
     const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const stats = {
-      total: users.length,
-      active: users.filter((u) => u.isActive).length,
-      verified: users.filter((u) => u.isVerified).length,
+      total: allUsers.length,
+      active: allUsers.filter((u) => u.isActive).length,
+      verified: allUsers.filter((u) => u.isVerified).length,
       byRole: {
-        customer: users.filter((u) => u.role === "customer").length,
-        admin: users.filter((u) => u.role === "admin").length,
-        staff: users.filter((u) => u.role === "staff").length,
-        delivery: users.filter((u) => u.role === "delivery").length,
+        customer: allUsers.filter((u) => u.role === "customer").length,
+        admin: allUsers.filter((u) => u.role === "admin").length,
+        staff: allUsers.filter((u) => u.role === "staff").length,
+        delivery: allUsers.filter((u) => u.role === "delivery").length,
       },
       byEmirate: {} as Record<string, number>,
-      newThisMonth: users.filter((u) => new Date(u.createdAt) >= monthAgo).length,
-      activeThisMonth: users.filter(
+      newThisMonth: allUsers.filter((u) => new Date(u.createdAt) >= monthAgo).length,
+      activeThisMonth: allUsers.filter(
         (u) => u.lastLoginAt && new Date(u.lastLoginAt) >= monthAgo
       ).length,
     };
 
     // Count by emirate
-    users.forEach((u) => {
+    allUsers.forEach((u) => {
       const emirate = u.emirate || "Unknown";
       stats.byEmirate[emirate] = (stats.byEmirate[emirate] || 0) + 1;
     });
@@ -702,6 +766,7 @@ const getUserStats: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Error getting user stats:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to fetch user stats",

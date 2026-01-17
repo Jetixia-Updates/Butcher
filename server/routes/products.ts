@@ -1,14 +1,18 @@
 /**
  * Products Routes
- * CRUD operations for products
+ * CRUD operations for products using PostgreSQL
  */
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import type { Product, ApiResponse } from "@shared/api";
-import { db, generateId } from "../db";
+import { db, products } from "../db/connection";
 
 const router = Router();
+
+// Helper to generate unique ID
+const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // Validation schemas
 const createProductSchema = z.object({
@@ -32,50 +36,77 @@ const createProductSchema = z.object({
 
 const updateProductSchema = createProductSchema.partial();
 
+// Helper to convert DB product to API product
+function toApiProduct(dbProduct: typeof products.$inferSelect): Product {
+  return {
+    id: dbProduct.id,
+    name: dbProduct.name,
+    nameAr: dbProduct.nameAr || undefined,
+    sku: dbProduct.sku,
+    barcode: dbProduct.barcode || undefined,
+    price: parseFloat(dbProduct.price),
+    costPrice: parseFloat(dbProduct.costPrice),
+    category: dbProduct.category,
+    description: dbProduct.description || "",
+    descriptionAr: dbProduct.descriptionAr || undefined,
+    image: dbProduct.image || undefined,
+    unit: dbProduct.unit,
+    minOrderQuantity: parseFloat(dbProduct.minOrderQuantity),
+    maxOrderQuantity: parseFloat(dbProduct.maxOrderQuantity),
+    isActive: dbProduct.isActive,
+    isFeatured: dbProduct.isFeatured,
+    tags: (dbProduct.tags as string[]) || [],
+    createdAt: dbProduct.createdAt.toISOString(),
+    updatedAt: dbProduct.updatedAt.toISOString(),
+  };
+}
+
 // GET /api/products - Get all products
-const getProducts: RequestHandler = (req, res) => {
+const getProducts: RequestHandler = async (req, res) => {
   try {
     const { category, active, featured, search } = req.query;
 
-    let products = Array.from(db.products.values());
+    let result = await db.select().from(products);
 
     // Filter by category
     if (category) {
-      products = products.filter(
+      result = result.filter(
         (p) => p.category.toLowerCase() === (category as string).toLowerCase()
       );
     }
 
     // Filter by active status
     if (active !== undefined) {
-      products = products.filter((p) => p.isActive === (active === "true"));
+      result = result.filter((p) => p.isActive === (active === "true"));
     }
 
     // Filter by featured
     if (featured !== undefined) {
-      products = products.filter((p) => p.isFeatured === (featured === "true"));
+      result = result.filter((p) => p.isFeatured === (featured === "true"));
     }
 
     // Search by name or description
     if (search) {
       const searchLower = (search as string).toLowerCase();
-      products = products.filter(
+      result = result.filter(
         (p) =>
           p.name.toLowerCase().includes(searchLower) ||
-          p.description.toLowerCase().includes(searchLower) ||
+          (p.description && p.description.toLowerCase().includes(searchLower)) ||
           (p.nameAr && p.nameAr.includes(search as string))
       );
     }
 
-    // Sort by name
-    products.sort((a, b) => a.name.localeCompare(b.name));
+    // Convert to API format and sort
+    const apiProducts = result.map(toApiProduct);
+    apiProducts.sort((a, b) => a.name.localeCompare(b.name));
 
     const response: ApiResponse<Product[]> = {
       success: true,
-      data: products,
+      data: apiProducts,
     };
     res.json(response);
   } catch (error) {
+    console.error("Error fetching products:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to fetch products",
@@ -85,12 +116,12 @@ const getProducts: RequestHandler = (req, res) => {
 };
 
 // GET /api/products/:id - Get product by ID
-const getProductById: RequestHandler = (req, res) => {
+const getProductById: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const product = db.products.get(id);
+    const result = await db.select().from(products).where(eq(products.id, id));
 
-    if (!product) {
+    if (result.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Product not found",
@@ -100,10 +131,11 @@ const getProductById: RequestHandler = (req, res) => {
 
     const response: ApiResponse<Product> = {
       success: true,
-      data: product,
+      data: toApiProduct(result[0]),
     };
     res.json(response);
   } catch (error) {
+    console.error("Error fetching product:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to fetch product",
@@ -113,7 +145,7 @@ const getProductById: RequestHandler = (req, res) => {
 };
 
 // POST /api/products - Create new product
-const createProduct: RequestHandler = (req, res) => {
+const createProduct: RequestHandler = async (req, res) => {
   try {
     const validation = createProductSchema.safeParse(req.body);
     if (!validation.success) {
@@ -127,10 +159,8 @@ const createProduct: RequestHandler = (req, res) => {
     const data = validation.data;
 
     // Check if SKU already exists
-    const existingBySku = Array.from(db.products.values()).find(
-      (p) => p.sku.toLowerCase() === data.sku.toLowerCase()
-    );
-    if (existingBySku) {
+    const existing = await db.select().from(products).where(eq(products.sku, data.sku));
+    if (existing.length > 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "A product with this SKU already exists",
@@ -138,37 +168,38 @@ const createProduct: RequestHandler = (req, res) => {
       return res.status(400).json(response);
     }
 
-    const product: Product = {
+    const newProduct = {
       id: generateId("prod"),
       name: data.name,
-      nameAr: data.nameAr,
+      nameAr: data.nameAr || null,
       sku: data.sku,
-      barcode: data.barcode,
-      price: data.price,
-      costPrice: data.costPrice || 0,
+      barcode: data.barcode || null,
+      price: String(data.price),
+      costPrice: String(data.costPrice || 0),
       category: data.category,
       description: data.description,
-      descriptionAr: data.descriptionAr,
-      image: data.image,
-      unit: data.unit || "kg",
-      minOrderQuantity: data.minOrderQuantity || 0.25,
-      maxOrderQuantity: data.maxOrderQuantity || 10,
+      descriptionAr: data.descriptionAr || null,
+      image: data.image || null,
+      unit: data.unit || "kg" as const,
+      minOrderQuantity: String(data.minOrderQuantity || 0.25),
+      maxOrderQuantity: String(data.maxOrderQuantity || 10),
       isActive: data.isActive ?? true,
       isFeatured: data.isFeatured ?? false,
       tags: data.tags || [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
 
-    db.products.set(product.id, product);
+    await db.insert(products).values(newProduct);
+
+    const result = await db.select().from(products).where(eq(products.id, newProduct.id));
 
     const response: ApiResponse<Product> = {
       success: true,
-      data: product,
+      data: toApiProduct(result[0]),
       message: "Product created successfully",
     };
     res.status(201).json(response);
   } catch (error) {
+    console.error("Error creating product:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to create product",
@@ -178,12 +209,12 @@ const createProduct: RequestHandler = (req, res) => {
 };
 
 // PUT /api/products/:id - Update product
-const updateProduct: RequestHandler = (req, res) => {
+const updateProduct: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const product = db.products.get(id);
-
-    if (!product) {
+    
+    const existing = await db.select().from(products).where(eq(products.id, id));
+    if (existing.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Product not found",
@@ -203,11 +234,9 @@ const updateProduct: RequestHandler = (req, res) => {
     const data = validation.data;
 
     // Check SKU uniqueness if updating
-    if (data.sku && data.sku.toLowerCase() !== product.sku.toLowerCase()) {
-      const existing = Array.from(db.products.values()).find(
-        (p) => p.id !== id && p.sku.toLowerCase() === data.sku.toLowerCase()
-      );
-      if (existing) {
+    if (data.sku && data.sku.toLowerCase() !== existing[0].sku.toLowerCase()) {
+      const skuCheck = await db.select().from(products).where(eq(products.sku, data.sku));
+      if (skuCheck.length > 0 && skuCheck[0].id !== id) {
         const response: ApiResponse<null> = {
           success: false,
           error: "A product with this SKU already exists",
@@ -216,33 +245,40 @@ const updateProduct: RequestHandler = (req, res) => {
       }
     }
 
-    // Update product fields
-    if (data.name !== undefined) product.name = data.name;
-    if (data.nameAr !== undefined) product.nameAr = data.nameAr;
-    if (data.sku !== undefined) product.sku = data.sku;
-    if (data.barcode !== undefined) product.barcode = data.barcode;
-    if (data.price !== undefined) product.price = data.price;
-    if (data.costPrice !== undefined) product.costPrice = data.costPrice;
-    if (data.category !== undefined) product.category = data.category;
-    if (data.description !== undefined) product.description = data.description;
-    if (data.descriptionAr !== undefined) product.descriptionAr = data.descriptionAr;
-    if (data.image !== undefined) product.image = data.image;
-    if (data.unit !== undefined) product.unit = data.unit;
-    if (data.minOrderQuantity !== undefined) product.minOrderQuantity = data.minOrderQuantity;
-    if (data.maxOrderQuantity !== undefined) product.maxOrderQuantity = data.maxOrderQuantity;
-    if (data.isActive !== undefined) product.isActive = data.isActive;
-    if (data.isFeatured !== undefined) product.isFeatured = data.isFeatured;
-    if (data.tags !== undefined) product.tags = data.tags;
+    // Build update object
+    const updateData: Partial<typeof products.$inferInsert> = {
+      updatedAt: new Date(),
+    };
 
-    product.updatedAt = new Date().toISOString();
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.nameAr !== undefined) updateData.nameAr = data.nameAr;
+    if (data.sku !== undefined) updateData.sku = data.sku;
+    if (data.barcode !== undefined) updateData.barcode = data.barcode;
+    if (data.price !== undefined) updateData.price = String(data.price);
+    if (data.costPrice !== undefined) updateData.costPrice = String(data.costPrice);
+    if (data.category !== undefined) updateData.category = data.category;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.descriptionAr !== undefined) updateData.descriptionAr = data.descriptionAr;
+    if (data.image !== undefined) updateData.image = data.image;
+    if (data.unit !== undefined) updateData.unit = data.unit;
+    if (data.minOrderQuantity !== undefined) updateData.minOrderQuantity = String(data.minOrderQuantity);
+    if (data.maxOrderQuantity !== undefined) updateData.maxOrderQuantity = String(data.maxOrderQuantity);
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured;
+    if (data.tags !== undefined) updateData.tags = data.tags;
+
+    await db.update(products).set(updateData).where(eq(products.id, id));
+
+    const result = await db.select().from(products).where(eq(products.id, id));
 
     const response: ApiResponse<Product> = {
       success: true,
-      data: product,
+      data: toApiProduct(result[0]),
       message: "Product updated successfully",
     };
     res.json(response);
   } catch (error) {
+    console.error("Error updating product:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to update product",
@@ -251,13 +287,13 @@ const updateProduct: RequestHandler = (req, res) => {
   }
 };
 
-// DELETE /api/products/:id - Delete product
-const deleteProduct: RequestHandler = (req, res) => {
+// DELETE /api/products/:id - Delete product (soft delete)
+const deleteProduct: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const product = db.products.get(id);
-
-    if (!product) {
+    
+    const existing = await db.select().from(products).where(eq(products.id, id));
+    if (existing.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Product not found",
@@ -266,8 +302,10 @@ const deleteProduct: RequestHandler = (req, res) => {
     }
 
     // Soft delete - just deactivate
-    product.isActive = false;
-    product.updatedAt = new Date().toISOString();
+    await db.update(products).set({ 
+      isActive: false,
+      updatedAt: new Date(),
+    }).where(eq(products.id, id));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -275,6 +313,7 @@ const deleteProduct: RequestHandler = (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("Error deleting product:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to delete product",
