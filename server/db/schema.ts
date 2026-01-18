@@ -474,6 +474,25 @@ export const notifications = pgTable("notifications", {
 });
 
 // =====================================================
+// IN-APP NOTIFICATIONS TABLE (for real-time cross-device sync)
+// =====================================================
+
+export const inAppNotifications = pgTable("in_app_notifications", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(), // Can be a user ID or "admin" for admin notifications
+  type: varchar("type", { length: 50 }).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  titleAr: varchar("title_ar", { length: 200 }).notNull(),
+  message: text("message").notNull(),
+  messageAr: text("message_ar").notNull(),
+  link: text("link"),
+  linkTab: varchar("link_tab", { length: 50 }),
+  linkId: text("link_id"),
+  unread: boolean("unread").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// =====================================================
 // SUPPLIERS TABLE
 // =====================================================
 

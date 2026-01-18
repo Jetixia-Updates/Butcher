@@ -1017,3 +1017,60 @@ export const financeApi = {
       body: JSON.stringify({ statementBalance, reconciliationDate }),
     }),
 };
+
+// =====================================================
+// NOTIFICATIONS API
+// =====================================================
+
+export interface InAppNotification {
+  id: string;
+  userId: string;
+  type: "order" | "stock" | "delivery" | "payment" | "system";
+  title: string;
+  titleAr: string;
+  message: string;
+  messageAr: string;
+  link?: string | null;
+  linkTab?: string | null;
+  linkId?: string | null;
+  unread: boolean;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  // Get all notifications for current user
+  getAll: () => fetchApi<InAppNotification[]>("/notifications"),
+
+  // Create a notification for a user (used by admin/system)
+  create: (data: {
+    userId: string;
+    type: "order" | "stock" | "delivery" | "payment" | "system";
+    title: string;
+    titleAr: string;
+    message: string;
+    messageAr: string;
+    link?: string;
+    linkTab?: string;
+    linkId?: string;
+  }) =>
+    fetchApi<InAppNotification>("/notifications", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Mark a notification as read
+  markAsRead: (id: string) =>
+    fetchApi<null>(`/notifications/${id}/read`, { method: "PATCH" }),
+
+  // Mark all notifications as read
+  markAllAsRead: () =>
+    fetchApi<null>("/notifications/read-all", { method: "PATCH" }),
+
+  // Delete a notification
+  delete: (id: string) =>
+    fetchApi<null>(`/notifications/${id}`, { method: "DELETE" }),
+
+  // Clear all notifications
+  clearAll: () =>
+    fetchApi<null>("/notifications", { method: "DELETE" }),
+};

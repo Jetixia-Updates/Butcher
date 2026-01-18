@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./AuthContext";
+import { notificationsApi, InAppNotification } from "@/lib/api";
 
 export type NotificationType = "order" | "stock" | "delivery" | "payment" | "system";
 
@@ -10,9 +11,9 @@ export interface Notification {
   titleAr: string;
   message: string;
   messageAr: string;
-  link?: string; // Optional link to navigate to
-  linkTab?: string; // Optional admin tab to navigate to
-  linkId?: string; // Optional ID (e.g., orderId, productId) to navigate to
+  link?: string | null; // Optional link to navigate to
+  linkTab?: string | null; // Optional admin tab to navigate to
+  linkId?: string | null; // Optional ID (e.g., orderId, productId) to navigate to
   unread: boolean;
   createdAt: string;
   userId?: string; // Optional user ID for user-specific notifications
@@ -28,14 +29,15 @@ interface NotificationContextType {
   markAllAsRead: () => void;
   deleteNotification: (id: string) => void;
   clearAllNotifications: () => void;
+  refreshNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const ADMIN_STORAGE_KEY = "butcher_admin_notifications";
-const USER_STORAGE_KEY_PREFIX = "butcher_user_notifications_";
+// Admin user ID constant for admin notifications
+const ADMIN_USER_ID = "admin";
 
-// Helper to generate unique ID
+// Helper to generate unique ID (for local fallback)
 const generateId = () => `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // Helper to format relative time
@@ -63,202 +65,209 @@ export function formatRelativeTime(dateString: string, language: "en" | "ar" = "
   }
 }
 
-export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isAdmin } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+// Convert API notification to local Notification type
+function toNotification(apiNotif: InAppNotification): Notification {
+  return {
+    id: apiNotif.id,
+    type: apiNotif.type,
+    title: apiNotif.title,
+    titleAr: apiNotif.titleAr,
+    message: apiNotif.message,
+    messageAr: apiNotif.messageAr,
+    link: apiNotif.link,
+    linkTab: apiNotif.linkTab,
+    linkId: apiNotif.linkId,
+    unread: apiNotif.unread,
+    createdAt: typeof apiNotif.createdAt === 'string' ? apiNotif.createdAt : new Date(apiNotif.createdAt).toISOString(),
+    userId: apiNotif.userId,
+  };
+}
 
-  // Get appropriate storage key based on user role
-  const getStorageKey = useCallback(() => {
+export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isAdmin, isLoggedIn } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get user ID for notifications
+  const getUserId = useCallback(() => {
     if (isAdmin) {
-      return ADMIN_STORAGE_KEY;
+      return ADMIN_USER_ID;
     }
-    if (user?.id) {
-      return `${USER_STORAGE_KEY_PREFIX}${user.id}`;
-    }
-    return null;
+    return user?.id || null;
   }, [isAdmin, user?.id]);
 
-  // Load notifications from localStorage on mount or user change
-  useEffect(() => {
-    const storageKey = getStorageKey();
-    if (!storageKey) {
+  // Fetch notifications from API
+  const fetchNotifications = useCallback(async () => {
+    const userId = getUserId();
+    if (!userId || !isLoggedIn) {
       setNotifications([]);
       return;
     }
 
     try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Notification[];
-        // Sort by date (newest first) and limit to 50
-        const sorted = parsed.sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        ).slice(0, 50);
+      const response = await notificationsApi.getAll();
+      if (response.success && response.data) {
+        const sorted = response.data
+          .map(toNotification)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setNotifications(sorted);
-      } else {
-        setNotifications([]);
       }
-    } catch {
-      setNotifications([]);
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
     }
-  }, [getStorageKey]);
+  }, [getUserId, isLoggedIn]);
 
-  // Listen for storage events to sync notifications across tabs
+  // Public refresh method
+  const refreshNotifications = useCallback(async () => {
+    await fetchNotifications();
+  }, [fetchNotifications]);
+
+  // Load notifications on mount and when user changes
   useEffect(() => {
-    const storageKey = getStorageKey();
-    if (!storageKey) return;
+    fetchNotifications();
+  }, [fetchNotifications]);
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === storageKey && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue) as Notification[];
-          const sorted = parsed.sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          ).slice(0, 50);
-          setNotifications(sorted);
-        } catch {
-          // Ignore parsing errors
-        }
+  // Poll for new notifications every 5 seconds (works on both web and mobile)
+  useEffect(() => {
+    const userId = getUserId();
+    if (!userId || !isLoggedIn) {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Start polling
+    pollingIntervalRef.current = setInterval(() => {
+      fetchNotifications();
+    }, 5000);
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
     };
+  }, [getUserId, isLoggedIn, fetchNotifications]);
 
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, [getStorageKey]);
-
-  // Track the last known localStorage state for comparison
-  const [lastStorageState, setLastStorageState] = useState<string>("");
-
-  // Poll for new notifications periodically (for same-tab and mobile scenarios)
-  useEffect(() => {
-    const storageKey = getStorageKey();
-    if (!storageKey) return;
-
-    const checkForNewNotifications = () => {
-      try {
-        const stored = localStorage.getItem(storageKey);
-        const storedValue = stored || "[]";
-        
-        // Compare the entire storage state to detect any changes (including mark as read)
-        if (storedValue !== lastStorageState) {
-          const parsed = JSON.parse(storedValue) as Notification[];
-          const sorted = parsed.sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          ).slice(0, 50);
-          
-          setNotifications(sorted);
-          setLastStorageState(storedValue);
-        }
-      } catch {
-        // Ignore errors
-      }
-    };
-
-    // Poll every 2 seconds for all users to catch notification updates on mobile
-    const intervalId = setInterval(checkForNewNotifications, 2000);
-    return () => clearInterval(intervalId);
-  }, [getStorageKey, lastStorageState]);
-
-  // Update lastStorageState when notifications change from local actions
-  useEffect(() => {
-    const storageKey = getStorageKey();
-    if (!storageKey) return;
+  // Add notification for current user
+  const addNotification = useCallback(async (notification: Omit<Notification, "id" | "createdAt" | "unread">) => {
+    const userId = getUserId();
+    if (!userId) return;
 
     try {
-      const currentState = localStorage.getItem(storageKey) || "[]";
-      setLastStorageState(currentState);
-    } catch {
-      // Ignore errors
+      const response = await notificationsApi.create({
+        userId,
+        type: notification.type,
+        title: notification.title,
+        titleAr: notification.titleAr,
+        message: notification.message,
+        messageAr: notification.messageAr,
+        link: notification.link || undefined,
+        linkTab: notification.linkTab || undefined,
+        linkId: notification.linkId || undefined,
+      });
+
+      if (response.success && response.data) {
+        setNotifications((prev) => [toNotification(response.data!), ...prev].slice(0, 50));
+      }
+    } catch (error) {
+      console.error("Failed to add notification:", error);
     }
-  }, [notifications, getStorageKey]);
-
-  // Save to localStorage whenever notifications change
-  useEffect(() => {
-    const storageKey = getStorageKey();
-    if (!storageKey) return;
-
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(notifications));
-    } catch {
-      // Ignore storage errors
-    }
-  }, [notifications, getStorageKey]);
-
-  // Add notification for current user/admin
-  const addNotification = useCallback((notification: Omit<Notification, "id" | "createdAt" | "unread">) => {
-    const newNotification: Notification = {
-      ...notification,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-      unread: true,
-    };
-
-    setNotifications((prev) => {
-      const updated = [newNotification, ...prev];
-      return updated.slice(0, 50);
-    });
-  }, []);
+  }, [getUserId]);
 
   // Add notification for a specific user (called from admin actions)
-  const addUserNotification = useCallback((userId: string, notification: Omit<Notification, "id" | "createdAt" | "unread" | "userId">) => {
-    const storageKey = `${USER_STORAGE_KEY_PREFIX}${userId}`;
-    
+  const addUserNotification = useCallback(async (userId: string, notification: Omit<Notification, "id" | "createdAt" | "unread" | "userId">) => {
     try {
-      const stored = localStorage.getItem(storageKey);
-      const existing = stored ? JSON.parse(stored) as Notification[] : [];
-      
-      const newNotification: Notification = {
-        ...notification,
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-        unread: true,
+      await notificationsApi.create({
         userId,
-      };
-      
-      const updated = [newNotification, ...existing].slice(0, 50);
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-    } catch {
-      // Ignore storage errors
+        type: notification.type,
+        title: notification.title,
+        titleAr: notification.titleAr,
+        message: notification.message,
+        messageAr: notification.messageAr,
+        link: notification.link || undefined,
+        linkTab: notification.linkTab || undefined,
+        linkId: notification.linkId || undefined,
+      });
+    } catch (error) {
+      console.error("Failed to add user notification:", error);
     }
   }, []);
 
-  // Add notification to admin storage (called from customer actions like placing an order)
-  const addAdminNotification = useCallback((notification: Omit<Notification, "id" | "createdAt" | "unread">) => {
+  // Add notification to admin (called from customer actions like placing an order)
+  const addAdminNotification = useCallback(async (notification: Omit<Notification, "id" | "createdAt" | "unread">) => {
     try {
-      const stored = localStorage.getItem(ADMIN_STORAGE_KEY);
-      const existing = stored ? JSON.parse(stored) as Notification[] : [];
-      
-      const newNotification: Notification = {
-        ...notification,
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-        unread: true,
-      };
-      
-      const updated = [newNotification, ...existing].slice(0, 50);
-      localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(updated));
-    } catch {
-      // Ignore storage errors
+      await notificationsApi.create({
+        userId: ADMIN_USER_ID,
+        type: notification.type,
+        title: notification.title,
+        titleAr: notification.titleAr,
+        message: notification.message,
+        messageAr: notification.messageAr,
+        link: notification.link || undefined,
+        linkTab: notification.linkTab || undefined,
+        linkId: notification.linkId || undefined,
+      });
+    } catch (error) {
+      console.error("Failed to add admin notification:", error);
     }
   }, []);
 
-  const markAsRead = useCallback((id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
+    // Optimistic update
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, unread: false } : n))
     );
-  }, []);
 
-  const markAllAsRead = useCallback(() => {
+    try {
+      await notificationsApi.markAsRead(id);
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+      // Refresh to get actual state
+      fetchNotifications();
+    }
+  }, [fetchNotifications]);
+
+  const markAllAsRead = useCallback(async () => {
+    // Optimistic update
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
-  }, []);
 
-  const deleteNotification = useCallback((id: string) => {
+    try {
+      await notificationsApi.markAllAsRead();
+    } catch (error) {
+      console.error("Failed to mark all as read:", error);
+      // Refresh to get actual state
+      fetchNotifications();
+    }
+  }, [fetchNotifications]);
+
+  const deleteNotification = useCallback(async (id: string) => {
+    // Optimistic update
     setNotifications((prev) => prev.filter((n) => n.id !== id));
-  }, []);
 
-  const clearAllNotifications = useCallback(() => {
+    try {
+      await notificationsApi.delete(id);
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
+      // Refresh to get actual state
+      fetchNotifications();
+    }
+  }, [fetchNotifications]);
+
+  const clearAllNotifications = useCallback(async () => {
+    // Optimistic update
     setNotifications([]);
-  }, []);
+
+    try {
+      await notificationsApi.clearAll();
+    } catch (error) {
+      console.error("Failed to clear notifications:", error);
+      // Refresh to get actual state
+      fetchNotifications();
+    }
+  }, [fetchNotifications]);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
@@ -274,6 +283,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         markAllAsRead,
         deleteNotification,
         clearAllNotifications,
+        refreshNotifications,
       }}
     >
       {children}

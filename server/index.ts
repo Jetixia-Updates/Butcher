@@ -14,6 +14,7 @@ import analyticsRouter from "./routes/analytics";
 import productsRouter from "./routes/products";
 import suppliersRouter from "./routes/suppliers";
 import financeRouter from "./routes/finance";
+import notificationsRouter from "./routes/notifications";
 
 export function createServer() {
   const app = express();
@@ -150,6 +151,15 @@ export function createServer() {
   // GET /api/finance/reports/cash-flow - Cash flow report
   // GET /api/finance/reports/vat - VAT report
   app.use("/api/finance", financeRouter);
+
+  // In-App Notifications
+  // GET /api/notifications - Get notifications for current user
+  // POST /api/notifications - Create notification for a user
+  // PATCH /api/notifications/:id/read - Mark notification as read
+  // PATCH /api/notifications/read-all - Mark all notifications as read
+  // DELETE /api/notifications/:id - Delete notification
+  // DELETE /api/notifications - Clear all notifications
+  app.use("/api/notifications", notificationsRouter);
 
   return app;
 }
