@@ -3187,164 +3187,329 @@ function createApp() {
     res.json({ success: true, data: drivers });
   });
 
-  // Assign delivery to driver (orderId in body)
-  app.post('/api/delivery/tracking/assign', (req, res) => {
-    const { orderId, driverId, estimatedArrival } = req.body;
-    
-    if (!orderId || !driverId) {
-      return res.status(400).json({ success: false, error: 'orderId and driverId are required' });
-    }
+  // Assign delivery to driver (orderId in body) - DATABASE BACKED
+  app.post('/api/delivery/tracking/assign', async (req, res) => {
+    try {
+      const { orderId, driverId, estimatedArrival } = req.body;
+      
+      if (!orderId || !driverId) {
+        return res.status(400).json({ success: false, error: 'orderId and driverId are required' });
+      }
 
-    const order = orders.get(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
-    }
+      // Try database first
+      if (isDatabaseAvailable() && pgDb) {
+        // Get order from database
+        const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+        if (orderResult.length === 0) {
+          return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+        const order = orderResult[0];
 
-    const driver = users.get(driverId);
-    if (!driver || driver.role !== 'delivery') {
-      return res.status(400).json({ success: false, error: 'Invalid delivery driver' });
-    }
+        // Get order items
+        const orderItems = await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
-    // Update order status
-    order.status = 'out_for_delivery';
-    order.updatedAt = new Date().toISOString();
-    order.statusHistory.push({
-      status: 'out_for_delivery',
-      changedAt: new Date().toISOString(),
-      changedBy: driverId,
-    });
+        // Get driver from database
+        const driverResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, driverId));
+        let driver = driverResult[0];
+        
+        // Fallback to in-memory driver if not in DB
+        if (!driver) {
+          driver = users.get(driverId) as any;
+        }
+        
+        if (!driver || driver.role !== 'delivery') {
+          return res.status(400).json({ success: false, error: 'Invalid delivery driver' });
+        }
 
-    const tracking = {
-      id: `track_${Date.now()}`,
-      orderId,
-      orderNumber: order.orderNumber,
-      driverId,
-      driverName: `${driver.firstName} ${driver.familyName}`,
-      driverMobile: driver.mobile,
-      status: 'assigned',
-      // Customer info for driver app
-      customerName: order.customerName,
-      customerMobile: order.customerMobile,
-      deliveryAddress: order.deliveryAddress,
-      deliveryNotes: order.deliveryNotes,
-      items: order.items.map(i => ({ name: i.productName, quantity: i.quantity })),
-      total: order.total,
-      estimatedArrival: estimatedArrival || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      timeline: [{
-        status: 'assigned',
-        timestamp: new Date().toISOString(),
-        notes: `Assigned to driver: ${driver.firstName}`,
-      }],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+        const now = new Date();
+        const newHistory = [...(order.statusHistory as any[] || []), {
+          status: 'out_for_delivery',
+          changedAt: now.toISOString(),
+          changedBy: driverId,
+        }];
 
-    // Store tracking info in both the Map and on the order itself
-    deliveryTracking.set(orderId, tracking);
-    
-    // Also store on order for persistence across serverless instances
-    order.trackingInfo = {
-      id: tracking.id,
-      driverId: tracking.driverId,
-      driverName: tracking.driverName,
-      driverMobile: tracking.driverMobile,
-      status: tracking.status,
-      estimatedArrival: tracking.estimatedArrival,
-      timeline: tracking.timeline,
-      createdAt: tracking.createdAt,
-      updatedAt: tracking.updatedAt,
-    };
+        // Update order status in database
+        await pgDb.update(ordersTable)
+          .set({
+            status: 'out_for_delivery',
+            updatedAt: now,
+            statusHistory: newHistory,
+          })
+          .where(eq(ordersTable.id, orderId));
 
-    res.json({
-      success: true,
-      data: tracking,
-      message: 'Delivery assigned successfully',
-    });
-  });
+        // Create tracking entry in database
+        const trackingId = `track_${Date.now()}`;
+        const initialTimeline = [{
+          status: 'assigned',
+          timestamp: now.toISOString(),
+          notes: `Assigned to driver: ${driver.firstName}`,
+        }];
+        
+        await pgDb.insert(deliveryTrackingTable).values({
+          id: trackingId,
+          orderId,
+          orderNumber: order.orderNumber,
+          driverId,
+          driverName: `${driver.firstName} ${driver.familyName}`,
+          driverMobile: driver.mobile,
+          status: 'assigned',
+          estimatedArrival: estimatedArrival ? new Date(estimatedArrival) : new Date(Date.now() + 60 * 60 * 1000),
+          timeline: initialTimeline,
+          createdAt: now,
+          updatedAt: now,
+        });
 
-  // Update tracking status
-  app.post('/api/delivery/tracking/:orderId/update', (req, res) => {
-    const { orderId } = req.params;
-    const { status, notes } = req.body;
-    
-    // First check the in-memory tracking map
-    let tracking = deliveryTracking.get(orderId);
-    
-    // If not found in map, try to get from order's trackingInfo
-    const order = orders.get(orderId);
-    if (!tracking && order?.trackingInfo) {
-      // Reconstruct tracking from order
-      tracking = {
-        id: order.trackingInfo.id,
-        orderId: order.id,
+        const tracking = {
+          id: trackingId,
+          orderId,
+          orderNumber: order.orderNumber,
+          driverId,
+          driverName: `${driver.firstName} ${driver.familyName}`,
+          driverMobile: driver.mobile,
+          status: 'assigned',
+          customerName: order.customerName,
+          customerMobile: order.customerMobile,
+          deliveryAddress: order.deliveryAddress,
+          deliveryNotes: order.deliveryNotes,
+          items: orderItems.map(i => ({ name: i.productName, quantity: parseInt(i.quantity) })),
+          total: parseFloat(order.total),
+          estimatedArrival: estimatedArrival || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          timeline: [{
+            status: 'assigned',
+            timestamp: now.toISOString(),
+            notes: `Assigned to driver: ${driver.firstName}`,
+          }],
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        };
+
+        // Also store in memory for quick access
+        deliveryTracking.set(orderId, tracking);
+
+        return res.json({
+          success: true,
+          data: tracking,
+          message: 'Delivery assigned successfully',
+        });
+      }
+
+      // Fallback to in-memory
+      const order = orders.get(orderId);
+      if (!order) {
+        return res.status(404).json({ success: false, error: 'Order not found' });
+      }
+
+      const driver = users.get(driverId);
+      if (!driver || driver.role !== 'delivery') {
+        return res.status(400).json({ success: false, error: 'Invalid delivery driver' });
+      }
+
+      // Update order status
+      order.status = 'out_for_delivery';
+      order.updatedAt = new Date().toISOString();
+      order.statusHistory.push({
+        status: 'out_for_delivery',
+        changedAt: new Date().toISOString(),
+        changedBy: driverId,
+      });
+
+      const tracking = {
+        id: `track_${Date.now()}`,
+        orderId,
         orderNumber: order.orderNumber,
-        driverId: order.trackingInfo.driverId,
-        driverName: order.trackingInfo.driverName,
-        driverMobile: order.trackingInfo.driverMobile,
-        status: order.trackingInfo.status,
+        driverId,
+        driverName: `${driver.firstName} ${driver.familyName}`,
+        driverMobile: driver.mobile,
+        status: 'assigned',
         customerName: order.customerName,
         customerMobile: order.customerMobile,
         deliveryAddress: order.deliveryAddress,
         deliveryNotes: order.deliveryNotes,
         items: order.items.map(i => ({ name: i.productName, quantity: i.quantity })),
         total: order.total,
-        estimatedArrival: order.trackingInfo.estimatedArrival,
-        timeline: order.trackingInfo.timeline,
-        createdAt: order.trackingInfo.createdAt,
-        updatedAt: order.trackingInfo.updatedAt,
+        estimatedArrival: estimatedArrival || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        timeline: [{
+          status: 'assigned',
+          timestamp: new Date().toISOString(),
+          notes: `Assigned to driver: ${driver.firstName}`,
+        }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
+
       deliveryTracking.set(orderId, tracking);
+
+      res.json({
+        success: true,
+        data: tracking,
+        message: 'Delivery assigned successfully',
+      });
+    } catch (error) {
+      console.error('[Delivery Assign Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to assign delivery' });
     }
-    
-    if (!tracking) {
-      return res.status(404).json({ success: false, error: 'Tracking not found' });
-    }
-    
-    tracking.status = status;
-    tracking.updatedAt = new Date().toISOString();
-    tracking.timeline.push({
-      status,
-      timestamp: new Date().toISOString(),
-      notes,
-    });
-    
-    // Update order status and trackingInfo
-    if (order) {
-      // Map tracking status to order status
-      const orderStatusMap: Record<string, string> = {
-        'assigned': 'out_for_delivery',
-        'picked_up': 'out_for_delivery',
-        'in_transit': 'out_for_delivery',
-        'nearby': 'out_for_delivery',
-        'delivered': 'delivered',
-      };
-      const newOrderStatus = orderStatusMap[status] || order.status;
+  });
+
+  // Update tracking status - DATABASE BACKED
+  app.post('/api/delivery/tracking/:orderId/update', async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { status, notes } = req.body;
       
-      if (order.status !== newOrderStatus) {
-        order.status = newOrderStatus;
-        order.updatedAt = new Date().toISOString();
-        order.statusHistory.push({
-          status: newOrderStatus,
-          changedAt: new Date().toISOString(),
-          changedBy: tracking.driverId,
+      // Try database first
+      if (isDatabaseAvailable() && pgDb) {
+        // Get tracking from database
+        const trackingResult = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.orderId, orderId));
+        
+        // Also get in-memory tracking for full data
+        let tracking = deliveryTracking.get(orderId);
+        
+        if (trackingResult.length === 0 && !tracking) {
+          return res.status(404).json({ success: false, error: 'Tracking not found' });
+        }
+
+        const dbTracking = trackingResult[0];
+        const now = new Date();
+
+        // Update tracking in database
+        await pgDb.update(deliveryTrackingTable)
+          .set({
+            status: status as any,
+            updatedAt: now,
+            actualArrival: status === 'delivered' ? now : undefined,
+          })
+          .where(eq(deliveryTrackingTable.orderId, orderId));
+
+        // Map tracking status to order status
+        const orderStatusMap: Record<string, string> = {
+          'assigned': 'out_for_delivery',
+          'picked_up': 'out_for_delivery',
+          'in_transit': 'out_for_delivery',
+          'nearby': 'out_for_delivery',
+          'delivered': 'delivered',
+        };
+        const newOrderStatus = orderStatusMap[status] || 'out_for_delivery';
+
+        // Get and update order in database
+        const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+        if (orderResult.length > 0) {
+          const order = orderResult[0];
+          const newHistory = [...(order.statusHistory as any[] || []), {
+            status: newOrderStatus,
+            changedAt: now.toISOString(),
+            changedBy: dbTracking?.driverId || 'driver',
+          }];
+
+          await pgDb.update(ordersTable)
+            .set({
+              status: newOrderStatus as any,
+              updatedAt: now,
+              statusHistory: newHistory,
+              actualDeliveryAt: status === 'delivered' ? now : null,
+            })
+            .where(eq(ordersTable.id, orderId));
+        }
+
+        // Update in-memory tracking
+        if (tracking) {
+          tracking.status = status;
+          tracking.updatedAt = now.toISOString();
+          tracking.timeline.push({
+            status,
+            timestamp: now.toISOString(),
+            notes,
+          });
+          deliveryTracking.set(orderId, tracking);
+        }
+
+        return res.json({ 
+          success: true, 
+          data: tracking || {
+            id: dbTracking?.id,
+            orderId,
+            status,
+            updatedAt: now.toISOString(),
+          }
         });
       }
+
+      // Fallback to in-memory
+      let tracking = deliveryTracking.get(orderId);
       
-      // Update trackingInfo on order for persistence
-      order.trackingInfo = {
-        id: tracking.id,
-        driverId: tracking.driverId,
-        driverName: tracking.driverName,
-        driverMobile: tracking.driverMobile,
-        status: tracking.status,
-        estimatedArrival: tracking.estimatedArrival,
-        timeline: [...tracking.timeline],
-        createdAt: tracking.createdAt,
-        updatedAt: tracking.updatedAt,
-      };
+      const order = orders.get(orderId);
+      if (!tracking && order?.trackingInfo) {
+        tracking = {
+          id: order.trackingInfo.id,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          driverId: order.trackingInfo.driverId,
+          driverName: order.trackingInfo.driverName,
+          driverMobile: order.trackingInfo.driverMobile,
+          status: order.trackingInfo.status,
+          customerName: order.customerName,
+          customerMobile: order.customerMobile,
+          deliveryAddress: order.deliveryAddress,
+          deliveryNotes: order.deliveryNotes,
+          items: order.items.map(i => ({ name: i.productName, quantity: i.quantity })),
+          total: order.total,
+          estimatedArrival: order.trackingInfo.estimatedArrival,
+          timeline: order.trackingInfo.timeline,
+          createdAt: order.trackingInfo.createdAt,
+          updatedAt: order.trackingInfo.updatedAt,
+        };
+        deliveryTracking.set(orderId, tracking);
+      }
+      
+      if (!tracking) {
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
+      }
+      
+      tracking.status = status;
+      tracking.updatedAt = new Date().toISOString();
+      tracking.timeline.push({
+        status,
+        timestamp: new Date().toISOString(),
+        notes,
+      });
+      
+      if (order) {
+        const orderStatusMap: Record<string, string> = {
+          'assigned': 'out_for_delivery',
+          'picked_up': 'out_for_delivery',
+          'in_transit': 'out_for_delivery',
+          'nearby': 'out_for_delivery',
+          'delivered': 'delivered',
+        };
+        const newOrderStatus = orderStatusMap[status] || order.status;
+        
+        if (order.status !== newOrderStatus) {
+          order.status = newOrderStatus;
+          order.updatedAt = new Date().toISOString();
+          order.statusHistory.push({
+            status: newOrderStatus,
+            changedAt: new Date().toISOString(),
+            changedBy: tracking.driverId,
+          });
+        }
+        
+        order.trackingInfo = {
+          id: tracking.id,
+          driverId: tracking.driverId,
+          driverName: tracking.driverName,
+          driverMobile: tracking.driverMobile,
+          status: tracking.status,
+          estimatedArrival: tracking.estimatedArrival,
+          timeline: [...tracking.timeline],
+          createdAt: tracking.createdAt,
+          updatedAt: tracking.updatedAt,
+        };
+      }
+      
+      res.json({ success: true, data: tracking });
+    } catch (error) {
+      console.error('[Delivery Update Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update delivery status' });
     }
-    
-    res.json({ success: true, data: tracking });
   });
 
   // Legacy route with orderId in path
