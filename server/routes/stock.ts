@@ -6,7 +6,7 @@
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import type { StockItem, StockMovement, LowStockAlert, ApiResponse, Order } from "@shared/api";
+import type { StockItem, StockMovement, LowStockAlert, ApiResponse, Order } from "../../shared/api";
 import { db, stock, stockMovements, products } from "../db/connection";
 import { sendLowStockNotifications } from "../services/notifications";
 import { randomUUID } from "crypto";

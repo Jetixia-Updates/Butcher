@@ -13,7 +13,7 @@ import type {
   InventoryReport,
   CustomerAnalytics,
   ApiResponse 
-} from "@shared/api";
+} from "../../shared/api";
 import { db, orders, orderItems, products, users, stock, stockMovements } from "../db/connection";
 
 const router = Router();

@@ -4,7 +4,7 @@
  * Uses PostgreSQL for persistence
  */
 
-import type { NotificationType, NotificationChannel, Order, Notification } from "@shared/api";
+import type { NotificationType, NotificationChannel, Order, Notification } from "../../shared/api";
 import { db, notifications, users } from "../db/connection";
 import { eq, desc, sql } from "drizzle-orm";
 import {

@@ -6,7 +6,7 @@
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, gte, lte, and } from "drizzle-orm";
-import type { Payment, PaymentRefund, SavedCard, ApiResponse, PaginatedResponse } from "@shared/api";
+import type { Payment, PaymentRefund, SavedCard, ApiResponse, PaginatedResponse } from "../../shared/api";
 import { db, payments, orders } from "../db/connection";
 import { sendOrderNotification } from "../services/notifications";
 import { randomUUID } from "crypto";

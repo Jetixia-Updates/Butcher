@@ -16,7 +16,7 @@ import type {
   CreateExpenseRequest,
   ExpenseCategory,
   ApiResponse,
-} from "@shared/api";
+} from "../../shared/api";
 import { db, orders, products, financeAccounts, financeTransactions, financeExpenses } from "../db/connection";
 import { randomUUID } from "crypto";
 

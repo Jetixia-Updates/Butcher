@@ -6,7 +6,7 @@
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, and, or, ilike, desc } from "drizzle-orm";
-import type { User, LoginResponse, ApiResponse, PaginatedResponse } from "@shared/api";
+import type { User, LoginResponse, ApiResponse, PaginatedResponse } from "../../shared/api";
 import { db, users, sessions, addresses } from "../db/connection";
 
 const router = Router();

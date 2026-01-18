@@ -10,7 +10,7 @@ import type {
   RecentOrder, 
   LowStockItem,
   ApiResponse 
-} from "@shared/api";
+} from "../../shared/api";
 import { db, orders, orderItems, users, stock, products, addresses } from "../db/connection";
 
 const router = Router();

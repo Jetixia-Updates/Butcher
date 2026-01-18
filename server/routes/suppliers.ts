@@ -14,7 +14,7 @@ import type {
   CreatePurchaseOrderRequest,
   SupplierStatus,
   PurchaseOrderStatus,
-} from "@shared/api";
+} from "../../shared/api";
 
 const router = Router();
 
