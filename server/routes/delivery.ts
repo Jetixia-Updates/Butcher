@@ -11,13 +11,11 @@ import type {
   DeliveryZone, 
   DeliveryTracking, 
   ApiResponse 
-} from "@shared/api";
+} from "../../shared/api";
 import { db, addresses, deliveryZones, deliveryTracking, orders, users } from "../db/connection";
 import { sendOrderNotification } from "../services/notifications";
 import { randomUUID } from "crypto";
-import type { 
-  DeliveryAvailabilityRequest, 
-} from "../../shared/api";
+// Types are inferred within handlers; explicit DeliveryAvailabilityRequest not exported in shared api.
 
 const router = Router();
 

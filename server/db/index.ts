@@ -16,7 +16,7 @@ import type {
   DeliveryTracking,
   DiscountCode,
   Product,
-} from "@shared/api";
+} from "../../shared/api";
 
 // =====================================================
 // DATABASE STORAGE
