@@ -140,12 +140,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     ].filter(Boolean).join(" | ");
 
     if (onAddToBasket) {
+      // Calculate discounted price for basket
+      const effectivePrice = product.discount ? product.price * (1 - product.discount / 100) : product.price;
       onAddToBasket({
         id: product.id,
         productId: product.id, // Original product ID for API calls
         name: product.name,
         nameAr: product.nameAr,
-        price: product.price,
+        price: Math.round(effectivePrice * 100) / 100, // Use discounted price
         quantity,
         image: product.image,
         category: product.category,
@@ -207,12 +209,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     ].filter(Boolean).join(" | ");
 
     if (onAddToBasket) {
+      // Calculate discounted price for basket
+      const effectivePrice = product.discount ? product.price * (1 - product.discount / 100) : product.price;
       onAddToBasket({
         id: product.id,
         productId: product.id,
         name: product.name,
         nameAr: product.nameAr,
-        price: product.price,
+        price: Math.round(effectivePrice * 100) / 100, // Use discounted price
         quantity: quickViewQuantity,
         image: product.image,
         category: product.category,

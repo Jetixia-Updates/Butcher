@@ -538,6 +538,7 @@ export interface InvoiceData {
   vatAmount: number;
   deliveryFee?: number; // Total delivery fee (base + express)
   expressDeliveryFee?: number; // Express delivery fee only (legacy, kept for compatibility)
+  isExpressDelivery?: boolean; // Whether express delivery was selected
   driverTip?: number;
   total: number;
   paymentMethod: "card" | "cod";
@@ -576,7 +577,8 @@ export const formatInvoiceForNotification = (invoice: InvoiceData, language: "en
     // Use deliveryFee (total) if provided, otherwise fall back to expressDeliveryFee for backward compatibility
     const deliveryFeeAmount = invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0;
     if (deliveryFeeAmount > 0) {
-      breakdownLines.push(`🚚 رسوم التوصيل: ${deliveryFeeAmount.toFixed(2)} د.إ`);
+      const deliveryLabel = invoice.isExpressDelivery ? '⚡ توصيل سريع' : '🚚 رسوم التوصيل';
+      breakdownLines.push(`${deliveryLabel}: ${deliveryFeeAmount.toFixed(2)} د.إ`);
     }
     if (invoice.driverTip && invoice.driverTip > 0) {
       breakdownLines.push(`💚 إكرامية السائق: ${invoice.driverTip.toFixed(2)} د.إ`);
@@ -622,7 +624,8 @@ ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatRef
   // Use deliveryFee (total) if provided, otherwise fall back to expressDeliveryFee for backward compatibility
   const deliveryFeeAmountEn = invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0;
   if (deliveryFeeAmountEn > 0) {
-    breakdownLines.push(`🚚 Delivery Fee: AED ${deliveryFeeAmountEn.toFixed(2)}`);
+    const deliveryLabelEn = invoice.isExpressDelivery ? '⚡ Express Delivery' : '🚚 Delivery Fee';
+    breakdownLines.push(`${deliveryLabelEn}: AED ${deliveryFeeAmountEn.toFixed(2)}`);
   }
   if (invoice.driverTip && invoice.driverTip > 0) {
     breakdownLines.push(`💚 Driver Tip: AED ${invoice.driverTip.toFixed(2)}`);

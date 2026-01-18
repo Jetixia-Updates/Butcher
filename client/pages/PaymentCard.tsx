@@ -292,6 +292,7 @@ export default function PaymentCardPage() {
           vatRate: 5,
           vatAmount: orderData.vatAmount,
           deliveryFee: orderData.deliveryFee > 0 ? orderData.deliveryFee : undefined,
+          isExpressDelivery: isExpressDelivery,
           driverTip: driverTip > 0 ? driverTip : undefined,
           total: orderData.total,
           paymentMethod: "card",

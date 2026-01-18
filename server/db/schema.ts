@@ -202,6 +202,7 @@ export const products = pgTable("products", {
   barcode: varchar("barcode", { length: 100 }),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   costPrice: decimal("cost_price", { precision: 10, scale: 2 }).notNull(),
+  discount: decimal("discount", { precision: 5, scale: 2 }).notNull().default("0"), // Discount percentage (0-100)
   category: varchar("category", { length: 100 }).notNull(),
   description: text("description"),
   descriptionAr: text("description_ar"),
@@ -211,7 +212,9 @@ export const products = pgTable("products", {
   maxOrderQuantity: decimal("max_order_quantity", { precision: 10, scale: 2 }).notNull().default("10"),
   isActive: boolean("is_active").notNull().default(true),
   isFeatured: boolean("is_featured").notNull().default(false),
+  rating: decimal("rating", { precision: 3, scale: 2 }).notNull().default("0"), // Product rating (0-5)
   tags: jsonb("tags").$type<string[]>().default([]),
+  badges: jsonb("badges").$type<("halal" | "organic" | "grass-fed" | "premium" | "fresh" | "local")[]>().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

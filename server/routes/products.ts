@@ -56,6 +56,9 @@ function toApiProduct(dbProduct: typeof products.$inferSelect): Product {
     isActive: dbProduct.isActive,
     isFeatured: dbProduct.isFeatured,
     tags: (dbProduct.tags as string[]) || [],
+    discount: dbProduct.discount ? parseFloat(dbProduct.discount) : undefined,
+    rating: dbProduct.rating ? parseFloat(dbProduct.rating) : undefined,
+    badges: (dbProduct.badges as ("halal" | "organic" | "grass-fed" | "premium" | "fresh" | "local")[]) || undefined,
     createdAt: dbProduct.createdAt.toISOString(),
     updatedAt: dbProduct.updatedAt.toISOString(),
   };

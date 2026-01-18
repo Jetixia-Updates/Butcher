@@ -365,7 +365,12 @@ const createOrder: RequestHandler = async (req, res) => {
         return res.status(400).json(response);
       }
 
-      const unitPrice = parseFloat(product.price);
+      // Calculate discounted price if product has a discount
+      const basePrice = parseFloat(product.price);
+      const discountPercent = product.discount ? parseFloat(product.discount) : 0;
+      const unitPrice = discountPercent > 0 
+        ? Math.round(basePrice * (1 - discountPercent / 100) * 100) / 100 
+        : basePrice;
       const totalPrice = unitPrice * item.quantity;
       subtotal += totalPrice;
 
@@ -376,7 +381,7 @@ const createOrder: RequestHandler = async (req, res) => {
         productNameAr: product.nameAr || undefined,
         sku: product.sku,
         quantity: String(item.quantity),
-        unitPrice: product.price,
+        unitPrice: String(unitPrice),
         totalPrice: String(Math.round(totalPrice * 100) / 100),
         notes: item.notes,
       });

@@ -538,7 +538,7 @@ export default function CheckoutPage() {
   
   // Promo code state
   const [promoCode, setPromoCode] = useState("");
-  const [promoApplied, setPromoApplied] = useState<{ code: string; discount: number; type: "percent" | "fixed" } | null>(null);
+  const [promoApplied, setPromoApplied] = useState<{ code: string; discount: number; type: "percent" | "fixed"; maxDiscount?: number } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
 
@@ -554,7 +554,8 @@ export default function CheckoutPage() {
         setPromoApplied({ 
           code: result.promo.code, 
           discount: result.promo.discount, 
-          type: result.promo.type 
+          type: result.promo.type,
+          maxDiscount: result.promo.maxDiscount
         });
         setPromoError(null);
       } else {
@@ -1126,6 +1127,7 @@ export default function CheckoutPage() {
           vatRate: 5,
           vatAmount: orderData.vatAmount,
           deliveryFee: orderData.deliveryFee > 0 ? orderData.deliveryFee : undefined,
+          isExpressDelivery: isExpressDelivery,
           driverTip: driverTip > 0 ? driverTip : undefined,
           total: orderData.total,
           paymentMethod: "cod",

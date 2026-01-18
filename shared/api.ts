@@ -186,6 +186,7 @@ export interface Product {
   barcode?: string;
   price: number;
   costPrice: number;
+  discount?: number; // Discount percentage (0-100)
   category: string;
   description: string;
   descriptionAr?: string;
@@ -195,7 +196,9 @@ export interface Product {
   maxOrderQuantity: number;
   isActive: boolean;
   isFeatured: boolean;
+  rating?: number; // Product rating (0-5)
   tags: string[];
+  badges?: ("halal" | "organic" | "grass-fed" | "premium" | "fresh" | "local")[];
   createdAt: string;
   updatedAt: string;
 }
