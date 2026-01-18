@@ -1,10 +1,12 @@
 /**
  * SMS Notification Service
  * In production, integrate with Twilio, MessageBird, or local UAE providers
+ * Uses PostgreSQL for persistence
  */
 
 import type { SMSNotificationPayload, Notification, NotificationType, Order } from "@shared/api";
-import { db, generateId } from "../db";
+import { db, notifications, users, generateId } from "../db/connection";
+import { eq } from "drizzle-orm";
 
 // SMS Templates
 const SMS_TEMPLATES: Record<NotificationType, { en: string; ar: string }> = {
@@ -68,28 +70,24 @@ function replaceTemplateVars(template: string, data: Record<string, unknown>): s
 
 // SMS Gateway Integration (mock for demo)
 async function sendSMSViaGateway(payload: SMSNotificationPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  // In production, integrate with actual SMS gateway:
-  // - Twilio: https://www.twilio.com/docs/sms
-  // - MessageBird: https://developers.messagebird.com/
-  // - UAE local: Etisalat SMS Gateway, Du SMS Gateway
-
   console.log(`📱 SMS to ${payload.to}:`, payload.message);
-
-  // Simulate API call delay
   await new Promise((resolve) => setTimeout(resolve, 100));
-
-  // Simulate success (95% success rate for demo)
   if (Math.random() > 0.05) {
-    return {
-      success: true,
-      messageId: `sms_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    };
+    return { success: true, messageId: `sms_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` };
   }
+  return { success: false, error: "SMS gateway temporarily unavailable" };
+}
 
-  return {
-    success: false,
-    error: "SMS gateway temporarily unavailable",
-  };
+// Helper to get user preferences from PostgreSQL
+async function getUserPreferences(userId: string): Promise<{ language: "en" | "ar" } | null> {
+  try {
+    const result = await db.select().from(users).where(eq(users.id, userId));
+    if (result.length === 0) return null;
+    const user = result[0];
+    return { language: (user.preferences as { language?: "en" | "ar" })?.language || "en" };
+  } catch {
+    return null;
+  }
 }
 
 // Main SMS sending function
@@ -103,121 +101,124 @@ export async function sendSMS(
   const message = replaceTemplateVars(language === "ar" ? template.ar : template.en, data);
   const messageAr = replaceTemplateVars(template.ar, data);
 
-  const notification: Notification = {
-    id: generateId("notif"),
-    userId: data.userId as string || "",
-    type,
-    channel: "sms",
-    title: `Order Update`,
-    message,
-    messageAr,
-    status: "pending",
-    metadata: data,
-    createdAt: new Date().toISOString(),
-  };
+  const notifId = generateId("notif");
+  let status: "pending" | "sent" | "delivered" | "failed" = "pending";
+  let sentAt: Date | undefined;
+  let failureReason: string | undefined;
 
   try {
     const result = await sendSMSViaGateway({ to, message, messageAr });
-
     if (result.success) {
-      notification.status = "sent";
-      notification.sentAt = new Date().toISOString();
+      status = "sent";
+      sentAt = new Date();
     } else {
-      notification.status = "failed";
-      notification.failureReason = result.error;
+      status = "failed";
+      failureReason = result.error;
     }
   } catch (error) {
-    notification.status = "failed";
-    notification.failureReason = error instanceof Error ? error.message : "Unknown error";
+    status = "failed";
+    failureReason = error instanceof Error ? error.message : "Unknown error";
   }
 
-  // Store notification
-  db.notifications.push(notification);
+  // Store notification in PostgreSQL
+  try {
+    await db.insert(notifications).values({
+      id: notifId,
+      userId: data.userId as string || "system",
+      type: type as typeof notifications.$inferInsert.type,
+      channel: "sms",
+      title: "Order Update",
+      message,
+      messageAr,
+      status,
+      sentAt,
+      failureReason,
+      metadata: data,
+    });
+  } catch (err) {
+    console.error("Failed to save notification to database:", err);
+  }
 
-  return notification;
+  return {
+    id: notifId,
+    userId: data.userId as string || "",
+    type,
+    channel: "sms",
+    title: "Order Update",
+    message,
+    messageAr,
+    status,
+    sentAt: sentAt?.toISOString(),
+    failureReason,
+    metadata: data,
+    createdAt: new Date().toISOString(),
+  };
 }
 
 // Order-specific SMS helpers
 export async function sendOrderPlacedSMS(order: Order): Promise<Notification> {
-  const user = db.users.get(order.userId);
-  const language = user?.preferences.language || "en";
-
+  const prefs = await getUserPreferences(order.userId);
   return sendSMS(order.customerMobile, "order_placed", {
     userId: order.userId,
     orderNumber: order.orderNumber,
     total: order.total.toFixed(2),
     trackingUrl: `https://butcher.ae/track/${order.orderNumber}`,
-  }, language);
+  }, prefs?.language || "en");
 }
 
 export async function sendOrderConfirmedSMS(order: Order): Promise<Notification> {
-  const user = db.users.get(order.userId);
-  const language = user?.preferences.language || "en";
-
+  const prefs = await getUserPreferences(order.userId);
   return sendSMS(order.customerMobile, "order_confirmed", {
     userId: order.userId,
     orderNumber: order.orderNumber,
     estimatedTime: order.estimatedDeliveryAt || "45-60 minutes",
-  }, language);
+  }, prefs?.language || "en");
 }
 
 export async function sendOrderProcessingSMS(order: Order): Promise<Notification> {
-  const user = db.users.get(order.userId);
-  const language = user?.preferences.language || "en";
-
+  const prefs = await getUserPreferences(order.userId);
   return sendSMS(order.customerMobile, "order_processing", {
     userId: order.userId,
     orderNumber: order.orderNumber,
-  }, language);
+  }, prefs?.language || "en");
 }
 
 export async function sendOrderOutForDeliverySMS(order: Order, driverName?: string, driverPhone?: string): Promise<Notification> {
-  const user = db.users.get(order.userId);
-  const language = user?.preferences.language || "en";
-
+  const prefs = await getUserPreferences(order.userId);
   return sendSMS(order.customerMobile, "order_shipped", {
     userId: order.userId,
     orderNumber: order.orderNumber,
     driverName: driverName || "Driver",
     driverPhone: driverPhone || "N/A",
     trackingUrl: `https://butcher.ae/track/${order.orderNumber}`,
-  }, language);
+  }, prefs?.language || "en");
 }
 
 export async function sendOrderDeliveredSMS(order: Order): Promise<Notification> {
-  const user = db.users.get(order.userId);
-  const language = user?.preferences.language || "en";
-
+  const prefs = await getUserPreferences(order.userId);
   return sendSMS(order.customerMobile, "order_delivered", {
     userId: order.userId,
     orderNumber: order.orderNumber,
-  }, language);
+  }, prefs?.language || "en");
 }
 
 export async function sendOrderCancelledSMS(order: Order): Promise<Notification> {
-  const user = db.users.get(order.userId);
-  const language = user?.preferences.language || "en";
-
+  const prefs = await getUserPreferences(order.userId);
   return sendSMS(order.customerMobile, "order_cancelled", {
     userId: order.userId,
     orderNumber: order.orderNumber,
-  }, language);
+  }, prefs?.language || "en");
 }
 
 export async function sendPaymentReceivedSMS(order: Order): Promise<Notification> {
-  const user = db.users.get(order.userId);
-  const language = user?.preferences.language || "en";
-
+  const prefs = await getUserPreferences(order.userId);
   return sendSMS(order.customerMobile, "payment_received", {
     userId: order.userId,
     orderNumber: order.orderNumber,
     amount: order.total.toFixed(2),
-  }, language);
+  }, prefs?.language || "en");
 }
 
 export async function sendLowStockAlertSMS(adminMobile: string, productName: string, quantity: number): Promise<Notification> {
-  return sendSMS(adminMobile, "low_stock", {
-    productName,
-    quantity,
-  }, "en");
+  return sendSMS(adminMobile, "low_stock", { productName, quantity }, "en");
 }

@@ -25,3 +25,8 @@ export * from "./schema";
 
 // Type exports for use throughout the app
 export type Database = typeof db;
+
+// ID generator helper
+export const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+export const generateOrderNumber = () => `ORD-${String(Date.now()).slice(-6)}${Math.random().toString(36).substr(2, 3).toUpperCase()}`;
+export const generateToken = () => `tok_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;

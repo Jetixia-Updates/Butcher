@@ -410,14 +410,18 @@ const login: RequestHandler = async (req, res) => {
 
     const { username, password } = validation.data;
 
-    // Find user by username (case-insensitive)
+    // Find user by username OR email (case-insensitive)
     const result = await db.select().from(users);
-    const user = result.find(u => u.username.toLowerCase() === username.toLowerCase());
+    const usernameOrEmail = username.toLowerCase();
+    const user = result.find(u => 
+      u.username.toLowerCase() === usernameOrEmail || 
+      u.email.toLowerCase() === usernameOrEmail
+    );
 
     if (!user) {
       const response: ApiResponse<null> = {
         success: false,
-        error: "No account found with this username",
+        error: "No account found with this username or email",
       };
       return res.status(401).json(response);
     }

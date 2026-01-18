@@ -18,7 +18,8 @@ import financeRouter from "./routes/finance";
 export function createServer() {
   const app = express();
 
-  // Database is seeded on module load in db/index.ts
+  // All data is stored in PostgreSQL via Neon serverless
+  // To seed the database, run: pnpm db:seed
 
   // Middleware
   app.use(cors());

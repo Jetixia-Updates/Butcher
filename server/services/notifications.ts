@@ -1,10 +1,12 @@
 /**
  * Unified Notification Service
  * Orchestrates SMS, Email, and Push notifications
+ * Uses PostgreSQL for persistence
  */
 
 import type { NotificationType, NotificationChannel, Order, Notification } from "@shared/api";
-import { db } from "../db";
+import { db, notifications, users } from "../db/connection";
+import { eq, desc, sql } from "drizzle-orm";
 import {
   sendSMS,
   sendOrderPlacedSMS,
@@ -34,19 +36,25 @@ export interface NotificationResult {
 }
 
 // Check if user has notifications enabled for a channel
-function isChannelEnabled(userId: string, channel: NotificationChannel): boolean {
-  const user = db.users.get(userId);
-  if (!user) return false;
-
-  switch (channel) {
-    case "sms":
-      return user.preferences.smsNotifications;
-    case "email":
-      return user.preferences.emailNotifications;
-    case "push":
-      return true; // Push notifications always enabled by default
-    default:
-      return false;
+async function isChannelEnabled(userId: string, channel: NotificationChannel): Promise<boolean> {
+  try {
+    const result = await db.select().from(users).where(eq(users.id, userId));
+    if (result.length === 0) return false;
+    const user = result[0];
+    const prefs = user.preferences as { smsNotifications?: boolean; emailNotifications?: boolean } || {};
+    
+    switch (channel) {
+      case "sms":
+        return prefs.smsNotifications ?? true;
+      case "email":
+        return prefs.emailNotifications ?? true;
+      case "push":
+        return true;
+      default:
+        return false;
+    }
+  } catch {
+    return false;
   }
 }
 
@@ -61,15 +69,14 @@ export async function sendOrderNotification(
   }
 ): Promise<NotificationResult> {
   const result: NotificationResult = {};
-  const user = db.users.get(order.userId);
 
-  // Determine which channels to use based on notification type and user preferences
+  // Determine which channels to use based on user preferences
   const channels: NotificationChannel[] = [];
 
-  if (isChannelEnabled(order.userId, "sms")) {
+  if (await isChannelEnabled(order.userId, "sms")) {
     channels.push("sms");
   }
-  if (isChannelEnabled(order.userId, "email")) {
+  if (await isChannelEnabled(order.userId, "email")) {
     channels.push("email");
   }
 
@@ -147,19 +154,21 @@ export async function sendLowStockNotifications(
   quantity: number,
   threshold: number
 ): Promise<NotificationResult[]> {
-  // Get all admin users
-  const admins = Array.from(db.users.values()).filter((u) => u.role === "admin" && u.isActive);
+  // Get all admin users from PostgreSQL
+  const admins = await db.select().from(users).where(eq(users.role, "admin"));
+  const activeAdmins = admins.filter(u => u.isActive);
 
   const results: NotificationResult[] = [];
 
-  for (const admin of admins) {
+  for (const admin of activeAdmins) {
     const result: NotificationResult = {};
+    const prefs = admin.preferences as { smsNotifications?: boolean; emailNotifications?: boolean } || {};
 
-    if (admin.preferences.smsNotifications) {
+    if (prefs.smsNotifications) {
       result.sms = await sendLowStockAlertSMS(admin.mobile, productName, quantity);
     }
 
-    if (admin.preferences.emailNotifications) {
+    if (prefs.emailNotifications) {
       result.email = await sendLowStockAlertEmail(admin.email, productName, quantity, threshold);
     }
 
@@ -169,49 +178,80 @@ export async function sendLowStockNotifications(
   return results;
 }
 
-// Get notification history for a user
-export function getUserNotifications(userId: string, limit = 50): Notification[] {
-  return db.notifications
-    .filter((n) => n.userId === userId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, limit);
+// Get notification history for a user from PostgreSQL
+export async function getUserNotifications(userId: string, limit = 50): Promise<Notification[]> {
+  const result = await db.select()
+    .from(notifications)
+    .where(eq(notifications.userId, userId))
+    .orderBy(desc(notifications.createdAt))
+    .limit(limit);
+
+  return result.map(n => ({
+    id: n.id,
+    userId: n.userId,
+    type: n.type,
+    channel: n.channel,
+    title: n.title,
+    message: n.message,
+    messageAr: n.messageAr || undefined,
+    status: n.status,
+    sentAt: n.sentAt?.toISOString(),
+    deliveredAt: n.deliveredAt?.toISOString(),
+    failureReason: n.failureReason || undefined,
+    metadata: n.metadata || undefined,
+    createdAt: n.createdAt.toISOString(),
+  }));
 }
 
-// Get all notifications (admin)
-export function getAllNotifications(limit = 100): Notification[] {
-  return db.notifications
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, limit);
+// Get all notifications (admin) from PostgreSQL
+export async function getAllNotifications(limit = 100): Promise<Notification[]> {
+  const result = await db.select()
+    .from(notifications)
+    .orderBy(desc(notifications.createdAt))
+    .limit(limit);
+
+  return result.map(n => ({
+    id: n.id,
+    userId: n.userId,
+    type: n.type,
+    channel: n.channel,
+    title: n.title,
+    message: n.message,
+    messageAr: n.messageAr || undefined,
+    status: n.status,
+    sentAt: n.sentAt?.toISOString(),
+    deliveredAt: n.deliveredAt?.toISOString(),
+    failureReason: n.failureReason || undefined,
+    metadata: n.metadata || undefined,
+    createdAt: n.createdAt.toISOString(),
+  }));
 }
 
-// Get notification stats
-export function getNotificationStats(): {
+// Get notification stats from PostgreSQL
+export async function getNotificationStats(): Promise<{
   total: number;
   sent: number;
   failed: number;
   pending: number;
   byType: Record<NotificationType, number>;
   byChannel: Record<NotificationChannel, number>;
-} {
-  const notifications = db.notifications;
+}> {
+  const allNotifications = await db.select().from(notifications);
 
   const byType: Record<string, number> = {};
   const byChannel: Record<string, number> = {};
 
-  notifications.forEach((n) => {
+  allNotifications.forEach((n) => {
     byType[n.type] = (byType[n.type] || 0) + 1;
     byChannel[n.channel] = (byChannel[n.channel] || 0) + 1;
   });
 
   return {
-    total: notifications.length,
-    sent: notifications.filter((n) => n.status === "sent" || n.status === "delivered").length,
-    failed: notifications.filter((n) => n.status === "failed").length,
-    pending: notifications.filter((n) => n.status === "pending").length,
+    total: allNotifications.length,
+    sent: allNotifications.filter((n) => n.status === "sent" || n.status === "delivered").length,
+    failed: allNotifications.filter((n) => n.status === "failed").length,
+    pending: allNotifications.filter((n) => n.status === "pending").length,
     byType: byType as Record<NotificationType, number>,
     byChannel: byChannel as Record<NotificationChannel, number>,
   };
 }
-
-// Re-export individual services for direct use
-export { sendSMS, sendEmail };

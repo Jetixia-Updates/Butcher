@@ -736,5 +736,9 @@ function generateSampleOrders(): Order[] {
   return orders;
 }
 
-// Initialize database with seed data on module load
-seedDatabase();
+// DEPRECATED: In-memory database is no longer used.
+// All data is now stored in PostgreSQL via server/db/connection.ts
+// This file is kept for backward compatibility but seeding is disabled.
+// To seed PostgreSQL, run: pnpm db:seed
+// seedDatabase();
+console.log("ℹ️  Using PostgreSQL database (in-memory database disabled)");

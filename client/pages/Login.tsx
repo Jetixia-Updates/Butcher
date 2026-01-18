@@ -22,8 +22,8 @@ export default function LoginPage() {
 
     if (!username || username.length < 3) {
       newErrors.username = language === "ar" 
-        ? "يرجى إدخال اسم المستخدم (3 أحرف على الأقل)" 
-        : "Please enter a username (at least 3 characters)";
+        ? "يرجى إدخال اسم المستخدم أو البريد الإلكتروني (3 أحرف على الأقل)" 
+        : "Please enter a username or email (at least 3 characters)";
     }
 
     if (!password) {
@@ -122,7 +122,7 @@ export default function LoginPage() {
           >
             <div>
               <label className="block text-sm font-semibold text-foreground mb-2">
-                {language === "ar" ? "اسم المستخدم" : "Username"}
+                {language === "ar" ? "اسم المستخدم أو البريد الإلكتروني" : "Username or Email"}
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -130,13 +130,14 @@ export default function LoginPage() {
                   type="text"
                   value={username}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/[^a-zA-Z0-9_]/g, "");
+                    // Allow alphanumeric, underscore, @, dot, hyphen for email support
+                    const value = e.target.value.replace(/[^a-zA-Z0-9_@.\-]/g, "");
                     setUsername(value);
                     if (errors.username) {
                       setErrors({ ...errors, username: undefined });
                     }
                   }}
-                  placeholder={language === "ar" ? "أدخل اسم المستخدم" : "Enter your username"}
+                  placeholder={language === "ar" ? "أدخل اسم المستخدم أو البريد الإلكتروني" : "Enter your username or email"}
                   className={`w-full pl-10 pr-4 py-3 rounded-lg border-2 transition-colors ${
                     errors.username
                       ? "border-destructive bg-destructive/5"
