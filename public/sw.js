@@ -50,6 +50,9 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
 
+  // Skip chrome-extension and other non-http(s) requests
+  if (!url.protocol.startsWith('http')) return;
+
   // Skip API requests - always fetch fresh
   if (url.pathname.startsWith('/api/')) {
     return;

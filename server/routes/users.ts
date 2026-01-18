@@ -264,9 +264,20 @@ const createUser: RequestHandler = async (req, res) => {
     res.status(201).json(response);
   } catch (error) {
     console.error("Error creating user:", error);
+    // Provide more helpful error messages
+    let errorMessage = "Failed to create user";
+    if (error instanceof Error) {
+      if (error.message.includes("connection") || error.message.includes("ECONNREFUSED")) {
+        errorMessage = "Database connection failed. Please try again later.";
+      } else if (error.message.includes("duplicate") || error.message.includes("unique")) {
+        errorMessage = "An account with this information already exists.";
+      } else {
+        errorMessage = error.message;
+      }
+    }
     const response: ApiResponse<null> = {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to create user",
+      error: errorMessage,
     };
     res.status(500).json(response);
   }

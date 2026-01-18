@@ -11,14 +11,17 @@ import * as schema from "./schema";
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-  throw new Error("DATABASE_URL environment variable is not set");
+  console.error("DATABASE_URL environment variable is not set. Database operations will fail.");
 }
 
-// Create Neon serverless connection
-const sql = neon(databaseUrl);
+// Create Neon serverless connection (use empty string if no URL to prevent crash during import)
+const sql = neon(databaseUrl || "postgresql://placeholder:placeholder@localhost/placeholder");
 
 // Create Drizzle instance with schema
 export const db = drizzle(sql, { schema });
+
+// Check if database is configured
+export const isDatabaseConfigured = () => !!databaseUrl;
 
 // Export schema for use in queries
 export * from "./schema";

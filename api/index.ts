@@ -1,9 +1,68 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import express from 'express';
 import cors from 'cors';
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import { eq, or, ilike } from 'drizzle-orm';
+import {
+  pgTable,
+  text,
+  varchar,
+  boolean,
+  timestamp,
+  jsonb,
+  pgEnum,
+} from 'drizzle-orm/pg-core';
 
 // =====================================================
-// INLINE DATABASE FOR VERCEL SERVERLESS
+// NEON DATABASE CONNECTION
+// =====================================================
+
+const databaseUrl = process.env.DATABASE_URL;
+const sql = databaseUrl ? neon(databaseUrl) : null;
+const pgDb = sql ? drizzle(sql) : null;
+
+// User role enum and table definition (inline for Vercel)
+const userRoleEnum = pgEnum("user_role", ["customer", "admin", "staff", "delivery"]);
+
+const usersTable = pgTable("users", {
+  id: text("id").primaryKey(),
+  username: varchar("username", { length: 100 }).notNull().unique(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  mobile: varchar("mobile", { length: 20 }).notNull(),
+  password: text("password").notNull(),
+  firstName: varchar("first_name", { length: 100 }).notNull(),
+  familyName: varchar("family_name", { length: 100 }).notNull(),
+  role: userRoleEnum("role").notNull().default("customer"),
+  isActive: boolean("is_active").notNull().default(true),
+  isVerified: boolean("is_verified").notNull().default(false),
+  emirate: varchar("emirate", { length: 100 }),
+  address: text("address"),
+  preferences: jsonb("preferences").$type<{
+    language: "en" | "ar";
+    currency: "AED" | "USD" | "EUR";
+    emailNotifications: boolean;
+    smsNotifications: boolean;
+    marketingEmails: boolean;
+  }>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  lastLoginAt: timestamp("last_login_at"),
+});
+
+const sessionsTable = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Helper to check if DB is available
+const isDatabaseAvailable = () => !!pgDb;
+
+// =====================================================
+// INLINE DATABASE FOR VERCEL SERVERLESS (FALLBACK)
 // =====================================================
 
 interface User {
@@ -366,8 +425,38 @@ function createApp() {
     res.json({ message: 'pong', timestamp: new Date().toISOString() });
   });
 
+  // Health check endpoint with DB status
+  app.get('/api/health', async (req, res) => {
+    const dbConnected = isDatabaseAvailable();
+    let dbTest = false;
+    
+    if (dbConnected && pgDb) {
+      try {
+        // Test query
+        await pgDb.select().from(usersTable).limit(1);
+        dbTest = true;
+      } catch (e) {
+        console.error('[Health Check DB Error]', e);
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        database: {
+          configured: dbConnected,
+          connected: dbTest,
+          url: databaseUrl ? `${databaseUrl.substring(0, 30)}...` : 'not set',
+        },
+        inMemoryUsers: users.size,
+      },
+    });
+  });
+
   // User login
-  app.post('/api/users/login', (req, res) => {
+  app.post('/api/users/login', async (req, res) => {
     try {
       const { username, password } = req.body;
       
@@ -375,11 +464,58 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Username and password are required' });
       }
       
-      // Find user by username or email
-      const user = Array.from(users.values()).find(
-        u => u.username?.toLowerCase() === username.toLowerCase() || 
-             u.email.toLowerCase() === username.toLowerCase()
-      );
+      let user: User | undefined;
+      
+      // Try database first if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          const dbUsers = await pgDb.select().from(usersTable).where(
+            or(
+              ilike(usersTable.username, username),
+              ilike(usersTable.email, username)
+            )
+          ).limit(1);
+          
+          if (dbUsers.length > 0) {
+            const dbUser = dbUsers[0];
+            user = {
+              id: dbUser.id,
+              username: dbUser.username,
+              email: dbUser.email,
+              mobile: dbUser.mobile,
+              password: dbUser.password,
+              firstName: dbUser.firstName,
+              familyName: dbUser.familyName,
+              role: dbUser.role as User['role'],
+              isActive: dbUser.isActive,
+              isVerified: dbUser.isVerified,
+              emirate: dbUser.emirate || '',
+              address: dbUser.address || undefined,
+              createdAt: dbUser.createdAt.toISOString(),
+              updatedAt: dbUser.updatedAt.toISOString(),
+              lastLoginAt: dbUser.lastLoginAt?.toISOString(),
+              preferences: dbUser.preferences || {
+                language: 'en',
+                currency: 'AED',
+                emailNotifications: true,
+                smsNotifications: true,
+                marketingEmails: true,
+              },
+            };
+          }
+        } catch (dbError) {
+          console.error('[Login DB Error]', dbError);
+          // Fall back to in-memory
+        }
+      }
+      
+      // Fallback to in-memory if not found in DB
+      if (!user) {
+        user = Array.from(users.values()).find(
+          u => u.username?.toLowerCase() === username.toLowerCase() || 
+               u.email.toLowerCase() === username.toLowerCase()
+        );
+      }
 
       if (!user) {
         return res.status(401).json({ success: false, error: 'No account found with this username or email' });
@@ -396,6 +532,15 @@ function createApp() {
       const token = generateToken();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       sessions.set(token, { userId: user.id, expiresAt });
+      
+      // Update last login in DB if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          await pgDb.update(usersTable)
+            .set({ lastLoginAt: new Date() })
+            .where(eq(usersTable.id, user.id));
+        } catch (e) { /* ignore */ }
+      }
       user.lastLoginAt = new Date().toISOString();
 
       res.json({
@@ -414,7 +559,7 @@ function createApp() {
   });
 
   // Admin login
-  app.post('/api/users/admin-login', (req, res) => {
+  app.post('/api/users/admin-login', async (req, res) => {
     try {
       const { username, password } = req.body;
       
@@ -422,9 +567,51 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Username and password are required' });
       }
 
-      const user = Array.from(users.values()).find(
-        u => u.username?.toLowerCase() === username.toLowerCase() && u.role === 'admin'
-      );
+      let user: User | undefined;
+      
+      // Try database first if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          const dbUsers = await pgDb.select().from(usersTable).where(
+            ilike(usersTable.username, username)
+          ).limit(1);
+          
+          if (dbUsers.length > 0 && dbUsers[0].role === 'admin') {
+            const dbUser = dbUsers[0];
+            user = {
+              id: dbUser.id,
+              username: dbUser.username,
+              email: dbUser.email,
+              mobile: dbUser.mobile,
+              password: dbUser.password,
+              firstName: dbUser.firstName,
+              familyName: dbUser.familyName,
+              role: dbUser.role as User['role'],
+              isActive: dbUser.isActive,
+              isVerified: dbUser.isVerified,
+              emirate: dbUser.emirate || '',
+              createdAt: dbUser.createdAt.toISOString(),
+              updatedAt: dbUser.updatedAt.toISOString(),
+              preferences: dbUser.preferences || {
+                language: 'en',
+                currency: 'AED',
+                emailNotifications: true,
+                smsNotifications: true,
+                marketingEmails: false,
+              },
+            };
+          }
+        } catch (dbError) {
+          console.error('[Admin Login DB Error]', dbError);
+        }
+      }
+      
+      // Fallback to in-memory
+      if (!user) {
+        user = Array.from(users.values()).find(
+          u => u.username?.toLowerCase() === username.toLowerCase() && u.role === 'admin'
+        );
+      }
 
       if (!user || user.password !== password) {
         return res.status(401).json({ success: false, error: 'Invalid admin credentials' });
@@ -433,6 +620,14 @@ function createApp() {
       const token = generateToken();
       const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
       sessions.set(token, { userId: user.id, expiresAt });
+      
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          await pgDb.update(usersTable)
+            .set({ lastLoginAt: new Date() })
+            .where(eq(usersTable.id, user.id));
+        } catch (e) { /* ignore */ }
+      }
       user.lastLoginAt = new Date().toISOString();
 
       res.json({
@@ -451,7 +646,7 @@ function createApp() {
   });
 
   // Register user
-  app.post('/api/users', (req, res) => {
+  app.post('/api/users', async (req, res) => {
     try {
       const { username, email, mobile, password, firstName, familyName, emirate, address, deliveryAddress } = req.body;
       
@@ -464,6 +659,105 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Username must be at least 3 characters and contain only letters, numbers, and underscores' });
       }
 
+      const normalizedMobile = mobile.replace(/\s/g, '');
+      const userId = `user_${Date.now()}`;
+      
+      // Use database if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          // Check for existing username
+          const existingUsername = await pgDb.select().from(usersTable)
+            .where(ilike(usersTable.username, username)).limit(1);
+          if (existingUsername.length > 0) {
+            return res.status(400).json({ success: false, error: 'Username already taken' });
+          }
+
+          // Check for existing email
+          const existingEmail = await pgDb.select().from(usersTable)
+            .where(ilike(usersTable.email, email)).limit(1);
+          if (existingEmail.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already registered' });
+          }
+
+          // Check for existing mobile
+          const existingMobile = await pgDb.select().from(usersTable)
+            .where(eq(usersTable.mobile, normalizedMobile)).limit(1);
+          if (existingMobile.length > 0) {
+            return res.status(400).json({ success: false, error: 'Phone number already registered' });
+          }
+
+          // Insert new user into database
+          await pgDb.insert(usersTable).values({
+            id: userId,
+            username,
+            email: email.toLowerCase(),
+            mobile: normalizedMobile,
+            password,
+            firstName,
+            familyName,
+            role: 'customer',
+            isActive: true,
+            isVerified: false,
+            emirate,
+            address,
+            preferences: {
+              language: 'en',
+              currency: 'AED',
+              emailNotifications: true,
+              smsNotifications: true,
+              marketingEmails: true,
+            },
+          });
+
+          const newUser: User = {
+            id: userId,
+            username,
+            email: email.toLowerCase(),
+            mobile: normalizedMobile,
+            password,
+            firstName,
+            familyName,
+            role: 'customer',
+            isActive: true,
+            isVerified: false,
+            emirate,
+            address,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            preferences: {
+              language: 'en',
+              currency: 'AED',
+              emailNotifications: true,
+              smsNotifications: true,
+              marketingEmails: true,
+            },
+          };
+
+          // Also add to in-memory for session lookup
+          users.set(userId, newUser);
+
+          return res.status(201).json({
+            success: true,
+            data: sanitizeUser(newUser),
+            message: 'User registered successfully',
+          });
+        } catch (dbError: any) {
+          console.error('[Register DB Error]', dbError);
+          // Check for unique constraint violations
+          if (dbError.message?.includes('unique') || dbError.code === '23505') {
+            if (dbError.message?.includes('username')) {
+              return res.status(400).json({ success: false, error: 'Username already taken' });
+            }
+            if (dbError.message?.includes('email')) {
+              return res.status(400).json({ success: false, error: 'Email already registered' });
+            }
+            return res.status(400).json({ success: false, error: 'User already exists' });
+          }
+          return res.status(500).json({ success: false, error: 'Registration failed: Database error' });
+        }
+      }
+
+      // Fallback to in-memory only if database is not available
       const existingUsername = Array.from(users.values()).find(
         u => u.username?.toLowerCase() === username.toLowerCase()
       );
@@ -471,7 +765,6 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Username already taken' });
       }
 
-      // Check existing
       const existingEmail = Array.from(users.values()).find(
         u => u.email.toLowerCase() === email.toLowerCase()
       );
@@ -479,7 +772,6 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Email already registered' });
       }
 
-      const normalizedMobile = mobile.replace(/\s/g, '');
       const existingMobile = Array.from(users.values()).find(
         u => u.mobile.replace(/\s/g, '') === normalizedMobile
       );
@@ -487,7 +779,6 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Phone number already registered' });
       }
 
-      const userId = `user_${Date.now()}`;
       const newUser: User = {
         id: userId,
         username,
