@@ -126,7 +126,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [getStorageKey]);
 
-  // Poll for new notifications periodically (for same-tab scenarios)
+  // Track the last known localStorage state for comparison
+  const [lastStorageState, setLastStorageState] = useState<string>("");
+
+  // Poll for new notifications periodically (for same-tab and mobile scenarios)
   useEffect(() => {
     const storageKey = getStorageKey();
     if (!storageKey) return;
@@ -134,27 +137,40 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const checkForNewNotifications = () => {
       try {
         const stored = localStorage.getItem(storageKey);
-        if (stored) {
-          const parsed = JSON.parse(stored) as Notification[];
+        const storedValue = stored || "[]";
+        
+        // Compare the entire storage state to detect any changes (including mark as read)
+        if (storedValue !== lastStorageState) {
+          const parsed = JSON.parse(storedValue) as Notification[];
           const sorted = parsed.sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           ).slice(0, 50);
           
-          // Only update if there are new notifications (compare by length and first item id)
-          if (sorted.length !== notifications.length || 
-              (sorted.length > 0 && notifications.length > 0 && sorted[0].id !== notifications[0].id)) {
-            setNotifications(sorted);
-          }
+          setNotifications(sorted);
+          setLastStorageState(storedValue);
         }
       } catch {
         // Ignore errors
       }
     };
 
-    // Poll every 3 seconds for admin users to catch new order notifications
-    const intervalId = setInterval(checkForNewNotifications, 3000);
+    // Poll every 2 seconds for all users to catch notification updates on mobile
+    const intervalId = setInterval(checkForNewNotifications, 2000);
     return () => clearInterval(intervalId);
-  }, [getStorageKey, notifications.length, notifications[0]?.id]);
+  }, [getStorageKey, lastStorageState]);
+
+  // Update lastStorageState when notifications change from local actions
+  useEffect(() => {
+    const storageKey = getStorageKey();
+    if (!storageKey) return;
+
+    try {
+      const currentState = localStorage.getItem(storageKey) || "[]";
+      setLastStorageState(currentState);
+    } catch {
+      // Ignore errors
+    }
+  }, [notifications, getStorageKey]);
 
   // Save to localStorage whenever notifications change
   useEffect(() => {
