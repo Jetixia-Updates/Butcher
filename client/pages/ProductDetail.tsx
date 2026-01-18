@@ -200,12 +200,15 @@ export default function ProductDetailPage() {
       cutLabels.length > 0 ? cutLabels.join(", ") : null,
     ].filter(Boolean).join(" | ");
 
+    // Calculate discounted price for basket
+    const effectivePrice = product.discount ? product.price * (1 - product.discount / 100) : product.price;
+
     addItem({
       id: product.id,
       productId: product.id,
       name: product.name,
       nameAr: product.nameAr,
-      price: product.price,
+      price: Math.round(effectivePrice * 100) / 100, // Use discounted price
       quantity,
       image: product.image,
       category: product.category,
