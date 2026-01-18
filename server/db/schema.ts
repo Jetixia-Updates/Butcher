@@ -719,6 +719,177 @@ export const savedCards = pgTable("saved_cards", {
 });
 
 // =====================================================
+// WALLET TABLES
+// =====================================================
+
+export const walletTransactionTypeEnum = pgEnum("wallet_transaction_type", [
+  "credit",
+  "debit",
+  "refund",
+  "topup",
+  "cashback",
+]);
+
+export const wallets = pgTable("wallets", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  balance: decimal("balance", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const walletTransactions = pgTable("wallet_transactions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: walletTransactionTypeEnum("type").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  description: text("description").notNull(),
+  descriptionAr: text("description_ar").notNull(),
+  reference: varchar("reference", { length: 100 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// WISHLIST TABLE
+// =====================================================
+
+export const wishlists = pgTable("wishlists", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// PRODUCT REVIEWS TABLE
+// =====================================================
+
+export const productReviews = pgTable("product_reviews", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userName: varchar("user_name", { length: 200 }).notNull(),
+  rating: integer("rating").notNull(), // 1-5
+  title: varchar("title", { length: 200 }).notNull(),
+  comment: text("comment").notNull(),
+  images: jsonb("images").$type<string[]>(),
+  isVerifiedPurchase: boolean("is_verified_purchase").notNull().default(false),
+  helpfulCount: integer("helpful_count").notNull().default(0),
+  isApproved: boolean("is_approved").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// LOYALTY TABLES
+// =====================================================
+
+export const loyaltyTransactionTypeEnum = pgEnum("loyalty_transaction_type", [
+  "earn",
+  "redeem",
+  "bonus",
+  "expire",
+]);
+
+export const loyaltyPoints = pgTable("loyalty_points", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  points: integer("points").notNull().default(0),
+  totalEarned: integer("total_earned").notNull().default(0),
+  referralCode: varchar("referral_code", { length: 20 }).unique(),
+  referredBy: text("referred_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const loyaltyTransactions = pgTable("loyalty_transactions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: loyaltyTransactionTypeEnum("type").notNull(),
+  points: integer("points").notNull(),
+  description: text("description").notNull(),
+  orderId: text("order_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// APP SETTINGS TABLES
+// =====================================================
+
+export const appSettings = pgTable("app_settings", {
+  id: text("id").primaryKey().default("default"),
+  vatRate: decimal("vat_rate", { precision: 5, scale: 4 }).notNull().default("0.05"),
+  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull().default("15"),
+  freeDeliveryThreshold: decimal("free_delivery_threshold", { precision: 10, scale: 2 }).notNull().default("200"),
+  expressDeliveryFee: decimal("express_delivery_fee", { precision: 10, scale: 2 }).notNull().default("25"),
+  minimumOrderAmount: decimal("minimum_order_amount", { precision: 10, scale: 2 }).notNull().default("50"),
+  maxOrdersPerDay: integer("max_orders_per_day").notNull().default(100),
+  enableCashOnDelivery: boolean("enable_cash_on_delivery").notNull().default(true),
+  enableCardPayment: boolean("enable_card_payment").notNull().default(true),
+  enableWallet: boolean("enable_wallet").notNull().default(true),
+  enableLoyalty: boolean("enable_loyalty").notNull().default(true),
+  enableReviews: boolean("enable_reviews").notNull().default(true),
+  enableWishlist: boolean("enable_wishlist").notNull().default(true),
+  enableExpressDelivery: boolean("enable_express_delivery").notNull().default(true),
+  enableScheduledDelivery: boolean("enable_scheduled_delivery").notNull().default(true),
+  enableWelcomeBonus: boolean("enable_welcome_bonus").notNull().default(true),
+  welcomeBonus: decimal("welcome_bonus", { precision: 10, scale: 2 }).notNull().default("50"),
+  cashbackPercentage: decimal("cashback_percentage", { precision: 5, scale: 2 }).notNull().default("2"),
+  loyaltyPointsPerAed: decimal("loyalty_points_per_aed", { precision: 5, scale: 2 }).notNull().default("1"),
+  loyaltyPointValue: decimal("loyalty_point_value", { precision: 5, scale: 4 }).notNull().default("0.1"),
+  storePhone: varchar("store_phone", { length: 20 }).default("+971 4 123 4567"),
+  storeEmail: varchar("store_email", { length: 255 }).default("support@aljazirabutcher.ae"),
+  storeAddress: text("store_address"),
+  storeAddressAr: text("store_address_ar"),
+  workingHoursStart: varchar("working_hours_start", { length: 10 }).default("08:00"),
+  workingHoursEnd: varchar("working_hours_end", { length: 10 }).default("22:00"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const banners = pgTable("banners", {
+  id: text("id").primaryKey(),
+  titleEn: varchar("title_en", { length: 200 }).notNull(),
+  titleAr: varchar("title_ar", { length: 200 }).notNull(),
+  subtitleEn: text("subtitle_en"),
+  subtitleAr: text("subtitle_ar"),
+  image: text("image"),
+  bgColor: varchar("bg_color", { length: 100 }).notNull().default("from-red-800 to-red-900"),
+  link: text("link"),
+  badge: varchar("badge", { length: 50 }),
+  badgeAr: varchar("badge_ar", { length: 50 }),
+  enabled: boolean("enabled").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const deliveryTimeSlots = pgTable("delivery_time_slots", {
+  id: text("id").primaryKey(),
+  label: varchar("label", { length: 100 }).notNull(),
+  labelAr: varchar("label_ar", { length: 100 }).notNull(),
+  startTime: varchar("start_time", { length: 10 }).notNull(),
+  endTime: varchar("end_time", { length: 10 }).notNull(),
+  isExpressSlot: boolean("is_express_slot").notNull().default(false),
+  maxOrders: integer("max_orders").notNull().default(20),
+  enabled: boolean("enabled").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const loyaltyTiers = pgTable("loyalty_tiers", {
+  id: text("id").primaryKey(),
+  name: varchar("name", { length: 50 }).notNull(),
+  nameAr: varchar("name_ar", { length: 50 }).notNull(),
+  minPoints: integer("min_points").notNull(),
+  multiplier: decimal("multiplier", { precision: 3, scale: 1 }).notNull().default("1"),
+  benefits: jsonb("benefits").$type<string[]>().notNull(),
+  benefitsAr: jsonb("benefits_ar").$type<string[]>().notNull(),
+  icon: varchar("icon", { length: 10 }).notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// =====================================================
 // RELATIONS
 // =====================================================
 

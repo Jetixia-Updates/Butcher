@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { useAuth } from "./AuthContext";
-import { useSettings } from "./SettingsContext";
+import { walletApi, WalletTransaction as ApiWalletTransaction } from "@/lib/api";
 
 export interface WalletTransaction {
   id: string;
@@ -18,9 +18,10 @@ interface WalletContextType {
   isLoading: boolean;
   topUp: (amount: number, paymentMethod: string) => Promise<boolean>;
   deduct: (amount: number, description: string, descriptionAr: string, reference?: string) => Promise<boolean>;
-  addCashback: (amount: number, orderNumber: string) => void;
-  addRefund: (amount: number, orderNumber: string) => void;
+  addCashback: (amount: number, orderNumber: string) => Promise<void>;
+  addRefund: (amount: number, orderNumber: string) => Promise<void>;
   canPay: (amount: number) => boolean;
+  refresh: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -39,82 +40,71 @@ interface WalletProviderProps {
 
 export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  const { settings } = useSettings();
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Get welcome bonus from settings
-  const welcomeBonus = settings?.enableWelcomeBonus ? (settings?.welcomeBonus || 50) : 0;
+  // Convert API transaction to local format
+  const mapTransaction = (t: ApiWalletTransaction): WalletTransaction => ({
+    id: t.id,
+    type: t.type as WalletTransaction["type"],
+    amount: parseFloat(t.amount),
+    description: t.description,
+    descriptionAr: t.descriptionAr,
+    reference: t.reference || undefined,
+    createdAt: t.createdAt,
+  });
 
-  // Storage key based on user
-  const getStorageKey = () => `aljazira_wallet_${user?.id || "guest"}`;
-  const getTransactionsKey = () => `aljazira_wallet_transactions_${user?.id || "guest"}`;
+  // Fetch wallet data from API
+  const fetchWallet = useCallback(async () => {
+    if (!user?.id) {
+      setBalance(0);
+      setTransactions([]);
+      return;
+    }
+
+    try {
+      const response = await walletApi.get();
+      if (response.success && response.data) {
+        setBalance(parseFloat(response.data.balance));
+        setTransactions(response.data.transactions.map(mapTransaction));
+      }
+    } catch (error) {
+      console.error("Error fetching wallet:", error);
+    }
+  }, [user?.id]);
 
   // Load wallet data on mount and user change
   useEffect(() => {
-    if (user?.id) {
-      const savedBalance = localStorage.getItem(getStorageKey());
-      const savedTransactions = localStorage.getItem(getTransactionsKey());
-      
-      if (savedBalance) {
-        setBalance(parseFloat(savedBalance));
-      } else if (welcomeBonus > 0) {
-        // Demo: Give new users welcome bonus from settings
-        setBalance(welcomeBonus);
-        localStorage.setItem(getStorageKey(), welcomeBonus.toString());
-        
-        const welcomeTransaction: WalletTransaction = {
-          id: `txn_welcome_${Date.now()}`,
-          type: "credit",
-          amount: welcomeBonus,
-          description: "Welcome bonus! Start shopping with us",
-          descriptionAr: "مكافأة ترحيبية! ابدأ التسوق معنا",
-          createdAt: new Date().toISOString(),
-        };
-        setTransactions([welcomeTransaction]);
-        localStorage.setItem(getTransactionsKey(), JSON.stringify([welcomeTransaction]));
-      }
-      
-      if (savedTransactions) {
-        setTransactions(JSON.parse(savedTransactions));
-      }
-    } else {
-      setBalance(0);
-      setTransactions([]);
-    }
-  }, [user?.id, welcomeBonus]);
+    fetchWallet();
+  }, [fetchWallet]);
 
-  // Save to storage when balance or transactions change
+  // Poll for updates every 30 seconds when user is logged in
   useEffect(() => {
-    if (user?.id) {
-      localStorage.setItem(getStorageKey(), balance.toString());
-      localStorage.setItem(getTransactionsKey(), JSON.stringify(transactions));
-    }
-  }, [balance, transactions, user?.id]);
+    if (!user?.id) return;
+
+    const interval = setInterval(fetchWallet, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id, fetchWallet]);
+
+  // Refresh wallet data
+  const refresh = async () => {
+    await fetchWallet();
+  };
 
   // Top up wallet
   const topUp = async (amount: number, paymentMethod: string): Promise<boolean> => {
-    if (amount <= 0) return false;
+    if (amount <= 0 || !user?.id) return false;
 
     setIsLoading(true);
     try {
-      // Simulate payment processing
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      const transaction: WalletTransaction = {
-        id: `txn_topup_${Date.now()}`,
-        type: "topup",
-        amount,
-        description: `Wallet top-up via ${paymentMethod}`,
-        descriptionAr: `شحن المحفظة عبر ${paymentMethod === "card" ? "البطاقة" : paymentMethod === "apple_pay" ? "Apple Pay" : paymentMethod}`,
-        createdAt: new Date().toISOString(),
-      };
-
-      setBalance((prev) => prev + amount);
-      setTransactions((prev) => [transaction, ...prev]);
-
-      return true;
+      const response = await walletApi.topUp(amount, paymentMethod);
+      if (response.success && response.data) {
+        // Refresh to get updated transactions
+        await fetchWallet();
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error("Top-up failed:", error);
       return false;
@@ -130,63 +120,57 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     descriptionAr: string,
     reference?: string
   ): Promise<boolean> => {
-    if (amount <= 0 || amount > balance) return false;
+    if (amount <= 0 || amount > balance || !user?.id) return false;
 
     setIsLoading(true);
     try {
-      const transaction: WalletTransaction = {
-        id: `txn_debit_${Date.now()}`,
-        type: "debit",
-        amount: -amount,
-        description,
-        descriptionAr,
-        reference,
-        createdAt: new Date().toISOString(),
-      };
-
-      setBalance((prev) => prev - amount);
-      setTransactions((prev) => [transaction, ...prev]);
-
-      return true;
+      const response = await walletApi.deduct(user.id, amount, description, descriptionAr, reference);
+      if (response.success && response.data) {
+        // Refresh to get updated transactions
+        await fetchWallet();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Deduct failed:", error);
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
 
   // Add cashback
-  const addCashback = (amount: number, orderNumber: string) => {
-    if (amount <= 0) return;
+  const addCashback = async (amount: number, orderNumber: string) => {
+    if (amount <= 0 || !user?.id) return;
 
-    const transaction: WalletTransaction = {
-      id: `txn_cashback_${Date.now()}`,
-      type: "cashback",
-      amount,
-      description: `Cashback from order #${orderNumber}`,
-      descriptionAr: `استرداد نقدي من الطلب #${orderNumber}`,
-      reference: orderNumber,
-      createdAt: new Date().toISOString(),
-    };
-
-    setBalance((prev) => prev + amount);
-    setTransactions((prev) => [transaction, ...prev]);
+    try {
+      await walletApi.addCredit(
+        user.id,
+        amount,
+        `Cashback from order #${orderNumber}`,
+        "cashback"
+      );
+      await fetchWallet();
+    } catch (error) {
+      console.error("Add cashback failed:", error);
+    }
   };
 
   // Add refund
-  const addRefund = (amount: number, orderNumber: string) => {
-    if (amount <= 0) return;
+  const addRefund = async (amount: number, orderNumber: string) => {
+    if (amount <= 0 || !user?.id) return;
 
-    const transaction: WalletTransaction = {
-      id: `txn_refund_${Date.now()}`,
-      type: "refund",
-      amount,
-      description: `Refund for order #${orderNumber}`,
-      descriptionAr: `استرداد للطلب #${orderNumber}`,
-      reference: orderNumber,
-      createdAt: new Date().toISOString(),
-    };
-
-    setBalance((prev) => prev + amount);
-    setTransactions((prev) => [transaction, ...prev]);
+    try {
+      await walletApi.addCredit(
+        user.id,
+        amount,
+        `Refund for order #${orderNumber}`,
+        "refund"
+      );
+      await fetchWallet();
+    } catch (error) {
+      console.error("Add refund failed:", error);
+    }
   };
 
   // Check if can pay
@@ -205,6 +189,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         addCashback,
         addRefund,
         canPay,
+        refresh,
       }}
     >
       {children}

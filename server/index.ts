@@ -15,6 +15,12 @@ import productsRouter from "./routes/products";
 import suppliersRouter from "./routes/suppliers";
 import financeRouter from "./routes/finance";
 import notificationsRouter from "./routes/notifications";
+import walletRouter from "./routes/wallet";
+import wishlistRouter from "./routes/wishlist";
+import reviewsRouter from "./routes/reviews";
+import loyaltyRouter from "./routes/loyalty";
+import settingsRouter from "./routes/settings";
+import addressesRouter from "./routes/addresses";
 
 export function createServer() {
   const app = express();
@@ -160,6 +166,54 @@ export function createServer() {
   // DELETE /api/notifications/:id - Delete notification
   // DELETE /api/notifications - Clear all notifications
   app.use("/api/notifications", notificationsRouter);
+
+  // Wallet Management
+  // GET /api/wallet - Get wallet balance and transactions
+  // POST /api/wallet/topup - Top up wallet
+  // POST /api/wallet/deduct - Deduct from wallet (for payments)
+  // POST /api/wallet/credit - Add credit (refunds, cashback)
+  app.use("/api/wallet", walletRouter);
+
+  // Wishlist Management
+  // GET /api/wishlist - Get user's wishlist
+  // POST /api/wishlist - Add item to wishlist
+  // DELETE /api/wishlist/:productId - Remove item from wishlist
+  // DELETE /api/wishlist - Clear wishlist
+  app.use("/api/wishlist", wishlistRouter);
+
+  // Product Reviews
+  // GET /api/reviews - Get all reviews (with optional productId filter)
+  // GET /api/reviews/product/:productId - Get reviews with stats for a product
+  // POST /api/reviews - Create a review
+  // PUT /api/reviews/:id - Update a review
+  // DELETE /api/reviews/:id - Delete a review
+  // POST /api/reviews/:id/helpful - Mark review as helpful
+  app.use("/api/reviews", reviewsRouter);
+
+  // Loyalty Points Program
+  // GET /api/loyalty - Get user's loyalty points and tier
+  // POST /api/loyalty/earn - Earn points from order
+  // POST /api/loyalty/redeem - Redeem points
+  // POST /api/loyalty/referral - Apply referral code
+  // GET /api/loyalty/tiers - Get all loyalty tiers
+  app.use("/api/loyalty", loyaltyRouter);
+
+  // App Settings & Configuration
+  // GET /api/settings - Get all settings, banners, time slots, promo codes
+  // PUT /api/settings - Update settings
+  // POST/PUT/DELETE /api/settings/banners/:id - Manage banners
+  // POST/PUT/DELETE /api/settings/time-slots/:id - Manage time slots
+  // POST/PUT/DELETE /api/settings/promo-codes/:id - Manage promo codes
+  // POST /api/settings/promo-codes/validate - Validate promo code
+  app.use("/api/settings", settingsRouter);
+
+  // User Addresses
+  // GET /api/addresses - Get user's addresses
+  // POST /api/addresses - Create address
+  // PUT /api/addresses/:id - Update address
+  // DELETE /api/addresses/:id - Delete address
+  // PUT /api/addresses/:id/default - Set as default
+  app.use("/api/addresses", addressesRouter);
 
   return app;
 }

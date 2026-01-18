@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
+import { wishlistApi, WishlistItem as ApiWishlistItem } from "@/lib/api";
 
 export interface WishlistItem {
   id: string;
@@ -15,11 +16,13 @@ export interface WishlistItem {
 interface WishlistContextType {
   items: WishlistItem[];
   isInWishlist: (productId: string) => boolean;
-  addToWishlist: (item: Omit<WishlistItem, "id" | "addedAt">) => void;
-  removeFromWishlist: (productId: string) => void;
-  toggleWishlist: (item: Omit<WishlistItem, "id" | "addedAt">) => void;
-  clearWishlist: () => void;
+  addToWishlist: (item: Omit<WishlistItem, "id" | "addedAt">) => Promise<void>;
+  removeFromWishlist: (productId: string) => Promise<void>;
+  toggleWishlist: (item: Omit<WishlistItem, "id" | "addedAt">) => Promise<void>;
+  clearWishlist: () => Promise<void>;
   itemCount: number;
+  isLoading: boolean;
+  refresh: () => Promise<void>;
 }
 
 const WishlistContext = createContext<WishlistContextType | undefined>(undefined);
@@ -27,72 +30,116 @@ const WishlistContext = createContext<WishlistContextType | undefined>(undefined
 export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [items, setItems] = useState<WishlistItem[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Get storage key based on user
-  const getStorageKey = useCallback(() => {
-    return user?.id ? `wishlist_${user.id}` : 'wishlist_guest';
+  // Convert API item to local format
+  const mapWishlistItem = (item: ApiWishlistItem): WishlistItem => ({
+    id: item.id,
+    productId: item.productId,
+    name: item.product?.name || "",
+    nameAr: item.product?.nameAr || "",
+    price: item.product ? parseFloat(item.product.price) : 0,
+    image: item.product?.image || undefined,
+    category: item.product?.category || "",
+    addedAt: item.createdAt,
+  });
+
+  // Fetch wishlist from API
+  const fetchWishlist = useCallback(async () => {
+    if (!user?.id) {
+      setItems([]);
+      return;
+    }
+
+    try {
+      const response = await wishlistApi.getAll();
+      if (response.success && response.data) {
+        setItems(response.data.map(mapWishlistItem));
+      }
+    } catch (error) {
+      console.error("Error fetching wishlist:", error);
+    }
   }, [user?.id]);
 
-  // Load wishlist from localStorage on mount or user change
+  // Load wishlist on mount or user change
   useEffect(() => {
-    const storageKey = getStorageKey();
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        setItems(JSON.parse(saved));
-      } catch {
-        setItems([]);
-      }
-    } else {
-      setItems([]);
-    }
-    setIsInitialized(true);
-  }, [getStorageKey]);
+    fetchWishlist();
+  }, [fetchWishlist]);
 
-  // Save to localStorage whenever items change (only after initialization)
-  useEffect(() => {
-    if (isInitialized) {
-      const storageKey = getStorageKey();
-      localStorage.setItem(storageKey, JSON.stringify(items));
-    }
-  }, [items, getStorageKey, isInitialized]);
+  // Refresh wishlist data
+  const refresh = async () => {
+    await fetchWishlist();
+  };
 
   const isInWishlist = useCallback((productId: string) => {
     return items.some((item) => item.productId === productId);
   }, [items]);
 
-  const addToWishlist = useCallback((item: Omit<WishlistItem, "id" | "addedAt">) => {
+  const addToWishlist = useCallback(async (item: Omit<WishlistItem, "id" | "addedAt">) => {
+    if (!user?.id) return;
+    
+    // Optimistic update
+    const tempItem: WishlistItem = {
+      ...item,
+      id: `temp_${Date.now()}`,
+      addedAt: new Date().toISOString(),
+    };
     setItems((prev) => {
-      // Check if already in wishlist using prev state to avoid stale closure
-      const alreadyExists = prev.some((existing) => existing.productId === item.productId);
-      if (alreadyExists) {
+      if (prev.some((existing) => existing.productId === item.productId)) {
         return prev;
       }
-      const newItem: WishlistItem = {
-        ...item,
-        id: `wishlist_${Date.now()}`,
-        addedAt: new Date().toISOString(),
-      };
-      return [...prev, newItem];
+      return [...prev, tempItem];
     });
-  }, []);
 
-  const removeFromWishlist = useCallback((productId: string) => {
+    try {
+      await wishlistApi.add(item.productId);
+      await fetchWishlist();
+    } catch (error) {
+      console.error("Error adding to wishlist:", error);
+      // Revert on error
+      setItems((prev) => prev.filter((i) => i.id !== tempItem.id));
+    }
+  }, [user?.id, fetchWishlist]);
+
+  const removeFromWishlist = useCallback(async (productId: string) => {
+    if (!user?.id) return;
+    
+    // Optimistic update
+    const removedItems = items.filter((item) => item.productId === productId);
     setItems((prev) => prev.filter((item) => item.productId !== productId));
-  }, []);
 
-  const toggleWishlist = useCallback((item: Omit<WishlistItem, "id" | "addedAt">) => {
+    try {
+      await wishlistApi.remove(productId);
+    } catch (error) {
+      console.error("Error removing from wishlist:", error);
+      // Revert on error
+      setItems((prev) => [...prev, ...removedItems]);
+    }
+  }, [user?.id, items]);
+
+  const toggleWishlist = useCallback(async (item: Omit<WishlistItem, "id" | "addedAt">) => {
     if (isInWishlist(item.productId)) {
-      removeFromWishlist(item.productId);
+      await removeFromWishlist(item.productId);
     } else {
-      addToWishlist(item);
+      await addToWishlist(item);
     }
   }, [isInWishlist, addToWishlist, removeFromWishlist]);
 
-  const clearWishlist = useCallback(() => {
+  const clearWishlist = useCallback(async () => {
+    if (!user?.id) return;
+    
+    // Optimistic update
+    const oldItems = [...items];
     setItems([]);
-  }, []);
+
+    try {
+      await wishlistApi.clear();
+    } catch (error) {
+      console.error("Error clearing wishlist:", error);
+      // Revert on error
+      setItems(oldItems);
+    }
+  }, [user?.id, items]);
 
   return (
     <WishlistContext.Provider
@@ -104,6 +151,8 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         toggleWishlist,
         clearWishlist,
         itemCount: items.length,
+        isLoading,
+        refresh,
       }}
     >
       {children}

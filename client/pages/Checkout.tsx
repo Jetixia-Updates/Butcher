@@ -542,13 +542,13 @@ export default function CheckoutPage() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
 
-  const handleApplyPromo = () => {
+  const handleApplyPromo = async () => {
     setPromoError(null);
     setIsApplyingPromo(true);
     
-    // Validate promo code using SettingsContext
-    setTimeout(() => {
-      const result = validatePromoCode(promoCode, subtotal);
+    try {
+      // Validate promo code using SettingsContext
+      const result = await validatePromoCode(promoCode, subtotal);
       
       if (result.valid && result.promo) {
         setPromoApplied({ 
@@ -565,8 +565,11 @@ export default function CheckoutPage() {
             : (result.error || "Invalid promo code")
         );
       }
+    } catch (error) {
+      setPromoError(isRTL ? "حدث خطأ" : "An error occurred");
+    } finally {
       setIsApplyingPromo(false);
-    }, 300);
+    }
   };
 
   const handleRemovePromo = () => {
@@ -731,64 +734,17 @@ export default function CheckoutPage() {
       try {
         // First, try to get addresses from API
         const response = await deliveryApi.getAddresses(user.id);
-        let apiAddresses: Address[] = [];
         if (response.success && response.data) {
-          apiAddresses = response.data;
-        }
-
-        // Also load addresses from localStorage (saved from Profile page)
-        let localAddresses: Address[] = [];
-        const savedLocal = localStorage.getItem(`addresses_${user.id}`);
-        if (savedLocal) {
-          try {
-            const parsed = JSON.parse(savedLocal);
-            // Ensure all local addresses have proper structure
-            localAddresses = parsed.map((addr: any) => ({
-              ...addr,
-              userId: user.id,
-              createdAt: addr.createdAt || new Date().toISOString(),
-              updatedAt: addr.updatedAt || new Date().toISOString(),
-            }));
-          } catch (e) {
-            console.error("Failed to parse local addresses:", e);
+          setAddresses(response.data);
+          
+          // Select default address or first address
+          const defaultAddress = response.data.find(a => a.isDefault) || response.data[0];
+          if (defaultAddress) {
+            setSelectedAddressId(defaultAddress.id);
           }
-        }
-
-        // Merge addresses: API addresses take priority, add local addresses that don't exist in API
-        const apiAddressIds = new Set(apiAddresses.map(a => a.id));
-        const uniqueLocalAddresses = localAddresses.filter(a => !apiAddressIds.has(a.id));
-        const mergedAddresses = [...apiAddresses, ...uniqueLocalAddresses];
-
-        setAddresses(mergedAddresses);
-        
-        // Select default address or first address
-        const defaultAddress = mergedAddresses.find(a => a.isDefault) || mergedAddresses[0];
-        if (defaultAddress) {
-          setSelectedAddressId(defaultAddress.id);
         }
       } catch (err) {
         console.error("Failed to fetch addresses:", err);
-        
-        // Fallback to localStorage only if API fails
-        const savedLocal = localStorage.getItem(`addresses_${user.id}`);
-        if (savedLocal) {
-          try {
-            const parsed = JSON.parse(savedLocal);
-            const localAddresses = parsed.map((addr: any) => ({
-              ...addr,
-              userId: user.id,
-              createdAt: addr.createdAt || new Date().toISOString(),
-              updatedAt: addr.updatedAt || new Date().toISOString(),
-            }));
-            setAddresses(localAddresses);
-            const defaultAddress = localAddresses.find((a: Address) => a.isDefault) || localAddresses[0];
-            if (defaultAddress) {
-              setSelectedAddressId(defaultAddress.id);
-            }
-          } catch (e) {
-            console.error("Failed to parse local addresses:", e);
-          }
-        }
       }
       setIsLoadingAddresses(false);
     };
@@ -899,13 +855,6 @@ export default function CheckoutPage() {
     setAddressForm(EMPTY_ADDRESS_FORM);
   };
 
-  // Sync addresses with localStorage for Profile page compatibility
-  const syncAddressesToLocalStorage = (updatedAddresses: Address[]) => {
-    if (user?.id) {
-      localStorage.setItem(`addresses_${user.id}`, JSON.stringify(updatedAddresses));
-    }
-  };
-
   const handleLocationSelect = (lat: number, lng: number, formattedAddress?: string) => {
     setAddressForm(prev => ({
       ...prev,
@@ -961,7 +910,6 @@ export default function CheckoutPage() {
           // Update local state
           const updatedAddresses = addresses.map(a => a.id === editingAddress.id ? response.data! : a);
           setAddresses(updatedAddresses);
-          syncAddressesToLocalStorage(updatedAddresses);
           handleCloseModal();
         } else {
           setError(response.error || "Failed to update address");
@@ -987,7 +935,6 @@ export default function CheckoutPage() {
           // Add to local state and select it
           const updatedAddresses = [...addresses, response.data!];
           setAddresses(updatedAddresses);
-          syncAddressesToLocalStorage(updatedAddresses);
           setSelectedAddressId(response.data.id);
           handleCloseModal();
         } else {
@@ -1009,7 +956,6 @@ export default function CheckoutPage() {
       if (response.success) {
         const updatedAddresses = addresses.filter(a => a.id !== addressId);
         setAddresses(updatedAddresses);
-        syncAddressesToLocalStorage(updatedAddresses);
         if (selectedAddressId === addressId) {
           setSelectedAddressId(updatedAddresses[0]?.id || null);
         }

@@ -1,9 +1,17 @@
 /**
  * Settings Context
  * Manages all admin-configurable settings: VAT, delivery, promo codes, banners, loyalty, etc.
+ * Now uses database API instead of localStorage
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { 
+  settingsApi, 
+  AppSettings as ApiAppSettings, 
+  Banner as ApiBanner,
+  DeliveryTimeSlot as ApiTimeSlot,
+  PromoCode as ApiPromoCode,
+} from "@/lib/api";
 
 // Promo Code Type
 export interface PromoCode {
@@ -108,27 +116,27 @@ export interface StoreSettings {
 interface SettingsContextType {
   // Store Settings
   settings: StoreSettings;
-  updateSettings: (updates: Partial<StoreSettings>) => void;
+  updateSettings: (updates: Partial<StoreSettings>) => Promise<void>;
   
   // Promo Codes
   promoCodes: PromoCode[];
-  addPromoCode: (code: Omit<PromoCode, "id" | "usedCount">) => void;
-  updatePromoCode: (id: string, updates: Partial<PromoCode>) => void;
-  deletePromoCode: (id: string) => void;
-  validatePromoCode: (code: string, orderTotal: number) => { valid: boolean; error?: string; promo?: PromoCode };
+  addPromoCode: (code: Omit<PromoCode, "id" | "usedCount">) => Promise<void>;
+  updatePromoCode: (id: string, updates: Partial<PromoCode>) => Promise<void>;
+  deletePromoCode: (id: string) => Promise<void>;
+  validatePromoCode: (code: string, orderTotal: number) => Promise<{ valid: boolean; error?: string; promo?: PromoCode; discount?: number }>;
   
   // Banners
   banners: Banner[];
-  addBanner: (banner: Omit<Banner, "id">) => void;
-  updateBanner: (id: string, updates: Partial<Banner>) => void;
-  deleteBanner: (id: string) => void;
+  addBanner: (banner: Omit<Banner, "id">) => Promise<void>;
+  updateBanner: (id: string, updates: Partial<Banner>) => Promise<void>;
+  deleteBanner: (id: string) => Promise<void>;
   reorderBanners: (bannerIds: string[]) => void;
   
   // Time Slots
   timeSlots: TimeSlot[];
-  addTimeSlot: (slot: Omit<TimeSlot, "id">) => void;
-  updateTimeSlot: (id: string, updates: Partial<TimeSlot>) => void;
-  deleteTimeSlot: (id: string) => void;
+  addTimeSlot: (slot: Omit<TimeSlot, "id">) => Promise<void>;
+  updateTimeSlot: (id: string, updates: Partial<TimeSlot>) => Promise<void>;
+  deleteTimeSlot: (id: string) => Promise<void>;
   
   // Loyalty Tiers
   loyaltyTiers: LoyaltyTier[];
@@ -138,16 +146,13 @@ interface SettingsContextType {
   exportSettings: () => string;
   importSettings: (jsonData: string) => boolean;
   resetToDefaults: () => void;
+  
+  // Loading and refresh
+  isLoading: boolean;
+  refresh: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
-
-// Storage keys
-const SETTINGS_STORAGE_KEY = "butcher_admin_settings";
-const PROMO_CODES_STORAGE_KEY = "butcher_promo_codes";
-const BANNERS_STORAGE_KEY = "butcher_banners";
-const TIME_SLOTS_STORAGE_KEY = "butcher_time_slots";
-const LOYALTY_TIERS_STORAGE_KEY = "butcher_loyalty_tiers";
 
 // Default Settings
 const DEFAULT_SETTINGS: StoreSettings = {
@@ -188,58 +193,7 @@ const DEFAULT_SETTINGS: StoreSettings = {
   enableLowStockAlerts: true,
 };
 
-// Default Promo Codes
-const DEFAULT_PROMO_CODES: PromoCode[] = [
-  { id: "1", code: "WELCOME10", discount: 10, type: "percent", enabled: true, usedCount: 0, description: "Welcome discount for new users" },
-  { id: "2", code: "SAVE20", discount: 20, type: "fixed", enabled: true, usedCount: 0, description: "Save 20 AED on your order" },
-  { id: "3", code: "MEAT15", discount: 15, type: "percent", minOrder: 100, enabled: true, usedCount: 0, description: "15% off on orders over 100 AED" },
-  { id: "4", code: "FIRSTORDER", discount: 25, type: "fixed", enabled: true, usedCount: 0, description: "25 AED off first order" },
-  { id: "5", code: "FRESH20", discount: 20, type: "percent", minOrder: 150, enabled: true, usedCount: 0, description: "20% off fresh meat" },
-  { id: "6", code: "MEAT50", discount: 50, type: "fixed", minOrder: 200, enabled: true, usedCount: 0, description: "50 AED off orders over 200" },
-  { id: "7", code: "EIDJOY", discount: 30, type: "percent", minOrder: 300, expiryDate: "2026-12-31", enabled: true, usedCount: 0, description: "Eid special discount" },
-];
-
-// Default Banners
-const DEFAULT_BANNERS: Banner[] = [
-  {
-    id: "1",
-    titleEn: "Premium Quality Meats",
-    titleAr: "لحوم عالية الجودة",
-    subtitleEn: "Fresh cuts delivered to your door",
-    subtitleAr: "قطع طازجة تصل إلى باب منزلك",
-    image: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=800&q=80",
-    bgColor: "from-red-600 to-red-800",
-    link: "/products",
-    badge: "Premium",
-    badgeAr: "ممتاز",
-    enabled: true,
-    order: 1,
-  },
-  {
-    id: "2",
-    titleEn: "Free Delivery",
-    titleAr: "توصيل مجاني",
-    subtitleEn: "On orders above 200 AED",
-    subtitleAr: "للطلبات فوق 200 درهم",
-    image: "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=800&q=80",
-    bgColor: "from-amber-600 to-amber-800",
-    link: "/products",
-    badge: "Free Delivery",
-    badgeAr: "توصيل مجاني",
-    enabled: true,
-    order: 2,
-  },
-];
-
-// Default Time Slots
-const DEFAULT_TIME_SLOTS: TimeSlot[] = [
-  { id: "1", start: "09:00", end: "12:00", enabled: true },
-  { id: "2", start: "12:00", end: "15:00", enabled: true },
-  { id: "3", start: "15:00", end: "18:00", enabled: true },
-  { id: "4", start: "18:00", end: "21:00", enabled: true },
-];
-
-// Default Loyalty Tiers
+// Default Loyalty Tiers (kept in memory, can be extended to API later)
 const DEFAULT_LOYALTY_TIERS: LoyaltyTier[] = [
   {
     id: "bronze",
@@ -289,127 +243,247 @@ const DEFAULT_LOYALTY_TIERS: LoyaltyTier[] = [
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
-  const [promoCodes, setPromoCodes] = useState<PromoCode[]>(DEFAULT_PROMO_CODES);
-  const [banners, setBanners] = useState<Banner[]>(DEFAULT_BANNERS);
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>(DEFAULT_TIME_SLOTS);
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [loyaltyTiers, setLoyaltyTiers] = useState<LoyaltyTier[]>(DEFAULT_LOYALTY_TIERS);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load from localStorage on mount
-  useEffect(() => {
+  // Convert API settings to local format
+  const mapSettings = (apiSettings: ApiAppSettings): StoreSettings => ({
+    storeName: "Butcher Shop",
+    storeNameAr: "متجر اللحوم",
+    contactEmail: apiSettings.storeEmail,
+    contactPhone: apiSettings.storePhone,
+    vatRate: parseFloat(apiSettings.vatRate) * 100, // Convert from decimal to percent
+    taxRegistrationNumber: "100123456700003",
+    showVatOnInvoice: true,
+    minOrderValue: parseFloat(apiSettings.minimumOrderAmount),
+    defaultDeliveryFee: parseFloat(apiSettings.deliveryFee),
+    freeDeliveryThreshold: parseFloat(apiSettings.freeDeliveryThreshold),
+    expressDeliveryFee: parseFloat(apiSettings.expressDeliveryFee),
+    enableCOD: apiSettings.enableCashOnDelivery,
+    enableCardPayment: apiSettings.enableCardPayment,
+    enableWalletPayment: apiSettings.enableWallet,
+    tipOptions: [5, 10, 15, 20],
+    enableTipping: true,
+    welcomeBonus: parseFloat(apiSettings.welcomeBonus),
+    enableWelcomeBonus: apiSettings.enableWelcomeBonus,
+    pointsPerAed: parseFloat(apiSettings.loyaltyPointsPerAed),
+    pointsToAedRate: parseFloat(apiSettings.loyaltyPointValue) * 10,
+    referralBonus: 100,
+    birthdayBonus: 50,
+    sameDayCutoffHours: 2,
+    maxAdvanceOrderDays: 7,
+    enableEmailNotifications: true,
+    enableSmsNotifications: true,
+    enablePushNotifications: true,
+    enableLowStockAlerts: true,
+  });
+
+  // Convert API banner to local format
+  const mapBanner = (b: ApiBanner): Banner => ({
+    id: b.id,
+    titleEn: b.titleEn,
+    titleAr: b.titleAr,
+    subtitleEn: b.subtitleEn || "",
+    subtitleAr: b.subtitleAr || "",
+    image: b.image || "",
+    bgColor: b.bgColor,
+    link: b.link || "/products",
+    badge: b.badge || undefined,
+    badgeAr: b.badgeAr || undefined,
+    enabled: b.enabled,
+    order: b.sortOrder,
+  });
+
+  // Convert API time slot to local format
+  const mapTimeSlot = (s: ApiTimeSlot): TimeSlot => ({
+    id: s.id,
+    start: s.startTime,
+    end: s.endTime,
+    enabled: s.enabled,
+  });
+
+  // Convert API promo code to local format
+  const mapPromoCode = (p: ApiPromoCode): PromoCode => ({
+    id: p.id,
+    code: p.code,
+    discount: parseFloat(p.value),
+    type: p.type === "percentage" ? "percent" : "fixed",
+    minOrder: parseFloat(p.minimumOrder) || undefined,
+    maxDiscount: p.maximumDiscount ? parseFloat(p.maximumDiscount) : undefined,
+    maxUses: p.usageLimit || undefined,
+    usedCount: p.usageCount,
+    expiryDate: p.validTo,
+    enabled: p.isActive,
+  });
+
+  // Fetch all settings from API
+  const fetchSettings = useCallback(async () => {
     try {
-      const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (savedSettings) setSettings(JSON.parse(savedSettings));
-      
-      const savedPromoCodes = localStorage.getItem(PROMO_CODES_STORAGE_KEY);
-      if (savedPromoCodes) setPromoCodes(JSON.parse(savedPromoCodes));
-      
-      const savedBanners = localStorage.getItem(BANNERS_STORAGE_KEY);
-      if (savedBanners) setBanners(JSON.parse(savedBanners));
-      
-      const savedTimeSlots = localStorage.getItem(TIME_SLOTS_STORAGE_KEY);
-      if (savedTimeSlots) setTimeSlots(JSON.parse(savedTimeSlots));
-      
-      const savedLoyaltyTiers = localStorage.getItem(LOYALTY_TIERS_STORAGE_KEY);
-      if (savedLoyaltyTiers) setLoyaltyTiers(JSON.parse(savedLoyaltyTiers));
+      const response = await settingsApi.getAll();
+      if (response.success && response.data) {
+        setSettings(mapSettings(response.data.settings));
+        setBanners(response.data.banners.map(mapBanner));
+        setTimeSlots(response.data.timeSlots.map(mapTimeSlot));
+        setPromoCodes(response.data.promoCodes.map(mapPromoCode));
+      }
     } catch (error) {
-      console.error("Error loading settings from storage:", error);
+      console.error("Error fetching settings:", error);
+    } finally {
+      setIsLoading(false);
     }
-    setIsInitialized(true);
   }, []);
 
-  // Save to localStorage when data changes
+  // Load settings on mount
   useEffect(() => {
-    if (!isInitialized) return;
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  }, [settings, isInitialized]);
+    fetchSettings();
+  }, [fetchSettings]);
 
-  useEffect(() => {
-    if (!isInitialized) return;
-    localStorage.setItem(PROMO_CODES_STORAGE_KEY, JSON.stringify(promoCodes));
-  }, [promoCodes, isInitialized]);
+  // Refresh settings
+  const refresh = async () => {
+    setIsLoading(true);
+    await fetchSettings();
+  };
 
-  useEffect(() => {
-    if (!isInitialized) return;
-    localStorage.setItem(BANNERS_STORAGE_KEY, JSON.stringify(banners));
-  }, [banners, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    localStorage.setItem(TIME_SLOTS_STORAGE_KEY, JSON.stringify(timeSlots));
-  }, [timeSlots, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    localStorage.setItem(LOYALTY_TIERS_STORAGE_KEY, JSON.stringify(loyaltyTiers));
-  }, [loyaltyTiers, isInitialized]);
-
-  // Settings functions
-  const updateSettings = (updates: Partial<StoreSettings>) => {
+  // Update settings
+  const updateSettings = async (updates: Partial<StoreSettings>) => {
     setSettings((prev) => ({ ...prev, ...updates }));
+    
+    // Convert to API format and save
+    try {
+      await settingsApi.update({
+        vatRate: ((updates.vatRate ?? settings.vatRate) / 100).toString(),
+        deliveryFee: (updates.defaultDeliveryFee ?? settings.defaultDeliveryFee).toString(),
+        freeDeliveryThreshold: (updates.freeDeliveryThreshold ?? settings.freeDeliveryThreshold).toString(),
+        minimumOrderAmount: (updates.minOrderValue ?? settings.minOrderValue).toString(),
+        expressDeliveryFee: (updates.expressDeliveryFee ?? settings.expressDeliveryFee).toString(),
+        enableCashOnDelivery: updates.enableCOD ?? settings.enableCOD,
+        enableCardPayment: updates.enableCardPayment ?? settings.enableCardPayment,
+        enableWallet: updates.enableWalletPayment ?? settings.enableWalletPayment,
+        welcomeBonus: (updates.welcomeBonus ?? settings.welcomeBonus).toString(),
+        enableWelcomeBonus: updates.enableWelcomeBonus ?? settings.enableWelcomeBonus,
+        storePhone: updates.contactPhone ?? settings.contactPhone,
+        storeEmail: updates.contactEmail ?? settings.contactEmail,
+      });
+    } catch (error) {
+      console.error("Error updating settings:", error);
+    }
   };
 
   // Promo Code functions
-  const addPromoCode = (code: Omit<PromoCode, "id" | "usedCount">) => {
-    const newCode: PromoCode = {
-      ...code,
-      id: Date.now().toString(),
-      usedCount: 0,
-    };
-    setPromoCodes((prev) => [...prev, newCode]);
+  const addPromoCode = async (code: Omit<PromoCode, "id" | "usedCount">) => {
+    try {
+      const response = await settingsApi.createPromoCode({
+        code: code.code,
+        type: code.type === "percent" ? "percentage" : "fixed",
+        value: code.discount.toString(),
+        minimumOrder: (code.minOrder || 0).toString(),
+        maximumDiscount: code.maxDiscount?.toString() || null,
+        usageLimit: code.maxUses || 0,
+        userLimit: 1,
+        validFrom: new Date().toISOString(),
+        validTo: code.expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        isActive: code.enabled,
+      });
+      if (response.success) {
+        await fetchSettings();
+      }
+    } catch (error) {
+      console.error("Error adding promo code:", error);
+    }
   };
 
-  const updatePromoCode = (id: string, updates: Partial<PromoCode>) => {
-    setPromoCodes((prev) =>
-      prev.map((code) => (code.id === id ? { ...code, ...updates } : code))
-    );
+  const updatePromoCode = async (id: string, updates: Partial<PromoCode>) => {
+    try {
+      await settingsApi.updatePromoCode(id, {
+        code: updates.code,
+        type: updates.type === "percent" ? "percentage" : updates.type === "fixed" ? "fixed" : undefined,
+        value: updates.discount?.toString(),
+        minimumOrder: updates.minOrder?.toString(),
+        maximumDiscount: updates.maxDiscount?.toString(),
+        usageLimit: updates.maxUses,
+        validTo: updates.expiryDate,
+        isActive: updates.enabled,
+      });
+      await fetchSettings();
+    } catch (error) {
+      console.error("Error updating promo code:", error);
+    }
   };
 
-  const deletePromoCode = (id: string) => {
-    setPromoCodes((prev) => prev.filter((code) => code.id !== id));
+  const deletePromoCode = async (id: string) => {
+    try {
+      await settingsApi.deletePromoCode(id);
+      setPromoCodes((prev) => prev.filter((code) => code.id !== id));
+    } catch (error) {
+      console.error("Error deleting promo code:", error);
+    }
   };
 
-  const validatePromoCode = (code: string, orderTotal: number) => {
-    const promo = promoCodes.find(
-      (p) => p.code.toUpperCase() === code.toUpperCase() && p.enabled
-    );
-    
-    if (!promo) {
-      return { valid: false, error: "Invalid promo code" };
+  const validatePromoCode = async (code: string, orderTotal: number) => {
+    try {
+      const response = await settingsApi.validatePromoCode(code, orderTotal);
+      if (response.success && response.data) {
+        const promo = promoCodes.find((p) => p.code.toUpperCase() === code.toUpperCase());
+        return { valid: true, promo, discount: response.data.discount };
+      }
+      return { valid: false, error: response.error || "Invalid promo code" };
+    } catch (error) {
+      return { valid: false, error: "Failed to validate promo code" };
     }
-    
-    if (promo.expiryDate && new Date(promo.expiryDate) < new Date()) {
-      return { valid: false, error: "Promo code has expired" };
-    }
-    
-    if (promo.maxUses && promo.usedCount >= promo.maxUses) {
-      return { valid: false, error: "Promo code usage limit reached" };
-    }
-    
-    if (promo.minOrder && orderTotal < promo.minOrder) {
-      return { valid: false, error: `Minimum order of ${promo.minOrder} AED required` };
-    }
-    
-    return { valid: true, promo };
   };
 
   // Banner functions
-  const addBanner = (banner: Omit<Banner, "id">) => {
-    const newBanner: Banner = {
-      ...banner,
-      id: Date.now().toString(),
-    };
-    setBanners((prev) => [...prev, newBanner]);
+  const addBanner = async (banner: Omit<Banner, "id">) => {
+    try {
+      await settingsApi.createBanner({
+        titleEn: banner.titleEn,
+        titleAr: banner.titleAr,
+        subtitleEn: banner.subtitleEn,
+        subtitleAr: banner.subtitleAr,
+        image: banner.image,
+        bgColor: banner.bgColor,
+        link: banner.link,
+        badge: banner.badge,
+        badgeAr: banner.badgeAr,
+        enabled: banner.enabled,
+      });
+      await fetchSettings();
+    } catch (error) {
+      console.error("Error adding banner:", error);
+    }
   };
 
-  const updateBanner = (id: string, updates: Partial<Banner>) => {
-    setBanners((prev) =>
-      prev.map((banner) => (banner.id === id ? { ...banner, ...updates } : banner))
-    );
+  const updateBanner = async (id: string, updates: Partial<Banner>) => {
+    try {
+      await settingsApi.updateBanner(id, {
+        titleEn: updates.titleEn,
+        titleAr: updates.titleAr,
+        subtitleEn: updates.subtitleEn,
+        subtitleAr: updates.subtitleAr,
+        image: updates.image,
+        bgColor: updates.bgColor,
+        link: updates.link,
+        badge: updates.badge,
+        badgeAr: updates.badgeAr,
+        enabled: updates.enabled,
+        sortOrder: updates.order,
+      });
+      await fetchSettings();
+    } catch (error) {
+      console.error("Error updating banner:", error);
+    }
   };
 
-  const deleteBanner = (id: string) => {
-    setBanners((prev) => prev.filter((banner) => banner.id !== id));
+  const deleteBanner = async (id: string) => {
+    try {
+      await settingsApi.deleteBanner(id);
+      setBanners((prev) => prev.filter((banner) => banner.id !== id));
+    } catch (error) {
+      console.error("Error deleting banner:", error);
+    }
   };
 
   const reorderBanners = (bannerIds: string[]) => {
@@ -425,25 +499,46 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   // Time Slot functions
-  const addTimeSlot = (slot: Omit<TimeSlot, "id">) => {
-    const newSlot: TimeSlot = {
-      ...slot,
-      id: Date.now().toString(),
-    };
-    setTimeSlots((prev) => [...prev, newSlot]);
+  const addTimeSlot = async (slot: Omit<TimeSlot, "id">) => {
+    try {
+      await settingsApi.createTimeSlot({
+        label: `${slot.start} - ${slot.end}`,
+        labelAr: `${slot.start} - ${slot.end}`,
+        startTime: slot.start,
+        endTime: slot.end,
+        isExpressSlot: false,
+        maxOrders: 20,
+        enabled: slot.enabled,
+      });
+      await fetchSettings();
+    } catch (error) {
+      console.error("Error adding time slot:", error);
+    }
   };
 
-  const updateTimeSlot = (id: string, updates: Partial<TimeSlot>) => {
-    setTimeSlots((prev) =>
-      prev.map((slot) => (slot.id === id ? { ...slot, ...updates } : slot))
-    );
+  const updateTimeSlot = async (id: string, updates: Partial<TimeSlot>) => {
+    try {
+      await settingsApi.updateTimeSlot(id, {
+        startTime: updates.start,
+        endTime: updates.end,
+        enabled: updates.enabled,
+      });
+      await fetchSettings();
+    } catch (error) {
+      console.error("Error updating time slot:", error);
+    }
   };
 
-  const deleteTimeSlot = (id: string) => {
-    setTimeSlots((prev) => prev.filter((slot) => slot.id !== id));
+  const deleteTimeSlot = async (id: string) => {
+    try {
+      await settingsApi.deleteTimeSlot(id);
+      setTimeSlots((prev) => prev.filter((slot) => slot.id !== id));
+    } catch (error) {
+      console.error("Error deleting time slot:", error);
+    }
   };
 
-  // Loyalty Tier functions
+  // Loyalty Tier functions (kept local for now)
   const updateLoyaltyTier = (id: string, updates: Partial<LoyaltyTier>) => {
     setLoyaltyTiers((prev) =>
       prev.map((tier) => (tier.id === id ? { ...tier, ...updates } : tier))
@@ -477,10 +572,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const resetToDefaults = () => {
     setSettings(DEFAULT_SETTINGS);
-    setPromoCodes(DEFAULT_PROMO_CODES);
-    setBanners(DEFAULT_BANNERS);
-    setTimeSlots(DEFAULT_TIME_SLOTS);
     setLoyaltyTiers(DEFAULT_LOYALTY_TIERS);
+    // Keep API data as-is or refetch
+    fetchSettings();
   };
 
   return (
@@ -507,6 +601,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         exportSettings,
         importSettings,
         resetToDefaults,
+        isLoading,
+        refresh,
       }}
     >
       {children}

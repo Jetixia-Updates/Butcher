@@ -46,6 +46,7 @@ import { useLoyalty } from "@/context/LoyaltyContext";
 import { useOrders } from "@/context/OrdersContext";
 import { PriceDisplay } from "@/components/CurrencySymbol";
 import { cn } from "@/lib/utils";
+import { addressesApi, UserAddress } from "@/lib/api";
 
 type TabType = "profile" | "addresses" | "preferences" | "loyalty" | "wishlist";
 
@@ -102,18 +103,22 @@ export default function ProfilePage() {
   const leafletMapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
 
-  // Load saved addresses from localStorage
+  // Load saved addresses from database
   useEffect(() => {
-    if (user?.id) {
-      const saved = localStorage.getItem(`addresses_${user.id}`);
-      if (saved) {
+    const loadAddresses = async () => {
+      if (user?.id) {
         try {
-          setSavedAddresses(JSON.parse(saved));
-        } catch {
+          const response = await addressesApi.getAll(user.id);
+          if (response.success && response.data) {
+            setSavedAddresses(response.data);
+          }
+        } catch (error) {
+          console.error("Error loading addresses:", error);
           setSavedAddresses([]);
         }
       }
-    }
+    };
+    loadAddresses();
   }, [user?.id]);
 
   // Initialize map when form is shown and location is set
@@ -265,26 +270,38 @@ export default function ProfilePage() {
   };
 
   // Save address handler
-  const handleSaveAddress = () => {
+  const handleSaveAddress = async () => {
     if (!addressForm.fullName || !addressForm.mobile || !addressForm.emirate || !addressForm.area || !addressForm.street || !addressForm.building) {
       return;
     }
     
-    const newAddress = {
-      id: `addr_${Date.now()}`,
-      userId: user?.id,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      ...addressForm,
-    };
+    if (!user?.id) return;
     
-    const updatedAddresses = addressForm.isDefault
-      ? savedAddresses.map(addr => ({ ...addr, isDefault: false })).concat(newAddress)
-      : [...savedAddresses, newAddress];
-    
-    setSavedAddresses(updatedAddresses);
-    if (user?.id) {
-      localStorage.setItem(`addresses_${user.id}`, JSON.stringify(updatedAddresses));
+    try {
+      const response = await addressesApi.create(user.id, {
+        label: addressForm.label,
+        fullName: addressForm.fullName,
+        mobile: addressForm.mobile,
+        emirate: addressForm.emirate,
+        area: addressForm.area,
+        street: addressForm.street,
+        building: addressForm.building,
+        floor: addressForm.floor || undefined,
+        apartment: addressForm.apartment || undefined,
+        latitude: addressForm.latitude,
+        longitude: addressForm.longitude,
+        isDefault: addressForm.isDefault,
+      });
+      
+      if (response.success && response.data) {
+        // Reload addresses from server to get updated list
+        const refreshed = await addressesApi.getAll(user.id);
+        if (refreshed.success && refreshed.data) {
+          setSavedAddresses(refreshed.data);
+        }
+      }
+    } catch (error) {
+      console.error("Error saving address:", error);
     }
     
     // Cleanup map and close form
@@ -292,23 +309,27 @@ export default function ProfilePage() {
   };
 
   // Delete address handler
-  const handleDeleteAddress = (addressId: string) => {
-    const updatedAddresses = savedAddresses.filter(addr => addr.id !== addressId);
-    setSavedAddresses(updatedAddresses);
-    if (user?.id) {
-      localStorage.setItem(`addresses_${user.id}`, JSON.stringify(updatedAddresses));
+  const handleDeleteAddress = async (addressId: string) => {
+    if (!user?.id) return;
+    try {
+      await addressesApi.delete(user.id, addressId);
+      setSavedAddresses(prev => prev.filter(addr => addr.id !== addressId));
+    } catch (error) {
+      console.error("Error deleting address:", error);
     }
   };
 
   // Set default address handler
-  const handleSetDefaultAddress = (addressId: string) => {
-    const updatedAddresses = savedAddresses.map(addr => ({
-      ...addr,
-      isDefault: addr.id === addressId,
-    }));
-    setSavedAddresses(updatedAddresses);
-    if (user?.id) {
-      localStorage.setItem(`addresses_${user.id}`, JSON.stringify(updatedAddresses));
+  const handleSetDefaultAddress = async (addressId: string) => {
+    if (!user?.id) return;
+    try {
+      await addressesApi.setDefault(user.id, addressId);
+      setSavedAddresses(prev => prev.map(addr => ({
+        ...addr,
+        isDefault: addr.id === addressId,
+      })));
+    } catch (error) {
+      console.error("Error setting default address:", error);
     }
   };
 
@@ -478,9 +499,9 @@ export default function ProfilePage() {
     setTimeout(() => setReferralCopied(false), 2000);
   };
 
-  const handleApplyReferral = () => {
+  const handleApplyReferral = async () => {
     if (!referralInput.trim()) return;
-    const result = applyReferral(referralInput.trim().toUpperCase());
+    const result = await applyReferral(referralInput.trim().toUpperCase());
     setReferralMessage({ type: result.success ? "success" : "error", text: result.message });
     if (result.success) {
       setReferralInput("");

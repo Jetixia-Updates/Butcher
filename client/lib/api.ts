@@ -1074,3 +1074,482 @@ export const notificationsApi = {
   clearAll: () =>
     fetchApi<null>("/notifications", { method: "DELETE" }),
 };
+
+// =====================================================
+// WALLET API
+// =====================================================
+
+export interface WalletTransaction {
+  id: string;
+  userId: string;
+  type: "topup" | "debit" | "credit" | "refund" | "cashback";
+  amount: string;
+  description: string;
+  descriptionAr: string;
+  reference?: string | null;
+  createdAt: string;
+}
+
+export interface WalletData {
+  balance: string;
+  transactions: WalletTransaction[];
+}
+
+export const walletApi = {
+  // Get wallet balance and transactions (optionally for a specific user - admin)
+  get: (userId?: string) => fetchApi<WalletData>("/wallet", userId ? {
+    headers: { "x-user-id": userId }
+  } : undefined),
+
+  // Top up wallet
+  topUp: (amount: number, paymentMethod: string) =>
+    fetchApi<{ balance: number }>("/wallet/topup", {
+      method: "POST",
+      body: JSON.stringify({ amount, paymentMethod }),
+    }),
+
+  // Deduct from wallet (for payments)
+  deduct: (userId: string, amount: number, description: string, descriptionAr?: string, reference?: string) =>
+    fetchApi<{ balance: string }>("/wallet/deduct", {
+      method: "POST",
+      headers: { "x-user-id": userId },
+      body: JSON.stringify({ amount, description, descriptionAr: descriptionAr || description, reference }),
+    }),
+
+  // Add credit (refunds, cashback, admin adjustments)
+  addCredit: (userId: string, amount: number, description: string, type: string = "credit") =>
+    fetchApi<{ balance: string }>("/wallet/credit", {
+      method: "POST",
+      headers: { "x-user-id": userId },
+      body: JSON.stringify({ 
+        amount, 
+        type, 
+        description, 
+        descriptionAr: description 
+      }),
+    }),
+};
+
+// =====================================================
+// WISHLIST API
+// =====================================================
+
+export interface WishlistItem {
+  id: string;
+  productId: string;
+  createdAt: string;
+  product?: {
+    id: string;
+    name: string;
+    nameAr: string;
+    price: string;
+    image: string | null;
+    category: string;
+    discount: number | null;
+  } | null;
+}
+
+export const wishlistApi = {
+  // Get user's wishlist
+  getAll: () => fetchApi<WishlistItem[]>("/wishlist"),
+
+  // Add item to wishlist
+  add: (productId: string) =>
+    fetchApi<WishlistItem>("/wishlist", {
+      method: "POST",
+      body: JSON.stringify({ productId }),
+    }),
+
+  // Remove item from wishlist
+  remove: (productId: string) =>
+    fetchApi<null>(`/wishlist/${productId}`, { method: "DELETE" }),
+
+  // Clear wishlist
+  clear: () =>
+    fetchApi<null>("/wishlist", { method: "DELETE" }),
+};
+
+// =====================================================
+// REVIEWS API
+// =====================================================
+
+export interface ProductReview {
+  id: string;
+  productId: string;
+  userId: string;
+  userName: string;
+  rating: number;
+  title: string;
+  comment: string;
+  images?: string[] | null;
+  isVerifiedPurchase: boolean;
+  helpfulCount: number;
+  isApproved: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductReviewStats {
+  averageRating: number;
+  totalReviews: number;
+  ratingDistribution: {
+    1: number;
+    2: number;
+    3: number;
+    4: number;
+    5: number;
+  };
+}
+
+export const reviewsApi = {
+  // Get all reviews (optionally filtered by productId)
+  getAll: (productId?: string) => {
+    const params = productId ? `?productId=${productId}` : "";
+    return fetchApi<ProductReview[]>(`/reviews${params}`);
+  },
+
+  // Get reviews for a product with stats
+  getProductReviews: (productId: string) =>
+    fetchApi<{ reviews: ProductReview[]; stats: ProductReviewStats }>(
+      `/reviews/product/${productId}`
+    ),
+
+  // Create a review
+  create: (data: {
+    productId: string;
+    rating: number;
+    title: string;
+    comment: string;
+    userName?: string;
+    images?: string[];
+    isVerifiedPurchase?: boolean;
+  }) =>
+    fetchApi<ProductReview>("/reviews", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Update a review (supports status for admin moderation)
+  update: (id: string, data: {
+    rating?: number;
+    title?: string;
+    comment?: string;
+    images?: string[];
+    status?: "pending" | "approved" | "rejected";
+  }) =>
+    fetchApi<ProductReview>(`/reviews/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  // Delete a review
+  delete: (id: string) =>
+    fetchApi<null>(`/reviews/${id}`, { method: "DELETE" }),
+
+  // Mark review as helpful
+  markHelpful: (id: string) =>
+    fetchApi<null>(`/reviews/${id}/helpful`, { method: "POST" }),
+};
+
+// =====================================================
+// LOYALTY API
+// =====================================================
+
+export interface LoyaltyTier {
+  id: string;
+  name: string;
+  nameAr: string;
+  minPoints: number;
+  multiplier: string;
+  benefits: string[];
+  benefitsAr: string[];
+  icon: string;
+  sortOrder: number;
+}
+
+export interface LoyaltyTransaction {
+  id: string;
+  userId: string;
+  type: "earn" | "redeem" | "bonus" | "expire" | "adjustment";
+  points: number;
+  description: string;
+  orderId?: string | null;
+  createdAt: string;
+}
+
+export interface LoyaltyData {
+  points: number;
+  totalEarned: number;
+  referralCode: string;
+  currentTier: LoyaltyTier;
+  nextTier: LoyaltyTier | null;
+  pointsToNextTier: number;
+  transactions: LoyaltyTransaction[];
+}
+
+export const loyaltyApi = {
+  // Get user's loyalty points and tier (optionally for a specific user - admin)
+  get: (userId?: string) => fetchApi<LoyaltyData>("/loyalty", userId ? {
+    headers: { "x-user-id": userId }
+  } : undefined),
+
+  // Earn points from an order (admin can specify userId)
+  earn: (userId: string, points: number, description: string, orderId?: string) =>
+    fetchApi<{ points: number; totalEarned: number; tier: string }>("/loyalty/earn", {
+      method: "POST",
+      headers: { "x-user-id": userId },
+      body: JSON.stringify({ points, orderId: orderId || "admin_bonus", description }),
+    }),
+
+  // Redeem points (admin can specify userId)
+  redeem: (userId: string, points: number, description?: string) =>
+    fetchApi<{ points: number; tier: string }>("/loyalty/redeem", {
+      method: "POST",
+      headers: { "x-user-id": userId },
+      body: JSON.stringify({ points, description: description || "Points redeemed" }),
+    }),
+
+  // Apply referral code
+  applyReferral: (code: string) =>
+    fetchApi<{ points: number }>("/loyalty/referral", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+
+  // Get all loyalty tiers
+  getTiers: () => fetchApi<LoyaltyTier[]>("/loyalty/tiers"),
+};
+
+// =====================================================
+// SETTINGS API
+// =====================================================
+
+export interface AppSettings {
+  id: string;
+  vatRate: string;
+  deliveryFee: string;
+  freeDeliveryThreshold: string;
+  expressDeliveryFee: string;
+  minimumOrderAmount: string;
+  maxOrdersPerDay: number;
+  enableCashOnDelivery: boolean;
+  enableCardPayment: boolean;
+  enableWallet: boolean;
+  enableLoyalty: boolean;
+  enableReviews: boolean;
+  enableWishlist: boolean;
+  enableExpressDelivery: boolean;
+  enableScheduledDelivery: boolean;
+  enableWelcomeBonus: boolean;
+  welcomeBonus: string;
+  cashbackPercentage: string;
+  loyaltyPointsPerAed: string;
+  loyaltyPointValue: string;
+  storePhone: string;
+  storeEmail: string;
+  storeAddress: string;
+  storeAddressAr: string;
+  workingHoursStart: string;
+  workingHoursEnd: string;
+}
+
+export interface Banner {
+  id: string;
+  titleEn: string;
+  titleAr: string;
+  subtitleEn?: string | null;
+  subtitleAr?: string | null;
+  image?: string | null;
+  bgColor: string;
+  link?: string | null;
+  badge?: string | null;
+  badgeAr?: string | null;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface DeliveryTimeSlot {
+  id: string;
+  label: string;
+  labelAr: string;
+  startTime: string;
+  endTime: string;
+  isExpressSlot: boolean;
+  maxOrders: number;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface PromoCode {
+  id: string;
+  code: string;
+  type: "percentage" | "fixed";
+  value: string;
+  minimumOrder: string;
+  maximumDiscount?: string | null;
+  usageLimit: number;
+  usageCount: number;
+  userLimit: number;
+  validFrom: string;
+  validTo: string;
+  isActive: boolean;
+  applicableProducts?: string[] | null;
+  applicableCategories?: string[] | null;
+}
+
+export interface SettingsData {
+  settings: AppSettings;
+  banners: Banner[];
+  timeSlots: DeliveryTimeSlot[];
+  promoCodes: PromoCode[];
+}
+
+export const settingsApi = {
+  // Get all settings
+  getAll: () => fetchApi<SettingsData>("/settings"),
+
+  // Update settings
+  update: (settings: Partial<AppSettings>) =>
+    fetchApi<AppSettings>("/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
+
+  // Banner management
+  createBanner: (banner: Omit<Banner, "id" | "sortOrder">) =>
+    fetchApi<Banner>("/settings/banners", {
+      method: "POST",
+      body: JSON.stringify(banner),
+    }),
+
+  updateBanner: (id: string, banner: Partial<Banner>) =>
+    fetchApi<Banner>(`/settings/banners/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(banner),
+    }),
+
+  deleteBanner: (id: string) =>
+    fetchApi<null>(`/settings/banners/${id}`, { method: "DELETE" }),
+
+  // Time slot management
+  createTimeSlot: (slot: Omit<DeliveryTimeSlot, "id" | "sortOrder">) =>
+    fetchApi<DeliveryTimeSlot>("/settings/time-slots", {
+      method: "POST",
+      body: JSON.stringify(slot),
+    }),
+
+  updateTimeSlot: (id: string, slot: Partial<DeliveryTimeSlot>) =>
+    fetchApi<DeliveryTimeSlot>(`/settings/time-slots/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(slot),
+    }),
+
+  deleteTimeSlot: (id: string) =>
+    fetchApi<null>(`/settings/time-slots/${id}`, { method: "DELETE" }),
+
+  // Promo code management
+  createPromoCode: (code: Omit<PromoCode, "id" | "usageCount">) =>
+    fetchApi<PromoCode>("/settings/promo-codes", {
+      method: "POST",
+      body: JSON.stringify(code),
+    }),
+
+  updatePromoCode: (id: string, code: Partial<PromoCode>) =>
+    fetchApi<PromoCode>(`/settings/promo-codes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(code),
+    }),
+
+  deletePromoCode: (id: string) =>
+    fetchApi<null>(`/settings/promo-codes/${id}`, { method: "DELETE" }),
+
+  validatePromoCode: (code: string, orderTotal: number) =>
+    fetchApi<{
+      valid: true;
+      code: string;
+      type: string;
+      value: number;
+      discount: number;
+    }>("/settings/promo-codes/validate", {
+      method: "POST",
+      body: JSON.stringify({ code, orderTotal }),
+    }),
+};
+
+// ============================================================
+// ADDRESSES API
+// ============================================================
+
+export interface UserAddress {
+  id: string;
+  userId: string;
+  label: string;
+  fullName: string;
+  mobile: string;
+  emirate: string;
+  area: string;
+  street: string;
+  building: string;
+  floor?: string | null;
+  apartment?: string | null;
+  landmark?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAddressInput {
+  label: string;
+  fullName: string;
+  mobile: string;
+  emirate: string;
+  area: string;
+  street: string;
+  building: string;
+  floor?: string;
+  apartment?: string;
+  landmark?: string;
+  latitude?: number;
+  longitude?: number;
+  isDefault?: boolean;
+}
+
+export const addressesApi = {
+  // Get all addresses for user
+  getAll: (userId: string) =>
+    fetchApi<UserAddress[]>("/addresses", {
+      headers: { "x-user-id": userId },
+    }),
+
+  // Create new address
+  create: (userId: string, address: CreateAddressInput) =>
+    fetchApi<UserAddress>("/addresses", {
+      method: "POST",
+      headers: { "x-user-id": userId },
+      body: JSON.stringify(address),
+    }),
+
+  // Update address
+  update: (userId: string, id: string, address: Partial<CreateAddressInput>) =>
+    fetchApi<UserAddress>(`/addresses/${id}`, {
+      method: "PUT",
+      headers: { "x-user-id": userId },
+      body: JSON.stringify(address),
+    }),
+
+  // Delete address
+  delete: (userId: string, id: string) =>
+    fetchApi<null>(`/addresses/${id}`, {
+      method: "DELETE",
+      headers: { "x-user-id": userId },
+    }),
+
+  // Set address as default
+  setDefault: (userId: string, id: string) =>
+    fetchApi<UserAddress>(`/addresses/${id}/default`, {
+      method: "PUT",
+      headers: { "x-user-id": userId },
+    }),
+};

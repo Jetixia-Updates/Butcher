@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/context/LanguageContext";
-import { usersApi } from "@/lib/api";
+import { usersApi, walletApi, loyaltyApi, reviewsApi } from "@/lib/api";
 import type { User as UserType } from "@shared/api";
 
 interface AdminTabProps {
@@ -217,6 +217,9 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
   const [reviewModal, setReviewModal] = useState<Review | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewFilter, setReviewFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  
+  // Customer wallet/loyalty data cache
+  const [customerData, setCustomerData] = useState<Record<string, { balance: number; points: number; tier: string }>>({});
 
   // Stats
   const [stats, setStats] = useState({
@@ -239,16 +242,32 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
       if (response.success && response.data) {
         setCustomers(response.data);
         
-        // Calculate stats from localStorage data
+        // Fetch wallet and loyalty data for each customer from API
+        const dataCache: Record<string, { balance: number; points: number; tier: string }> = {};
         let totalBalance = 0;
         let totalPoints = 0;
         
-        response.data.forEach((user: UserType) => {
-          const walletBalance = parseFloat(localStorage.getItem(`aljazira_wallet_${user.id}`) || "0");
-          const loyaltyPoints = parseInt(localStorage.getItem(`loyalty_points_${user.id}`) || "0");
-          totalBalance += walletBalance;
-          totalPoints += loyaltyPoints;
-        });
+        // Fetch in batches to avoid too many parallel requests
+        for (const user of response.data) {
+          try {
+            const [walletRes, loyaltyRes] = await Promise.all([
+              walletApi.get(user.id),
+              loyaltyApi.get(user.id),
+            ]);
+            
+            const balance = walletRes.success && walletRes.data ? parseFloat(walletRes.data.balance) : 0;
+            const points = loyaltyRes.success && loyaltyRes.data ? loyaltyRes.data.points : 0;
+            const tier = loyaltyRes.success && loyaltyRes.data && loyaltyRes.data.currentTier ? loyaltyRes.data.currentTier.name.toLowerCase() : "bronze";
+            
+            dataCache[user.id] = { balance, points, tier };
+            totalBalance += balance;
+            totalPoints += points;
+          } catch (e) {
+            dataCache[user.id] = { balance: 0, points: 0, tier: "bronze" };
+          }
+        }
+        
+        setCustomerData(dataCache);
         
         setStats({
           totalCustomers: response.data.length,
@@ -258,20 +277,18 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
         });
       }
       
-      // Load reviews
-      loadReviews();
+      // Load reviews from API
+      await loadReviews();
     } finally {
       setLoading(false);
     }
   };
 
-  const loadReviews = () => {
+  const loadReviews = async () => {
     try {
-      const stored = localStorage.getItem("product_reviews");
-      if (stored) {
-        const allReviews = JSON.parse(stored);
-        // Add status to reviews if missing
-        const reviewsWithStatus = allReviews.map((r: any) => ({
+      const response = await reviewsApi.getAll();
+      if (response.success && response.data) {
+        const reviewsWithStatus = response.data.map((r: any) => ({
           ...r,
           status: r.status || "approved",
           productName: r.productName || "Product",
@@ -298,104 +315,102 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
     return review.status === reviewFilter;
   });
 
-  // Get wallet balance for a user
+  // Get wallet balance for a user (from cache)
   const getWalletBalance = (userId: string): number => {
-    return parseFloat(localStorage.getItem(`aljazira_wallet_${userId}`) || "0");
+    return customerData[userId]?.balance || 0;
   };
 
-  // Get loyalty points for a user
+  // Get loyalty points for a user (from cache)
   const getLoyaltyPoints = (userId: string): number => {
-    return parseInt(localStorage.getItem(`loyalty_points_${userId}`) || "0");
+    return customerData[userId]?.points || 0;
   };
 
-  // Get loyalty tier for a user
+  // Get loyalty tier for a user (from cache)
   const getLoyaltyTier = (userId: string): string => {
-    const totalEarned = parseInt(localStorage.getItem(`loyalty_total_${userId}`) || "0");
-    if (totalEarned >= 5000) return "platinum";
-    if (totalEarned >= 2000) return "gold";
-    if (totalEarned >= 500) return "silver";
-    return "bronze";
+    return customerData[userId]?.tier || "bronze";
   };
 
-  // Adjust wallet balance
-  const adjustWalletBalance = (userId: string, amount: number, reason: string) => {
-    const currentBalance = getWalletBalance(userId);
-    const newBalance = currentBalance + amount;
-    
-    if (newBalance < 0) {
-      alert(isRTL ? "الرصيد غير كافٍ" : "Insufficient balance");
+  // Adjust wallet balance via API
+  const adjustWalletBalance = async (userId: string, amount: number, reason: string) => {
+    try {
+      let response;
+      if (amount >= 0) {
+        response = await walletApi.addCredit(userId, amount, reason || (isRTL ? "تعديل من المدير" : "Admin adjustment"));
+      } else {
+        response = await walletApi.deduct(userId, Math.abs(amount), reason || (isRTL ? "خصم من المدير" : "Admin deduction"));
+      }
+      
+      if (response.success && response.data) {
+        // Update cache
+        setCustomerData(prev => ({
+          ...prev,
+          [userId]: { ...prev[userId], balance: parseFloat(response.data!.balance) },
+        }));
+        return true;
+      } else {
+        alert(response.error || (isRTL ? "فشلت العملية" : "Operation failed"));
+        return false;
+      }
+    } catch (error) {
+      console.error("Error adjusting wallet:", error);
+      alert(isRTL ? "حدث خطأ" : "An error occurred");
       return false;
     }
-    
-    localStorage.setItem(`aljazira_wallet_${userId}`, newBalance.toString());
-    
-    // Add transaction
-    const transactionsKey = `aljazira_wallet_transactions_${userId}`;
-    const existingTransactions = JSON.parse(localStorage.getItem(transactionsKey) || "[]");
-    const newTransaction: WalletTransaction = {
-      id: `txn_admin_${Date.now()}`,
-      type: amount >= 0 ? "credit" : "debit",
-      amount: amount,
-      description: reason || (amount >= 0 ? t.walletCredited : t.walletDebited),
-      descriptionAr: reason || (amount >= 0 ? "رصيد مضاف من المدير" : "رصيد مخصوم من المدير"),
-      reference: "admin",
-      createdAt: new Date().toISOString(),
-    };
-    existingTransactions.unshift(newTransaction);
-    localStorage.setItem(transactionsKey, JSON.stringify(existingTransactions));
-    
-    return true;
   };
 
-  // Adjust loyalty points
-  const adjustLoyaltyPoints = (userId: string, points: number, reason: string) => {
-    const currentPoints = getLoyaltyPoints(userId);
-    const newPoints = currentPoints + points;
-    
-    if (newPoints < 0) {
-      alert(isRTL ? "النقاط غير كافية" : "Insufficient points");
+  // Adjust loyalty points via API
+  const adjustLoyaltyPoints = async (userId: string, points: number, reason: string) => {
+    try {
+      let response;
+      if (points >= 0) {
+        response = await loyaltyApi.earn(userId, points, reason || (isRTL ? "نقاط إضافية من المدير" : "Bonus from admin"));
+      } else {
+        response = await loyaltyApi.redeem(userId, Math.abs(points));
+      }
+      
+      if (response.success && response.data) {
+        // Update cache
+        setCustomerData(prev => ({
+          ...prev,
+          [userId]: { ...prev[userId], points: response.data!.points, tier: response.data!.tier },
+        }));
+        return true;
+      } else {
+        alert(response.error || (isRTL ? "فشلت العملية" : "Operation failed"));
+        return false;
+      }
+    } catch (error) {
+      console.error("Error adjusting loyalty:", error);
+      alert(isRTL ? "حدث خطأ" : "An error occurred");
       return false;
     }
-    
-    localStorage.setItem(`loyalty_points_${userId}`, newPoints.toString());
-    
-    if (points > 0) {
-      const totalEarned = parseInt(localStorage.getItem(`loyalty_total_${userId}`) || "0");
-      localStorage.setItem(`loyalty_total_${userId}`, (totalEarned + points).toString());
+  };
+
+  // Update review status via API
+  const updateReviewStatus = async (reviewId: string, status: "approved" | "rejected") => {
+    try {
+      const response = await reviewsApi.update(reviewId, { status });
+      if (response.success) {
+        setReviews(prev => prev.map((r) =>
+          r.id === reviewId ? { ...r, status } : r
+        ));
+      }
+    } catch (error) {
+      console.error("Error updating review:", error);
     }
-    
-    // Add transaction
-    const transactionsKey = `loyalty_transactions_${userId}`;
-    const existingTransactions = JSON.parse(localStorage.getItem(transactionsKey) || "[]");
-    const newTransaction = {
-      id: `trans_admin_${Date.now()}`,
-      userId,
-      type: points >= 0 ? "bonus" : "redeem",
-      points,
-      description: reason || (points >= 0 ? t.bonusAdded : t.pointsDeducted),
-      createdAt: new Date().toISOString(),
-    };
-    existingTransactions.unshift(newTransaction);
-    localStorage.setItem(transactionsKey, JSON.stringify(existingTransactions));
-    
-    return true;
   };
 
-  // Update review status
-  const updateReviewStatus = (reviewId: string, status: "approved" | "rejected") => {
-    const updated = reviews.map((r) =>
-      r.id === reviewId ? { ...r, status } : r
-    );
-    setReviews(updated);
-    localStorage.setItem("product_reviews", JSON.stringify(updated));
-  };
-
-  // Delete review
-  const deleteReview = (reviewId: string) => {
+  // Delete review via API
+  const deleteReview = async (reviewId: string) => {
     if (!confirm(isRTL ? "هل أنت متأكد من حذف هذا التقييم؟" : "Are you sure you want to delete this review?")) return;
-    const updated = reviews.filter((r) => r.id !== reviewId);
-    setReviews(updated);
-    localStorage.setItem("product_reviews", JSON.stringify(updated));
+    try {
+      const response = await reviewsApi.delete(reviewId);
+      if (response.success) {
+        setReviews(prev => prev.filter((r) => r.id !== reviewId));
+      }
+    } catch (error) {
+      console.error("Error deleting review:", error);
+    }
   };
 
   return (
@@ -1102,15 +1117,30 @@ function HistoryModal({
   t: typeof translations.en;
 }) {
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const key = type === "wallet"
-      ? `aljazira_wallet_transactions_${user.id}`
-      : `loyalty_transactions_${user.id}`;
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      setTransactions(JSON.parse(stored));
-    }
+    const fetchTransactions = async () => {
+      setLoading(true);
+      try {
+        if (type === "wallet") {
+          const response = await walletApi.get(user.id);
+          if (response.success && response.data?.transactions) {
+            setTransactions(response.data.transactions);
+          }
+        } else {
+          const response = await loyaltyApi.get(user.id);
+          if (response.success && response.data?.transactions) {
+            setTransactions(response.data.transactions);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching transactions:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTransactions();
   }, [user.id, type]);
 
   return (

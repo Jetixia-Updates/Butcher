@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
+import { reviewsApi, ProductReview as ApiProductReview, ProductReviewStats } from "@/lib/api";
 
 export interface Review {
   id: string;
@@ -32,96 +33,85 @@ export interface ProductRating {
 interface ReviewsContextType {
   getProductReviews: (productId: string) => Review[];
   getProductRating: (productId: string) => ProductRating;
-  addReview: (review: Omit<Review, "id" | "createdAt" | "updatedAt" | "helpfulCount">) => void;
-  updateReview: (reviewId: string, updates: Partial<Pick<Review, "rating" | "title" | "comment" | "images">>) => void;
-  deleteReview: (reviewId: string) => void;
-  markHelpful: (reviewId: string) => void;
+  addReview: (review: Omit<Review, "id" | "createdAt" | "updatedAt" | "helpfulCount">) => Promise<void>;
+  updateReview: (reviewId: string, updates: Partial<Pick<Review, "rating" | "title" | "comment" | "images">>) => Promise<void>;
+  deleteReview: (reviewId: string) => Promise<void>;
+  markHelpful: (reviewId: string) => Promise<void>;
   hasUserReviewed: (productId: string) => boolean;
   getUserReview: (productId: string) => Review | undefined;
+  isLoading: boolean;
+  fetchReviews: (productId: string) => Promise<void>;
 }
 
 const ReviewsContext = createContext<ReviewsContextType | undefined>(undefined);
 
-// Initial demo reviews
-const INITIAL_REVIEWS: Review[] = [
-  {
-    id: "review_1",
-    productId: "prod_1",
-    userId: "user_1",
-    userName: "Ahmed M.",
-    rating: 5,
-    title: "Excellent quality!",
-    comment: "The best beef steak I've ever had. Very tender and flavorful. Will definitely order again!",
-    isVerifiedPurchase: true,
-    helpfulCount: 12,
-    createdAt: "2025-12-15T10:30:00Z",
-    updatedAt: "2025-12-15T10:30:00Z",
-  },
-  {
-    id: "review_2",
-    productId: "prod_1",
-    userId: "user_2",
-    userName: "Sara K.",
-    rating: 4,
-    title: "Great but pricey",
-    comment: "Quality is amazing, but a bit expensive. Still worth it for special occasions.",
-    isVerifiedPurchase: true,
-    helpfulCount: 5,
-    createdAt: "2025-12-10T14:20:00Z",
-    updatedAt: "2025-12-10T14:20:00Z",
-  },
-  {
-    id: "review_3",
-    productId: "prod_2",
-    userId: "user_3",
-    userName: "Mohammed A.",
-    rating: 5,
-    title: "Perfect lamb chops",
-    comment: "Fresh and perfectly cut. My family loved them!",
-    isVerifiedPurchase: true,
-    helpfulCount: 8,
-    createdAt: "2025-12-08T18:45:00Z",
-    updatedAt: "2025-12-08T18:45:00Z",
-  },
-  {
-    id: "review_4",
-    productId: "prod_3",
-    userId: "user_4",
-    userName: "Fatima H.",
-    rating: 5,
-    title: "Best chicken in town",
-    comment: "Fresh, well-cleaned, and delicious. Fast delivery too!",
-    isVerifiedPurchase: true,
-    helpfulCount: 15,
-    createdAt: "2025-12-05T09:15:00Z",
-    updatedAt: "2025-12-05T09:15:00Z",
-  },
-  {
-    id: "review_5",
-    productId: "prod_4",
-    userId: "user_5",
-    userName: "Omar S.",
-    rating: 4,
-    title: "Good ground beef",
-    comment: "Nice lean ground beef. Perfect for burgers and keema.",
-    isVerifiedPurchase: true,
-    helpfulCount: 3,
-    createdAt: "2025-12-01T11:30:00Z",
-    updatedAt: "2025-12-01T11:30:00Z",
-  },
-];
-
 export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [reviews, setReviews] = useState<Review[]>(() => {
-    const saved = localStorage.getItem("product_reviews");
-    return saved ? JSON.parse(saved) : INITIAL_REVIEWS;
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [productRatings, setProductRatings] = useState<Map<string, ProductRating>>(new Map());
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Convert API review to local format
+  const mapReview = (r: ApiProductReview): Review => ({
+    id: r.id,
+    productId: r.productId,
+    userId: r.userId,
+    userName: r.userName,
+    rating: r.rating,
+    title: r.title,
+    comment: r.comment,
+    images: r.images || undefined,
+    isVerifiedPurchase: r.isVerifiedPurchase,
+    helpfulCount: r.helpfulCount,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
   });
 
-  // Save to localStorage whenever reviews change
+  // Fetch all reviews on mount
   useEffect(() => {
-    localStorage.setItem("product_reviews", JSON.stringify(reviews));
-  }, [reviews]);
+    const loadAllReviews = async () => {
+      try {
+        const response = await reviewsApi.getAll();
+        if (response.success && response.data) {
+          setReviews(response.data.map(mapReview));
+        }
+      } catch (error) {
+        console.error("Error loading reviews:", error);
+      }
+    };
+    loadAllReviews();
+  }, []);
+
+  // Fetch reviews for a specific product
+  const fetchReviews = useCallback(async (productId: string) => {
+    setIsLoading(true);
+    try {
+      const response = await reviewsApi.getProductReviews(productId);
+      if (response.success && response.data) {
+        const fetchedReviews = response.data.reviews.map(mapReview);
+        
+        // Update reviews state
+        setReviews((prev) => {
+          const otherReviews = prev.filter((r) => r.productId !== productId);
+          return [...otherReviews, ...fetchedReviews];
+        });
+        
+        // Update ratings cache
+        setProductRatings((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(productId, {
+            productId,
+            ...response.data!.stats,
+          });
+          return newMap;
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching reviews:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const getProductReviews = useCallback((productId: string): Review[] => {
     return reviews
@@ -130,6 +120,11 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [reviews]);
 
   const getProductRating = useCallback((productId: string): ProductRating => {
+    // Check cache first
+    const cached = productRatings.get(productId);
+    if (cached) return cached;
+
+    // Calculate from local reviews
     const productReviews = reviews.filter((r) => r.productId === productId);
     const totalReviews = productReviews.length;
     
@@ -159,41 +154,89 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
       totalReviews,
       ratingDistribution,
     };
+  }, [reviews, productRatings]);
+
+  const addReview = useCallback(async (review: Omit<Review, "id" | "createdAt" | "updatedAt" | "helpfulCount">) => {
+    try {
+      const response = await reviewsApi.create({
+        productId: review.productId,
+        rating: review.rating,
+        title: review.title,
+        comment: review.comment,
+        userName: review.userName,
+        images: review.images,
+        isVerifiedPurchase: review.isVerifiedPurchase,
+      });
+      
+      if (response.success && response.data) {
+        const newReview = mapReview(response.data);
+        setReviews((prev) => [newReview, ...prev]);
+        // Clear cached rating for this product
+        setProductRatings((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(review.productId);
+          return newMap;
+        });
+      }
+    } catch (error) {
+      console.error("Error adding review:", error);
+      throw error;
+    }
+  }, []);
+
+  const updateReview = useCallback(async (reviewId: string, updates: Partial<Pick<Review, "rating" | "title" | "comment" | "images">>) => {
+    try {
+      const response = await reviewsApi.update(reviewId, updates);
+      if (response.success && response.data) {
+        const updatedReview = mapReview(response.data);
+        setReviews((prev) =>
+          prev.map((r) => (r.id === reviewId ? updatedReview : r))
+        );
+        // Clear cached rating
+        setProductRatings((prev) => {
+          const newMap = new Map(prev);
+          const review = reviews.find((r) => r.id === reviewId);
+          if (review) newMap.delete(review.productId);
+          return newMap;
+        });
+      }
+    } catch (error) {
+      console.error("Error updating review:", error);
+      throw error;
+    }
   }, [reviews]);
 
-  const addReview = useCallback((review: Omit<Review, "id" | "createdAt" | "updatedAt" | "helpfulCount">) => {
-    const newReview: Review = {
-      ...review,
-      id: `review_${Date.now()}`,
-      helpfulCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setReviews((prev) => [newReview, ...prev]);
-  }, []);
+  const deleteReview = useCallback(async (reviewId: string) => {
+    const review = reviews.find((r) => r.id === reviewId);
+    
+    try {
+      await reviewsApi.delete(reviewId);
+      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+      // Clear cached rating
+      if (review) {
+        setProductRatings((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(review.productId);
+          return newMap;
+        });
+      }
+    } catch (error) {
+      console.error("Error deleting review:", error);
+      throw error;
+    }
+  }, [reviews]);
 
-  const updateReview = useCallback((reviewId: string, updates: Partial<Pick<Review, "rating" | "title" | "comment" | "images">>) => {
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === reviewId
-          ? { ...r, ...updates, updatedAt: new Date().toISOString() }
-          : r
-      )
-    );
-  }, []);
-
-  const deleteReview = useCallback((reviewId: string) => {
-    setReviews((prev) => prev.filter((r) => r.id !== reviewId));
-  }, []);
-
-  const markHelpful = useCallback((reviewId: string) => {
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === reviewId
-          ? { ...r, helpfulCount: r.helpfulCount + 1 }
-          : r
-      )
-    );
+  const markHelpful = useCallback(async (reviewId: string) => {
+    try {
+      await reviewsApi.markHelpful(reviewId);
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === reviewId ? { ...r, helpfulCount: r.helpfulCount + 1 } : r
+        )
+      );
+    } catch (error) {
+      console.error("Error marking helpful:", error);
+    }
   }, []);
 
   const hasUserReviewed = useCallback((productId: string): boolean => {
@@ -217,6 +260,8 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
         markHelpful,
         hasUserReviewed,
         getUserReview,
+        isLoading,
+        fetchReviews,
       }}
     >
       {children}

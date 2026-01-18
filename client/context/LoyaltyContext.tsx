@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
-import { useSettings } from "./SettingsContext";
+import { loyaltyApi, LoyaltyTier as ApiLoyaltyTier, LoyaltyTransaction as ApiLoyaltyTransaction } from "@/lib/api";
 
 export interface LoyaltyTransaction {
   id: string;
@@ -30,191 +30,165 @@ interface LoyaltyContextType {
   nextTier: LoyaltyTier | null;
   pointsToNextTier: number;
   transactions: LoyaltyTransaction[];
-  earnPoints: (amount: number, orderId: string, description: string) => void;
-  redeemPoints: (points: number, description: string) => boolean;
+  earnPoints: (amount: number, orderId: string, description: string) => Promise<void>;
+  redeemPoints: (points: number, description: string) => Promise<boolean>;
   calculatePointsValue: (points: number) => number; // AED value
   calculatePointsFromOrder: (orderTotal: number) => number;
   referralCode: string;
-  applyReferral: (code: string) => { success: boolean; message: string };
+  applyReferral: (code: string) => Promise<{ success: boolean; message: string }>;
+  isLoading: boolean;
+  refresh: () => Promise<void>;
 }
 
 const LoyaltyContext = createContext<LoyaltyContextType | undefined>(undefined);
 
-// Loyalty tiers
-const TIERS: LoyaltyTier[] = [
-  {
-    id: "bronze",
-    name: "Bronze",
-    nameAr: "برونزي",
-    minPoints: 0,
-    multiplier: 1,
-    benefits: ["1 point per AED spent", "Birthday bonus"],
-    benefitsAr: ["1 نقطة لكل درهم", "مكافأة عيد ميلاد"],
-    icon: "🥉",
-  },
-  {
-    id: "silver",
-    name: "Silver",
-    nameAr: "فضي",
-    minPoints: 500,
-    multiplier: 1.5,
-    benefits: ["1.5 points per AED spent", "Birthday bonus", "Early access to sales"],
-    benefitsAr: ["1.5 نقطة لكل درهم", "مكافأة عيد ميلاد", "وصول مبكر للتخفيضات"],
-    icon: "🥈",
-  },
-  {
-    id: "gold",
-    name: "Gold",
-    nameAr: "ذهبي",
-    minPoints: 2000,
-    multiplier: 2,
-    benefits: ["2 points per AED spent", "Birthday bonus", "Early access to sales", "Free delivery"],
-    benefitsAr: ["2 نقطة لكل درهم", "مكافأة عيد ميلاد", "وصول مبكر للتخفيضات", "توصيل مجاني"],
-    icon: "🥇",
-  },
-  {
-    id: "platinum",
-    name: "Platinum",
-    nameAr: "بلاتيني",
-    minPoints: 5000,
-    multiplier: 3,
-    benefits: ["3 points per AED spent", "Birthday bonus", "Early access to sales", "Free delivery", "VIP support"],
-    benefitsAr: ["3 نقطة لكل درهم", "مكافأة عيد ميلاد", "وصول مبكر للتخفيضات", "توصيل مجاني", "دعم VIP"],
-    icon: "💎",
-  },
-];
+// Default tier for when not loaded yet
+const DEFAULT_TIER: LoyaltyTier = {
+  id: "bronze",
+  name: "Bronze",
+  nameAr: "برونزي",
+  minPoints: 0,
+  multiplier: 1,
+  benefits: ["1 point per AED spent", "Birthday bonus"],
+  benefitsAr: ["1 نقطة لكل درهم", "مكافأة عيد ميلاد"],
+  icon: "🥉",
+};
 
 export const LoyaltyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const { settings } = useSettings();
   const [points, setPoints] = useState(0);
   const [totalEarned, setTotalEarned] = useState(0);
   const [transactions, setTransactions] = useState<LoyaltyTransaction[]>([]);
+  const [currentTier, setCurrentTier] = useState<LoyaltyTier>(DEFAULT_TIER);
+  const [nextTier, setNextTier] = useState<LoyaltyTier | null>(null);
+  const [pointsToNextTier, setPointsToNextTier] = useState(0);
+  const [referralCode, setReferralCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Get settings values with fallbacks
-  const pointsToAedRate = settings.pointsToAedRate ?? 0.1; // 100 points = 10 AED
-  const referralBonusPoints = settings.referralBonus ?? 100;
+  // Points to AED rate (10 points = 1 AED)
+  const pointsToAedRate = 0.1;
 
-  // Load loyalty data from localStorage
-  useEffect(() => {
-    if (user?.id) {
-      const savedPoints = localStorage.getItem(`loyalty_points_${user.id}`);
-      const savedTotal = localStorage.getItem(`loyalty_total_${user.id}`);
-      const savedTransactions = localStorage.getItem(`loyalty_transactions_${user.id}`);
+  // Convert API tier to local format
+  const mapTier = (t: ApiLoyaltyTier): LoyaltyTier => ({
+    id: t.id,
+    name: t.name,
+    nameAr: t.nameAr,
+    minPoints: t.minPoints,
+    multiplier: parseFloat(t.multiplier),
+    benefits: t.benefits,
+    benefitsAr: t.benefitsAr,
+    icon: t.icon,
+  });
 
-      if (savedPoints) setPoints(parseInt(savedPoints, 10));
-      if (savedTotal) setTotalEarned(parseInt(savedTotal, 10));
-      if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
-    } else {
+  // Convert API transaction to local format
+  const mapTransaction = (t: ApiLoyaltyTransaction): LoyaltyTransaction => ({
+    id: t.id,
+    userId: t.userId,
+    type: t.type as LoyaltyTransaction["type"],
+    points: t.points,
+    description: t.description,
+    orderId: t.orderId || undefined,
+    createdAt: t.createdAt,
+  });
+
+  // Fetch loyalty data from API
+  const fetchLoyalty = useCallback(async () => {
+    if (!user?.id) {
       setPoints(0);
       setTotalEarned(0);
       setTransactions([]);
+      setCurrentTier(DEFAULT_TIER);
+      setNextTier(null);
+      setPointsToNextTier(0);
+      setReferralCode("");
+      return;
+    }
+
+    try {
+      const response = await loyaltyApi.get();
+      if (response.success && response.data) {
+        setPoints(response.data.points);
+        setTotalEarned(response.data.totalEarned);
+        setReferralCode(response.data.referralCode);
+        setCurrentTier(mapTier(response.data.currentTier));
+        setNextTier(response.data.nextTier ? mapTier(response.data.nextTier) : null);
+        setPointsToNextTier(response.data.pointsToNextTier);
+        setTransactions(response.data.transactions.map(mapTransaction));
+      }
+    } catch (error) {
+      console.error("Error fetching loyalty data:", error);
     }
   }, [user?.id]);
 
-  // Save to localStorage
+  // Load loyalty data on mount and user change
   useEffect(() => {
-    if (user?.id) {
-      localStorage.setItem(`loyalty_points_${user.id}`, points.toString());
-      localStorage.setItem(`loyalty_total_${user.id}`, totalEarned.toString());
-      localStorage.setItem(`loyalty_transactions_${user.id}`, JSON.stringify(transactions));
+    fetchLoyalty();
+  }, [fetchLoyalty]);
+
+  // Refresh loyalty data
+  const refresh = async () => {
+    await fetchLoyalty();
+  };
+
+  const earnPoints = useCallback(async (amount: number, orderId: string, description: string) => {
+    if (!user?.id) return;
+
+    try {
+      const earnedPoints = Math.floor(amount * currentTier.multiplier);
+      await loyaltyApi.earn(user.id, earnedPoints, description, orderId);
+      await fetchLoyalty();
+    } catch (error) {
+      console.error("Error earning points:", error);
     }
-  }, [user?.id, points, totalEarned, transactions]);
+  }, [user?.id, currentTier.multiplier, fetchLoyalty]);
 
-  const currentTier = TIERS.reduce((acc, tier) => {
-    if (totalEarned >= tier.minPoints) return tier;
-    return acc;
-  }, TIERS[0]);
+  const redeemPoints = useCallback(async (pointsToRedeem: number, description: string): Promise<boolean> => {
+    if (!user?.id || pointsToRedeem > points) return false;
 
-  const nextTier = TIERS.find((tier) => tier.minPoints > totalEarned) || null;
-  const pointsToNextTier = nextTier ? nextTier.minPoints - totalEarned : 0;
-
-  const earnPoints = useCallback((amount: number, orderId: string, description: string) => {
-    const earnedPoints = Math.floor(amount * currentTier.multiplier);
-    
-    const transaction: LoyaltyTransaction = {
-      id: `trans_${Date.now()}`,
-      userId: user?.id || "",
-      type: "earn",
-      points: earnedPoints,
-      description,
-      orderId,
-      createdAt: new Date().toISOString(),
-    };
-
-    setPoints((prev) => prev + earnedPoints);
-    setTotalEarned((prev) => prev + earnedPoints);
-    setTransactions((prev) => [transaction, ...prev]);
-  }, [currentTier.multiplier, user?.id]);
-
-  const redeemPoints = useCallback((pointsToRedeem: number, description: string): boolean => {
-    if (pointsToRedeem > points) return false;
-
-    const transaction: LoyaltyTransaction = {
-      id: `trans_${Date.now()}`,
-      userId: user?.id || "",
-      type: "redeem",
-      points: -pointsToRedeem,
-      description,
-      createdAt: new Date().toISOString(),
-    };
-
-    setPoints((prev) => prev - pointsToRedeem);
-    setTransactions((prev) => [transaction, ...prev]);
-    return true;
-  }, [points, user?.id]);
+    setIsLoading(true);
+    try {
+      const response = await loyaltyApi.redeem(user.id, pointsToRedeem, description);
+      if (response.success) {
+        await fetchLoyalty();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error redeeming points:", error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id, points, fetchLoyalty]);
 
   const calculatePointsValue = useCallback((pointsAmount: number): number => {
     return parseFloat((pointsAmount * pointsToAedRate).toFixed(2));
-  }, [pointsToAedRate]);
+  }, []);
 
   const calculatePointsFromOrder = useCallback((orderTotal: number): number => {
     return Math.floor(orderTotal * currentTier.multiplier);
   }, [currentTier.multiplier]);
 
-  const referralCode = user?.id ? `REF${user.id.toUpperCase().slice(-6)}` : "";
-
-  const applyReferral = useCallback((code: string): { success: boolean; message: string } => {
+  const applyReferral = useCallback(async (code: string): Promise<{ success: boolean; message: string }> => {
     if (!user?.id) {
       return { success: false, message: "Please login first" };
     }
 
-    const appliedReferrals = localStorage.getItem(`applied_referrals_${user.id}`);
-    const referralsList = appliedReferrals ? JSON.parse(appliedReferrals) : [];
-
-    if (referralsList.includes(code)) {
-      return { success: false, message: "You have already used this referral code" };
+    setIsLoading(true);
+    try {
+      const response = await loyaltyApi.applyReferral(code);
+      if (response.success) {
+        await fetchLoyalty();
+        return { success: true, message: response.message || "Referral applied successfully!" };
+      }
+      return { success: false, message: response.error || "Failed to apply referral code" };
+    } catch (error) {
+      console.error("Error applying referral:", error);
+      return { success: false, message: "Failed to apply referral code" };
+    } finally {
+      setIsLoading(false);
     }
-
-    if (code === referralCode) {
-      return { success: false, message: "You cannot use your own referral code" };
-    }
-
-    // Check if referral code exists (simplified check)
-    if (!code.startsWith("REF") || code.length < 6) {
-      return { success: false, message: "Invalid referral code" };
-    }
-
-    // Add bonus points for referral using settings value
-    const bonusPoints = referralBonusPoints;
-    const transaction: LoyaltyTransaction = {
-      id: `trans_${Date.now()}`,
-      userId: user.id,
-      type: "bonus",
-      points: bonusPoints,
-      description: `Referral bonus from code ${code}`,
-      createdAt: new Date().toISOString(),
-    };
-
-    setPoints((prev) => prev + bonusPoints);
-    setTotalEarned((prev) => prev + bonusPoints);
-    setTransactions((prev) => [transaction, ...prev]);
-
-    referralsList.push(code);
-    localStorage.setItem(`applied_referrals_${user.id}`, JSON.stringify(referralsList));
-
-    return { success: true, message: `You earned ${bonusPoints} bonus points!` };
-  }, [user?.id, referralCode, referralBonusPoints]);
+  }, [user?.id, fetchLoyalty]);
 
   return (
     <LoyaltyContext.Provider
@@ -231,6 +205,8 @@ export const LoyaltyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         calculatePointsFromOrder,
         referralCode,
         applyReferral,
+        isLoading,
+        refresh,
       }}
     >
       {children}
