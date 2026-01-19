@@ -286,19 +286,7 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
         await fetchData();
         setAssignModal(null);
         toast({ title: t.assignSuccess });
-        
-        // Send notification to driver about the assignment
-        if (order) {
-          const addressStr = `${order.deliveryAddress.building}, ${order.deliveryAddress.street}, ${order.deliveryAddress.area}`;
-          const notification = createDriverAssignedNotification(order.orderNumber, order.customerName, addressStr);
-          addUserNotification(driverId, notification);
-          
-          // Also notify customer that their order is ready for delivery
-          if (order.userId) {
-            addUserNotification(order.userId, createUserOrderNotification(order.orderNumber, "ready"));
-          }
-        }
-        
+        // Note: Notifications for driver and customer are now created server-side
         return true;
       }
 

@@ -12,16 +12,91 @@ import type {
   DeliveryTracking, 
   ApiResponse 
 } from "../../shared/api";
-import { db, addresses, deliveryZones, deliveryTracking, orders, users } from "../db/connection";
+import { db, addresses, deliveryZones, deliveryTracking, orders, users, inAppNotifications } from "../db/connection";
 import { sendOrderNotification } from "../services/notifications";
 import { randomUUID } from "crypto";
 // Types are inferred within handlers; explicit DeliveryAvailabilityRequest not exported in shared api.
 
 const router = Router();
 
-// Helper to generate IDs
-function generateId(prefix: string): string {
-  return `${prefix}-${randomUUID().slice(0, 8)}`;
+// Helper to generate unique ID
+const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// Helper to create order notification (for delivery status updates)
+async function createOrderNotification(userId: string, orderNumber: string, status: string): Promise<void> {
+  interface NotificationContent {
+    title: string;
+    titleAr: string;
+    message: string;
+    messageAr: string;
+  }
+  
+  const notifications: Record<string, NotificationContent> = {
+    ready_for_pickup: {
+      title: "Order Ready",
+      titleAr: "الطلب جاهز",
+      message: `Your order ${orderNumber} is ready for pickup/delivery`,
+      messageAr: `طلبك ${orderNumber} جاهز للاستلام/التوصيل`,
+    },
+    out_for_delivery: {
+      title: "Out for Delivery",
+      titleAr: "في الطريق إليك",
+      message: `Your order ${orderNumber} is on its way to you!`,
+      messageAr: `طلبك ${orderNumber} في الطريق إليك!`,
+    },
+    delivered: {
+      title: "Order Delivered",
+      titleAr: "تم تسليم الطلب",
+      message: `Your order ${orderNumber} has been delivered. Enjoy!`,
+      messageAr: `تم تسليم طلبك ${orderNumber}. بالهناء والشفاء!`,
+    },
+  };
+
+  const content = notifications[status];
+  if (!content || !userId) return;
+
+  try {
+    await db.insert(inAppNotifications).values({
+      id: generateId("notif"),
+      userId,
+      type: "order",
+      title: content.title,
+      titleAr: content.titleAr,
+      message: content.message,
+      messageAr: content.messageAr,
+      link: null,
+      linkTab: null,
+      linkId: null,
+      unread: true,
+      createdAt: new Date(),
+    });
+    console.log(`[Delivery Notification] Created notification for user ${userId}: ${status}`);
+  } catch (error) {
+    console.error(`[Delivery Notification] Failed to create notification:`, error);
+  }
+}
+
+// Helper to create driver notification
+async function createDriverNotification(driverId: string, orderNumber: string, customerName: string, address: string): Promise<void> {
+  try {
+    await db.insert(inAppNotifications).values({
+      id: generateId("notif"),
+      userId: driverId,
+      type: "delivery",
+      title: "New Delivery Assigned",
+      titleAr: "تم تعيين توصيل جديد",
+      message: `Order ${orderNumber} assigned to you. Customer: ${customerName}. Address: ${address}`,
+      messageAr: `تم تعيين الطلب ${orderNumber} لك. العميل: ${customerName}. العنوان: ${address}`,
+      link: null,
+      linkTab: null,
+      linkId: null,
+      unread: true,
+      createdAt: new Date(),
+    });
+    console.log(`[Delivery Notification] Created driver notification for ${driverId}`);
+  } catch (error) {
+    console.error(`[Delivery Notification] Failed to create driver notification:`, error);
+  }
 }
 
 // Validation schemas
@@ -784,6 +859,17 @@ const assignDelivery: RequestHandler = async (req, res) => {
       })
       .where(eq(orders.id, orderId));
 
+    // Create notifications server-side
+    // 1. Notify customer that their order is ready
+    if (order.userId) {
+      await createOrderNotification(order.userId, order.orderNumber, "ready_for_pickup");
+    }
+    // 2. Notify driver about the assignment
+    const addressStr = order.deliveryAddress ? 
+      `${(order.deliveryAddress as any).building || ''}, ${(order.deliveryAddress as any).street || ''}, ${(order.deliveryAddress as any).area || ''}` : 
+      'Address not available';
+    await createDriverNotification(driverId, order.orderNumber, order.customerName, addressStr);
+
     console.log("[ASSIGN DELIVERY] Success! Tracking ID:", tracking.id);
     const response: ApiResponse<typeof tracking> = {
       success: true,
@@ -947,8 +1033,10 @@ const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
       .where(eq(deliveryTracking.id, tracking.id))
       .returning();
 
-    // Update order status if delivered
+    // Update order status based on delivery status
+    let orderStatus: string | null = null;
     if (status === "delivered") {
+      orderStatus = "delivered";
       await db.update(orders)
         .set({
           status: "delivered",
@@ -957,6 +1045,25 @@ const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
           updatedAt: new Date(),
         })
         .where(eq(orders.id, tracking.orderId));
+    } else if (status === "in_transit" || status === "picked_up") {
+      orderStatus = "out_for_delivery";
+      await db.update(orders)
+        .set({
+          status: "out_for_delivery",
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, tracking.orderId));
+    }
+
+    // Create notification for customer based on delivery status
+    const orderResult = await db.select().from(orders).where(eq(orders.id, tracking.orderId));
+    if (orderResult.length > 0 && orderResult[0].userId) {
+      const order = orderResult[0];
+      if (status === "in_transit" || status === "picked_up") {
+        await createOrderNotification(order.userId, order.orderNumber, "out_for_delivery");
+      } else if (status === "delivered") {
+        await createOrderNotification(order.userId, order.orderNumber, "delivered");
+      }
     }
 
     const response: ApiResponse<typeof updated> = {
@@ -1017,6 +1124,13 @@ const completeDelivery: RequestHandler = async (req, res) => {
         updatedAt: new Date(),
       })
       .where(eq(orders.id, tracking.orderId));
+
+    // Create notification for customer
+    const orderResult = await db.select().from(orders).where(eq(orders.id, tracking.orderId));
+    if (orderResult.length > 0 && orderResult[0].userId) {
+      const order = orderResult[0];
+      await createOrderNotification(order.userId, order.orderNumber, "delivered");
+    }
 
     const response: ApiResponse<typeof updated> = {
       success: true,

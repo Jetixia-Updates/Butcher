@@ -7,7 +7,7 @@ import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 import type { Order, OrderItem, ApiResponse, PaginatedResponse } from "../../shared/api";
-import { db, orders, orderItems, products, users, addresses, discountCodes, deliveryZones, stock, payments } from "../db/connection";
+import { db, orders, orderItems, products, users, addresses, discountCodes, deliveryZones, stock, payments, inAppNotifications } from "../db/connection";
 
 const router = Router();
 
@@ -55,6 +55,85 @@ const updateStatusSchema = z.object({
   status: z.enum(["pending", "confirmed", "processing", "ready_for_pickup", "out_for_delivery", "delivered", "cancelled", "refunded"]),
   notes: z.string().optional(),
 });
+
+// Order status notification messages
+interface OrderNotificationContent {
+  title: string;
+  titleAr: string;
+  message: string;
+  messageAr: string;
+}
+
+function getOrderStatusNotification(orderNumber: string, status: string): OrderNotificationContent | null {
+  const notifications: Record<string, OrderNotificationContent> = {
+    confirmed: {
+      title: "Order Confirmed",
+      titleAr: "تم تأكيد الطلب",
+      message: `Great news! Your order ${orderNumber} has been confirmed`,
+      messageAr: `أخبار سارة! تم تأكيد طلبك ${orderNumber}`,
+    },
+    processing: {
+      title: "Order Being Prepared",
+      titleAr: "جاري تحضير الطلب",
+      message: `Your order ${orderNumber} is now being prepared`,
+      messageAr: `جاري تحضير طلبك ${orderNumber} الآن`,
+    },
+    ready_for_pickup: {
+      title: "Order Ready",
+      titleAr: "الطلب جاهز",
+      message: `Your order ${orderNumber} is ready for pickup/delivery`,
+      messageAr: `طلبك ${orderNumber} جاهز للاستلام/التوصيل`,
+    },
+    out_for_delivery: {
+      title: "Out for Delivery",
+      titleAr: "في الطريق إليك",
+      message: `Your order ${orderNumber} is on its way to you!`,
+      messageAr: `طلبك ${orderNumber} في الطريق إليك!`,
+    },
+    delivered: {
+      title: "Order Delivered",
+      titleAr: "تم تسليم الطلب",
+      message: `Your order ${orderNumber} has been delivered. Enjoy!`,
+      messageAr: `تم تسليم طلبك ${orderNumber}. بالهناء والشفاء!`,
+    },
+    cancelled: {
+      title: "Order Cancelled",
+      titleAr: "تم إلغاء الطلب",
+      message: `Your order ${orderNumber} has been cancelled`,
+      messageAr: `تم إلغاء طلبك ${orderNumber}`,
+    },
+  };
+
+  return notifications[status] || null;
+}
+
+// Helper to create notification for a user (server-side)
+async function createOrderNotification(userId: string, orderNumber: string, status: string): Promise<void> {
+  const content = getOrderStatusNotification(orderNumber, status);
+  if (!content || !userId) return;
+
+  try {
+    const newNotification = {
+      id: generateId("notif"),
+      userId,
+      type: "order",
+      title: content.title,
+      titleAr: content.titleAr,
+      message: content.message,
+      messageAr: content.messageAr,
+      link: null,
+      linkTab: null,
+      linkId: null,
+      unread: true,
+      createdAt: new Date(),
+    };
+
+    await db.insert(inAppNotifications).values(newNotification);
+    console.log(`[Notification] Created order notification for user ${userId}: ${status}`);
+  } catch (error) {
+    console.error(`[Notification] Failed to create notification for user ${userId}:`, error);
+  }
+}
 
 // Helper to convert DB order to API order
 function toApiOrder(dbOrder: typeof orders.$inferSelect, items: OrderItem[]): Order {
@@ -581,6 +660,11 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
       totalPrice: parseFloat(item.totalPrice),
       notes: item.notes || undefined,
     }));
+
+    // Create notification for customer (server-side to ensure it's always created)
+    if (order.userId) {
+      await createOrderNotification(order.userId, order.orderNumber, status);
+    }
 
     const response: ApiResponse<Order> = {
       success: true,

@@ -316,22 +316,7 @@ export default function DriverDashboardPage() {
 
       if (response.ok) {
         await fetchDeliveries();
-        
-        // Send notification to customer about delivery status
-        const driverName = user?.firstName || "Driver";
-        if (nextStatus === "in_transit" || nextStatus === "picked_up") {
-          // Order is out for delivery
-          const notification = createUserOrderNotification(selectedDelivery.orderNumber, "outForDelivery");
-          addUserNotification(selectedDelivery.customerId, notification);
-        } else if (nextStatus === "nearby") {
-          // Driver is arriving
-          const notification = createUserDeliveryNotification(selectedDelivery.orderNumber, driverName, "arriving");
-          addUserNotification(selectedDelivery.customerId, notification);
-        } else if (nextStatus === "delivered") {
-          // Order delivered
-          const notification = createUserOrderNotification(selectedDelivery.orderNumber, "delivered");
-          addUserNotification(selectedDelivery.customerId, notification);
-        }
+        // Notifications are now sent server-side
       }
     } catch (error) {
       console.error("Error updating status:", error);

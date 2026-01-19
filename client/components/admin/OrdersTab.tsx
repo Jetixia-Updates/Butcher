@@ -274,29 +274,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       if (selectedOrder?.id === orderId && response.data) {
         setSelectedOrder(response.data);
       }
-      
-      // Send notification to user about order status change
-      if (response.data) {
-        const order = response.data;
-        // Map OrderStatus to user notification status
-        const statusMap: Record<OrderStatus, "confirmed" | "preparing" | "ready" | "outForDelivery" | "delivered" | "cancelled" | null> = {
-          pending: null, // No notification for pending
-          confirmed: "confirmed",
-          processing: "preparing",
-          ready_for_pickup: "ready",
-          out_for_delivery: "outForDelivery",
-          delivered: "delivered",
-          cancelled: "cancelled",
-          refunded: null, // Handle refund separately if needed
-        };
-        
-        const notificationStatus = statusMap[newStatus];
-        if (notificationStatus && order.userId) {
-          const notification = createUserOrderNotification(order.orderNumber, notificationStatus);
-          // Send notification to the specific customer who placed the order
-          addUserNotification(order.userId, notification);
-        }
-      }
+      // Note: Customer notifications are now created server-side when status is updated
     }
     setUpdating(null);
   };
