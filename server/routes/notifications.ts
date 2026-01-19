@@ -7,9 +7,12 @@ import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import type { ApiResponse } from "../../shared/api";
-import { db, sessions, inAppNotifications } from "../db/connection";
+import { db, sessions, inAppNotifications, users } from "../db/connection";
 
 const router = Router();
+
+// Constant for admin notifications - must match client-side ADMIN_USER_ID
+const ADMIN_USER_ID = "admin";
 
 // Helper to generate unique IDs
 const generateId = () => `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -38,6 +41,23 @@ async function getUserIdFromToken(token: string | undefined): Promise<string | n
     return sessionResult[0].userId;
   } catch {
     return null;
+  }
+}
+
+// Helper to get the notification userId (returns "admin" for admin users)
+async function getNotificationUserId(token: string | undefined): Promise<string | null> {
+  const userId = await getUserIdFromToken(token);
+  if (!userId) return null;
+  
+  try {
+    // Check if user is admin
+    const userResult = await db.select({ role: users.role }).from(users).where(eq(users.id, userId));
+    if (userResult.length > 0 && userResult[0].role === "admin") {
+      return ADMIN_USER_ID;
+    }
+    return userId;
+  } catch {
+    return userId;
   }
 }
 
@@ -142,9 +162,9 @@ const markAsRead: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const notificationUserId = await getNotificationUserId(token);
 
-    if (!userId) {
+    if (!notificationUserId) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -155,7 +175,7 @@ const markAsRead: RequestHandler = async (req, res) => {
     await db
       .update(inAppNotifications)
       .set({ unread: false })
-      .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, userId)));
+      .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, notificationUserId)));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -176,9 +196,9 @@ const markAsRead: RequestHandler = async (req, res) => {
 const markAllAsRead: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const notificationUserId = await getNotificationUserId(token);
 
-    if (!userId) {
+    if (!notificationUserId) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -189,7 +209,7 @@ const markAllAsRead: RequestHandler = async (req, res) => {
     await db
       .update(inAppNotifications)
       .set({ unread: false })
-      .where(eq(inAppNotifications.userId, userId));
+      .where(eq(inAppNotifications.userId, notificationUserId));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -211,9 +231,9 @@ const deleteNotification: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const notificationUserId = await getNotificationUserId(token);
 
-    if (!userId) {
+    if (!notificationUserId) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -223,7 +243,7 @@ const deleteNotification: RequestHandler = async (req, res) => {
 
     await db
       .delete(inAppNotifications)
-      .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, userId)));
+      .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, notificationUserId)));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -244,9 +264,9 @@ const deleteNotification: RequestHandler = async (req, res) => {
 const clearAllNotifications: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const notificationUserId = await getNotificationUserId(token);
 
-    if (!userId) {
+    if (!notificationUserId) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -254,7 +274,7 @@ const clearAllNotifications: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    await db.delete(inAppNotifications).where(eq(inAppNotifications.userId, userId));
+    await db.delete(inAppNotifications).where(eq(inAppNotifications.userId, notificationUserId));
 
     const response: ApiResponse<null> = {
       success: true,
