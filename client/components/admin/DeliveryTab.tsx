@@ -693,7 +693,7 @@ function DeliveriesList({
                   </div>
                   <p className="text-xs sm:text-sm text-slate-500 truncate">{order.customerName}</p>
                   <p className="text-xs text-slate-400 truncate">
-                    {order.deliveryAddress.area}, {order.deliveryAddress.emirate}
+                    {order.deliveryAddress?.area || 'N/A'}, {order.deliveryAddress?.emirate || 'N/A'}
                   </p>
                 </div>
               </div>
@@ -1244,7 +1244,7 @@ function AssignDriverModal({
             <p className="text-xs sm:text-sm text-slate-500 mt-2">{t.deliveryTo}</p>
             <p className="font-medium text-sm sm:text-base">{order.customerName}</p>
             <p className="text-xs sm:text-sm text-slate-500">
-              {order.deliveryAddress.area}, {order.deliveryAddress.emirate}
+              {order.deliveryAddress?.area || 'N/A'}, {order.deliveryAddress?.emirate || 'N/A'}
             </p>
           </div>
 

@@ -131,6 +131,16 @@ const translations = {
     walletDebited: "Wallet debited by admin",
     aed: "AED",
     pts: "pts",
+    deleteCustomer: "Delete Customer",
+    confirmDeleteCustomer: "Are you sure you want to delete this customer? This action cannot be undone.",
+    save: "Save",
+    firstName: "First Name",
+    lastName: "Last Name",
+    updateSuccess: "Customer updated successfully",
+    updateFailed: "Failed to update customer",
+    deleteSuccess: "Customer deleted successfully",
+    deleteFailed: "Failed to delete customer",
+    toggleActive: "Toggle Active Status",
   },
   ar: {
     customersManagement: "إدارة العملاء",
@@ -193,6 +203,16 @@ const translations = {
     walletDebited: "رصيد مخصوم من المدير",
     aed: "د.إ",
     pts: "نقطة",
+    deleteCustomer: "حذف العميل",
+    confirmDeleteCustomer: "هل أنت متأكد من حذف هذا العميل؟ لا يمكن التراجع عن هذا الإجراء.",
+    save: "حفظ",
+    firstName: "الاسم الأول",
+    lastName: "اسم العائلة",
+    updateSuccess: "تم تحديث العميل بنجاح",
+    updateFailed: "فشل تحديث العميل",
+    deleteSuccess: "تم حذف العميل بنجاح",
+    deleteFailed: "فشل حذف العميل",
+    toggleActive: "تغيير حالة النشاط",
   },
 };
 
@@ -217,6 +237,7 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
   const [reviewModal, setReviewModal] = useState<Review | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewFilter, setReviewFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [editModal, setEditModal] = useState<UserType | null>(null);
   
   // Customer wallet/loyalty data cache
   const [customerData, setCustomerData] = useState<Record<string, { balance: number; points: number; tier: string }>>({});
@@ -410,6 +431,55 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
       }
     } catch (error) {
       console.error("Error deleting review:", error);
+    }
+  };
+
+  // Update customer via API
+  const updateCustomer = async (userId: string, data: Partial<UserType>) => {
+    try {
+      const response = await usersApi.update(userId, data);
+      if (response.success && response.data) {
+        setCustomers(prev => prev.map(c => c.id === userId ? { ...c, ...response.data } : c));
+        setEditModal(null);
+        alert(t.updateSuccess);
+        return true;
+      } else {
+        alert(response.error || t.updateFailed);
+        return false;
+      }
+    } catch (error) {
+      console.error("Error updating customer:", error);
+      alert(t.updateFailed);
+      return false;
+    }
+  };
+
+  // Delete customer via API
+  const deleteCustomer = async (userId: string) => {
+    if (!confirm(t.confirmDeleteCustomer)) return;
+    try {
+      const response = await usersApi.delete(userId);
+      if (response.success) {
+        setCustomers(prev => prev.filter(c => c.id !== userId));
+        alert(t.deleteSuccess);
+      } else {
+        alert(response.error || t.deleteFailed);
+      }
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      alert(t.deleteFailed);
+    }
+  };
+
+  // Toggle customer active status
+  const toggleCustomerActive = async (userId: string, currentStatus: boolean) => {
+    try {
+      const response = await usersApi.toggleActive(userId, !currentStatus);
+      if (response.success && response.data) {
+        setCustomers(prev => prev.map(c => c.id === userId ? { ...c, isActive: !currentStatus } : c));
+      }
+    } catch (error) {
+      console.error("Error toggling customer status:", error);
     }
   };
 
@@ -629,6 +699,25 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
                           isRTL ? "justify-start" : "justify-end"
                         )}>
                           <button
+                            onClick={() => setEditModal(customer)}
+                            className="p-1.5 sm:p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                            title={t.editCustomer}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => toggleCustomerActive(customer.id, customer.isActive)}
+                            className={cn(
+                              "p-1.5 sm:p-2 rounded-lg",
+                              customer.isActive
+                                ? "text-green-600 hover:text-orange-600 hover:bg-orange-50"
+                                : "text-slate-500 hover:text-green-600 hover:bg-green-50"
+                            )}
+                            title={t.toggleActive}
+                          >
+                            {customer.isActive ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                          </button>
+                          <button
                             onClick={() => setActiveSection("wallets")}
                             className="p-1.5 sm:p-2 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg"
                             title={t.wallets}
@@ -641,6 +730,13 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
                             title={t.loyalty}
                           >
                             <Award className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteCustomer(customer.id)}
+                            className="p-1.5 sm:p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                            title={t.deleteCustomer}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -976,6 +1072,17 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
           t={t}
         />
       )}
+
+      {/* Edit Customer Modal */}
+      {editModal && (
+        <EditCustomerModal
+          customer={editModal}
+          onClose={() => setEditModal(null)}
+          onSave={(data) => updateCustomer(editModal.id, data)}
+          isRTL={isRTL}
+          t={t}
+        />
+      )}
     </div>
   );
 }
@@ -1192,6 +1299,166 @@ function HistoryModal({
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Edit Customer Modal Component
+function EditCustomerModal({
+  customer,
+  onClose,
+  onSave,
+  isRTL,
+  t,
+}: {
+  customer: UserType;
+  onClose: () => void;
+  onSave: (data: Partial<UserType>) => Promise<boolean>;
+  isRTL: boolean;
+  t: typeof translations.en;
+}) {
+  const [formData, setFormData] = useState({
+    firstName: customer.firstName || "",
+    familyName: customer.familyName || "",
+    email: customer.email || "",
+    mobile: customer.mobile || "",
+    emirate: customer.emirate || "",
+    isActive: customer.isActive,
+    isVerified: customer.isVerified,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(formData);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-slate-900">{t.editCustomer}</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[60vh]">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {t.firstName}
+              </label>
+              <input
+                type="text"
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {t.lastName}
+              </label>
+              <input
+                type="text"
+                value={formData.familyName}
+                onChange={(e) => setFormData({ ...formData, familyName: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t.email}
+            </label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t.phone}
+            </label>
+            <input
+              type="tel"
+              value={formData.mobile}
+              onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {t.emirate}
+            </label>
+            <select
+              value={formData.emirate}
+              onChange={(e) => setFormData({ ...formData, emirate: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+              <option value="">-</option>
+              <option value="Dubai">Dubai</option>
+              <option value="Abu Dhabi">Abu Dhabi</option>
+              <option value="Sharjah">Sharjah</option>
+              <option value="Ajman">Ajman</option>
+              <option value="Fujairah">Fujairah</option>
+              <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+              <option value="Umm Al Quwain">Umm Al Quwain</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isActive}
+                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                className="w-4 h-4 text-primary border-slate-300 rounded focus:ring-primary"
+              />
+              <span className="text-sm text-slate-700">{t.active}</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isVerified}
+                onChange={(e) => setFormData({ ...formData, isVerified: e.target.checked })}
+                className="w-4 h-4 text-primary border-slate-300 rounded focus:ring-primary"
+              />
+              <span className="text-sm text-slate-700">{t.verifiedAccount}</span>
+            </label>
+          </div>
+        </form>
+
+        <div className="p-6 border-t border-slate-200 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 border border-slate-300 rounded-lg font-medium hover:bg-slate-50"
+          >
+            {t.cancel}
+          </button>
+          <button
+            type="submit"
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
+          >
+            {saving ? "..." : t.save}
+          </button>
         </div>
       </div>
     </div>
