@@ -1093,11 +1093,7 @@ export default function CheckoutPage() {
       });
 
       if (response.success && response.data) {
-        // Add notification for the admin (include order ID for navigation)
-        addAdminNotification(createOrderNotification(response.data.orderNumber, "new", response.data.id));
-        
-        // Add notification for the user (current logged-in user)
-        addNotification(createUserOrderNotification(response.data.orderNumber, "placed"));
+        // Notifications are now created server-side for reliability across all devices
         
         // Generate TAX invoice using server-calculated values for accuracy
         const invoiceNumber = generateInvoiceNumber(response.data.orderNumber);

@@ -580,6 +580,52 @@ const createOrder: RequestHandler = async (req, res) => {
       notes: item.notes || undefined,
     }));
 
+    // === SERVER-SIDE NOTIFICATIONS ===
+    // Create notification for customer (order placed)
+    try {
+      const customerNotification = {
+        id: generateId("notif"),
+        userId: userId,
+        type: "order",
+        title: "Order Placed Successfully",
+        titleAr: "تم تقديم الطلب بنجاح",
+        message: `Your order ${orderNumber} has been placed and is being processed`,
+        messageAr: `تم تقديم طلبك ${orderNumber} وجاري معالجته`,
+        link: `/orders`,
+        linkTab: null,
+        linkId: orderId,
+        unread: true,
+        createdAt: new Date(),
+      };
+      await db.insert(inAppNotifications).values(customerNotification);
+      console.log(`[Order Notification] Customer notification created for order ${orderNumber}`);
+    } catch (notifError) {
+      console.error(`[Order Notification] Failed to create customer notification:`, notifError);
+    }
+
+    // Create notification for admin (new order received)
+    try {
+      const adminNotification = {
+        id: generateId("notif"),
+        userId: "admin", // Admin user constant
+        type: "order",
+        title: "New Order Received",
+        titleAr: "تم استلام طلب جديد",
+        message: `New order ${orderNumber} from ${user.firstName} ${user.familyName} - Total: ${total.toFixed(2)} AED`,
+        messageAr: `طلب جديد ${orderNumber} من ${user.firstName} ${user.familyName} - المجموع: ${total.toFixed(2)} درهم`,
+        link: `/admin`,
+        linkTab: "orders",
+        linkId: orderId,
+        unread: true,
+        createdAt: new Date(),
+      };
+      await db.insert(inAppNotifications).values(adminNotification);
+      console.log(`[Order Notification] Admin notification created for order ${orderNumber}`);
+    } catch (notifError) {
+      console.error(`[Order Notification] Failed to create admin notification:`, notifError);
+    }
+    // === END SERVER-SIDE NOTIFICATIONS ===
+
     const response: ApiResponse<Order> = {
       success: true,
       data: toApiOrder(createdOrderResult[0], apiItems),
