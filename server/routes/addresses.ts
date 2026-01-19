@@ -53,13 +53,18 @@ router.get("/", async (req: Request, res: Response) => {
 router.post("/", async (req: Request, res: Response) => {
   try {
     const userId = req.headers["x-user-id"] as string;
+    console.log("[Addresses] Creating address for user:", userId);
+    
     if (!userId) {
+      console.log("[Addresses] No user ID provided");
       return res.status(401).json({ success: false, error: "User ID required" });
     }
 
     const validation = addressSchema.safeParse(req.body);
     if (!validation.success) {
-      return res.status(400).json({ success: false, error: validation.error.message });
+      const errorMessages = validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      console.log("[Addresses] Validation failed:", errorMessages);
+      return res.status(400).json({ success: false, error: errorMessages });
     }
 
     const data = validation.data;
@@ -102,10 +107,12 @@ router.post("/", async (req: Request, res: Response) => {
       })
       .returning();
 
+    console.log("[Addresses] Address created successfully:", addressId);
     res.json({ success: true, data: newAddress });
   } catch (error) {
-    console.error("Error creating address:", error);
-    res.status(500).json({ success: false, error: "Failed to create address" });
+    console.error("[Addresses] Error creating address:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to create address";
+    res.status(500).json({ success: false, error: errorMessage });
   }
 });
 

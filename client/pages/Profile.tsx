@@ -272,10 +272,14 @@ export default function ProfilePage() {
   // Save address handler
   const handleSaveAddress = async () => {
     if (!addressForm.fullName || !addressForm.mobile || !addressForm.emirate || !addressForm.area || !addressForm.street || !addressForm.building) {
+      alert(isRTL ? "يرجى ملء جميع الحقول المطلوبة" : "Please fill in all required fields");
       return;
     }
     
-    if (!user?.id) return;
+    if (!user?.id) {
+      alert(isRTL ? "يرجى تسجيل الدخول أولاً" : "Please log in first");
+      return;
+    }
     
     try {
       const response = await addressesApi.create(user.id, {
@@ -299,13 +303,16 @@ export default function ProfilePage() {
         if (refreshed.success && refreshed.data) {
           setSavedAddresses(refreshed.data);
         }
+        // Only close form on success
+        closeAddressForm();
+      } else {
+        // Show error message from server
+        alert(isRTL ? (response.error || "فشل حفظ العنوان") : (response.error || "Failed to save address"));
       }
     } catch (error) {
       console.error("Error saving address:", error);
+      alert(isRTL ? "حدث خطأ أثناء حفظ العنوان" : "An error occurred while saving the address");
     }
-    
-    // Cleanup map and close form
-    closeAddressForm();
   };
 
   // Delete address handler
