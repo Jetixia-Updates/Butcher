@@ -8,7 +8,7 @@ import { useNotifications, createOrderNotification, createUserOrderNotification,
 import { PriceDisplay } from "@/components/CurrencySymbol";
 import { ordersApi, deliveryApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { Address } from "@shared/api";
+import type { Address, DeliveryZone } from "@shared/api";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -697,10 +697,16 @@ export default function CheckoutPage() {
   const [driverTip, setDriverTip] = useState<number>(0);
   const tipOptions = [0, 5, 10, 15, 20];
 
-  // Adjusted totals with express delivery and tip (rounded to match server calculations)
+  // Delivery zones state
+  const [zones, setZones] = useState<DeliveryZone[]>([]);
+  const [zoneDeliveryFee, setZoneDeliveryFee] = useState<number>(0);
+  const [matchedZone, setMatchedZone] = useState<DeliveryZone | null>(null);
+
+  // Adjusted totals with zone delivery fee, express delivery and tip (rounded to match server calculations)
   const adjustedSubtotal = Math.round((subtotal - discountAmount) * 100) / 100;
   const adjustedVat = Math.round(adjustedSubtotal * 0.05 * 100) / 100;
-  const deliveryFeeTotal = isExpressDelivery ? expressDeliveryFee : 0;
+  const expressDeliveryAmount = isExpressDelivery ? expressDeliveryFee : 0;
+  const deliveryFeeTotal = zoneDeliveryFee + expressDeliveryAmount;
   const adjustedTotal = Math.round((adjustedSubtotal + adjustedVat + deliveryFeeTotal + driverTip) * 100) / 100;
 
   // Helper function to get localized item name
@@ -751,6 +757,59 @@ export default function CheckoutPage() {
 
     fetchAddresses();
   }, [user?.id]);
+
+  // Fetch delivery zones on mount
+  useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        const response = await deliveryApi.getZones();
+        if (response.success && response.data) {
+          setZones(response.data.filter(z => z.isActive));
+        }
+      } catch (err) {
+        console.error("Failed to fetch delivery zones:", err);
+      }
+    };
+    fetchZones();
+  }, []);
+
+  // Calculate zone-based delivery fee when address changes
+  useEffect(() => {
+    const currentAddress = addresses.find(a => a.id === selectedAddressId);
+    if (!currentAddress || zones.length === 0) {
+      setZoneDeliveryFee(0);
+      setMatchedZone(null);
+      return;
+    }
+
+    // Find matching zone based on emirate and area
+    const zone = zones.find((z) => {
+      const emirateMatch = z.emirate.toLowerCase() === currentAddress.emirate.toLowerCase();
+      const areaMatch = z.areas.some((a) => 
+        a.toLowerCase().includes(currentAddress.area.toLowerCase()) ||
+        currentAddress.area.toLowerCase().includes(a.toLowerCase())
+      );
+      return emirateMatch && areaMatch;
+    });
+
+    if (zone) {
+      setZoneDeliveryFee(zone.deliveryFee);
+      setMatchedZone(zone);
+    } else {
+      // Fallback: try to match just by emirate
+      const emirateZone = zones.find((z) => 
+        z.emirate.toLowerCase() === currentAddress.emirate.toLowerCase()
+      );
+      if (emirateZone) {
+        setZoneDeliveryFee(emirateZone.deliveryFee);
+        setMatchedZone(emirateZone);
+      } else {
+        // No matching zone found - could show a warning or use default fee
+        setZoneDeliveryFee(0);
+        setMatchedZone(null);
+      }
+    }
+  }, [selectedAddressId, addresses, zones]);
 
   if (items.length === 0) {
     return (
@@ -814,6 +873,7 @@ export default function CheckoutPage() {
         discountAmount: discountAmount,
         isExpressDelivery: isExpressDelivery,
         expressDeliveryFee: isExpressDelivery ? expressDeliveryFee : 0,
+        zoneDeliveryFee: zoneDeliveryFee,
         driverTip: driverTip,
       } 
     });
@@ -1731,6 +1791,21 @@ export default function CheckoutPage() {
                       <PriceDisplay price={adjustedVat} size="md" />
                     </span>
                   </div>
+                  {zoneDeliveryFee > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        🚚 {t.deliveryFee}
+                        {matchedZone && (
+                          <span className="text-xs text-muted-foreground/70">
+                            ({language === "ar" ? matchedZone.nameAr : matchedZone.name})
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-semibold">
+                        +<PriceDisplay price={zoneDeliveryFee} size="md" />
+                      </span>
+                    </div>
+                  )}
                   {isExpressDelivery && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-orange-600 dark:text-orange-400 flex items-center gap-1">

@@ -29,6 +29,7 @@ export default function PaymentCardPage() {
     discountAmount?: number;
     isExpressDelivery?: boolean;
     expressDeliveryFee?: number;
+    zoneDeliveryFee?: number;
     driverTip?: number;
   }
   
@@ -40,12 +41,14 @@ export default function PaymentCardPage() {
   const discountAmount = checkoutState.discountAmount || 0;
   const isExpressDelivery = checkoutState.isExpressDelivery || false;
   const expressDeliveryFee = checkoutState.expressDeliveryFee || 0;
+  const zoneDeliveryFee = checkoutState.zoneDeliveryFee || 0;
   const driverTip = checkoutState.driverTip || 0;
   
   // Calculate adjusted values for invoice (rounded to match server calculations)
   const adjustedSubtotal = Math.round((subtotal - discountAmount) * 100) / 100;
   const adjustedVat = Math.round(adjustedSubtotal * 0.05 * 100) / 100;
-  const adjustedTotal = Math.round((adjustedSubtotal + adjustedVat + expressDeliveryFee + driverTip) * 100) / 100;
+  const totalDeliveryFee = zoneDeliveryFee + expressDeliveryFee;
+  const adjustedTotal = Math.round((adjustedSubtotal + adjustedVat + totalDeliveryFee + driverTip) * 100) / 100;
   
   // State for delivery address
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
@@ -605,6 +608,14 @@ export default function PaymentCardPage() {
                       {formatPrice(adjustedVat)}
                     </span>
                   </div>
+                  {zoneDeliveryFee > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">🚚 Delivery Fee</span>
+                      <span className="font-semibold">
+                        +{formatPrice(zoneDeliveryFee)}
+                      </span>
+                    </div>
+                  )}
                   {isExpressDelivery && expressDeliveryFee > 0 && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-orange-600">⚡ Express Delivery</span>
