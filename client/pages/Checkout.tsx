@@ -6,7 +6,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useSettings } from "@/context/SettingsContext";
 import { useNotifications, createOrderNotification, createUserOrderNotification, createUserPaymentNotification, createDetailedInvoiceNotification, generateInvoiceNumber, type InvoiceData } from "@/context/NotificationContext";
 import { PriceDisplay } from "@/components/CurrencySymbol";
-import { ordersApi, deliveryApi } from "@/lib/api";
+import { ordersApi, deliveryApi, addressesApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Address, DeliveryZone } from "@shared/api";
 import L from "leaflet";
@@ -738,8 +738,8 @@ export default function CheckoutPage() {
       }
 
       try {
-        // First, try to get addresses from API
-        const response = await deliveryApi.getAddresses(user.id);
+        // Get addresses from the shared addresses API (same as My Account > Saved Addresses)
+        const response = await addressesApi.getAll(user.id);
         if (response.success && response.data) {
           setAddresses(response.data);
           
@@ -950,8 +950,8 @@ export default function CheckoutPage() {
 
     try {
       if (editingAddress) {
-        // Update existing address
-        const response = await deliveryApi.updateAddress(editingAddress.id, {
+        // Update existing address using shared addresses API
+        const response = await addressesApi.update(user.id, editingAddress.id, {
           label: addressForm.label,
           fullName: addressForm.fullName,
           mobile: addressForm.mobile,
@@ -975,8 +975,8 @@ export default function CheckoutPage() {
           setError(response.error || "Failed to update address");
         }
       } else {
-        // Create new address
-        const response = await deliveryApi.createAddress(user.id, {
+        // Create new address using shared addresses API
+        const response = await addressesApi.create(user.id, {
           label: addressForm.label,
           fullName: addressForm.fullName,
           mobile: addressForm.mobile,
@@ -1010,9 +1010,11 @@ export default function CheckoutPage() {
 
   const handleDeleteAddress = async (addressId: string) => {
     if (!confirm("Are you sure you want to delete this address?")) return;
+    if (!user?.id) return;
 
     try {
-      const response = await deliveryApi.deleteAddress(addressId);
+      // Delete using shared addresses API
+      const response = await addressesApi.delete(user.id, addressId);
       if (response.success) {
         const updatedAddresses = addresses.filter(a => a.id !== addressId);
         setAddresses(updatedAddresses);
