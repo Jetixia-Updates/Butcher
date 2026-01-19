@@ -32,6 +32,9 @@ const createProductSchema = z.object({
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
+  discount: z.number().min(0).max(100).optional(),
+  rating: z.number().min(0).max(5).optional(),
+  badges: z.array(z.enum(["halal", "organic", "grass-fed", "premium", "fresh", "local"])).optional(),
 });
 
 const updateProductSchema = createProductSchema.partial();
@@ -189,6 +192,9 @@ const createProduct: RequestHandler = async (req, res) => {
       isActive: data.isActive ?? true,
       isFeatured: data.isFeatured ?? false,
       tags: data.tags || [],
+      discount: String(data.discount || 0),
+      rating: data.rating ? String(data.rating) : null,
+      badges: data.badges || [],
     };
 
     await db.insert(products).values(newProduct);
@@ -269,6 +275,9 @@ const updateProduct: RequestHandler = async (req, res) => {
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured;
     if (data.tags !== undefined) updateData.tags = data.tags;
+    if (data.discount !== undefined) updateData.discount = String(data.discount);
+    if (data.rating !== undefined) updateData.rating = String(data.rating);
+    if (data.badges !== undefined) updateData.badges = data.badges;
 
     await db.update(products).set(updateData).where(eq(products.id, id));
 
