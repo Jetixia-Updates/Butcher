@@ -1038,8 +1038,8 @@ export interface InAppNotification {
 }
 
 export const notificationsApi = {
-  // Get all notifications for current user
-  getAll: () => fetchApi<InAppNotification[]>("/notifications"),
+  // Get all notifications for current user (or specific userId if provided)
+  getAll: (userId?: string) => fetchApi<InAppNotification[]>(`/notifications${userId ? `?userId=${userId}` : ""}`),
 
   // Create a notification for a user (used by admin/system)
   create: (data: {

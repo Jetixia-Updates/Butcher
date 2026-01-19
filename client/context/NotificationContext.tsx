@@ -105,7 +105,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     try {
-      const response = await notificationsApi.getAll();
+      // Pass the userId explicitly to ensure admins get notifications for "admin" userId
+      const response = await notificationsApi.getAll(userId);
       if (response.success && response.data) {
         const sorted = response.data
           .map(toNotification)

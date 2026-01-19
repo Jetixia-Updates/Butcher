@@ -776,10 +776,10 @@ const assignDelivery: RequestHandler = async (req, res) => {
       }).returning();
     }
 
-    // Update order status
+    // Update order status to ready_for_pickup (driver assigned, but hasn't picked up yet)
     await db.update(orders)
       .set({
-        status: "out_for_delivery",
+        status: "ready_for_pickup",
         updatedAt: new Date(),
       })
       .where(eq(orders.id, orderId));
