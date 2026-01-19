@@ -27,6 +27,14 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/context/LanguageContext";
 import { useProducts, Product } from "@/context/ProductsContext";
 import { PRODUCT_CATEGORIES, getCategoryName } from "@shared/categories";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -107,7 +115,6 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
   const [deleteModal, setDeleteModal] = useState<Product | null>(null);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showSyncMenu, setShowSyncMenu] = useState(false);
 
   // Handle export products
   const handleExportProducts = () => {
@@ -121,7 +128,6 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    setShowSyncMenu(false);
   };
 
   // Handle import products
@@ -140,7 +146,6 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
       };
       reader.readAsText(file);
     }
-    setShowSyncMenu(false);
     if (importInputRef.current) {
       importInputRef.current.value = '';
     }
@@ -150,7 +155,6 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
   const handleResetToDefaults = () => {
     resetToDefaults();
     setShowResetConfirm(false);
-    setShowSyncMenu(false);
   };
 
   // Use shared categories for the filter dropdown
@@ -197,55 +201,44 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Sync Menu */}
-          <div className="relative">
-            <button
-              onClick={() => setShowSyncMenu(!showSyncMenu)}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-sm"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-            {showSyncMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowSyncMenu(false)} />
-                <div className={cn(
-                  "absolute top-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg z-50 min-w-[220px] py-2",
-                  isRTL ? "left-0" : "right-0"
-                )}>
-                  <p className="px-4 py-2 text-xs text-slate-500">{t.syncInfo}</p>
-                  <hr className="my-1 border-slate-200" />
-                  <button
-                    onClick={handleExportProducts}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 text-sm"
-                  >
-                    <Download className="w-4 h-4 text-blue-600" />
-                    <span>{t.exportProducts}</span>
-                  </button>
-                  <label className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 text-sm cursor-pointer">
-                    <UploadCloud className="w-4 h-4 text-green-600" />
-                    <span>{t.importProducts}</span>
-                    <input
-                      ref={importInputRef}
-                      type="file"
-                      accept=".json"
-                      onChange={handleImportProducts}
-                      className="hidden"
-                    />
-                  </label>
-                  <hr className="my-1 border-slate-200" />
-                  <button
-                    onClick={() => {
-                      setShowSyncMenu(false);
-                      setShowResetConfirm(true);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-sm text-red-600"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    <span>{t.resetToDefaults}</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-sm"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={isRTL ? "start" : "end"} className="min-w-[220px]">
+              <DropdownMenuLabel className="text-xs text-slate-500">{t.syncInfo}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportProducts} className="cursor-pointer">
+                <Download className="w-4 h-4 text-blue-600 mr-2" />
+                <span>{t.exportProducts}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <UploadCloud className="w-4 h-4 text-green-600" />
+                  <span>{t.importProducts}</span>
+                  <input
+                    ref={importInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportProducts}
+                    className="hidden"
+                  />
+                </label>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => setShowResetConfirm(true)}
+                className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                <span>{t.resetToDefaults}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             onClick={() => setAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"

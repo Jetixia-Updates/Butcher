@@ -757,7 +757,7 @@ export function AdminLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-auto pb-20">{children}</main>
+        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden overflow-y-auto pb-20">{children}</main>
       </div>
 
       {/* Invoice Modal */}

@@ -23,6 +23,12 @@ import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useLanguage } from "@/context/LanguageContext";
 import { useNotifications, createUserOrderNotification, createDeliveryNotification } from "@/context/NotificationContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -540,8 +546,6 @@ function StatusDropdown({
   t: typeof translations.en;
   isRTL: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "cancelled":
@@ -558,45 +562,35 @@ function StatusDropdown({
   };
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        disabled={updating}
-        className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 disabled:opacity-50"
-      >
-        {updating ? (
-          <RefreshCw className="w-4 h-4 animate-spin" />
-        ) : (
-          <>
-            {t.update}
-            <ChevronDown className="w-4 h-4" />
-          </>
-        )}
-      </button>
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setOpen(false)}
-          />
-          <div className={cn("absolute mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-20", isRTL ? "left-0" : "right-0")}>
-            {availableStatuses.map((status) => (
-              <button
-                key={status}
-                onClick={() => {
-                  onUpdate(orderId, status);
-                  setOpen(false);
-                }}
-                className={cn("w-full px-4 py-2 text-sm hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg flex items-center gap-2", isRTL ? "text-right flex-row-reverse" : "text-left")}
-              >
-                {getStatusIcon(status)}
-                <span>{getStatusLabel(status, t)}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          disabled={updating}
+          className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 disabled:opacity-50"
+        >
+          {updating ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              {t.update}
+              <ChevronDown className="w-4 h-4" />
+            </>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={isRTL ? "start" : "end"} className="w-48">
+        {availableStatuses.map((status) => (
+          <DropdownMenuItem
+            key={status}
+            onClick={() => onUpdate(orderId, status)}
+            className={cn("flex items-center gap-2 cursor-pointer", isRTL && "flex-row-reverse")}
+          >
+            {getStatusIcon(status)}
+            <span>{getStatusLabel(status, t)}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
