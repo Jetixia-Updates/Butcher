@@ -407,10 +407,11 @@ const createOrder: RequestHandler = async (req, res) => {
     }
 
     // Get delivery zone and fee
+    // Express delivery replaces zone fee (not added to it)
     const zones = await db.select().from(deliveryZones);
     const zone = zones.find(z => z.emirate === address.emirate && z.isActive);
     const baseDeliveryFee = zone ? parseFloat(zone.deliveryFee) : 0;
-    const deliveryFee = baseDeliveryFee + (expressDeliveryFee || 0);
+    const deliveryFee = (expressDeliveryFee && expressDeliveryFee > 0) ? expressDeliveryFee : baseDeliveryFee;
     const tipAmount = driverTip || 0;
 
     // Calculate VAT

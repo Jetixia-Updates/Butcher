@@ -702,11 +702,11 @@ export default function CheckoutPage() {
   const [zoneDeliveryFee, setZoneDeliveryFee] = useState<number>(0);
   const [matchedZone, setMatchedZone] = useState<DeliveryZone | null>(null);
 
-  // Adjusted totals with zone delivery fee, express delivery and tip (rounded to match server calculations)
+  // Adjusted totals with delivery fee and tip (rounded to match server calculations)
+  // Express delivery replaces zone delivery fee (not added to it)
   const adjustedSubtotal = Math.round((subtotal - discountAmount) * 100) / 100;
   const adjustedVat = Math.round(adjustedSubtotal * 0.05 * 100) / 100;
-  const expressDeliveryAmount = isExpressDelivery ? expressDeliveryFee : 0;
-  const deliveryFeeTotal = zoneDeliveryFee + expressDeliveryAmount;
+  const deliveryFeeTotal = isExpressDelivery ? expressDeliveryFee : zoneDeliveryFee;
   const adjustedTotal = Math.round((adjustedSubtotal + adjustedVat + deliveryFeeTotal + driverTip) * 100) / 100;
 
   // Helper function to get localized item name
@@ -1791,7 +1791,17 @@ export default function CheckoutPage() {
                       <PriceDisplay price={adjustedVat} size="md" />
                     </span>
                   </div>
-                  {zoneDeliveryFee > 0 && (
+                  {/* Show either zone delivery fee OR express delivery fee, not both */}
+                  {isExpressDelivery ? (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                        ⚡ {isRTL ? "توصيل سريع" : "Express Delivery"}
+                      </span>
+                      <span className="font-semibold text-orange-600 dark:text-orange-400">
+                        +<PriceDisplay price={expressDeliveryFee} size="md" />
+                      </span>
+                    </div>
+                  ) : zoneDeliveryFee > 0 ? (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         🚚 {t.deliveryFee}
@@ -1805,17 +1815,7 @@ export default function CheckoutPage() {
                         +<PriceDisplay price={zoneDeliveryFee} size="md" />
                       </span>
                     </div>
-                  )}
-                  {isExpressDelivery && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-orange-600 dark:text-orange-400 flex items-center gap-1">
-                        ⚡ {isRTL ? "توصيل سريع" : "Express Delivery"}
-                      </span>
-                      <span className="font-semibold text-orange-600 dark:text-orange-400">
-                        +<PriceDisplay price={expressDeliveryFee} size="md" />
-                      </span>
-                    </div>
-                  )}
+                  ) : null}
                   {driverTip > 0 && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-green-600 dark:text-green-400 flex items-center gap-1">

@@ -2,6 +2,17 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
+// Helper to get or create a persistent visitor ID
+const getOrCreateVisitorId = (): string => {
+  const VISITOR_ID_KEY = "persistent_visitor_id";
+  let visitorId = localStorage.getItem(VISITOR_ID_KEY);
+  if (!visitorId) {
+    visitorId = `visitor_${Date.now()}`;
+    localStorage.setItem(VISITOR_ID_KEY, visitorId);
+  }
+  return visitorId;
+};
+
 export default function VisitorPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -9,6 +20,9 @@ export default function VisitorPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Get persistent visitor ID (same ID across sessions)
+    const visitorId = getOrCreateVisitorId();
+    
     // Attempt to get geolocation
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -27,13 +41,13 @@ export default function VisitorPage() {
             })
           );
 
-          // Create visitor session
+          // Create visitor session with persistent ID
           login({
-            id: `visitor_${Date.now()}`,
-            username: `visitor_${Date.now()}`,
+            id: visitorId,
+            username: visitorId,
             firstName: "Visitor",
             familyName: "Guest",
-            email: `visitor_${Date.now()}@guest.butcher.ae`,
+            email: `${visitorId}@guest.butcher.ae`,
             mobile: "+971 00 000 0000",
             emirate: "Dubai",
             address: `Coordinates: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
@@ -78,11 +92,11 @@ export default function VisitorPage() {
           );
 
           login({
-            id: `visitor_${Date.now()}`,
-            username: `visitor_${Date.now()}`,
+            id: visitorId,
+            username: visitorId,
             firstName: "Visitor",
             familyName: "Guest",
-            email: `visitor_${Date.now()}@guest.butcher.ae`,
+            email: `${visitorId}@guest.butcher.ae`,
             mobile: "+971 00 000 0000",
             emirate: "Dubai",
             address: "Location not available",
@@ -99,13 +113,13 @@ export default function VisitorPage() {
       setError("Geolocation is not supported by your browser");
       setLoading(false);
 
-      // Still proceed as visitor
+      // Still proceed as visitor with persistent ID
       login({
-        id: `visitor_${Date.now()}`,
-        username: `visitor_${Date.now()}`,
+        id: visitorId,
+        username: visitorId,
         firstName: "Visitor",
         familyName: "Guest",
-        email: `visitor_${Date.now()}@guest.butcher.ae`,
+        email: `${visitorId}@guest.butcher.ae`,
         mobile: "+971 00 000 0000",
         emirate: "Dubai",
         address: "Location not available",

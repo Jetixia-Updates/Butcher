@@ -45,9 +45,10 @@ export default function PaymentCardPage() {
   const driverTip = checkoutState.driverTip || 0;
   
   // Calculate adjusted values for invoice (rounded to match server calculations)
+  // Express delivery replaces zone delivery fee (not added to it)
   const adjustedSubtotal = Math.round((subtotal - discountAmount) * 100) / 100;
   const adjustedVat = Math.round(adjustedSubtotal * 0.05 * 100) / 100;
-  const totalDeliveryFee = zoneDeliveryFee + expressDeliveryFee;
+  const totalDeliveryFee = isExpressDelivery ? expressDeliveryFee : zoneDeliveryFee;
   const adjustedTotal = Math.round((adjustedSubtotal + adjustedVat + totalDeliveryFee + driverTip) * 100) / 100;
   
   // State for delivery address
@@ -608,22 +609,22 @@ export default function PaymentCardPage() {
                       {formatPrice(adjustedVat)}
                     </span>
                   </div>
-                  {zoneDeliveryFee > 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">🚚 Delivery Fee</span>
-                      <span className="font-semibold">
-                        +{formatPrice(zoneDeliveryFee)}
-                      </span>
-                    </div>
-                  )}
-                  {isExpressDelivery && expressDeliveryFee > 0 && (
+                  {/* Show either zone delivery fee OR express delivery fee, not both */}
+                  {isExpressDelivery ? (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-orange-600">⚡ Express Delivery</span>
                       <span className="font-semibold text-orange-600">
                         +{formatPrice(expressDeliveryFee)}
                       </span>
                     </div>
-                  )}
+                  ) : zoneDeliveryFee > 0 ? (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">🚚 Delivery Fee</span>
+                      <span className="font-semibold">
+                        +{formatPrice(zoneDeliveryFee)}
+                      </span>
+                    </div>
+                  ) : null}
                   {driverTip > 0 && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-green-600">💚 Driver Tip</span>
