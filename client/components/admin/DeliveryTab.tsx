@@ -103,6 +103,7 @@ const translations = {
     expressDeliveryEnabledDesc: "Allow customers to choose express delivery at checkout",
     saveSettings: "Save Settings",
     settingsSaved: "Settings saved successfully",
+    failedToLoad: "Failed to load data. Please try again.",
   },
   ar: {
     deliveryManagement: "إدارة التوصيل",
@@ -170,6 +171,7 @@ const translations = {
     expressDeliveryEnabledDesc: "السماح للعملاء باختيار التوصيل السريع عند الدفع",
     saveSettings: "حفظ الإعدادات",
     settingsSaved: "تم حفظ الإعدادات بنجاح",
+    failedToLoad: "فشل في تحميل البيانات. حاول مرة أخرى.",
   },
 };
 
@@ -189,54 +191,62 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
   const [zoneModal, setZoneModal] = useState<DeliveryZone | null>(null);
   const [createZoneModal, setCreateZoneModal] = useState(false);
   const [assignModal, setAssignModal] = useState<Order | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
-    // Fetch orders that need delivery (confirmed, processing, ready_for_pickup, out_for_delivery)
-    const [zonesRes, confirmedRes, processingRes, readyRes, outForDeliveryRes, usersRes] = await Promise.all([
-      deliveryApi.getZones(),
-      ordersApi.getAll({ status: "confirmed" }),
-      ordersApi.getAll({ status: "processing" }),
-      ordersApi.getAll({ status: "ready_for_pickup" }),
-      ordersApi.getAll({ status: "out_for_delivery" }),
-      usersApi.getAll({ role: "delivery" }),
-    ]);
-    
-    // Combine all orders that need delivery management
-    const allDeliveryOrders: Order[] = [];
-    if (confirmedRes.success && confirmedRes.data) allDeliveryOrders.push(...confirmedRes.data);
-    if (processingRes.success && processingRes.data) allDeliveryOrders.push(...processingRes.data);
-    if (readyRes.success && readyRes.data) allDeliveryOrders.push(...readyRes.data);
-    if (outForDeliveryRes.success && outForDeliveryRes.data) allDeliveryOrders.push(...outForDeliveryRes.data);
-    
-    const ordersRes = { success: true, data: allDeliveryOrders };
+    setError(null);
+    try {
+      // Fetch orders that need delivery (confirmed, processing, ready_for_pickup, out_for_delivery)
+      const [zonesRes, confirmedRes, processingRes, readyRes, outForDeliveryRes, usersRes] = await Promise.all([
+        deliveryApi.getZones(),
+        ordersApi.getAll({ status: "confirmed" }),
+        ordersApi.getAll({ status: "processing" }),
+        ordersApi.getAll({ status: "ready_for_pickup" }),
+        ordersApi.getAll({ status: "out_for_delivery" }),
+        usersApi.getAll({ role: "delivery" }),
+      ]);
+      
+      // Combine all orders that need delivery management
+      const allDeliveryOrders: Order[] = [];
+      if (confirmedRes.success && confirmedRes.data) allDeliveryOrders.push(...confirmedRes.data);
+      if (processingRes.success && processingRes.data) allDeliveryOrders.push(...processingRes.data);
+      if (readyRes.success && readyRes.data) allDeliveryOrders.push(...readyRes.data);
+      if (outForDeliveryRes.success && outForDeliveryRes.data) allDeliveryOrders.push(...outForDeliveryRes.data);
+      
+      const ordersRes = { success: true, data: allDeliveryOrders };
 
-    if (zonesRes.success && zonesRes.data) setZones(zonesRes.data);
-    if (ordersRes.success && ordersRes.data) {
-      // Fetch tracking info for each order
-      const trackingPromises = ordersRes.data.map(order => 
-        deliveryApi.getTracking(order.id)
-      );
-      const trackingResults = await Promise.all(trackingPromises);
-      
-      const trackingMap: Record<string, DeliveryTracking> = {};
-      trackingResults.forEach((result, index) => {
-        if (result.success && result.data) {
-          trackingMap[ordersRes.data[index].id] = result.data;
-        }
-      });
-      setTrackingInfo(trackingMap);
-      
-      // Filter out orders where tracking status is 'delivered' - they should not appear in active deliveries
-      const activeDeliveries = ordersRes.data.filter(order => {
-        const tracking = trackingMap[order.id];
-        // Keep orders that have no tracking yet, or tracking status is not 'delivered'
-        return !tracking || tracking.status !== 'delivered';
-      });
-      setPendingDeliveries(activeDeliveries);
+      if (zonesRes.success && zonesRes.data) setZones(zonesRes.data);
+      if (ordersRes.success && ordersRes.data) {
+        // Fetch tracking info for each order
+        const trackingPromises = ordersRes.data.map(order => 
+          deliveryApi.getTracking(order.id)
+        );
+        const trackingResults = await Promise.all(trackingPromises);
+        
+        const trackingMap: Record<string, DeliveryTracking> = {};
+        trackingResults.forEach((result, index) => {
+          if (result.success && result.data) {
+            trackingMap[ordersRes.data[index].id] = result.data;
+          }
+        });
+        setTrackingInfo(trackingMap);
+        
+        // Filter out orders where tracking status is 'delivered' - they should not appear in active deliveries
+        const activeDeliveries = ordersRes.data.filter(order => {
+          const tracking = trackingMap[order.id];
+          // Keep orders that have no tracking yet, or tracking status is not 'delivered'
+          return !tracking || tracking.status !== 'delivered';
+        });
+        setPendingDeliveries(activeDeliveries);
+      }
+      if (usersRes.success && usersRes.data) setDrivers(usersRes.data);
+    } catch (err) {
+      console.error("Failed to fetch delivery data:", err);
+      setError(t.failedToLoad || "Failed to load data. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    if (usersRes.success && usersRes.data) setDrivers(usersRes.data);
-    setLoading(false);
   };
 
   useEffect(() => {

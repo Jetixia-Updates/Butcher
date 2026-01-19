@@ -152,102 +152,105 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
+    setError(null);
 
-    // Calculate date range based on period
-    const endDate = new Date();
-    const startDate = new Date();
-    
-    switch (period) {
-      case "today":
-        startDate.setHours(0, 0, 0, 0);
-        break;
-      case "week":
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case "month":
-        startDate.setMonth(startDate.getMonth() - 1);
-        break;
-      case "year":
-        startDate.setFullYear(startDate.getFullYear() - 1);
-        break;
-    }
-
-    if (reportType === "sales") {
-      const [reportRes, topRes, categoryRes, revenueRes] = await Promise.all([
-        reportsApi.getSales({
-          startDate: startDate.toISOString().split("T")[0],
-          endDate: endDate.toISOString().split("T")[0],
-        }),
-        analyticsApi.getTopProducts(period, 10),
-        reportsApi.getSalesByCategory(period),
-        analyticsApi.getRevenueChart(period),
-      ]);
-
-      if (reportRes.success && reportRes.data) {
-        const data = reportRes.data;
-        setSalesReport({
-          totalRevenue: data.totalSales || 0,
-          totalOrders: data.totalOrders || 0,
-          itemsSold: 0, // Not in the API response
-          averageOrderValue: data.averageOrderValue || 0,
-          taxCollected: data.totalVat || 0,
-          totalDiscounts: data.totalDiscount || 0,
-          totalRefunds: 0, // Not in the API response
-          dailySales: revenueRes.success && revenueRes.data 
-            ? revenueRes.data.map(d => ({ date: d.date, revenue: d.revenue, orders: d.orders }))
-            : [],
-        });
-      }
+    try {
+      // Calculate date range based on period
+      const endDate = new Date();
+      const startDate = new Date();
       
-      if (topRes.success && topRes.data) {
-        setTopProducts(topRes.data.map(p => ({
-          productId: p.productId,
-          productName: p.productName,
-          sales: p.sales,
-          quantity: p.quantity,
-        })));
+      switch (period) {
+        case "today":
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case "week":
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case "month":
+          startDate.setMonth(startDate.getMonth() - 1);
+          break;
+        case "year":
+          startDate.setFullYear(startDate.getFullYear() - 1);
+          break;
       }
-      
-      if (categoryRes.success && categoryRes.data) setCategorySales(categoryRes.data);
-    } else {
-      // Fetch customer orders report
-      const [customersRes, ordersRes] = await Promise.all([
-        usersApi.getAll({ role: "customer" }),
-        ordersApi.getAll({ limit: 1000 }), // Get all orders
-      ]);
 
-      if (customersRes.success && customersRes.data && ordersRes.success && ordersRes.data) {
-        const customers = customersRes.data;
-        const orders = ordersRes.data;
+      if (reportType === "sales") {
+        const [reportRes, topRes, categoryRes, revenueRes] = await Promise.all([
+          reportsApi.getSales({
+            startDate: startDate.toISOString().split("T")[0],
+            endDate: endDate.toISOString().split("T")[0],
+          }),
+          analyticsApi.getTopProducts(period, 10),
+          reportsApi.getSalesByCategory(period),
+          analyticsApi.getRevenueChart(period),
+        ]);
 
-        // Group orders by customer
-        const customerOrderMap = new Map<string, Order[]>();
-        orders.forEach(order => {
-          const customerId = order.userId;
-          if (!customerOrderMap.has(customerId)) {
-            customerOrderMap.set(customerId, []);
-          }
-          customerOrderMap.get(customerId)!.push(order);
-        });
+        if (reportRes.success && reportRes.data) {
+          const data = reportRes.data;
+          setSalesReport({
+            totalRevenue: data.totalSales || 0,
+            totalOrders: data.totalOrders || 0,
+            itemsSold: 0, // Not in the API response
+            averageOrderValue: data.averageOrderValue || 0,
+            taxCollected: data.totalVat || 0,
+            totalDiscounts: data.totalDiscount || 0,
+            totalRefunds: 0, // Not in the API response
+            dailySales: revenueRes.success && revenueRes.data 
+              ? revenueRes.data.map(d => ({ date: d.date, revenue: d.revenue, orders: d.orders }))
+              : [],
+          });
+        }
+        
+        if (topRes.success && topRes.data) {
+          setTopProducts(topRes.data.map(p => ({
+            productId: p.productId,
+            productName: p.productName,
+            sales: p.sales,
+            quantity: p.quantity,
+          })));
+        }
+        
+        if (categoryRes.success && categoryRes.data) setCategorySales(categoryRes.data);
+      } else {
+        // Fetch customer orders report
+        const [customersRes, ordersRes] = await Promise.all([
+          usersApi.getAll({ role: "customer" }),
+          ordersApi.getAll({ limit: 1000 }), // Get all orders
+        ]);
 
-        // Build customer stats
-        const stats: CustomerOrderStats[] = customers.map(customer => {
-          const customerOrders = customerOrderMap.get(customer.id) || [];
-          const completedOrders = customerOrders.filter(o => o.status === "delivered").length;
-          const canceledOrders = customerOrders.filter(o => o.status === "cancelled").length;
-          const pendingOrders = customerOrders.filter(o => 
-            !["delivered", "cancelled"].includes(o.status)
-          ).length;
-          const totalSpent = customerOrders
-            .filter(o => o.status !== "cancelled")
-            .reduce((sum, o) => sum + (o.total || 0), 0);
+        if (customersRes.success && customersRes.data && ordersRes.success && ordersRes.data) {
+          const customers = customersRes.data;
+          const orders = ordersRes.data;
 
-          return {
-            customerId: customer.id,
-            customerName: `${customer.firstName} ${customer.familyName}`,
+          // Group orders by customer
+          const customerOrderMap = new Map<string, Order[]>();
+          orders.forEach(order => {
+            const customerId = order.userId;
+            if (!customerOrderMap.has(customerId)) {
+              customerOrderMap.set(customerId, []);
+            }
+            customerOrderMap.get(customerId)!.push(order);
+          });
+
+          // Build customer stats
+          const stats: CustomerOrderStats[] = customers.map(customer => {
+            const customerOrders = customerOrderMap.get(customer.id) || [];
+            const completedOrders = customerOrders.filter(o => o.status === "delivered").length;
+            const canceledOrders = customerOrders.filter(o => o.status === "cancelled").length;
+            const pendingOrders = customerOrders.filter(o => 
+              !["delivered", "cancelled"].includes(o.status)
+            ).length;
+            const totalSpent = customerOrders
+              .filter(o => o.status !== "cancelled")
+              .reduce((sum, o) => sum + (o.total || 0), 0);
+
+            return {
+              customerId: customer.id,
+              customerName: `${customer.firstName} ${customer.familyName}`,
             customerEmail: customer.email,
             totalOrders: customerOrders.length,
             completedOrders,
@@ -265,8 +268,12 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
         setCustomerStats(stats);
       }
     }
-
-    setLoading(false);
+    } catch (err) {
+      console.error("Failed to fetch reports data:", err);
+      setError("Failed to load reports. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

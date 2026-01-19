@@ -333,26 +333,32 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
 
   const fetchSuppliers = async () => {
     setLoading(true);
-    const [listRes, statsRes] = await Promise.all([
-      suppliersApi.getAll({ status: filters.status === "all" ? undefined : filters.status, category: filters.category === "all" ? undefined : filters.category, search: filters.search || undefined }),
-      suppliersApi.getStats(),
-    ]);
-    let list: Supplier[] = [];
-    if (listRes.success && listRes.data) {
-      list = listRes.data;
-      setSuppliers(listRes.data);
+    try {
+      const [listRes, statsRes] = await Promise.all([
+        suppliersApi.getAll({ status: filters.status === "all" ? undefined : filters.status, category: filters.category === "all" ? undefined : filters.category, search: filters.search || undefined }),
+        suppliersApi.getStats(),
+      ]);
+      let list: Supplier[] = [];
+      if (listRes.success && listRes.data) {
+        list = listRes.data;
+        setSuppliers(listRes.data);
+      }
+      if (statsRes.success && statsRes.data) {
+        setStats({
+          totalSuppliers: statsRes.data.totalSuppliers,
+          activeSuppliers: statsRes.data.activeSuppliers,
+          pendingSuppliers: statsRes.data.pendingSuppliers,
+          totalSpent: statsRes.data.totalSpent,
+          pendingOrders: statsRes.data.pendingOrders,
+        });
+      }
+      return list;
+    } catch (err) {
+      console.error("Failed to fetch suppliers data:", err);
+      return [];
+    } finally {
+      setLoading(false);
     }
-    if (statsRes.success && statsRes.data) {
-      setStats({
-        totalSuppliers: statsRes.data.totalSuppliers,
-        activeSuppliers: statsRes.data.activeSuppliers,
-        pendingSuppliers: statsRes.data.pendingSuppliers,
-        totalSpent: statsRes.data.totalSpent,
-        pendingOrders: statsRes.data.pendingOrders,
-      });
-    }
-    setLoading(false);
-    return list;
   };
 
   const refreshSelection = async (supplierId: string) => {

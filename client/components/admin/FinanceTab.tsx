@@ -113,28 +113,33 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
 
   const loadData = async (period: PeriodPreset = state.period, type: TransactionType | "all" = state.type) => {
     setState((s) => ({ ...s, loading: true, period, type }));
-    const range = getRangeFromPreset(period);
-    const [summaryRes, accountsRes, txRes, expRes] = await Promise.all([
-      financeApi.getSummary({ period }),
-      financeApi.getAccounts(),
-      financeApi.getTransactions({
-        type: type === "all" ? undefined : type,
-        startDate: range.start,
-        endDate: range.end,
-      }),
-      financeApi.getExpenses({ startDate: range.start, endDate: range.end }),
-    ]);
+    try {
+      const range = getRangeFromPreset(period);
+      const [summaryRes, accountsRes, txRes, expRes] = await Promise.all([
+        financeApi.getSummary({ period }),
+        financeApi.getAccounts(),
+        financeApi.getTransactions({
+          type: type === "all" ? undefined : type,
+          startDate: range.start,
+          endDate: range.end,
+        }),
+        financeApi.getExpenses({ startDate: range.start, endDate: range.end }),
+      ]);
 
-    setState((s) => ({
-      ...s,
-      summary: summaryRes.data,
-      accounts: accountsRes.data || [],
-      transactions: txRes.data || [],
-      expenses: expRes.data || [],
-      loading: false,
-      period,
-      type,
-    }));
+      setState((s) => ({
+        ...s,
+        summary: summaryRes.data,
+        accounts: accountsRes.data || [],
+        transactions: txRes.data || [],
+        expenses: expRes.data || [],
+        loading: false,
+        period,
+        type,
+      }));
+    } catch (err) {
+      console.error("Failed to fetch finance data:", err);
+      setState((s) => ({ ...s, loading: false }));
+    }
   };
 
   useEffect(() => {

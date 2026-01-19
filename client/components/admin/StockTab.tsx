@@ -105,16 +105,21 @@ export function StockTab({ onNavigate }: AdminTabProps) {
 
   const fetchData = async () => {
     setLoading(true);
-    const [stockRes, alertsRes, movementsRes] = await Promise.all([
-      stockApi.getAll(),
-      stockApi.getAlerts(),
-      stockApi.getMovements({ limit: 50 }),
-    ]);
+    try {
+      const [stockRes, alertsRes, movementsRes] = await Promise.all([
+        stockApi.getAll(),
+        stockApi.getAlerts(),
+        stockApi.getMovements({ limit: 50 }),
+      ]);
 
-    if (stockRes.success && stockRes.data) setStock(stockRes.data);
-    if (alertsRes.success && alertsRes.data) setAlerts(alertsRes.data);
-    if (movementsRes.success && movementsRes.data) setMovements(movementsRes.data);
-    setLoading(false);
+      if (stockRes.success && stockRes.data) setStock(stockRes.data);
+      if (alertsRes.success && alertsRes.data) setAlerts(alertsRes.data);
+      if (movementsRes.success && movementsRes.data) setMovements(movementsRes.data);
+    } catch (err) {
+      console.error("Failed to fetch stock data:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
