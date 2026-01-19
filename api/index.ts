@@ -3859,6 +3859,372 @@ function createApp() {
   });
 
   // =====================================================
+  // USER ADDRESSES API (separate from delivery)
+  // =====================================================
+
+  // GET /api/addresses - Get all addresses for user
+  app.get('/api/addresses', async (req, res) => {
+    try {
+      const userId = req.headers['x-user-id'] as string;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'User ID required' });
+      }
+
+      // Try database first if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          const dbAddresses = await pgDb.select().from(addressesTable).where(eq(addressesTable.userId, userId));
+          const formattedAddresses = dbAddresses.map(a => ({
+            id: a.id,
+            userId: a.userId,
+            label: a.label,
+            fullName: a.fullName,
+            mobile: a.mobile,
+            emirate: a.emirate,
+            area: a.area,
+            street: a.street,
+            building: a.building,
+            floor: a.floor,
+            apartment: a.apartment,
+            landmark: a.landmark,
+            latitude: a.latitude,
+            longitude: a.longitude,
+            isDefault: a.isDefault,
+            createdAt: a.createdAt.toISOString(),
+            updatedAt: a.updatedAt.toISOString(),
+          }));
+          return res.json({ success: true, data: formattedAddresses });
+        } catch (dbError) {
+          console.error('[Addresses GET DB Error]', dbError);
+        }
+      }
+
+      // Fallback to in-memory
+      const userAddresses = Array.from(addresses.values()).filter(a => a.userId === userId);
+      res.json({ success: true, data: userAddresses });
+    } catch (error) {
+      console.error('[Addresses GET Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch addresses' });
+    }
+  });
+
+  // POST /api/addresses - Create new address
+  app.post('/api/addresses', async (req, res) => {
+    try {
+      const userId = req.headers['x-user-id'] as string;
+      console.log('[Addresses POST] Creating address for user:', userId);
+      
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'User ID required' });
+      }
+
+      const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, isDefault } = req.body;
+
+      // Validation
+      if (!label || !fullName || !mobile || !emirate || !area || !street || !building) {
+        return res.status(400).json({ success: false, error: 'Missing required fields: label, fullName, mobile, emirate, area, street, building' });
+      }
+
+      const addressId = `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const now = new Date();
+
+      // Try database first if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          // If this is set as default, unset other defaults
+          if (isDefault) {
+            await pgDb.update(addressesTable).set({ isDefault: false }).where(eq(addressesTable.userId, userId));
+          }
+
+          // Check if this is the first address
+          const existingAddresses = await pgDb.select().from(addressesTable).where(eq(addressesTable.userId, userId));
+          const shouldBeDefault = isDefault || existingAddresses.length === 0;
+
+          // If first address, make it default
+          if (shouldBeDefault && existingAddresses.length > 0) {
+            await pgDb.update(addressesTable).set({ isDefault: false }).where(eq(addressesTable.userId, userId));
+          }
+
+          const newAddressData = {
+            id: addressId,
+            userId,
+            label,
+            fullName,
+            mobile,
+            emirate,
+            area,
+            street,
+            building,
+            floor: floor || null,
+            apartment: apartment || null,
+            landmark: landmark || null,
+            latitude: latitude || null,
+            longitude: longitude || null,
+            isDefault: shouldBeDefault,
+            createdAt: now,
+            updatedAt: now,
+          };
+
+          await pgDb.insert(addressesTable).values(newAddressData);
+          console.log('[Addresses POST] Address created in DB:', addressId);
+
+          return res.json({
+            success: true,
+            data: {
+              ...newAddressData,
+              createdAt: now.toISOString(),
+              updatedAt: now.toISOString(),
+            },
+          });
+        } catch (dbError) {
+          console.error('[Addresses POST DB Error]', dbError);
+          return res.status(500).json({ success: false, error: 'Failed to create address in database' });
+        }
+      }
+
+      // Fallback to in-memory
+      // If this is set as default, unset other defaults
+      if (isDefault) {
+        addresses.forEach(addr => {
+          if (addr.userId === userId) {
+            addr.isDefault = false;
+          }
+        });
+      }
+
+      const existingUserAddresses = Array.from(addresses.values()).filter(a => a.userId === userId);
+      const shouldBeDefaultMem = isDefault || existingUserAddresses.length === 0;
+
+      const newAddress: Address = {
+        id: addressId,
+        userId,
+        label,
+        fullName,
+        mobile,
+        emirate,
+        area,
+        street,
+        building,
+        floor,
+        apartment,
+        landmark,
+        latitude,
+        longitude,
+        isDefault: shouldBeDefaultMem,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
+
+      addresses.set(addressId, newAddress);
+      console.log('[Addresses POST] Address created in memory:', addressId);
+
+      res.json({ success: true, data: newAddress });
+    } catch (error) {
+      console.error('[Addresses POST Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create address' });
+    }
+  });
+
+  // PUT /api/addresses/:id - Update address
+  app.put('/api/addresses/:id', async (req, res) => {
+    try {
+      const userId = req.headers['x-user-id'] as string;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'User ID required' });
+      }
+
+      const { id } = req.params;
+      const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, isDefault } = req.body;
+
+      // Try database first if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          const existing = await pgDb.select().from(addressesTable).where(and(eq(addressesTable.id, id), eq(addressesTable.userId, userId)));
+          if (existing.length === 0) {
+            return res.status(404).json({ success: false, error: 'Address not found' });
+          }
+
+          // If setting as default, unset others
+          if (isDefault) {
+            await pgDb.update(addressesTable).set({ isDefault: false }).where(eq(addressesTable.userId, userId));
+          }
+
+          const updateData: Record<string, unknown> = { updatedAt: new Date() };
+          if (label !== undefined) updateData.label = label;
+          if (fullName !== undefined) updateData.fullName = fullName;
+          if (mobile !== undefined) updateData.mobile = mobile;
+          if (emirate !== undefined) updateData.emirate = emirate;
+          if (area !== undefined) updateData.area = area;
+          if (street !== undefined) updateData.street = street;
+          if (building !== undefined) updateData.building = building;
+          if (floor !== undefined) updateData.floor = floor;
+          if (apartment !== undefined) updateData.apartment = apartment;
+          if (landmark !== undefined) updateData.landmark = landmark;
+          if (latitude !== undefined) updateData.latitude = latitude;
+          if (longitude !== undefined) updateData.longitude = longitude;
+          if (isDefault !== undefined) updateData.isDefault = isDefault;
+
+          await pgDb.update(addressesTable).set(updateData).where(eq(addressesTable.id, id));
+
+          const updated = await pgDb.select().from(addressesTable).where(eq(addressesTable.id, id));
+          return res.json({ success: true, data: updated[0] });
+        } catch (dbError) {
+          console.error('[Addresses PUT DB Error]', dbError);
+          return res.status(500).json({ success: false, error: 'Failed to update address' });
+        }
+      }
+
+      // Fallback to in-memory
+      const address = addresses.get(id);
+      if (!address || address.userId !== userId) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+
+      if (isDefault) {
+        addresses.forEach(addr => {
+          if (addr.userId === userId) {
+            addr.isDefault = addr.id === id;
+          }
+        });
+      }
+
+      Object.assign(address, {
+        label: label ?? address.label,
+        fullName: fullName ?? address.fullName,
+        mobile: mobile ?? address.mobile,
+        emirate: emirate ?? address.emirate,
+        area: area ?? address.area,
+        street: street ?? address.street,
+        building: building ?? address.building,
+        floor: floor ?? address.floor,
+        apartment: apartment ?? address.apartment,
+        landmark: landmark ?? address.landmark,
+        latitude: latitude ?? address.latitude,
+        longitude: longitude ?? address.longitude,
+        isDefault: isDefault ?? address.isDefault,
+        updatedAt: new Date().toISOString(),
+      });
+
+      res.json({ success: true, data: address });
+    } catch (error) {
+      console.error('[Addresses PUT Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update address' });
+    }
+  });
+
+  // DELETE /api/addresses/:id - Delete address
+  app.delete('/api/addresses/:id', async (req, res) => {
+    try {
+      const userId = req.headers['x-user-id'] as string;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'User ID required' });
+      }
+
+      const { id } = req.params;
+
+      // Try database first if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          const existing = await pgDb.select().from(addressesTable).where(and(eq(addressesTable.id, id), eq(addressesTable.userId, userId)));
+          if (existing.length === 0) {
+            return res.status(404).json({ success: false, error: 'Address not found' });
+          }
+
+          const wasDefault = existing[0].isDefault;
+          await pgDb.delete(addressesTable).where(eq(addressesTable.id, id));
+
+          // If deleted address was default, make another one default
+          if (wasDefault) {
+            const remaining = await pgDb.select().from(addressesTable).where(eq(addressesTable.userId, userId)).limit(1);
+            if (remaining.length > 0) {
+              await pgDb.update(addressesTable).set({ isDefault: true }).where(eq(addressesTable.id, remaining[0].id));
+            }
+          }
+
+          return res.json({ success: true, message: 'Address deleted' });
+        } catch (dbError) {
+          console.error('[Addresses DELETE DB Error]', dbError);
+          return res.status(500).json({ success: false, error: 'Failed to delete address' });
+        }
+      }
+
+      // Fallback to in-memory
+      const address = addresses.get(id);
+      if (!address || address.userId !== userId) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+
+      const wasDefault = address.isDefault;
+      addresses.delete(id);
+
+      // If deleted address was default, make another one default
+      if (wasDefault) {
+        const userAddresses = Array.from(addresses.values()).filter(a => a.userId === userId);
+        if (userAddresses.length > 0) {
+          userAddresses[0].isDefault = true;
+        }
+      }
+
+      res.json({ success: true, message: 'Address deleted' });
+    } catch (error) {
+      console.error('[Addresses DELETE Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete address' });
+    }
+  });
+
+  // PUT /api/addresses/:id/default - Set address as default
+  app.put('/api/addresses/:id/default', async (req, res) => {
+    try {
+      const userId = req.headers['x-user-id'] as string;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'User ID required' });
+      }
+
+      const { id } = req.params;
+
+      // Try database first if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          const existing = await pgDb.select().from(addressesTable).where(and(eq(addressesTable.id, id), eq(addressesTable.userId, userId)));
+          if (existing.length === 0) {
+            return res.status(404).json({ success: false, error: 'Address not found' });
+          }
+
+          // Unset all defaults for this user
+          await pgDb.update(addressesTable).set({ isDefault: false }).where(eq(addressesTable.userId, userId));
+
+          // Set this one as default
+          await pgDb.update(addressesTable).set({ isDefault: true, updatedAt: new Date() }).where(eq(addressesTable.id, id));
+
+          const updated = await pgDb.select().from(addressesTable).where(eq(addressesTable.id, id));
+          return res.json({ success: true, data: updated[0] });
+        } catch (dbError) {
+          console.error('[Addresses Set Default DB Error]', dbError);
+          return res.status(500).json({ success: false, error: 'Failed to set default address' });
+        }
+      }
+
+      // Fallback to in-memory
+      const address = addresses.get(id);
+      if (!address || address.userId !== userId) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+
+      // Unset all defaults for this user
+      addresses.forEach(addr => {
+        if (addr.userId === userId) {
+          addr.isDefault = addr.id === id;
+        }
+      });
+
+      res.json({ success: true, data: address });
+    } catch (error) {
+      console.error('[Addresses Set Default Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to set default address' });
+    }
+  });
+
+  // =====================================================
   // REPORTS API
   // =====================================================
 
