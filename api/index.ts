@@ -1327,9 +1327,9 @@ function createApp() {
       const weekOrders = allOrders.filter(o => new Date(o.createdAt) >= weekStart);
       const monthOrders = allOrders.filter(o => new Date(o.createdAt) >= monthStart);
 
-      const todayRevenue = todayOrders.reduce((sum, o) => sum + parseFloat(o.total), 0);
-      const weekRevenue = weekOrders.reduce((sum, o) => sum + parseFloat(o.total), 0);
-      const monthRevenue = monthOrders.reduce((sum, o) => sum + parseFloat(o.total), 0);
+      const todayRevenue = todayOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
+      const weekRevenue = weekOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
+      const monthRevenue = monthOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
 
       const pendingOrders = allOrders.filter(o => o.status === 'pending').length;
       
@@ -1362,7 +1362,7 @@ function createApp() {
           orderNumber: o.orderNumber,
           customerName: o.customerName,
           itemCount: 0, // Would need to join order_items
-          total: parseFloat(o.total),
+          total: parseFloat(String(o.total)),
           status: o.status,
           paymentStatus: o.paymentStatus,
           createdAt: o.createdAt.toISOString(),
@@ -1419,7 +1419,7 @@ function createApp() {
         const date = new Date(o.createdAt).toISOString().split('T')[0];
         const existing = dateMap.get(date);
         if (existing) {
-          existing.revenue += parseFloat(o.total);
+          existing.revenue += parseFloat(String(o.total));
           existing.orders += 1;
         }
       });
@@ -1503,7 +1503,7 @@ function createApp() {
           emirateData[emirate] = { orders: 0, revenue: 0 };
         }
         emirateData[emirate].orders += 1;
-        emirateData[emirate].revenue += parseFloat(o.total);
+        emirateData[emirate].revenue += parseFloat(String(o.total));
       });
       
       const data = Object.entries(emirateData).map(([emirate, stats]) => ({
@@ -1535,7 +1535,7 @@ function createApp() {
           methodData[method] = { count: 0, amount: 0 };
         }
         methodData[method].count += 1;
-        methodData[method].amount += parseFloat(o.total);
+        methodData[method].amount += parseFloat(String(o.total));
       });
       
       const data = Object.entries(methodData).map(([method, stats]) => ({
@@ -1677,7 +1677,7 @@ function createApp() {
           delivered: allOrders.filter(o => o.status === 'delivered').length,
           cancelled: allOrders.filter(o => o.status === 'cancelled').length,
           todayOrders: todayOrders.length,
-          todayRevenue: todayOrders.reduce((sum, o) => sum + parseFloat(o.total), 0),
+          todayRevenue: todayOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0),
         },
       });
     } catch (error) {
