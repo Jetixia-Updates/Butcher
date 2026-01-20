@@ -212,6 +212,7 @@ export const products = pgTable("products", {
   maxOrderQuantity: decimal("max_order_quantity", { precision: 10, scale: 2 }).notNull().default("10"),
   isActive: boolean("is_active").notNull().default(true),
   isFeatured: boolean("is_featured").notNull().default(false),
+  isPremium: boolean("is_premium").notNull().default(false),
   rating: decimal("rating", { precision: 3, scale: 2 }).notNull().default("0"), // Product rating (0-5)
   tags: jsonb("tags").$type<string[]>().default([]),
   badges: jsonb("badges").$type<("halal" | "organic" | "grass-fed" | "premium" | "fresh" | "local")[]>().default([]),

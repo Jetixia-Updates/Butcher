@@ -83,6 +83,7 @@ const productsTable = pgTable("products", {
   maxOrderQuantity: decimal("max_order_quantity", { precision: 10, scale: 2 }).notNull().default("10"),
   isActive: boolean("is_active").notNull().default(true),
   isFeatured: boolean("is_featured").notNull().default(false),
+  isPremium: boolean("is_premium").notNull().default(false),
   rating: decimal("rating", { precision: 3, scale: 2 }).notNull().default("0"), // Product rating (0-5)
   tags: jsonb("tags").$type<string[]>().default([]),
   badges: jsonb("badges").$type<string[]>().default([]),
@@ -1141,6 +1142,7 @@ function createApp() {
         maxOrderQuantity: parseFloat(p.maxOrderQuantity),
         isActive: p.isActive,
         isFeatured: p.isFeatured,
+        isPremium: p.isPremium,
         rating: parseFloat(p.rating || '0'),
         tags: p.tags || [],
         badges: p.badges || [],
@@ -1185,6 +1187,7 @@ function createApp() {
         maxOrderQuantity: parseFloat(p.maxOrderQuantity),
         isActive: p.isActive,
         isFeatured: p.isFeatured,
+        isPremium: p.isPremium,
         rating: parseFloat(p.rating || '0'),
         tags: p.tags || [],
         badges: p.badges || [],
@@ -1227,6 +1230,7 @@ function createApp() {
         maxOrderQuantity: String(req.body.maxOrderQuantity || 10),
         isActive: req.body.isActive !== false,
         isFeatured: req.body.isFeatured || false,
+        isPremium: req.body.isPremium || false,
         rating: String(req.body.rating || 0),
         tags: req.body.tags || [],
         badges: req.body.badges || [],
@@ -1304,6 +1308,7 @@ function createApp() {
       if (req.body.maxOrderQuantity !== undefined) updateData.maxOrderQuantity = String(req.body.maxOrderQuantity);
       if (req.body.isActive !== undefined) updateData.isActive = req.body.isActive;
       if (req.body.isFeatured !== undefined) updateData.isFeatured = req.body.isFeatured;
+      if (req.body.isPremium !== undefined) updateData.isPremium = req.body.isPremium;
       if (req.body.tags !== undefined) updateData.tags = req.body.tags;
       
       await pgDb.update(productsTable).set(updateData).where(eq(productsTable.id, req.params.id));
@@ -1331,6 +1336,7 @@ function createApp() {
           maxOrderQuantity: parseFloat(p.maxOrderQuantity),
           isActive: p.isActive,
           isFeatured: p.isFeatured,
+          isPremium: p.isPremium,
           rating: parseFloat(p.rating || '0'),
           tags: p.tags || [],
           badges: p.badges || [],
