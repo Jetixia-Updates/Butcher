@@ -72,6 +72,8 @@ export function BannersTab({ onNavigate }: AdminTabProps) {
   const [editModal, setEditModal] = useState<Banner | null>(null);
   const [addModal, setAddModal] = useState(false);
   const [deleteModal, setDeleteModal] = useState<Banner | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sort banners by order
   const sortedBanners = [...banners].sort((a, b) => a.order - b.order);
@@ -79,19 +81,68 @@ export function BannersTab({ onNavigate }: AdminTabProps) {
   const activeCount = banners.filter((b) => b.enabled).length;
   const inactiveCount = banners.filter((b) => !b.enabled).length;
 
-  const handleToggleEnabled = (banner: Banner) => {
-    updateBanner(banner.id, { enabled: !banner.enabled });
+  const handleToggleEnabled = async (banner: Banner) => {
+    try {
+      await updateBanner(banner.id, { enabled: !banner.enabled });
+    } catch (error) {
+      setError("Failed to update banner status");
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteModal) {
-      deleteBanner(deleteModal.id);
-      setDeleteModal(null);
+      try {
+        setIsSubmitting(true);
+        await deleteBanner(deleteModal.id);
+        setDeleteModal(null);
+      } catch (error) {
+        setError("Failed to delete banner");
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+  };
+
+  const handleAddBanner = async (data: Omit<Banner, "id">) => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      await addBanner({ ...data, order: banners.length + 1 });
+      setAddModal(false);
+    } catch (error) {
+      setError("Failed to create banner. Please try again.");
+      console.error("Error creating banner:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateBanner = async (id: string, data: Partial<Banner>) => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      await updateBanner(id, data);
+      setEditModal(null);
+    } catch (error) {
+      setError("Failed to update banner. Please try again.");
+      console.error("Error updating banner:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+      {/* Error Alert */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
+          <p className="text-red-700">{error}</p>
+          <button onClick={() => setError(null)} className="text-red-700 hover:text-red-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -207,13 +258,11 @@ export function BannersTab({ onNavigate }: AdminTabProps) {
       {addModal && (
         <BannerFormModal
           onClose={() => setAddModal(false)}
-          onSave={(data) => {
-            addBanner({ ...data, order: banners.length + 1 });
-            setAddModal(false);
-          }}
+          onSave={handleAddBanner}
           isRTL={isRTL}
           t={t}
           mode="add"
+          isSubmitting={isSubmitting}
         />
       )}
 
@@ -222,13 +271,11 @@ export function BannersTab({ onNavigate }: AdminTabProps) {
         <BannerFormModal
           banner={editModal}
           onClose={() => setEditModal(null)}
-          onSave={(data) => {
-            updateBanner(editModal.id, data);
-            setEditModal(null);
-          }}
+          onSave={(data) => handleUpdateBanner(editModal.id, data)}
           isRTL={isRTL}
           t={t}
           mode="edit"
+          isSubmitting={isSubmitting}
         />
       )}
 
@@ -284,10 +331,11 @@ export function BannersTab({ onNavigate }: AdminTabProps) {
 interface BannerFormModalProps {
   banner?: Banner;
   onClose: () => void;
-  onSave: (data: Omit<Banner, "id">) => void;
+  onSave: (data: Omit<Banner, "id">) => void | Promise<void>;
   isRTL: boolean;
   t: Record<string, string>;
   mode: "add" | "edit";
+  isSubmitting?: boolean;
 }
 
 const COLOR_PRESETS = [
@@ -301,7 +349,7 @@ const COLOR_PRESETS = [
   { name: "Orange", value: "from-orange-500 to-red-600" },
 ];
 
-function BannerFormModal({ banner, onClose, onSave, isRTL, t, mode }: BannerFormModalProps) {
+function BannerFormModal({ banner, onClose, onSave, isRTL, t, mode, isSubmitting = false }: BannerFormModalProps) {
   const [titleEn, setTitleEn] = useState(banner?.titleEn || "");
   const [titleAr, setTitleAr] = useState(banner?.titleAr || "");
   const [subtitleEn, setSubtitleEn] = useState(banner?.subtitleEn || "");
@@ -324,11 +372,11 @@ function BannerFormModal({ banner, onClose, onSave, isRTL, t, mode }: BannerForm
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!titleEn || !subtitleEn) return;
 
-    onSave({
+    await onSave({
       titleEn,
       titleAr: titleAr || titleEn,
       subtitleEn,
@@ -350,7 +398,11 @@ function BannerFormModal({ banner, onClose, onSave, isRTL, t, mode }: BannerForm
           <h2 className="text-xl font-bold text-slate-900">
             {mode === "add" ? t.addNewBanner : t.editBanner}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg">
+          <button 
+            onClick={onClose} 
+            disabled={isSubmitting}
+            className="p-2 hover:bg-slate-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -557,16 +609,17 @@ function BannerFormModal({ banner, onClose, onSave, isRTL, t, mode }: BannerForm
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 border border-slate-300 rounded-lg font-medium hover:bg-slate-50 transition-colors"
+              disabled={isSubmitting}
+              className="flex-1 py-2.5 border border-slate-300 rounded-lg font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {t.cancel}
             </button>
             <button
               type="submit"
-              disabled={!titleEn || !subtitleEn}
+              disabled={!titleEn || !subtitleEn || isSubmitting}
               className="flex-1 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {mode === "add" ? t.create : t.save}
+              {isSubmitting ? (mode === "add" ? "Creating..." : "Saving...") : (mode === "add" ? t.create : t.save)}
             </button>
           </div>
         </form>

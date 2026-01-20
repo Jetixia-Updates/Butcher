@@ -438,21 +438,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // Banner functions
   const addBanner = async (banner: Omit<Banner, "id">) => {
     try {
+      // Don't send 'order' field - backend handles sortOrder automatically
+      const { order, ...bannerData } = banner;
       await settingsApi.createBanner({
-        titleEn: banner.titleEn,
-        titleAr: banner.titleAr,
-        subtitleEn: banner.subtitleEn,
-        subtitleAr: banner.subtitleAr,
-        image: banner.image,
-        bgColor: banner.bgColor,
-        link: banner.link,
-        badge: banner.badge,
-        badgeAr: banner.badgeAr,
-        enabled: banner.enabled,
+        titleEn: bannerData.titleEn,
+        titleAr: bannerData.titleAr,
+        subtitleEn: bannerData.subtitleEn,
+        subtitleAr: bannerData.subtitleAr,
+        image: bannerData.image,
+        bgColor: bannerData.bgColor,
+        link: bannerData.link,
+        badge: bannerData.badge,
+        badgeAr: bannerData.badgeAr,
+        enabled: bannerData.enabled,
       });
       await fetchSettings();
     } catch (error) {
       console.error("Error adding banner:", error);
+      throw error; // Re-throw to allow UI to handle the error
     }
   };
 
