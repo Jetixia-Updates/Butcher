@@ -3004,13 +3004,17 @@ function createApp() {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
       
-      await pgDb.update(usersTable)
-        .set({ isVerified: true })
-        .where(eq(usersTable.id, req.params.id));
-    user.updatedAt = new Date().toISOString();
-    
-    const { password, ...userWithoutPassword } = user;
-    res.json({ success: true, data: userWithoutPassword, message: 'User verified successfully' });
+      const [updated] = await pgDb.update(usersTable)
+        .set({ isVerified: true, updatedAt: new Date() })
+        .where(eq(usersTable.id, req.params.id))
+        .returning();
+      
+      const { password, ...userWithoutPassword } = updated;
+      res.json({ success: true, data: userWithoutPassword, message: 'User verified successfully' });
+    } catch (error) {
+      console.error('[Verify User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to verify user' });
+    }
   });
 
   // =====================================================
@@ -3813,7 +3817,8 @@ function createApp() {
   app.get('/api/delivery/tracking', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
-        return res.status(500).json({ success: false, error: 'Database not available' });\n      }
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
 
       const allTracking = await pgDb.select().from(deliveryTrackingTable);
       res.json({ success: true, data: allTracking });
@@ -4681,11 +4686,15 @@ function createApp() {
           dataPoints,
           summary: {
             totalRevenue: dataPoints.reduce((sum, d) => sum + d.revenue, 0),
-          totalOrders: dataPoints.reduce((sum, d) => sum + d.orders, 0),
-          averageOrderValue: 175,
+            totalOrders: dataPoints.reduce((sum, d) => sum + d.orders, 0),
+            averageOrderValue: 175,
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      console.error('[Sales Timeseries Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to generate timeseries report' });
+    }
   });
 
   // Export report
@@ -4975,14 +4984,6 @@ function createApp() {
     { id: 'acc-004', name: 'Petty Cash', nameAr: 'النثرية', type: 'petty_cash', balance: 2500, currency: 'AED', isActive: true },
   ];
 
-  const financeExpenses = [
-    { id: 'exp-001', category: 'utilities', amount: 1500, currency: 'AED', description: 'Monthly Electricity Bill', vendor: 'DEWA', status: 'paid', paidAt: '2026-01-10T09:00:00Z', createdAt: '2026-01-05T10:00:00Z' },
-    { id: 'exp-002', category: 'rent', amount: 15000, currency: 'AED', description: 'Shop Rent - January', vendor: 'Emirates Properties', status: 'paid', paidAt: '2026-01-03T10:00:00Z', createdAt: '2026-01-01T08:00:00Z' },
-    { id: 'exp-003', category: 'salaries', amount: 35000, currency: 'AED', description: 'Staff Salaries - January', status: 'pending', createdAt: '2026-01-01T08:00:00Z' },
-    { id: 'exp-004', category: 'delivery', amount: 2500, currency: 'AED', description: 'Delivery Vehicle Fuel', vendor: 'ADNOC', status: 'paid', paidAt: '2026-01-08T14:00:00Z', createdAt: '2026-01-08T14:00:00Z' },
-    { id: 'exp-005', category: 'marketing', amount: 5000, currency: 'AED', description: 'Social Media Advertising', vendor: 'Meta Ads', status: 'overdue', createdAt: '2026-01-01T08:00:00Z' },
-  ];
-
   // Finance summary
   app.get('/api/finance/summary', async (req, res) => {
     try {
@@ -5257,15 +5258,19 @@ function createApp() {
             cashFromCOD: totalRevenue * 0.35,
             cashFromRefunds: 0,
             cashToSuppliers: totalRevenue * 0.5,
-          cashToExpenses: totalExpenses,
-          netOperating: totalRevenue - totalExpenses - totalRevenue * 0.5,
+            cashToExpenses: totalExpenses,
+            netOperating: totalRevenue - totalExpenses - totalRevenue * 0.5,
+          },
+          investingActivities: { equipmentPurchases: 0, netInvesting: 0 },
+          financingActivities: { ownerDrawings: 0, capitalInjection: 0, netFinancing: 0 },
+          netCashFlow: totalRevenue - totalExpenses,
+          dailyCashFlow: [],
         },
-        investingActivities: { equipmentPurchases: 0, netInvesting: 0 },
-        financingActivities: { ownerDrawings: 0, capitalInjection: 0, netFinancing: 0 },
-        netCashFlow: totalRevenue - totalExpenses,
-        dailyCashFlow: [],
-      },
-    });
+      });
+    } catch (error) {
+      console.error('[Cash Flow Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to generate cash-flow report' });
+    }
   });
 
   app.get('/api/finance/reports/vat', async (req, res) => {
