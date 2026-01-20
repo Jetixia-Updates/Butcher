@@ -284,7 +284,7 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
             <div className="flex items-center gap-2 font-semibold text-slate-900">
               <Wallet className="w-4 h-4" /> {t("accounts")}
             </div>
-            <button className="text-sm text-primary flex items-center gap-1" onClick={() => onNavigate?.("accounts")}> 
+            <button className="text-sm text-primary flex items-center gap-1" onClick={() => onNavigate?.("finance")}> 
               <PlusIcon /> {language === "ar" ? "إنشاء" : "Create"}
             </button>
           </div>
@@ -526,13 +526,22 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition">
+          <button 
+            onClick={() => onNavigate?.("reports")}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition"
+          >
             {language === "ar" ? "إنشاء إقرار ضريبي" : "Generate VAT Return"}
           </button>
-          <button className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition">
+          <button 
+            onClick={() => onNavigate?.("reports")}
+            className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition"
+          >
             {language === "ar" ? "تصدير للهيئة (Excel)" : "Export for FTA (Excel)"}
           </button>
-          <button className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition">
+          <button 
+            onClick={() => onNavigate?.("reports")}
+            className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition"
+          >
             {language === "ar" ? "سجل التدقيق" : "Audit Log"}
           </button>
         </div>
