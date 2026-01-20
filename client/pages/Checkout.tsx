@@ -691,7 +691,6 @@ export default function CheckoutPage() {
   
   // Express delivery state
   const [isExpressDelivery, setIsExpressDelivery] = useState(false);
-  const expressDeliveryFee = 25; // AED 25 for express delivery
   
   // Driver tip state
   const [driverTip, setDriverTip] = useState<number>(0);
@@ -704,6 +703,10 @@ export default function CheckoutPage() {
 
   // Adjusted totals with delivery fee and tip (rounded to match server calculations)
   // Express delivery replaces zone delivery fee (not added to it)
+  // Use zone's expressFee if available, fallback to 25 AED
+  const expressDeliveryFee = matchedZone?.expressFee ? Number(matchedZone.expressFee) : 25;
+  const expressEnabled = matchedZone?.expressEnabled ?? true;
+  const expressHours = matchedZone?.expressHours ?? 3;
   const adjustedSubtotal = Math.round((subtotal - discountAmount) * 100) / 100;
   const adjustedVat = Math.round(adjustedSubtotal * 0.05 * 100) / 100;
   const deliveryFeeTotal = isExpressDelivery ? expressDeliveryFee : zoneDeliveryFee;
@@ -1441,7 +1444,8 @@ export default function CheckoutPage() {
                   </>
                 )}
 
-                {/* Express Delivery Option */}
+                {/* Express Delivery Option - only show if zone has express enabled */}
+                {expressEnabled && (
                 <div className="mt-4 sm:mt-6 pt-4 border-t border-border">
                   <div
                     onClick={() => setIsExpressDelivery(!isExpressDelivery)}
@@ -1477,16 +1481,17 @@ export default function CheckoutPage() {
                         </div>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                           {language === "ar" 
-                            ? "احصل على طلبك خلال 3 ساعات! رسوم إضافية 25 درهم" 
-                            : "Get your order within 3 hours! Additional AED 25 fee"}
+                            ? `احصل على طلبك خلال ${expressHours} ساعات! رسوم إضافية ${expressDeliveryFee} درهم` 
+                            : `Get your order within ${expressHours} hours! Additional AED ${expressDeliveryFee} fee`}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-orange-600 dark:text-orange-400">+AED 25</p>
+                        <p className="font-bold text-orange-600 dark:text-orange-400">+AED {expressDeliveryFee}</p>
                       </div>
                     </div>
                   </div>
                 </div>
+                )}
               </div>
 
               {/* Driver Tip Section */}
