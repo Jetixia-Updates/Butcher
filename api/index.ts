@@ -3278,38 +3278,8 @@ function createApp() {
     updatedAt: string;
   }>();
 
-  // Pre-populate demo tracking for out_for_delivery orders
-  const driver = users.get("driver_1");
-  if (driver) {
-    Array.from(orders.values())
-      .filter(o => o.status === 'out_for_delivery')
-      .forEach((order, index) => {
-        const tracking = {
-          id: `track_demo_${index}`,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          driverId: driver.id,
-          driverName: `${driver.firstName} ${driver.familyName}`,
-          driverMobile: driver.mobile,
-          status: 'assigned',
-          customerName: order.customerName,
-          customerMobile: order.customerMobile,
-          deliveryAddress: order.deliveryAddress,
-          deliveryNotes: order.deliveryNotes,
-          items: order.items.map(i => ({ name: i.productName, quantity: i.quantity })),
-          total: order.total,
-          estimatedArrival: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-          timeline: [{
-            status: 'assigned',
-            timestamp: new Date().toISOString(),
-            notes: `Assigned to driver: ${driver.firstName}`,
-          }],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        deliveryTracking.set(order.id, tracking);
-      });
-  }
+  // Note: Delivery tracking is now database-backed via deliveryTrackingTable
+  // Demo tracking pre-population removed - all tracking created via /api/delivery/tracking/assign
 
   // Get tracking by order ID
   app.get('/api/delivery/tracking/by-order/:orderId', (req, res) => {
@@ -4437,40 +4407,44 @@ function createApp() {
   // REPORTS API
   // =====================================================
 
-  app.get('/api/reports/sales', (req, res) => {
-    const allOrders = Array.from(orders.values());
-    const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
-    const totalOrders = allOrders.length;
-    const totalVat = allOrders.reduce((sum, o) => sum + o.vatAmount, 0);
-    const totalDiscount = allOrders.reduce((sum, o) => sum + o.discount, 0);
-    
-    res.json({
-      success: true,
-      data: {
-        period: 'month',
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date().toISOString(),
-        totalRevenue,
-        totalSales: totalRevenue,
-        totalOrders,
-        totalVat,
-        totalDiscount,
-        averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
-        revenueGrowth: 15.2,
-        ordersGrowth: 10.5,
-        topSellingProducts: demoProducts.slice(0, 5).map((p, i) => ({
-          productId: p.id,
-          productName: p.name,
-          quantitySold: 50 - i * 5,
-          revenue: (50 - i * 5) * p.price,
-        })),
-        revenueByDay: Array.from({ length: 7 }, (_, i) => ({
-          date: new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          revenue: 1000 + Math.random() * 500,
-          orders: 5 + Math.floor(Math.random() * 5),
-        })),
-      },
-    });
+  app.get('/api/reports/sales', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const allOrders = await pgDb.select().from(ordersTable);
+      const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
+      const totalOrders = allOrders.length;
+      const totalVat = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
+      const totalDiscount = allOrders.reduce((sum, o) => sum + parseFloat(String(o.discount || 0)), 0);
+      
+      res.json({
+        success: true,
+        data: {
+          period: 'month',
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          endDate: new Date().toISOString(),
+          totalRevenue,
+          totalSales: totalRevenue,
+          totalOrders,
+          totalVat,
+          totalDiscount,
+          averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+          revenueGrowth: 15.2,
+          ordersGrowth: 10.5,
+          topSellingProducts: [],
+          revenueByDay: Array.from({ length: 7 }, (_, i) => ({
+            date: new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            revenue: 1000 + Math.random() * 500,
+            orders: 5 + Math.floor(Math.random() * 5),
+          })),
+        },
+      });
+    } catch (error) {
+      console.error('[Sales Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to generate sales report' });
+    }
   });
 
   app.get('/api/reports/sales-by-category', (req, res) => {
@@ -4507,15 +4481,18 @@ function createApp() {
         returningCustomers: 3,
         customerRetentionRate: 75,
         averageOrdersPerCustomer: 3,
-        topCustomers: Array.from(users.values())
-          .filter(u => u.role === 'customer')
-          .slice(0, 5)
-          .map(u => ({
-            userId: u.id,
-            name: `${u.firstName} ${u.familyName}`,
-            totalOrders: 3,
-            totalSpent: 750,
-          })),
+        topCustomers: (async () => {
+          if (isDatabaseAvailable() && pgDb) {
+            const users = await pgDb.select().from(usersTable).where(eq(usersTable.role, 'customer')).limit(5);
+            return users.map(u => ({
+              userId: u.id,
+              name: `${u.firstName} ${u.familyName}`,
+              totalOrders: 3,
+              totalSpent: 750,
+            }));
+          }
+          return [];
+        })(),
       },
     });
   });
@@ -4539,71 +4516,85 @@ function createApp() {
     });
   });
 
-  app.get('/api/reports/orders', (req, res) => {
-    const allOrders = Array.from(orders.values());
-    res.json({
-      success: true,
-      data: {
-        period: 'month',
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date().toISOString(),
-        totalOrders: allOrders.length,
-        statusBreakdown: {
-          pending: allOrders.filter(o => o.status === 'pending').length,
-          confirmed: allOrders.filter(o => o.status === 'confirmed').length,
-          processing: allOrders.filter(o => o.status === 'processing').length,
-          out_for_delivery: allOrders.filter(o => o.status === 'out_for_delivery').length,
-          delivered: allOrders.filter(o => o.status === 'delivered').length,
-          cancelled: allOrders.filter(o => o.status === 'cancelled').length,
+  app.get('/api/reports/orders', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const allOrders = await pgDb.select().from(ordersTable);
+      res.json({
+        success: true,
+        data: {
+          period: 'month',
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          endDate: new Date().toISOString(),
+          totalOrders: allOrders.length,
+          statusBreakdown: {
+            pending: allOrders.filter(o => o.status === 'pending').length,
+            confirmed: allOrders.filter(o => o.status === 'confirmed').length,
+            processing: allOrders.filter(o => o.status === 'processing').length,
+            out_for_delivery: allOrders.filter(o => o.status === 'out_for_delivery').length,
+            delivered: allOrders.filter(o => o.status === 'delivered').length,
+            cancelled: allOrders.filter(o => o.status === 'cancelled').length,
+          },
+          paymentBreakdown: {
+            card: allOrders.filter(o => o.paymentMethod === 'card').length,
+            cod: allOrders.filter(o => o.paymentMethod === 'cod').length,
+            bank_transfer: allOrders.filter(o => o.paymentMethod === 'bank_transfer').length,
+          },
+          sourceBreakdown: { web: allOrders.length, mobile: 0 },
+          deliveryPerformance: {
+            totalDelivered: allOrders.filter(o => o.status === 'delivered').length,
+            onTimeDeliveries: allOrders.filter(o => o.status === 'delivered').length,
+            onTimeDeliveryRate: 95,
+            averageDeliveryTime: 45,
+          },
+          cancellationRate: 5,
         },
-        paymentBreakdown: {
-          card: allOrders.filter(o => o.paymentMethod === 'card').length,
-          cod: allOrders.filter(o => o.paymentMethod === 'cod').length,
-          bank_transfer: allOrders.filter(o => o.paymentMethod === 'bank_transfer').length,
-        },
-        sourceBreakdown: { web: allOrders.length, mobile: 0 },
-        deliveryPerformance: {
-          totalDelivered: allOrders.filter(o => o.status === 'delivered').length,
-          onTimeDeliveries: allOrders.filter(o => o.status === 'delivered').length,
-          onTimeDeliveryRate: 95,
-          averageDeliveryTime: 45,
-        },
-        cancellationRate: 5,
-      },
-    });
+      });
+    } catch (error) {
+      console.error('[Orders Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to generate orders report' });
+    }
   });
 
   // Sales timeseries report
-  app.get('/api/reports/sales-timeseries', (req, res) => {
-    const { startDate, endDate, granularity = 'day' } = req.query;
-    const allOrders = Array.from(orders.values());
-    
-    // Generate time series data
-    const now = new Date();
-    const days = granularity === 'hour' ? 1 : granularity === 'week' ? 28 : 7;
-    const dataPoints = [];
-    
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
-      dataPoints.push({
-        date: dateStr,
-        timestamp: date.toISOString(),
-        revenue: 800 + Math.random() * 400,
-        orders: 5 + Math.floor(Math.random() * 5),
-        averageOrderValue: 150 + Math.random() * 50,
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: {
-        granularity,
-        startDate: dataPoints[0]?.date,
-        endDate: dataPoints[dataPoints.length - 1]?.date,
-        dataPoints,
-        summary: {
-          totalRevenue: dataPoints.reduce((sum, d) => sum + d.revenue, 0),
+  app.get('/api/reports/sales-timeseries', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { startDate, endDate, granularity = 'day' } = req.query;
+      const allOrders = await pgDb.select().from(ordersTable);
+      
+      // Generate time series data
+      const now = new Date();
+      const days = granularity === 'hour' ? 1 : granularity === 'week' ? 28 : 7;
+      const dataPoints = [];
+      
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const dateStr = date.toISOString().split('T')[0];
+        dataPoints.push({
+          date: dateStr,
+          timestamp: date.toISOString(),
+          revenue: 800 + Math.random() * 400,
+          orders: 5 + Math.floor(Math.random() * 5),
+          averageOrderValue: 150 + Math.random() * 50,
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          granularity,
+          startDate: dataPoints[0]?.date,
+          endDate: dataPoints[dataPoints.length - 1]?.date,
+          dataPoints,
+          summary: {
+            totalRevenue: dataPoints.reduce((sum, d) => sum + d.revenue, 0),
           totalOrders: dataPoints.reduce((sum, d) => sum + d.orders, 0),
           averageOrderValue: 175,
         },
@@ -5033,30 +5024,39 @@ function createApp() {
   });
 
   // Get transaction by ID
-  app.get('/api/finance/transactions/:id', (req, res) => {
-    const allOrders = Array.from(orders.values());
-    const transactions = allOrders.map((o, i) => ({
-      id: `txn-${i + 1}`,
-      type: 'sale',
-      status: 'completed',
-      amount: o.total,
-      currency: 'AED',
-      description: `Order #${o.orderNumber}`,
-      reference: o.orderNumber,
-      referenceType: 'order',
-      referenceId: o.id,
-      accountId: o.paymentMethod === 'card' ? 'acc-002' : 'acc-003',
-      accountName: o.paymentMethod === 'card' ? 'Card Payments' : 'COD Collections',
-      createdBy: 'system',
-      createdAt: o.createdAt,
-      updatedAt: o.createdAt,
-    }));
-    
-    const transaction = transactions.find(t => t.id === req.params.id);
-    if (!transaction) {
-      return res.status(404).json({ success: false, error: 'Transaction not found' });
+  app.get('/api/finance/transactions/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const allOrders = await pgDb.select().from(ordersTable);
+      const transactions = allOrders.map((o, i) => ({
+        id: `txn-${i + 1}`,
+        type: 'sale',
+        status: 'completed',
+        amount: parseFloat(String(o.total)),
+        currency: 'AED',
+        description: `Order #${o.orderNumber}`,
+        reference: o.orderNumber,
+        referenceType: 'order',
+        referenceId: o.id,
+        accountId: o.paymentMethod === 'card' ? 'acc-002' : 'acc-003',
+        accountName: o.paymentMethod === 'card' ? 'Card Payments' : 'COD Collections',
+        createdBy: 'system',
+        createdAt: o.createdAt.toISOString(),
+        updatedAt: o.createdAt.toISOString(),
+      }));
+      
+      const transaction = transactions.find(t => t.id === req.params.id);
+      if (!transaction) {
+        return res.status(404).json({ success: false, error: 'Transaction not found' });
+      }
+      res.json({ success: true, data: transaction });
+    } catch (error) {
+      console.error('[Get Transaction Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch transaction' });
     }
-    res.json({ success: true, data: transaction });
   });
 
   // Finance expenses
@@ -5107,56 +5107,70 @@ function createApp() {
   });
 
   // Finance reports
-  app.get('/api/finance/reports/profit-loss', (req, res) => {
-    const allOrders = Array.from(orders.values());
-    const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
-    const totalCOGS = totalRevenue * 0.65;
-    const grossProfit = totalRevenue - totalCOGS;
-    const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
-    const netProfit = grossProfit - totalExpenses;
+  app.get('/api/finance/reports/profit-loss', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
 
-    res.json({
-      success: true,
-      data: {
-        period: req.query.period || 'month',
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date().toISOString(),
-        revenue: { sales: totalRevenue, otherIncome: 0, totalRevenue },
-        costOfGoodsSold: { inventoryCost: totalCOGS, supplierPurchases: 0, totalCOGS },
-        grossProfit,
-        grossProfitMargin: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,
-        operatingExpenses: [
-          { category: 'rent', amount: 15000 },
-          { category: 'salaries', amount: 35000 },
-          { category: 'utilities', amount: 1500 },
-        ],
-        totalOperatingExpenses: totalExpenses,
-        operatingProfit: grossProfit - totalExpenses,
-        otherExpenses: { vatPaid: 0, refunds: 0, totalOther: 0 },
-        netProfit,
-        netProfitMargin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
-      },
-    });
+      const allOrders = await pgDb.select().from(ordersTable);
+      const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
+      const totalCOGS = totalRevenue * 0.65;
+      const grossProfit = totalRevenue - totalCOGS;
+      const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
+      const netProfit = grossProfit - totalExpenses;
+
+      res.json({
+        success: true,
+        data: {
+          period: req.query.period || 'month',
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          endDate: new Date().toISOString(),
+          revenue: { sales: totalRevenue, otherIncome: 0, totalRevenue },
+          costOfGoodsSold: { inventoryCost: totalCOGS, supplierPurchases: 0, totalCOGS },
+          grossProfit,
+          grossProfitMargin: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,
+          operatingExpenses: [
+            { category: 'rent', amount: 15000 },
+            { category: 'salaries', amount: 35000 },
+            { category: 'utilities', amount: 1500 },
+          ],
+          totalOperatingExpenses: totalExpenses,
+          operatingProfit: grossProfit - totalExpenses,
+          otherExpenses: { vatPaid: 0, refunds: 0, totalOther: 0 },
+          netProfit,
+          netProfitMargin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
+        },
+      });
+    } catch (error) {
+      console.error('[Profit Loss Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to generate profit-loss report' });
+    }
   });
 
-  app.get('/api/finance/reports/cash-flow', (req, res) => {
-    const allOrders = Array.from(orders.values());
-    const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
-    const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
+  app.get('/api/finance/reports/cash-flow', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
 
-    res.json({
-      success: true,
-      data: {
-        period: req.query.period || 'month',
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date().toISOString(),
-        openingBalance: 100000,
-        closingBalance: 100000 + totalRevenue - totalExpenses,
-        operatingActivities: {
-          cashFromSales: totalRevenue * 0.6,
-          cashFromCOD: totalRevenue * 0.35,
-          cashFromRefunds: 0,
-          cashToSuppliers: totalRevenue * 0.5,
+      const allOrders = await pgDb.select().from(ordersTable);
+      const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
+      const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
+
+      res.json({
+        success: true,
+        data: {
+          period: req.query.period || 'month',
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          endDate: new Date().toISOString(),
+          openingBalance: 100000,
+          closingBalance: 100000 + totalRevenue - totalExpenses,
+          operatingActivities: {
+            cashFromSales: totalRevenue * 0.6,
+            cashFromCOD: totalRevenue * 0.35,
+            cashFromRefunds: 0,
+            cashToSuppliers: totalRevenue * 0.5,
           cashToExpenses: totalExpenses,
           netOperating: totalRevenue - totalExpenses - totalRevenue * 0.5,
         },
@@ -5168,32 +5182,41 @@ function createApp() {
     });
   });
 
-  app.get('/api/finance/reports/vat', (req, res) => {
-    const allOrders = Array.from(orders.values());
-    const salesVAT = allOrders.reduce((sum, o) => sum + o.vatAmount, 0);
-    const salesTaxable = allOrders.reduce((sum, o) => sum + (o.total - o.vatAmount), 0);
+  app.get('/api/finance/reports/vat', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
 
-    res.json({
-      success: true,
-      data: {
-        period: req.query.period || 'month',
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date().toISOString(),
-        salesVAT: { taxableAmount: salesTaxable, vatAmount: salesVAT, exemptAmount: 0 },
-        purchasesVAT: { taxableAmount: 0, vatAmount: 0 },
-        vatDue: salesVAT,
-        vatRefund: 0,
-        netVAT: salesVAT,
-        transactionDetails: allOrders.slice(0, 10).map(o => ({
-          date: o.createdAt,
-          type: 'sale',
-          reference: o.orderNumber,
-          taxableAmount: o.total - o.vatAmount,
-          vatAmount: o.vatAmount,
-          vatRate: 5,
-        })),
-      },
-    });
+      const allOrders = await pgDb.select().from(ordersTable);
+      const salesVAT = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
+      const salesTaxable = allOrders.reduce((sum, o) => sum + (parseFloat(String(o.total)) - parseFloat(String(o.vat))), 0);
+
+      res.json({
+        success: true,
+        data: {
+          period: req.query.period || 'month',
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          endDate: new Date().toISOString(),
+          salesVAT: { taxableAmount: salesTaxable, vatAmount: salesVAT, exemptAmount: 0 },
+          purchasesVAT: { taxableAmount: 0, vatAmount: 0 },
+          vatDue: salesVAT,
+          vatRefund: 0,
+          netVAT: salesVAT,
+          transactionDetails: allOrders.slice(0, 10).map(o => ({
+            date: o.createdAt.toISOString(),
+            type: 'sale',
+            reference: o.orderNumber,
+            taxableAmount: parseFloat(String(o.total)) - parseFloat(String(o.vat)),
+            vatAmount: parseFloat(String(o.vat)),
+            vatRate: 5,
+          })),
+        },
+      });
+    } catch (error) {
+      console.error('[VAT Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to generate VAT report' });
+    }
   });
 
   // Catch all for unhandled routes - Express 5 compatible syntax
