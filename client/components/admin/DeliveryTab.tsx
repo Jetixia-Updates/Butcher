@@ -29,7 +29,6 @@ import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useLanguage } from "@/context/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { useNotifications, createDriverAssignedNotification, createUserOrderNotification } from "@/context/NotificationContext";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -180,7 +179,6 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
   const isRTL = language === 'ar';
   const t = translations[language] || translations.en;
   const { toast } = useToast();
-  const { addUserNotification } = useNotifications();
 
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [pendingDeliveries, setPendingDeliveries] = useState<Order[]>([]);
@@ -199,12 +197,12 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
     try {
       // Fetch orders that need delivery (confirmed, processing, ready_for_pickup, out_for_delivery)
       const [zonesRes, confirmedRes, processingRes, readyRes, outForDeliveryRes, usersRes] = await Promise.all([
-        deliveryApi.getZones(),
-        ordersApi.getAll({ status: "confirmed" }),
-        ordersApi.getAll({ status: "processing" }),
-        ordersApi.getAll({ status: "ready_for_pickup" }),
-        ordersApi.getAll({ status: "out_for_delivery" }),
-        usersApi.getAll({ role: "delivery" }),
+        deliveryApi.getZones().catch(() => ({ success: false as const, error: "Failed to load zones" })),
+        ordersApi.getAll({ status: "confirmed" }).catch(() => ({ success: false as const, error: "Failed to load orders" })),
+        ordersApi.getAll({ status: "processing" }).catch(() => ({ success: false as const, error: "Failed to load orders" })),
+        ordersApi.getAll({ status: "ready_for_pickup" }).catch(() => ({ success: false as const, error: "Failed to load orders" })),
+        ordersApi.getAll({ status: "out_for_delivery" }).catch(() => ({ success: false as const, error: "Failed to load orders" })),
+        usersApi.getAll({ role: "delivery" }).catch(() => ({ success: false as const, error: "Failed to load drivers" })),
       ]);
       
       // Combine all orders that need delivery management
@@ -217,17 +215,17 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
       const ordersRes = { success: true, data: allDeliveryOrders };
 
       if (zonesRes.success && zonesRes.data) setZones(zonesRes.data);
-      if (ordersRes.success && ordersRes.data) {
+      if (ordersRes.success && ordersRes.data && ordersRes.data.length > 0) {
         // Fetch tracking info for each order
         const trackingPromises = ordersRes.data.map(order => 
-          deliveryApi.getTracking(order.id)
+          deliveryApi.getTracking(order.id).catch(() => ({ success: false as const, error: "Failed to load tracking" }))
         );
         const trackingResults = await Promise.all(trackingPromises);
         
         const trackingMap: Record<string, DeliveryTracking> = {};
         trackingResults.forEach((result, index) => {
           if (result.success && result.data) {
-            trackingMap[ordersRes.data[index].id] = result.data;
+            trackingMap[ordersRes.data![index].id] = result.data;
           }
         });
         setTrackingInfo(trackingMap);
@@ -239,6 +237,9 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
           return !tracking || tracking.status !== 'delivered';
         });
         setPendingDeliveries(activeDeliveries);
+      } else {
+        setPendingDeliveries([]);
+        setTrackingInfo({});
       }
       if (usersRes.success && usersRes.data) setDrivers(usersRes.data);
     } catch (err) {
