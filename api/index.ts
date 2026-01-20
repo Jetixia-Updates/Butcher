@@ -808,8 +808,26 @@ function createApp() {
       }
 
       const token = generateToken();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      sessions.set(token, { userId: user.id, expiresAt });
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const sessionId = `session_${Date.now()}`;
+      
+      // Store session in database
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          await pgDb.insert(sessionsTable).values({
+            id: sessionId,
+            userId: user.id,
+            token: token,
+            expiresAt: expiresAt,
+            createdAt: new Date(),
+          });
+        } catch (e) {
+          console.error('[Session DB Error]', e);
+        }
+      }
+      
+      // Also store in memory for fallback
+      sessions.set(token, { userId: user.id, expiresAt: expiresAt.toISOString() });
       
       // Update last login in DB if available
       if (isDatabaseAvailable() && pgDb) {
@@ -826,7 +844,7 @@ function createApp() {
         data: {
           user: sanitizeUser(user),
           token,
-          expiresAt,
+          expiresAt: expiresAt.toISOString(),
         },
         message: 'Login successful',
       });
@@ -892,8 +910,26 @@ function createApp() {
       }
 
       const token = generateToken();
-      const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
-      sessions.set(token, { userId: user.id, expiresAt });
+      const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+      const sessionId = `session_${Date.now()}`;
+      
+      // Store session in database
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          await pgDb.insert(sessionsTable).values({
+            id: sessionId,
+            userId: user.id,
+            token: token,
+            expiresAt: expiresAt,
+            createdAt: new Date(),
+          });
+        } catch (e) {
+          console.error('[Admin Session DB Error]', e);
+        }
+      }
+      
+      // Also store in memory for fallback
+      sessions.set(token, { userId: user.id, expiresAt: expiresAt.toISOString() });
       
       if (isDatabaseAvailable() && pgDb) {
         try {
@@ -909,7 +945,7 @@ function createApp() {
         data: {
           user: sanitizeUser(user),
           token,
-          expiresAt,
+          expiresAt: expiresAt.toISOString(),
         },
         message: 'Admin login successful',
       });
@@ -2993,6 +3029,62 @@ function createApp() {
     }
   });
 
+  // Get current user - MUST be before /api/users/:id to avoid route conflict
+  app.get('/api/users/me', async (req, res) => {
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) {
+        return res.json({ success: true, data: null });
+      }
+
+      // Check database for session
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+          
+          if (sessionResults.length > 0) {
+            const session = sessionResults[0];
+            
+            // Check if session is expired
+            if (new Date(session.expiresAt) < new Date()) {
+              // Delete expired session
+              await pgDb.delete(sessionsTable).where(eq(sessionsTable.id, session.id));
+              return res.json({ success: true, data: null });
+            }
+            
+            // Get user from database
+            const userResults = await pgDb.select().from(usersTable).where(eq(usersTable.id, session.userId));
+            
+            if (userResults.length > 0) {
+              const dbUser = userResults[0];
+              const { password, ...userWithoutPassword } = dbUser;
+              return res.json({ success: true, data: userWithoutPassword });
+            }
+          }
+        } catch (dbError) {
+          console.error('[Get Me DB Error]', dbError);
+        }
+      }
+
+      // Fallback to in-memory session (for local dev)
+      const memSession = sessions.get(token);
+      if (!memSession || new Date(memSession.expiresAt) < new Date()) {
+        sessions.delete(token);
+        return res.json({ success: true, data: null });
+      }
+
+      const memUser = users.get(memSession.userId);
+      if (!memUser) {
+        return res.json({ success: true, data: null });
+      }
+
+      res.json({ success: true, data: sanitizeUser(memUser) });
+    } catch (error) {
+      console.error('[Get Me Error]', error);
+      res.json({ success: true, data: null });
+    }
+  });
+
   // Get user by ID
   app.get('/api/users/:id', async (req, res) => {
     try {
@@ -4831,33 +4923,22 @@ function createApp() {
     });
   });
 
-  // Logout
-  app.post('/api/users/logout', (req, res) => {
+  // Logout - also delete session from database
+  app.post('/api/users/logout', async (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    if (token) sessions.delete(token);
+    if (token) {
+      sessions.delete(token);
+      // Also delete from database
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          await pgDb.delete(sessionsTable).where(eq(sessionsTable.token, token));
+        } catch (e) { /* ignore */ }
+      }
+    }
     res.json({ success: true, message: 'Logged out successfully' });
   });
 
-  // Get current user
-  app.get('/api/users/me', (req, res) => {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.json({ success: true, data: null }); // Return null instead of error for unauthenticated
-    }
-
-    const session = sessions.get(token);
-    if (!session || new Date(session.expiresAt) < new Date()) {
-      sessions.delete(token);
-      return res.json({ success: true, data: null }); // Return null for expired session
-    }
-
-    const user = users.get(session.userId);
-    if (!user) {
-      return res.json({ success: true, data: null }); // Return null if user not found
-    }
-
-    res.json({ success: true, data: sanitizeUser(user) });
-  });
+  // NOTE: /api/users/me is defined earlier in the file (before /api/users/:id)
 
   // =====================================================
   // SETTINGS API
