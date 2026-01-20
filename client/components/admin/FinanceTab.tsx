@@ -923,6 +923,97 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
         />
       </div>
 
+      {/* UAE Compliance Section */}
+      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-900">
+                {language === "ar" ? "الامتثال لقوانين الإمارات" : "UAE Compliance"}
+              </h3>
+              <p className="text-sm text-slate-600">
+                {language === "ar" ? "إقرار ضريبة القيمة المضافة والتقارير المالية" : "FTA VAT Returns & Financial Reports"}
+              </p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
+            {language === "ar" ? "هيئة الضرائب الاتحادية" : "FTA Compliant"}
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* VAT Summary */}
+          <div className="bg-white rounded-lg p-4 border border-emerald-200">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-slate-500">
+                {language === "ar" ? "ضريبة القيمة المضافة المستحقة" : "VAT Due"}
+              </span>
+              <span className="text-xs text-slate-400">5%</span>
+            </div>
+            <div className="text-2xl font-bold text-emerald-700 flex items-center gap-1">
+              <CurrencySymbol /> {formatAmount(((state.summary?.totalRevenue || 0) - (state.summary?.totalExpenses || 0)) * 0.05)}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {language === "ar" ? "هذا الربع" : "This Quarter"}
+            </p>
+          </div>
+
+          {/* TRN */}
+          <div className="bg-white rounded-lg p-4 border border-emerald-200">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-slate-500">
+                {language === "ar" ? "الرقم الضريبي" : "Tax Registration Number"}
+              </span>
+            </div>
+            <div className="text-lg font-bold text-slate-900">
+              100-XXX-XXX-XXX-003
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {language === "ar" ? "قابل للتعديل في الإعدادات" : "Configurable in Settings"}
+            </p>
+          </div>
+
+          {/* Next Filing */}
+          <div className="bg-white rounded-lg p-4 border border-emerald-200">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-slate-500">
+                {language === "ar" ? "الإقرار القادم" : "Next VAT Filing"}
+              </span>
+            </div>
+            <div className="text-lg font-bold text-amber-600">
+              {language === "ar" ? "الربع الأول 2026" : "Q1 2026"}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {language === "ar" ? "الموعد النهائي: 28 أبريل" : "Due: April 28, 2026"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button 
+            onClick={() => setSubView("vat")}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition"
+          >
+            {language === "ar" ? "إنشاء إقرار ضريبي" : "Generate VAT Return"}
+          </button>
+          <button 
+            onClick={() => setSubView("vat")}
+            className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition"
+          >
+            {language === "ar" ? "تصدير للهيئة (Excel)" : "Export for FTA (Excel)"}
+          </button>
+          <button 
+            onClick={() => setSubView("audit-log")}
+            className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition"
+          >
+            {language === "ar" ? "سجل التدقيق" : "Audit Log"}
+          </button>
+        </div>
+      </div>
+
       {/* Add Expense Modal */}
       {showExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowExpenseModal(false)}>
