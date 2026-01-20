@@ -4136,7 +4136,38 @@ function createApp() {
       }
 
       const allTracking = await pgDb.select().from(deliveryTrackingTable);
-      res.json({ success: true, data: allTracking });
+      
+      // Enrich tracking with order details
+      const enrichedTracking = await Promise.all(allTracking.map(async (tracking) => {
+        // Get order details
+        const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, tracking.orderId));
+        const order = orderResult[0];
+        
+        // Get order items
+        const orderItems = order 
+          ? await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, tracking.orderId))
+          : [];
+
+        return {
+          ...tracking,
+          customerName: order?.customerName || 'Customer',
+          customerMobile: order?.customerMobile || '',
+          deliveryAddress: order?.deliveryAddress || { area: '', emirate: '', street: '', building: '' },
+          deliveryNotes: order?.deliveryNotes || null,
+          items: orderItems.map(i => ({ 
+            name: i.productName, 
+            nameAr: i.productNameAr,
+            quantity: Number(i.quantity) 
+          })),
+          total: order ? Number(order.total) : 0,
+          subtotal: order ? Number(order.subtotal) : 0,
+          vatAmount: order ? Number(order.vatAmount) : 0,
+          deliveryFee: order ? Number(order.deliveryFee) : 0,
+          paymentMethod: order?.paymentMethod || 'cod',
+        };
+      }));
+
+      res.json({ success: true, data: enrichedTracking });
     } catch (error) {
       console.error('[Get All Tracking Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch tracking' });
@@ -4154,7 +4185,36 @@ function createApp() {
       if (trackingResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Tracking not found' });
       }
-      res.json({ success: true, data: trackingResult[0] });
+      
+      const tracking = trackingResult[0];
+      
+      // Enrich with order details
+      const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, tracking.orderId));
+      const order = orderResult[0];
+      
+      const orderItems = order 
+        ? await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, tracking.orderId))
+        : [];
+
+      const enrichedTracking = {
+        ...tracking,
+        customerName: order?.customerName || 'Customer',
+        customerMobile: order?.customerMobile || '',
+        deliveryAddress: order?.deliveryAddress || { area: '', emirate: '', street: '', building: '' },
+        deliveryNotes: order?.deliveryNotes || null,
+        items: orderItems.map(i => ({ 
+          name: i.productName, 
+          nameAr: i.productNameAr,
+          quantity: Number(i.quantity) 
+        })),
+        total: order ? Number(order.total) : 0,
+        subtotal: order ? Number(order.subtotal) : 0,
+        vatAmount: order ? Number(order.vatAmount) : 0,
+        deliveryFee: order ? Number(order.deliveryFee) : 0,
+        paymentMethod: order?.paymentMethod || 'cod',
+      };
+      
+      res.json({ success: true, data: enrichedTracking });
     } catch (error) {
       console.error('[Get Tracking Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch tracking' });
