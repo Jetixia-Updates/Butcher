@@ -2177,13 +2177,49 @@ function createApp() {
 
       // Create notification for order status change (async, don't wait)
       try {
-        const statusMessages: Record<string, { en: string; ar: string }> = {
-          confirmed: { en: 'Your order has been confirmed', ar: 'تم تأكيد طلبك' },
-          processing: { en: 'Your order is being prepared', ar: 'جاري تحضير طلبك' },
-          ready: { en: 'Your order is ready for pickup/delivery', ar: 'طلبك جاهز للاستلام/التوصيل' },
-          shipped: { en: 'Your order is on its way', ar: 'طلبك في الطريق إليك' },
-          delivered: { en: 'Your order has been delivered', ar: 'تم توصيل طلبك' },
-          cancelled: { en: 'Your order has been cancelled', ar: 'تم إلغاء طلبك' },
+        const statusMessages: Record<string, { en: string; ar: string; titleEn: string; titleAr: string }> = {
+          confirmed: { 
+            en: 'Your order has been confirmed', 
+            ar: 'تم تأكيد طلبك',
+            titleEn: 'Order Confirmed',
+            titleAr: 'تم تأكيد الطلب'
+          },
+          processing: { 
+            en: 'Your order is being prepared', 
+            ar: 'جاري تحضير طلبك',
+            titleEn: 'Order Processing',
+            titleAr: 'جاري تحضير الطلب'
+          },
+          ready_for_pickup: { 
+            en: 'Your order is ready for pickup/delivery', 
+            ar: 'طلبك جاهز للاستلام/التوصيل',
+            titleEn: 'Order Ready',
+            titleAr: 'الطلب جاهز'
+          },
+          out_for_delivery: { 
+            en: 'Your order is on its way', 
+            ar: 'طلبك في الطريق إليك',
+            titleEn: 'Out for Delivery',
+            titleAr: 'في الطريق للتوصيل'
+          },
+          delivered: { 
+            en: 'Your order has been delivered', 
+            ar: 'تم توصيل طلبك',
+            titleEn: 'Order Delivered',
+            titleAr: 'تم التوصيل'
+          },
+          cancelled: { 
+            en: 'Your order has been cancelled', 
+            ar: 'تم إلغاء طلبك',
+            titleEn: 'Order Cancelled',
+            titleAr: 'تم إلغاء الطلب'
+          },
+          refunded: { 
+            en: 'Your order has been refunded', 
+            ar: 'تم استرداد مبلغ طلبك',
+            titleEn: 'Order Refunded',
+            titleAr: 'تم الاسترداد'
+          },
         };
         
         const statusMsg = statusMessages[status];
@@ -2192,8 +2228,8 @@ function createApp() {
             id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             userId: String(order.userId),
             type: `order_${status}`,
-            title: `Order ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-            titleAr: statusMsg.ar.split(' ')[0] + ' ' + statusMsg.ar.split(' ')[1],
+            title: statusMsg.titleEn,
+            titleAr: statusMsg.titleAr,
             message: `${statusMsg.en}. Order #${order.orderNumber}`,
             messageAr: `${statusMsg.ar}. طلب #${order.orderNumber}`,
             link: `/orders/${order.id}`,
@@ -2201,6 +2237,9 @@ function createApp() {
             linkId: order.id,
             unread: true,
           });
+          console.log(`[Order Status Notification] Created notification for user ${order.userId} - status: ${status}`);
+        } else {
+          console.log(`[Order Status Notification] Skipped - statusMsg: ${!!statusMsg}, userId: ${order.userId}, status: ${status}`);
         }
       } catch (notifError) {
         console.error('[Order Status Notification Error]', notifError);
