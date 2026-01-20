@@ -922,16 +922,19 @@ export const notificationsApi = {
     fetchApi<null>(`/notifications/${id}/read`, { method: "PATCH" }),
 
   // Mark all notifications as read
-  markAllAsRead: () =>
-    fetchApi<null>("/notifications/read-all", { method: "PATCH" }),
+  markAllAsRead: (userId: string) =>
+    fetchApi<null>("/notifications/read-all", { 
+      method: "PATCH",
+      body: JSON.stringify({ userId }),
+    }),
 
   // Delete a notification
   delete: (id: string) =>
     fetchApi<null>(`/notifications/${id}`, { method: "DELETE" }),
 
   // Clear all notifications
-  clearAll: () =>
-    fetchApi<null>("/notifications", { method: "DELETE" }),
+  clearAll: (userId: string) =>
+    fetchApi<null>(`/notifications?userId=${userId}`, { method: "DELETE" }),
 };
 
 // =====================================================

@@ -237,6 +237,22 @@ const deliveryZonesTable = pgTable("delivery_zones", {
   expressHours: integer("express_hours").notNull().default(1),
 });
 
+// In-app notifications table
+const inAppNotificationsTable = pgTable("in_app_notifications", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  titleAr: varchar("title_ar", { length: 200 }).notNull(),
+  message: text("message").notNull(),
+  messageAr: text("message_ar").notNull(),
+  link: text("link"),
+  linkTab: varchar("link_tab", { length: 50 }),
+  linkId: text("link_id"),
+  unread: boolean("unread").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Delivery tracking table
 const deliveryTrackingStatusEnum = pgEnum("delivery_tracking_status", [
   "assigned", "picked_up", "in_transit", "nearby", "delivered", "failed"
@@ -2036,6 +2052,25 @@ function createApp() {
         data: responseOrder,
         message: 'Order created successfully',
       });
+
+      // Create notification for the user (async, don't wait)
+      try {
+        await pgDb.insert(inAppNotificationsTable).values({
+          id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          userId: String(userId),
+          type: 'order_placed',
+          title: 'Order Placed Successfully',
+          titleAr: 'تم تقديم الطلب بنجاح',
+          message: `Your order #${orderNumber} has been placed and is being processed.`,
+          messageAr: `تم تقديم طلبك #${orderNumber} وجاري معالجته.`,
+          link: `/orders/${orderId}`,
+          linkTab: 'orders',
+          linkId: orderId,
+          unread: true,
+        });
+      } catch (notifError) {
+        console.error('[Order Notification Error]', notifError);
+      }
     } catch (error) {
       console.error('[Create Order Error]', error);
       res.status(500).json({ success: false, error: 'Failed to create order' });
@@ -2075,6 +2110,37 @@ function createApp() {
       const updated = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
       
       res.json({ success: true, data: updated[0] });
+
+      // Create notification for order status change (async, don't wait)
+      try {
+        const statusMessages: Record<string, { en: string; ar: string }> = {
+          confirmed: { en: 'Your order has been confirmed', ar: 'تم تأكيد طلبك' },
+          processing: { en: 'Your order is being prepared', ar: 'جاري تحضير طلبك' },
+          ready: { en: 'Your order is ready for pickup/delivery', ar: 'طلبك جاهز للاستلام/التوصيل' },
+          shipped: { en: 'Your order is on its way', ar: 'طلبك في الطريق إليك' },
+          delivered: { en: 'Your order has been delivered', ar: 'تم توصيل طلبك' },
+          cancelled: { en: 'Your order has been cancelled', ar: 'تم إلغاء طلبك' },
+        };
+        
+        const statusMsg = statusMessages[status];
+        if (statusMsg && order.userId) {
+          await pgDb.insert(inAppNotificationsTable).values({
+            id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            userId: String(order.userId),
+            type: `order_${status}`,
+            title: `Order ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+            titleAr: statusMsg.ar.split(' ')[0] + ' ' + statusMsg.ar.split(' ')[1],
+            message: `${statusMsg.en}. Order #${order.orderNumber}`,
+            messageAr: `${statusMsg.ar}. طلب #${order.orderNumber}`,
+            link: `/orders/${order.id}`,
+            linkTab: 'orders',
+            linkId: order.id,
+            unread: true,
+          });
+        }
+      } catch (notifError) {
+        console.error('[Order Status Notification Error]', notifError);
+      }
     } catch (error) {
       console.error('[Update Order Status Error]', error);
       res.status(500).json({ success: false, error: 'Failed to update order status' });
@@ -5538,29 +5604,174 @@ function createApp() {
   // NOTIFICATIONS API
   // =====================================================
 
-  app.get('/api/notifications', (req, res) => {
-    res.json({ success: true, data: [] });
+  // Get all notifications for a user
+  app.get('/api/notifications', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId } = req.query;
+      if (!userId) {
+        return res.status(400).json({ success: false, error: 'userId is required' });
+      }
+
+      const notifications = await pgDb
+        .select()
+        .from(inAppNotificationsTable)
+        .where(eq(inAppNotificationsTable.userId, String(userId)))
+        .orderBy(desc(inAppNotificationsTable.createdAt));
+
+      const formattedNotifications = notifications.map(n => ({
+        id: n.id,
+        userId: n.userId,
+        type: n.type,
+        title: n.title,
+        titleAr: n.titleAr,
+        message: n.message,
+        messageAr: n.messageAr,
+        link: n.link,
+        linkTab: n.linkTab,
+        linkId: n.linkId,
+        unread: n.unread,
+        createdAt: n.createdAt?.toISOString(),
+      }));
+
+      res.json({ success: true, data: formattedNotifications });
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch notifications' });
+    }
   });
 
-  app.post('/api/notifications', (req, res) => {
-    const newNotification = { id: `notif_${Date.now()}`, ...req.body, isRead: false, createdAt: new Date().toISOString() };
-    res.status(201).json({ success: true, data: newNotification });
+  // Create a new notification
+  app.post('/api/notifications', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId, type, title, titleAr, message, messageAr, link, linkTab, linkId } = req.body;
+      
+      if (!userId || !type || !title || !message) {
+        return res.status(400).json({ success: false, error: 'userId, type, title, and message are required' });
+      }
+
+      const newNotification = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        userId: String(userId),
+        type: type || 'general',
+        title: title || '',
+        titleAr: titleAr || title || '',
+        message: message || '',
+        messageAr: messageAr || message || '',
+        link: link || null,
+        linkTab: linkTab || null,
+        linkId: linkId || null,
+        unread: true,
+      };
+
+      await pgDb.insert(inAppNotificationsTable).values(newNotification);
+
+      res.status(201).json({ 
+        success: true, 
+        data: {
+          ...newNotification,
+          createdAt: new Date().toISOString(),
+        }
+      });
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      res.status(500).json({ success: false, error: 'Failed to create notification' });
+    }
   });
 
-  app.patch('/api/notifications/:id/read', (req, res) => {
-    res.json({ success: true, data: { id: req.params.id, isRead: true } });
+  // Mark all notifications as read for a user (MUST come before /:id/read)
+  app.patch('/api/notifications/read-all', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ success: false, error: 'userId is required' });
+      }
+
+      await pgDb
+        .update(inAppNotificationsTable)
+        .set({ unread: false })
+        .where(eq(inAppNotificationsTable.userId, String(userId)));
+
+      res.json({ success: true, message: 'All notifications marked as read' });
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      res.status(500).json({ success: false, error: 'Failed to mark all notifications as read' });
+    }
   });
 
-  app.patch('/api/notifications/read-all', (req, res) => {
-    res.json({ success: true, message: 'All notifications marked as read' });
+  // Mark a notification as read
+  app.patch('/api/notifications/:id/read', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+
+      await pgDb
+        .update(inAppNotificationsTable)
+        .set({ unread: false })
+        .where(eq(inAppNotificationsTable.id, id));
+
+      res.json({ success: true, data: { id, isRead: true } });
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      res.status(500).json({ success: false, error: 'Failed to mark notification as read' });
+    }
   });
 
-  app.delete('/api/notifications/:id', (req, res) => {
-    res.json({ success: true, message: 'Notification deleted' });
+  // Delete a notification
+  app.delete('/api/notifications/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+
+      await pgDb
+        .delete(inAppNotificationsTable)
+        .where(eq(inAppNotificationsTable.id, id));
+
+      res.json({ success: true, message: 'Notification deleted' });
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      res.status(500).json({ success: false, error: 'Failed to delete notification' });
+    }
   });
 
-  app.delete('/api/notifications', (req, res) => {
-    res.json({ success: true, message: 'All notifications cleared' });
+  // Delete all notifications for a user
+  app.delete('/api/notifications', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId } = req.query;
+      if (!userId) {
+        return res.status(400).json({ success: false, error: 'userId is required' });
+      }
+
+      await pgDb
+        .delete(inAppNotificationsTable)
+        .where(eq(inAppNotificationsTable.userId, String(userId)));
+
+      res.json({ success: true, message: 'All notifications cleared' });
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+      res.status(500).json({ success: false, error: 'Failed to clear notifications' });
+    }
   });
 
   // =====================================================

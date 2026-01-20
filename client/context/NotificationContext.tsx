@@ -232,17 +232,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [fetchNotifications]);
 
   const markAllAsRead = useCallback(async () => {
+    const userId = getUserId();
+    if (!userId) return;
+
     // Optimistic update
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
 
     try {
-      await notificationsApi.markAllAsRead();
+      await notificationsApi.markAllAsRead(userId);
     } catch (error) {
       console.error("Failed to mark all as read:", error);
       // Refresh to get actual state
       fetchNotifications();
     }
-  }, [fetchNotifications]);
+  }, [fetchNotifications, getUserId]);
 
   const deleteNotification = useCallback(async (id: string) => {
     // Optimistic update
@@ -258,17 +261,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [fetchNotifications]);
 
   const clearAllNotifications = useCallback(async () => {
+    const userId = getUserId();
+    if (!userId) return;
+
     // Optimistic update
     setNotifications([]);
 
     try {
-      await notificationsApi.clearAll();
+      await notificationsApi.clearAll(userId);
     } catch (error) {
       console.error("Failed to clear notifications:", error);
       // Refresh to get actual state
       fetchNotifications();
     }
-  }, [fetchNotifications]);
+  }, [fetchNotifications, getUserId]);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
