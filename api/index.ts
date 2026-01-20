@@ -3799,6 +3799,29 @@ function createApp() {
         // Also store in memory for quick access
         deliveryTracking.set(orderId, tracking);
 
+        // Create notification for customer about driver assignment
+        if (order.userId) {
+          try {
+            const driverFullName = `${driver.firstName} ${driver.familyName}`;
+            await pgDb.insert(inAppNotificationsTable).values({
+              id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              userId: String(order.userId),
+              type: 'driver_assigned',
+              title: 'Driver Assigned to Your Order',
+              titleAr: 'تم تعيين سائق لطلبك',
+              message: `Good news! A driver has been assigned to your order ${order.orderNumber}. Driver: ${driverFullName}, Mobile: ${driver.mobile}`,
+              messageAr: `أخبار سارة! تم تعيين سائق لطلبك ${order.orderNumber}. السائق: ${driverFullName}، الهاتف: ${driver.mobile}`,
+              link: '/orders',
+              linkTab: 'orders',
+              linkId: orderId,
+              unread: true,
+            });
+            console.log(`[Driver Assigned] ✅ Notification sent to customer ${order.userId} for order ${order.orderNumber}`);
+          } catch (notifError) {
+            console.error('[Driver Assigned Notification Error]', notifError);
+          }
+        }
+
         return res.json({
           success: true,
           data: tracking,

@@ -22,6 +22,39 @@ const router = Router();
 // Helper to generate unique ID
 const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+// Helper to create driver assigned notification
+async function createDriverAssignedNotification(
+  userId: string, 
+  orderNumber: string, 
+  driverName: string, 
+  driverMobile: string
+): Promise<void> {
+  if (!userId) {
+    console.log(`[Driver Assigned Notification] Skipped - no userId`);
+    return;
+  }
+
+  try {
+    await db.insert(inAppNotifications).values({
+      id: generateId("notif"),
+      userId,
+      type: "driver_assigned",
+      title: "Driver Assigned to Your Order",
+      titleAr: "تم تعيين سائق لطلبك",
+      message: `Good news! A driver has been assigned to your order ${orderNumber}. Driver: ${driverName}, Mobile: ${driverMobile}`,
+      messageAr: `أخبار سارة! تم تعيين سائق لطلبك ${orderNumber}. السائق: ${driverName}، الهاتف: ${driverMobile}`,
+      link: "/orders",
+      linkTab: null,
+      linkId: null,
+      unread: true,
+      createdAt: new Date(),
+    });
+    console.log(`[Driver Assigned Notification] ✅ Created notification for user ${userId}: Driver ${driverName} assigned to order ${orderNumber}`);
+  } catch (error) {
+    console.error(`[Driver Assigned Notification] ❌ Failed to create notification:`, error);
+  }
+}
+
 // Helper to create order notification (for delivery status updates)
 async function createOrderNotification(userId: string, orderNumber: string, status: string): Promise<void> {
   interface NotificationContent {
@@ -883,9 +916,10 @@ const assignDelivery: RequestHandler = async (req, res) => {
       .where(eq(orders.id, orderId));
 
     // Create notifications server-side
-    // 1. Notify customer that their order is ready
+    // 1. Notify customer that a driver has been assigned (with driver details)
     if (order.userId) {
-      await createOrderNotification(order.userId, order.orderNumber, "ready_for_pickup");
+      const driverFullName = `${driver.firstName} ${driver.familyName}`;
+      await createDriverAssignedNotification(order.userId, order.orderNumber, driverFullName, driver.mobile);
     }
     // 2. Notify driver about the assignment
     const addressStr = order.deliveryAddress ? 

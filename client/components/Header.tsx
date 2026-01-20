@@ -83,10 +83,11 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
   const { messages: chatMessages, unreadCount: chatUnreadCount, sendMessage: sendChatMessage, markAsRead: markChatAsRead } = useUserChat(user?.id);
 
   // Filter notifications for user (exclude admin-only types like stock)
-  // Types can be: order, order_placed, order_confirmed, order_delivered, delivery, delivery_in_transit, payment, system
+  // Types can be: order, order_placed, order_confirmed, order_delivered, delivery, delivery_in_transit, driver_assigned, payment, system
   const userNotifications = notifications.filter(n => 
     n.type.startsWith("order") || 
     n.type.startsWith("delivery") || 
+    n.type.startsWith("driver") || 
     n.type.startsWith("payment") || 
     n.type === "system"
   ).slice(0, 10);
