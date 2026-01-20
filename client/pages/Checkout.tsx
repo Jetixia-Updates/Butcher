@@ -707,10 +707,10 @@ export default function CheckoutPage() {
   const expressDeliveryFee = matchedZone?.expressFee ? Number(matchedZone.expressFee) : 25;
   const expressEnabled = matchedZone?.expressEnabled ?? true;
   const expressHours = matchedZone?.expressHours ?? 3;
-  const adjustedSubtotal = Math.round((subtotal - discountAmount) * 100) / 100;
+  const adjustedSubtotal = Math.round((Number(subtotal) - Number(discountAmount)) * 100) / 100;
   const adjustedVat = Math.round(adjustedSubtotal * 0.05 * 100) / 100;
-  const deliveryFeeTotal = isExpressDelivery ? expressDeliveryFee : zoneDeliveryFee;
-  const adjustedTotal = Math.round((adjustedSubtotal + adjustedVat + deliveryFeeTotal + driverTip) * 100) / 100;
+  const deliveryFeeTotal = isExpressDelivery ? Number(expressDeliveryFee) : Number(zoneDeliveryFee);
+  const adjustedTotal = Math.round((adjustedSubtotal + adjustedVat + deliveryFeeTotal + Number(driverTip)) * 100) / 100;
 
   // Helper function to get localized item name
   const getItemName = (item: typeof items[0]) => {
@@ -796,7 +796,7 @@ export default function CheckoutPage() {
     });
 
     if (zone) {
-      setZoneDeliveryFee(zone.deliveryFee);
+      setZoneDeliveryFee(Number(zone.deliveryFee) || 0);
       setMatchedZone(zone);
     } else {
       // Fallback: try to match just by emirate
@@ -804,7 +804,7 @@ export default function CheckoutPage() {
         z.emirate.toLowerCase() === currentAddress.emirate.toLowerCase()
       );
       if (emirateZone) {
-        setZoneDeliveryFee(emirateZone.deliveryFee);
+        setZoneDeliveryFee(Number(emirateZone.deliveryFee) || 0);
         setMatchedZone(emirateZone);
       } else {
         // No matching zone found - could show a warning or use default fee
