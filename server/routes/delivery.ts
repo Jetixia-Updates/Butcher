@@ -53,7 +53,10 @@ async function createOrderNotification(userId: string, orderNumber: string, stat
   };
 
   const content = notifications[status];
-  if (!content || !userId) return;
+  if (!content || !userId) {
+    console.log(`[Delivery Notification] Skipped - no content or userId. userId=${userId}, status=${status}`);
+    return;
+  }
 
   try {
     await db.insert(inAppNotifications).values({
@@ -64,15 +67,15 @@ async function createOrderNotification(userId: string, orderNumber: string, stat
       titleAr: content.titleAr,
       message: content.message,
       messageAr: content.messageAr,
-      link: null,
+      link: "/orders",
       linkTab: null,
       linkId: null,
       unread: true,
       createdAt: new Date(),
     });
-    console.log(`[Delivery Notification] Created notification for user ${userId}: ${status}`);
+    console.log(`[Delivery Notification] ✅ Created notification for user ${userId}: ${status} (Order: ${orderNumber})`);
   } catch (error) {
-    console.error(`[Delivery Notification] Failed to create notification:`, error);
+    console.error(`[Delivery Notification] ❌ Failed to create notification:`, error);
   }
 }
 

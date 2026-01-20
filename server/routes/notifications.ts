@@ -70,7 +70,10 @@ const getNotifications: RequestHandler = async (req, res) => {
     // Also support query param for userId (for admin fetching user notifications)
     const targetUserId = (req.query.userId as string) || userId;
     
+    console.log(`[Notifications] Fetching notifications for userId=${targetUserId} (tokenUserId=${userId})`);
+    
     if (!targetUserId) {
+      console.log(`[Notifications] ❌ Not authenticated - no userId found`);
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -84,6 +87,8 @@ const getNotifications: RequestHandler = async (req, res) => {
       .where(eq(inAppNotifications.userId, targetUserId))
       .orderBy(desc(inAppNotifications.createdAt))
       .limit(50);
+
+    console.log(`[Notifications] ✅ Found ${result.length} notifications for userId=${targetUserId}`);
 
     const response: ApiResponse<typeof result> = {
       success: true,

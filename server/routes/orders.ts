@@ -110,7 +110,10 @@ function getOrderStatusNotification(orderNumber: string, status: string): OrderN
 // Helper to create notification for a user (server-side)
 async function createOrderNotification(userId: string, orderNumber: string, status: string): Promise<void> {
   const content = getOrderStatusNotification(orderNumber, status);
-  if (!content || !userId) return;
+  if (!content || !userId) {
+    console.log(`[Notification] Skipped - no content or userId. userId=${userId}, status=${status}`);
+    return;
+  }
 
   try {
     const newNotification = {
@@ -121,7 +124,7 @@ async function createOrderNotification(userId: string, orderNumber: string, stat
       titleAr: content.titleAr,
       message: content.message,
       messageAr: content.messageAr,
-      link: null,
+      link: "/orders",
       linkTab: null,
       linkId: null,
       unread: true,
@@ -129,9 +132,9 @@ async function createOrderNotification(userId: string, orderNumber: string, stat
     };
 
     await db.insert(inAppNotifications).values(newNotification);
-    console.log(`[Notification] Created order notification for user ${userId}: ${status}`);
+    console.log(`[Notification] ✅ Created order notification for user ${userId}: ${status} (Order: ${orderNumber})`);
   } catch (error) {
-    console.error(`[Notification] Failed to create notification for user ${userId}:`, error);
+    console.error(`[Notification] ❌ Failed to create notification for user ${userId}:`, error);
   }
 }
 
@@ -598,9 +601,9 @@ const createOrder: RequestHandler = async (req, res) => {
         createdAt: new Date(),
       };
       await db.insert(inAppNotifications).values(customerNotification);
-      console.log(`[Order Notification] Customer notification created for order ${orderNumber}`);
+      console.log(`[Order Notification] ✅ Customer notification created for order ${orderNumber} (userId: ${userId})`);
     } catch (notifError) {
-      console.error(`[Order Notification] Failed to create customer notification:`, notifError);
+      console.error(`[Order Notification] ❌ Failed to create customer notification:`, notifError);
     }
 
     // Create notification for admin (new order received)
@@ -620,7 +623,7 @@ const createOrder: RequestHandler = async (req, res) => {
         createdAt: new Date(),
       };
       await db.insert(inAppNotifications).values(adminNotification);
-      console.log(`[Order Notification] Admin notification created for order ${orderNumber}`);
+      console.log(`[Order Notification] ✅ Admin notification created for order ${orderNumber}`);
     } catch (notifError) {
       console.error(`[Order Notification] Failed to create admin notification:`, notifError);
     }
