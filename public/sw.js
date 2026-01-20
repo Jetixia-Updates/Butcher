@@ -88,22 +88,33 @@ self.addEventListener('fetch', (event) => {
       caches.match(request).then((cachedResponse) => {
         if (cachedResponse) {
           // Return cached version but also update cache in background
-          fetch(request).then((response) => {
-            caches.open(DYNAMIC_CACHE).then((cache) => {
-              cache.put(request, response);
+          fetch(request)
+            .then((response) => {
+              if (response.ok) {
+                caches.open(DYNAMIC_CACHE).then((cache) => {
+                  cache.put(request, response);
+                });
+              }
+            })
+            .catch(() => {
+              // Ignore fetch errors for background updates - we already have cached version
             });
-          });
           return cachedResponse;
         }
 
         // Not in cache, fetch and cache
-        return fetch(request).then((response) => {
-          const responseClone = response.clone();
-          caches.open(DYNAMIC_CACHE).then((cache) => {
-            cache.put(request, responseClone);
+        return fetch(request)
+          .then((response) => {
+            const responseClone = response.clone();
+            caches.open(DYNAMIC_CACHE).then((cache) => {
+              cache.put(request, responseClone);
+            });
+            return response;
+          })
+          .catch(() => {
+            // Return a fallback for failed fetches
+            return new Response('', { status: 503, statusText: 'Service Unavailable' });
           });
-          return response;
-        });
       })
     );
     return;

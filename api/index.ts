@@ -252,6 +252,94 @@ const deliveryTrackingTable = pgTable("delivery_tracking", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Banners table
+const bannersTable = pgTable("banners", {
+  id: text("id").primaryKey(),
+  titleEn: varchar("title_en", { length: 200 }).notNull(),
+  titleAr: varchar("title_ar", { length: 200 }).notNull(),
+  subtitleEn: text("subtitle_en"),
+  subtitleAr: text("subtitle_ar"),
+  image: text("image"),
+  bgColor: varchar("bg_color", { length: 100 }).notNull().default("from-red-800 to-red-900"),
+  link: text("link"),
+  badge: varchar("badge", { length: 50 }),
+  badgeAr: varchar("badge_ar", { length: 50 }),
+  enabled: boolean("enabled").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Delivery time slots table
+const deliveryTimeSlotsTable = pgTable("delivery_time_slots", {
+  id: text("id").primaryKey(),
+  label: varchar("label", { length: 100 }).notNull(),
+  labelAr: varchar("label_ar", { length: 100 }).notNull(),
+  startTime: varchar("start_time", { length: 10 }).notNull(),
+  endTime: varchar("end_time", { length: 10 }).notNull(),
+  isExpressSlot: boolean("is_express_slot").notNull().default(false),
+  maxOrders: integer("max_orders").notNull().default(20),
+  enabled: boolean("enabled").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Discount codes / Promo codes table
+const discountCodeTypeEnum = pgEnum("discount_code_type", ["percentage", "fixed"]);
+const discountCodesTable = pgTable("discount_codes", {
+  id: text("id").primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  type: discountCodeTypeEnum("type").notNull(),
+  value: decimal("value", { precision: 10, scale: 2 }).notNull(),
+  minimumOrder: decimal("minimum_order", { precision: 10, scale: 2 }).notNull().default("0"),
+  maximumDiscount: decimal("maximum_discount", { precision: 10, scale: 2 }),
+  usageLimit: integer("usage_limit").notNull().default(0),
+  usageCount: integer("usage_count").notNull().default(0),
+  userLimit: integer("user_limit").notNull().default(1),
+  validFrom: timestamp("valid_from").notNull(),
+  validTo: timestamp("valid_to").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  applicableProducts: jsonb("applicable_products").$type<string[]>(),
+  applicableCategories: jsonb("applicable_categories").$type<string[]>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// App settings table
+const appSettingsTable = pgTable("app_settings", {
+  id: text("id").primaryKey().default("default"),
+  vatRate: decimal("vat_rate", { precision: 5, scale: 4 }).notNull().default("0.05"),
+  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull().default("15"),
+  freeDeliveryThreshold: decimal("free_delivery_threshold", { precision: 10, scale: 2 }).notNull().default("200"),
+  expressDeliveryFee: decimal("express_delivery_fee", { precision: 10, scale: 2 }).notNull().default("25"),
+  minimumOrderAmount: decimal("minimum_order_amount", { precision: 10, scale: 2 }).notNull().default("50"),
+  maxOrdersPerDay: integer("max_orders_per_day").notNull().default(100),
+  enableCashOnDelivery: boolean("enable_cash_on_delivery").notNull().default(true),
+  enableCardPayment: boolean("enable_card_payment").notNull().default(true),
+  enableWallet: boolean("enable_wallet").notNull().default(true),
+  enableLoyalty: boolean("enable_loyalty").notNull().default(true),
+  enableReviews: boolean("enable_reviews").notNull().default(true),
+  enableWishlist: boolean("enable_wishlist").notNull().default(true),
+  enableExpressDelivery: boolean("enable_express_delivery").notNull().default(true),
+  enableScheduledDelivery: boolean("enable_scheduled_delivery").notNull().default(true),
+  enableWelcomeBonus: boolean("enable_welcome_bonus").notNull().default(true),
+  welcomeBonus: decimal("welcome_bonus", { precision: 10, scale: 2 }).notNull().default("50"),
+  cashbackPercentage: decimal("cashback_percentage", { precision: 5, scale: 2 }).notNull().default("2"),
+  loyaltyPointsPerAed: decimal("loyalty_points_per_aed", { precision: 5, scale: 2 }).notNull().default("1"),
+  loyaltyPointValue: decimal("loyalty_point_value", { precision: 5, scale: 4 }).notNull().default("0.1"),
+  storePhone: varchar("store_phone", { length: 50 }),
+  storeEmail: varchar("store_email", { length: 255 }),
+  storeAddress: text("store_address"),
+  storeAddressAr: text("store_address_ar"),
+  workingHoursStart: varchar("working_hours_start", { length: 10 }).default("08:00"),
+  workingHoursEnd: varchar("working_hours_end", { length: 10 }).default("22:00"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Helper to generate IDs
+const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
 // Helper to check if DB is available
 const isDatabaseAvailable = () => !!pgDb;
 
@@ -4765,47 +4853,447 @@ function createApp() {
   // SETTINGS API
   // =====================================================
 
-  app.get('/api/settings', (req, res) => {
-    res.json({
-      success: true,
-      data: {
-        settings: {
-          id: 'settings_1',
-          vatRate: '0.05',
-          deliveryFee: '15.00',
-          freeDeliveryThreshold: '200.00',
-          expressDeliveryFee: '25.00',
-          minimumOrderAmount: '50.00',
-          maxOrdersPerDay: 100,
-          enableCashOnDelivery: true,
-          enableCardPayment: true,
-          enableWallet: true,
-          enableLoyalty: true,
-          enableReviews: true,
-          enableWishlist: true,
-          enableExpressDelivery: true,
-          enableScheduledDelivery: true,
-          enableWelcomeBonus: true,
-          welcomeBonus: '50.00',
-          cashbackPercentage: '2.00',
-          loyaltyPointsPerAed: '1.00',
-          loyaltyPointValue: '0.10',
-          storePhone: '+971501234567',
-          storeEmail: 'contact@butcher.ae',
-          storeAddress: 'Dubai, UAE',
-          storeAddressAr: 'دبي، الإمارات العربية المتحدة',
-          workingHoursStart: '08:00',
-          workingHoursEnd: '22:00',
+  app.get('/api/settings', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        // Fallback to static data if database not available
+        return res.json({
+          success: true,
+          data: {
+            settings: {
+              id: 'settings_1',
+              vatRate: '0.05',
+              deliveryFee: '15.00',
+              freeDeliveryThreshold: '200.00',
+              expressDeliveryFee: '25.00',
+              minimumOrderAmount: '50.00',
+              maxOrdersPerDay: 100,
+              enableCashOnDelivery: true,
+              enableCardPayment: true,
+              enableWallet: true,
+              enableLoyalty: true,
+              enableReviews: true,
+              enableWishlist: true,
+              enableExpressDelivery: true,
+              enableScheduledDelivery: true,
+              enableWelcomeBonus: true,
+              welcomeBonus: '50.00',
+              cashbackPercentage: '2.00',
+              loyaltyPointsPerAed: '1.00',
+              loyaltyPointValue: '0.10',
+              storePhone: '+971501234567',
+              storeEmail: 'contact@butcher.ae',
+              storeAddress: 'Dubai, UAE',
+              storeAddressAr: 'دبي، الإمارات العربية المتحدة',
+              workingHoursStart: '08:00',
+              workingHoursEnd: '22:00',
+            },
+            banners: [],
+            timeSlots: [],
+            promoCodes: [],
+          },
+        });
+      }
+
+      // Fetch settings from database
+      let settingsResult = await pgDb.select().from(appSettingsTable).where(eq(appSettingsTable.id, "default"));
+      const settings = settingsResult[0] || {
+        id: 'default',
+        vatRate: '0.05',
+        deliveryFee: '15.00',
+        freeDeliveryThreshold: '200.00',
+        expressDeliveryFee: '25.00',
+        minimumOrderAmount: '50.00',
+        maxOrdersPerDay: 100,
+        enableCashOnDelivery: true,
+        enableCardPayment: true,
+        enableWallet: true,
+        enableLoyalty: true,
+        enableReviews: true,
+        enableWishlist: true,
+        enableExpressDelivery: true,
+        enableScheduledDelivery: true,
+        enableWelcomeBonus: true,
+        welcomeBonus: '50.00',
+        cashbackPercentage: '2.00',
+        loyaltyPointsPerAed: '1.00',
+        loyaltyPointValue: '0.10',
+        storePhone: '+971501234567',
+        storeEmail: 'contact@butcher.ae',
+        storeAddress: 'Dubai, UAE',
+        storeAddressAr: 'دبي، الإمارات العربية المتحدة',
+        workingHoursStart: '08:00',
+        workingHoursEnd: '22:00',
+      };
+
+      // Fetch banners
+      const bannersResult = await pgDb.select().from(bannersTable);
+
+      // Fetch time slots
+      const timeSlotsResult = await pgDb.select().from(deliveryTimeSlotsTable);
+
+      // Fetch promo codes
+      const promoCodesResult = await pgDb.select().from(discountCodesTable);
+
+      res.json({
+        success: true,
+        data: {
+          settings,
+          banners: bannersResult,
+          timeSlots: timeSlotsResult,
+          promoCodes: promoCodesResult,
         },
-        banners: [],
-        timeSlots: [],
-        promoCodes: [],
-      },
-    });
+      });
+    } catch (error) {
+      console.error('[Get Settings Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch settings' });
+    }
   });
 
   app.put('/api/settings', (req, res) => {
     res.json({ success: true, data: req.body, message: 'Settings updated successfully' });
+  });
+
+  // =====================================================
+  // BANNERS API
+  // =====================================================
+
+  // POST /api/settings/banners - Create banner
+  app.post('/api/settings/banners', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { titleEn, titleAr, subtitleEn, subtitleAr, image, bgColor, link, badge, badgeAr, enabled } = req.body;
+      
+      // Get existing banners count for sortOrder
+      const existing = await pgDb.select().from(bannersTable);
+      const sortOrder = existing.length;
+
+      const newBanner = {
+        id: generateId("banner"),
+        titleEn,
+        titleAr,
+        subtitleEn,
+        subtitleAr,
+        image,
+        bgColor: bgColor || "from-red-800 to-red-900",
+        link,
+        badge,
+        badgeAr,
+        enabled: enabled !== false,
+        sortOrder,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await pgDb.insert(bannersTable).values(newBanner);
+
+      res.status(201).json({
+        success: true,
+        data: {
+          ...newBanner,
+          createdAt: newBanner.createdAt.toISOString(),
+          updatedAt: newBanner.updatedAt.toISOString(),
+        },
+        message: 'Banner created successfully',
+      });
+    } catch (error) {
+      console.error('[Create Banner Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create banner' });
+    }
+  });
+
+  // PUT /api/settings/banners/:id - Update banner
+  app.put('/api/settings/banners/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const updates = req.body;
+
+      await pgDb.update(bannersTable).set({
+        ...updates,
+        updatedAt: new Date(),
+      }).where(eq(bannersTable.id, id));
+
+      const updated = await pgDb.select().from(bannersTable).where(eq(bannersTable.id, id));
+
+      res.json({
+        success: true,
+        data: updated[0],
+        message: 'Banner updated successfully',
+      });
+    } catch (error) {
+      console.error('[Update Banner Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update banner' });
+    }
+  });
+
+  // DELETE /api/settings/banners/:id - Delete banner
+  app.delete('/api/settings/banners/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await pgDb.delete(bannersTable).where(eq(bannersTable.id, id));
+
+      res.json({
+        success: true,
+        message: 'Banner deleted successfully',
+      });
+    } catch (error) {
+      console.error('[Delete Banner Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete banner' });
+    }
+  });
+
+  // =====================================================
+  // TIME SLOTS API
+  // =====================================================
+
+  // POST /api/settings/time-slots - Create time slot
+  app.post('/api/settings/time-slots', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { label, labelAr, startTime, endTime, isExpressSlot, maxOrders, enabled } = req.body;
+      
+      const existing = await pgDb.select().from(deliveryTimeSlotsTable);
+      const sortOrder = existing.length;
+
+      const newSlot = {
+        id: generateId("slot"),
+        label,
+        labelAr,
+        startTime,
+        endTime,
+        isExpressSlot: isExpressSlot || false,
+        maxOrders: maxOrders || 20,
+        enabled: enabled !== false,
+        sortOrder,
+        createdAt: new Date(),
+      };
+
+      await pgDb.insert(deliveryTimeSlotsTable).values(newSlot);
+
+      res.status(201).json({
+        success: true,
+        data: { ...newSlot, createdAt: newSlot.createdAt.toISOString() },
+        message: 'Time slot created successfully',
+      });
+    } catch (error) {
+      console.error('[Create Time Slot Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create time slot' });
+    }
+  });
+
+  // PUT /api/settings/time-slots/:id - Update time slot
+  app.put('/api/settings/time-slots/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await pgDb.update(deliveryTimeSlotsTable).set(req.body).where(eq(deliveryTimeSlotsTable.id, id));
+      const updated = await pgDb.select().from(deliveryTimeSlotsTable).where(eq(deliveryTimeSlotsTable.id, id));
+
+      res.json({
+        success: true,
+        data: updated[0],
+        message: 'Time slot updated successfully',
+      });
+    } catch (error) {
+      console.error('[Update Time Slot Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update time slot' });
+    }
+  });
+
+  // DELETE /api/settings/time-slots/:id - Delete time slot
+  app.delete('/api/settings/time-slots/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await pgDb.delete(deliveryTimeSlotsTable).where(eq(deliveryTimeSlotsTable.id, id));
+
+      res.json({
+        success: true,
+        message: 'Time slot deleted successfully',
+      });
+    } catch (error) {
+      console.error('[Delete Time Slot Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete time slot' });
+    }
+  });
+
+  // =====================================================
+  // PROMO CODES API
+  // =====================================================
+
+  // POST /api/settings/promo-codes - Create promo code
+  app.post('/api/settings/promo-codes', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { code, type, value, minimumOrder, maximumDiscount, usageLimit, userLimit, validFrom, validTo, applicableProducts, applicableCategories } = req.body;
+
+      const newCode = {
+        id: generateId("promo"),
+        code: code.toUpperCase(),
+        type,
+        value: String(value),
+        minimumOrder: String(minimumOrder || 0),
+        maximumDiscount: maximumDiscount ? String(maximumDiscount) : null,
+        usageLimit: usageLimit || 0,
+        usageCount: 0,
+        userLimit: userLimit || 1,
+        validFrom: new Date(validFrom),
+        validTo: new Date(validTo),
+        isActive: true,
+        applicableProducts,
+        applicableCategories,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await pgDb.insert(discountCodesTable).values(newCode);
+
+      res.status(201).json({
+        success: true,
+        data: { ...newCode, validFrom: newCode.validFrom.toISOString(), validTo: newCode.validTo.toISOString(), createdAt: newCode.createdAt.toISOString(), updatedAt: newCode.updatedAt.toISOString() },
+        message: 'Promo code created successfully',
+      });
+    } catch (error) {
+      console.error('[Create Promo Code Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create promo code' });
+    }
+  });
+
+  // PUT /api/settings/promo-codes/:id - Update promo code
+  app.put('/api/settings/promo-codes/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const updates = { ...req.body };
+
+      if (updates.value) updates.value = String(updates.value);
+      if (updates.minimumOrder) updates.minimumOrder = String(updates.minimumOrder);
+      if (updates.maximumDiscount) updates.maximumDiscount = String(updates.maximumDiscount);
+      if (updates.validFrom) updates.validFrom = new Date(updates.validFrom);
+      if (updates.validTo) updates.validTo = new Date(updates.validTo);
+      updates.updatedAt = new Date();
+
+      await pgDb.update(discountCodesTable).set(updates).where(eq(discountCodesTable.id, id));
+      const updated = await pgDb.select().from(discountCodesTable).where(eq(discountCodesTable.id, id));
+
+      res.json({
+        success: true,
+        data: updated[0],
+        message: 'Promo code updated successfully',
+      });
+    } catch (error) {
+      console.error('[Update Promo Code Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update promo code' });
+    }
+  });
+
+  // DELETE /api/settings/promo-codes/:id - Delete promo code
+  app.delete('/api/settings/promo-codes/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await pgDb.delete(discountCodesTable).where(eq(discountCodesTable.id, id));
+
+      res.json({
+        success: true,
+        message: 'Promo code deleted successfully',
+      });
+    } catch (error) {
+      console.error('[Delete Promo Code Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete promo code' });
+    }
+  });
+
+  // POST /api/settings/promo-codes/validate - Validate promo code
+  app.post('/api/settings/promo-codes/validate', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { code, orderTotal } = req.body;
+
+      const promoCode = await pgDb.select().from(discountCodesTable).where(eq(discountCodesTable.code, code.toUpperCase()));
+
+      if (promoCode.length === 0) {
+        return res.status(400).json({ success: false, error: 'Invalid promo code' });
+      }
+
+      const promo = promoCode[0];
+
+      if (!promo.isActive) {
+        return res.status(400).json({ success: false, error: 'This promo code is no longer active' });
+      }
+
+      const now = new Date();
+      if (now < promo.validFrom || now > promo.validTo) {
+        return res.status(400).json({ success: false, error: 'This promo code has expired' });
+      }
+
+      if (promo.usageLimit > 0 && promo.usageCount >= promo.usageLimit) {
+        return res.status(400).json({ success: false, error: 'This promo code has reached its usage limit' });
+      }
+
+      if (orderTotal < parseFloat(String(promo.minimumOrder))) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Minimum order of ${parseFloat(String(promo.minimumOrder))} AED required` 
+        });
+      }
+
+      let discount = 0;
+      if (promo.type === "percentage") {
+        discount = orderTotal * (parseFloat(String(promo.value)) / 100);
+        if (promo.maximumDiscount && discount > parseFloat(String(promo.maximumDiscount))) {
+          discount = parseFloat(String(promo.maximumDiscount));
+        }
+      } else {
+        discount = parseFloat(String(promo.value));
+      }
+
+      res.json({
+        success: true,
+        data: {
+          valid: true,
+          code: promo.code,
+          type: promo.type,
+          value: parseFloat(String(promo.value)),
+          discount: Math.round(discount * 100) / 100,
+        },
+      });
+    } catch (error) {
+      console.error('[Validate Promo Code Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to validate promo code' });
+    }
   });
 
   // =====================================================
