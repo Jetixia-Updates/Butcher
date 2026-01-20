@@ -963,7 +963,54 @@ export interface SupplierStats {
 
 export type TransactionType = "sale" | "refund" | "expense" | "purchase" | "adjustment" | "payout";
 export type TransactionStatus = "pending" | "completed" | "failed" | "cancelled";
-export type ExpenseCategory = "inventory" | "utilities" | "salaries" | "rent" | "marketing" | "equipment" | "maintenance" | "delivery" | "taxes" | "other";
+
+// IFRS/IAS 1 Compliant Expense Categories (Nature-based)
+export type ExpenseCategory =
+  // Cost of Sales (COGS)
+  | "inventory"           // Raw materials and goods
+  | "direct_labor"        // Direct wages
+  | "freight_in"          // Inbound shipping
+  // Operating Expenses - Selling & Distribution
+  | "marketing"           // Advertising, promotions
+  | "delivery"            // Outbound shipping, delivery costs
+  | "sales_commission"    // Sales commissions
+  // Operating Expenses - Administrative
+  | "salaries"            // Admin salaries & wages
+  | "rent"                // Office/warehouse rent
+  | "utilities"           // Electric, water, internet
+  | "office_supplies"     // Stationery, supplies
+  | "insurance"           // Business insurance
+  | "professional_fees"   // Legal, accounting, consulting
+  | "licenses_permits"    // Business licenses
+  | "bank_charges"        // Bank fees, transaction costs
+  // Fixed Asset Related
+  | "equipment"           // Equipment purchases
+  | "maintenance"         // Repairs & maintenance
+  | "depreciation"        // Asset depreciation
+  | "amortization"        // Intangible amortization
+  // Finance Costs
+  | "interest_expense"    // Loan interest
+  | "finance_charges"     // Late fees, finance costs
+  // Taxes & Government
+  | "taxes"               // Non-VAT taxes
+  | "government_fees"     // Govt charges, fines
+  // Employee Benefits (IAS 19)
+  | "employee_benefits"   // Health, pension, end of service
+  | "training"            // Staff training
+  | "travel"              // Business travel
+  | "meals_entertainment" // Client entertainment
+  // Other
+  | "other";              // Miscellaneous
+
+// Expense Function Classification (IAS 1 - By Function)
+export type ExpenseFunction = "cost_of_sales" | "selling" | "administrative" | "finance" | "other_operating";
+
+// Approval Status
+export type ApprovalStatus = "draft" | "pending_approval" | "approved" | "rejected" | "cancelled";
+
+// Payment Terms
+export type PaymentTerms = "immediate" | "net_7" | "net_15" | "net_30" | "net_45" | "net_60" | "net_90" | "eom" | "custom";
+
 export type AccountType = "cash" | "bank" | "card_payments" | "cod_collections" | "petty_cash";
 
 export interface FinanceTransaction {
@@ -1006,26 +1053,218 @@ export interface FinanceAccount {
 
 export interface FinanceExpense {
   id: string;
+  expenseNumber: string;
+  
+  // Classification (IFRS/IAS 1)
   category: ExpenseCategory;
-  amount: number;
+  function?: ExpenseFunction;
+  
+  // Amounts
+  grossAmount: number;
+  vatAmount: number;
+  vatRate: number;
+  isVatRecoverable: boolean;
+  withholdingTax: number;
+  amount: number; // Net amount
   currency: Currency;
+  exchangeRate?: number;
+  baseCurrencyAmount?: number;
+  
+  // Description
   description: string;
   descriptionAr?: string;
+  
+  // Vendor/Supplier
+  vendorId?: string;
   vendor?: string;
+  vendorTrn?: string;
+  
+  // Invoice Details
   invoiceNumber?: string;
   invoiceDate?: string;
+  receivedDate?: string;
+  
+  // Payment Terms
+  paymentTerms?: PaymentTerms;
   dueDate?: string;
+  earlyPaymentDiscount?: number;
+  earlyPaymentDays?: number;
+  daysOverdue?: number; // Computed field for aging
+  
+  // Payment Info
   paidAt?: string;
-  status: "pending" | "paid" | "overdue" | "cancelled";
+  paidAmount?: number;
+  paymentReference?: string;
+  paymentMethod?: "bank_transfer" | "cash" | "card" | "cheque";
+  
+  // Status & Workflow
+  status: "pending" | "approved" | "paid" | "overdue" | "cancelled" | "reimbursed";
+  approvalStatus?: ApprovalStatus;
+  
+  // Cost Allocation
+  costCenterId?: string;
+  costCenterName?: string;
+  projectId?: string;
+  projectName?: string;
+  departmentId?: string;
+  departmentName?: string;
+  
+  // GL Integration
   accountId?: string;
+  glAccountCode?: string;
+  journalEntryId?: string;
+  
+  // Approval Workflow
   createdBy: string;
+  submittedBy?: string;
+  submittedAt?: string;
   approvedBy?: string;
-  createdAt: string;
-  updatedAt: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  
+  // Reimbursement
+  isReimbursement?: boolean;
+  employeeId?: string;
+  reimbursedAt?: string;
+  
+  // Documentation
   attachments?: string[];
   notes?: string;
+  internalNotes?: string;
+  
+  // Recurring
   isRecurring?: boolean;
   recurringFrequency?: "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
+  recurringEndDate?: string;
+  parentExpenseId?: string;
+  
+  // Audit
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Cost Center
+export interface CostCenter {
+  id: string;
+  code: string;
+  name: string;
+  nameAr?: string;
+  description?: string;
+  parentId?: string;
+  managerId?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Expense Budget
+export interface ExpenseBudget {
+  id: string;
+  name: string;
+  periodType: "monthly" | "quarterly" | "yearly";
+  startDate: string;
+  endDate: string;
+  category?: ExpenseCategory;
+  costCenterId?: string;
+  departmentId?: string;
+  budgetAmount: number;
+  spentAmount: number;
+  remainingAmount: number;
+  percentUsed: number; // Computed
+  alertThreshold: number;
+  isAlertSent: boolean;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Vendor/Supplier
+export interface Vendor {
+  id: string;
+  code: string;
+  name: string;
+  nameAr?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  website?: string;
+  address?: string;
+  city?: string;
+  emirate?: string;
+  country: string;
+  trn?: string;
+  tradeLicense?: string;
+  defaultPaymentTerms: PaymentTerms;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankIban?: string;
+  bankSwift?: string;
+  category?: "supplier" | "contractor" | "service_provider";
+  expenseCategories?: ExpenseCategory[];
+  openingBalance: number;
+  currentBalance: number;
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Expense Approval Rule
+export interface ExpenseApprovalRule {
+  id: string;
+  name: string;
+  minAmount: number;
+  maxAmount?: number;
+  category?: ExpenseCategory;
+  costCenterId?: string;
+  approverLevel: number;
+  approverId?: string;
+  approverRole?: string;
+  requiresAllApprovers: boolean;
+  autoApproveBelow?: number;
+  isActive: boolean;
+  priority: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Aging Report
+export interface AgingReport {
+  asOfDate: string;
+  summary: {
+    current: number;    // Not yet due
+    days1to30: number;
+    days31to60: number;
+    days61to90: number;
+    over90Days: number;
+    total: number;
+  };
+  byVendor: {
+    vendorId: string;
+    vendorName: string;
+    current: number;
+    days1to30: number;
+    days31to60: number;
+    days61to90: number;
+    over90Days: number;
+    total: number;
+  }[];
+  details: {
+    expenseId: string;
+    expenseNumber: string;
+    vendorName: string;
+    invoiceNumber: string;
+    invoiceDate: string;
+    dueDate: string;
+    amount: number;
+    paidAmount: number;
+    balance: number;
+    daysOverdue: number;
+    agingBucket: "current" | "1-30" | "31-60" | "61-90" | "90+";
+  }[];
 }
 
 export interface FinanceSummary {
@@ -1157,18 +1396,103 @@ export interface VATReport {
 }
 
 export interface CreateExpenseRequest {
+  // Required fields
   category: ExpenseCategory;
-  amount: number;
+  grossAmount: number;
   description: string;
+  
+  // Classification
+  function?: ExpenseFunction;
+  
+  // VAT
+  vatAmount?: number;
+  vatRate?: number;
+  isVatRecoverable?: boolean;
+  withholdingTax?: number;
+  
+  // Optional fields
   descriptionAr?: string;
+  vendorId?: string;
   vendor?: string;
+  vendorTrn?: string;
   invoiceNumber?: string;
   invoiceDate?: string;
+  receivedDate?: string;
+  
+  // Payment Terms
+  paymentTerms?: PaymentTerms;
   dueDate?: string;
+  
+  // Cost Allocation
+  costCenterId?: string;
+  costCenterName?: string;
+  projectId?: string;
+  projectName?: string;
+  departmentId?: string;
+  departmentName?: string;
+  
+  // GL
   accountId?: string;
+  glAccountCode?: string;
+  
+  // Reimbursement
+  isReimbursement?: boolean;
+  employeeId?: string;
+  
+  // Documentation
   notes?: string;
+  attachments?: string[];
+  
+  // Recurring
   isRecurring?: boolean;
   recurringFrequency?: "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
+  recurringEndDate?: string;
+}
+
+// Create Vendor Request
+export interface CreateVendorRequest {
+  name: string;
+  nameAr?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  address?: string;
+  city?: string;
+  emirate?: string;
+  country?: string;
+  trn?: string;
+  tradeLicense?: string;
+  defaultPaymentTerms?: PaymentTerms;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankIban?: string;
+  bankSwift?: string;
+  category?: "supplier" | "contractor" | "service_provider";
+  openingBalance?: number;
+  notes?: string;
+}
+
+// Create Budget Request
+export interface CreateBudgetRequest {
+  name: string;
+  periodType: "monthly" | "quarterly" | "yearly";
+  startDate: string;
+  endDate: string;
+  category?: ExpenseCategory;
+  costCenterId?: string;
+  departmentId?: string;
+  budgetAmount: number;
+  alertThreshold?: number;
+}
+
+// Create Cost Center Request
+export interface CreateCostCenterRequest {
+  code: string;
+  name: string;
+  nameAr?: string;
+  description?: string;
+  parentId?: string;
+  managerId?: string;
 }
 
 // =====================================================

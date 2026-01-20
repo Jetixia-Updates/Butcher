@@ -515,6 +515,468 @@ const markExpensePaid: RequestHandler = async (req, res) => {
 };
 
 // =====================================================
+// VENDORS
+// =====================================================
+
+const getVendors: RequestHandler = async (req, res) => {
+  try {
+    // Return sample vendors (would come from vendors table in production)
+    const sampleVendors = [
+      {
+        id: "v-001",
+        code: "V-001",
+        name: "Al Ain Farms",
+        nameAr: "مزارع العين",
+        email: "accounts@alainfarms.ae",
+        phone: "+971 4 123 4567",
+        trn: "100123456789003",
+        defaultPaymentTerms: "net_30",
+        currentBalance: 15000,
+        isActive: true,
+        category: "supplier",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "v-002",
+        code: "V-002", 
+        name: "Emirates Spices",
+        nameAr: "توابل الإمارات",
+        email: "billing@emiratesspices.com",
+        phone: "+971 4 987 6543",
+        trn: "100987654321003",
+        defaultPaymentTerms: "net_15",
+        currentBalance: 5200,
+        isActive: true,
+        category: "supplier",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    res.json({ success: true, data: sampleVendors });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get vendors" });
+  }
+};
+
+const createVendor: RequestHandler = async (req, res) => {
+  try {
+    const data = req.body;
+    const newVendor = {
+      id: generateId("v"),
+      code: `V-${String(Date.now()).slice(-4)}`,
+      ...data,
+      currentBalance: data.openingBalance || 0,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    res.status(201).json({ success: true, data: newVendor });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to create vendor" });
+  }
+};
+
+const getVendorById: RequestHandler = async (req, res) => {
+  try {
+    const vendor = {
+      id: req.params.id,
+      code: "V-001",
+      name: "Sample Vendor",
+      currentBalance: 0,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    res.json({ success: true, data: vendor });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get vendor" });
+  }
+};
+
+// =====================================================
+// COST CENTERS
+// =====================================================
+
+const getCostCenters: RequestHandler = async (req, res) => {
+  try {
+    const sampleCostCenters = [
+      { id: "cc-001", code: "CC-OPS", name: "Operations", nameAr: "العمليات", isActive: true },
+      { id: "cc-002", code: "CC-ADMIN", name: "Administration", nameAr: "الإدارة", isActive: true },
+      { id: "cc-003", code: "CC-SALES", name: "Sales & Marketing", nameAr: "المبيعات والتسويق", isActive: true },
+      { id: "cc-004", code: "CC-DELIVERY", name: "Delivery", nameAr: "التوصيل", isActive: true },
+      { id: "cc-005", code: "CC-WAREHOUSE", name: "Warehouse", nameAr: "المستودع", isActive: true },
+    ];
+    res.json({ success: true, data: sampleCostCenters });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get cost centers" });
+  }
+};
+
+const createCostCenter: RequestHandler = async (req, res) => {
+  try {
+    const data = req.body;
+    const newCostCenter = {
+      id: generateId("cc"),
+      ...data,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    res.status(201).json({ success: true, data: newCostCenter });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to create cost center" });
+  }
+};
+
+// =====================================================
+// EXPENSE BUDGETS
+// =====================================================
+
+const getBudgets: RequestHandler = async (req, res) => {
+  try {
+    const sampleBudgets = [
+      {
+        id: "bud-001",
+        name: "Operations Q1 2026",
+        periodType: "quarterly",
+        startDate: "2026-01-01",
+        endDate: "2026-03-31",
+        category: null,
+        costCenterId: "cc-001",
+        budgetAmount: 50000,
+        spentAmount: 22500,
+        remainingAmount: 27500,
+        percentUsed: 45,
+        alertThreshold: 80,
+        isAlertSent: false,
+        isActive: true,
+      },
+      {
+        id: "bud-002",
+        name: "Marketing Monthly",
+        periodType: "monthly",
+        startDate: "2026-01-01",
+        endDate: "2026-01-31",
+        category: "marketing",
+        costCenterId: null,
+        budgetAmount: 10000,
+        spentAmount: 7800,
+        remainingAmount: 2200,
+        percentUsed: 78,
+        alertThreshold: 80,
+        isAlertSent: false,
+        isActive: true,
+      },
+      {
+        id: "bud-003",
+        name: "Delivery Expenses 2026",
+        periodType: "yearly",
+        startDate: "2026-01-01",
+        endDate: "2026-12-31",
+        category: "delivery",
+        costCenterId: "cc-004",
+        budgetAmount: 120000,
+        spentAmount: 8500,
+        remainingAmount: 111500,
+        percentUsed: 7,
+        alertThreshold: 80,
+        isAlertSent: false,
+        isActive: true,
+      },
+    ];
+    res.json({ success: true, data: sampleBudgets });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get budgets" });
+  }
+};
+
+const createBudget: RequestHandler = async (req, res) => {
+  try {
+    const data = req.body;
+    const newBudget = {
+      id: generateId("bud"),
+      ...data,
+      spentAmount: 0,
+      remainingAmount: data.budgetAmount,
+      percentUsed: 0,
+      isAlertSent: false,
+      isActive: true,
+      createdBy: "admin",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    res.status(201).json({ success: true, data: newBudget });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to create budget" });
+  }
+};
+
+const getBudgetVsActual: RequestHandler = async (req, res) => {
+  try {
+    const report = {
+      period: req.query.period || "quarter",
+      asOfDate: new Date().toISOString(),
+      summary: {
+        totalBudget: 180000,
+        totalSpent: 38800,
+        totalRemaining: 141200,
+        overallVariance: 141200,
+        overallVariancePercent: 78.4,
+      },
+      byCategory: [
+        { category: "marketing", budget: 10000, actual: 7800, variance: 2200, variancePercent: 22 },
+        { category: "delivery", budget: 10000, actual: 8500, variance: 1500, variancePercent: 15 },
+        { category: "salaries", budget: 80000, actual: 18000, variance: 62000, variancePercent: 77.5 },
+        { category: "utilities", budget: 5000, actual: 2500, variance: 2500, variancePercent: 50 },
+        { category: "rent", budget: 25000, budget_actual: 0, variance: 25000, variancePercent: 100 },
+      ],
+      byCostCenter: [
+        { costCenter: "Operations", budget: 50000, actual: 22500, variance: 27500, variancePercent: 55 },
+        { costCenter: "Sales & Marketing", budget: 30000, actual: 7800, variance: 22200, variancePercent: 74 },
+        { costCenter: "Delivery", budget: 40000, actual: 8500, variance: 31500, variancePercent: 78.75 },
+      ],
+    };
+    res.json({ success: true, data: report });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get budget vs actual report" });
+  }
+};
+
+// =====================================================
+// AGING REPORT
+// =====================================================
+
+const getAgingReport: RequestHandler = async (req, res) => {
+  try {
+    // Get all unpaid expenses
+    const allExpenses = await db.select().from(financeExpenses);
+    const unpaidExpenses = allExpenses.filter(e => e.status !== "paid" && e.status !== "cancelled");
+    
+    const today = new Date();
+    const summary = { current: 0, days1to30: 0, days31to60: 0, days61to90: 0, over90Days: 0, total: 0 };
+    const byVendorMap: Record<string, any> = {};
+    const details: any[] = [];
+
+    unpaidExpenses.forEach(expense => {
+      const dueDate = expense.dueDate ? new Date(expense.dueDate) : new Date(expense.createdAt);
+      const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+      const amount = Number(expense.amount);
+      const paidAmount = Number(expense.paidAt ? expense.amount : 0);
+      const balance = amount - paidAmount;
+      
+      let bucket: "current" | "1-30" | "31-60" | "61-90" | "90+" = "current";
+      if (daysOverdue <= 0) {
+        summary.current += balance;
+        bucket = "current";
+      } else if (daysOverdue <= 30) {
+        summary.days1to30 += balance;
+        bucket = "1-30";
+      } else if (daysOverdue <= 60) {
+        summary.days31to60 += balance;
+        bucket = "31-60";
+      } else if (daysOverdue <= 90) {
+        summary.days61to90 += balance;
+        bucket = "61-90";
+      } else {
+        summary.over90Days += balance;
+        bucket = "90+";
+      }
+      summary.total += balance;
+
+      // By vendor
+      const vendorName = expense.vendor || "Unknown";
+      if (!byVendorMap[vendorName]) {
+        byVendorMap[vendorName] = { vendorId: "", vendorName, current: 0, days1to30: 0, days31to60: 0, days61to90: 0, over90Days: 0, total: 0 };
+      }
+      if (daysOverdue <= 0) byVendorMap[vendorName].current += balance;
+      else if (daysOverdue <= 30) byVendorMap[vendorName].days1to30 += balance;
+      else if (daysOverdue <= 60) byVendorMap[vendorName].days31to60 += balance;
+      else if (daysOverdue <= 90) byVendorMap[vendorName].days61to90 += balance;
+      else byVendorMap[vendorName].over90Days += balance;
+      byVendorMap[vendorName].total += balance;
+
+      details.push({
+        expenseId: expense.id,
+        expenseNumber: expense.id,
+        vendorName,
+        invoiceNumber: expense.invoiceNumber || "-",
+        invoiceDate: expense.invoiceDate?.toISOString() || expense.createdAt.toISOString(),
+        dueDate: dueDate.toISOString(),
+        amount,
+        paidAmount,
+        balance,
+        daysOverdue: Math.max(0, daysOverdue),
+        agingBucket: bucket,
+      });
+    });
+
+    res.json({
+      success: true,
+      data: {
+        asOfDate: today.toISOString(),
+        summary,
+        byVendor: Object.values(byVendorMap),
+        details,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get aging report" });
+  }
+};
+
+// =====================================================
+// EXPENSE APPROVAL WORKFLOW
+// =====================================================
+
+const getApprovalRules: RequestHandler = async (req, res) => {
+  try {
+    const rules = [
+      { id: "rule-001", name: "Auto-approve small expenses", minAmount: 0, maxAmount: 500, autoApproveBelow: 500, approverLevel: 0, isActive: true },
+      { id: "rule-002", name: "Manager approval (500-5000)", minAmount: 500, maxAmount: 5000, approverRole: "manager", approverLevel: 1, isActive: true },
+      { id: "rule-003", name: "Finance approval (5000-20000)", minAmount: 5000, maxAmount: 20000, approverRole: "finance", approverLevel: 2, isActive: true },
+      { id: "rule-004", name: "CFO approval (20000+)", minAmount: 20000, maxAmount: null, approverRole: "cfo", approverLevel: 3, isActive: true },
+    ];
+    res.json({ success: true, data: rules });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get approval rules" });
+  }
+};
+
+const getPendingApprovals: RequestHandler = async (req, res) => {
+  try {
+    const allExpenses = await db.select().from(financeExpenses);
+    const pending = allExpenses.filter(e => e.approvedBy === null && e.status === "pending");
+    res.json({ success: true, data: pending });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get pending approvals" });
+  }
+};
+
+const approveExpense: RequestHandler = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approverId, notes } = req.body;
+    
+    const expenses = await db.select().from(financeExpenses).where(eq(financeExpenses.id, id));
+    if (expenses.length === 0) {
+      return res.status(404).json({ success: false, error: "Expense not found" });
+    }
+
+    const [updated] = await db.update(financeExpenses)
+      .set({
+        approvedBy: approverId || "admin",
+        status: "approved",
+        updatedAt: new Date(),
+      })
+      .where(eq(financeExpenses.id, id))
+      .returning();
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to approve expense" });
+  }
+};
+
+const rejectExpense: RequestHandler = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rejectedBy, reason } = req.body;
+    
+    const expenses = await db.select().from(financeExpenses).where(eq(financeExpenses.id, id));
+    if (expenses.length === 0) {
+      return res.status(404).json({ success: false, error: "Expense not found" });
+    }
+
+    const [updated] = await db.update(financeExpenses)
+      .set({
+        status: "cancelled",
+        notes: reason ? `Rejected: ${reason}` : "Rejected",
+        updatedAt: new Date(),
+      })
+      .where(eq(financeExpenses.id, id))
+      .returning();
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to reject expense" });
+  }
+};
+
+const submitForApproval: RequestHandler = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const expenses = await db.select().from(financeExpenses).where(eq(financeExpenses.id, id));
+    if (expenses.length === 0) {
+      return res.status(404).json({ success: false, error: "Expense not found" });
+    }
+
+    // In production, would check approval rules and route to correct approver
+    const [updated] = await db.update(financeExpenses)
+      .set({
+        status: "pending",
+        updatedAt: new Date(),
+      })
+      .where(eq(financeExpenses.id, id))
+      .returning();
+
+    res.json({ success: true, data: updated, message: "Submitted for approval" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to submit for approval" });
+  }
+};
+
+// =====================================================
+// EXPENSE CATEGORIES MAPPING (IFRS)
+// =====================================================
+
+const getExpenseCategories: RequestHandler = async (req, res) => {
+  try {
+    const categories = [
+      // COGS
+      { code: "inventory", name: "Inventory / Raw Materials", nameAr: "المخزون", function: "cost_of_sales", glCode: "5100" },
+      { code: "direct_labor", name: "Direct Labor", nameAr: "العمالة المباشرة", function: "cost_of_sales", glCode: "5110" },
+      { code: "freight_in", name: "Freight In", nameAr: "الشحن الداخلي", function: "cost_of_sales", glCode: "5120" },
+      // Selling & Distribution
+      { code: "marketing", name: "Marketing & Advertising", nameAr: "التسويق والإعلان", function: "selling", glCode: "5200" },
+      { code: "delivery", name: "Delivery & Shipping", nameAr: "التوصيل والشحن", function: "selling", glCode: "5210" },
+      { code: "sales_commission", name: "Sales Commission", nameAr: "عمولة المبيعات", function: "selling", glCode: "5220" },
+      // Administrative
+      { code: "salaries", name: "Salaries & Wages", nameAr: "الرواتب والأجور", function: "administrative", glCode: "5300" },
+      { code: "rent", name: "Rent", nameAr: "الإيجار", function: "administrative", glCode: "5310" },
+      { code: "utilities", name: "Utilities", nameAr: "المرافق", function: "administrative", glCode: "5320" },
+      { code: "office_supplies", name: "Office Supplies", nameAr: "مستلزمات المكتب", function: "administrative", glCode: "5330" },
+      { code: "insurance", name: "Insurance", nameAr: "التأمين", function: "administrative", glCode: "5340" },
+      { code: "professional_fees", name: "Professional Fees", nameAr: "الرسوم المهنية", function: "administrative", glCode: "5350" },
+      { code: "licenses_permits", name: "Licenses & Permits", nameAr: "الرخص والتصاريح", function: "administrative", glCode: "5360" },
+      { code: "bank_charges", name: "Bank Charges", nameAr: "رسوم البنك", function: "administrative", glCode: "5370" },
+      // Fixed Assets
+      { code: "equipment", name: "Equipment", nameAr: "المعدات", function: "administrative", glCode: "5400" },
+      { code: "maintenance", name: "Repairs & Maintenance", nameAr: "الصيانة والإصلاحات", function: "administrative", glCode: "5410" },
+      { code: "depreciation", name: "Depreciation", nameAr: "الإهلاك", function: "administrative", glCode: "5420" },
+      { code: "amortization", name: "Amortization", nameAr: "الإطفاء", function: "administrative", glCode: "5430" },
+      // Finance
+      { code: "interest_expense", name: "Interest Expense", nameAr: "مصروفات الفوائد", function: "finance", glCode: "5500" },
+      { code: "finance_charges", name: "Finance Charges", nameAr: "الرسوم المالية", function: "finance", glCode: "5510" },
+      // Taxes
+      { code: "taxes", name: "Taxes (Non-VAT)", nameAr: "الضرائب", function: "other_operating", glCode: "5600" },
+      { code: "government_fees", name: "Government Fees", nameAr: "الرسوم الحكومية", function: "other_operating", glCode: "5610" },
+      // Employee Benefits (IAS 19)
+      { code: "employee_benefits", name: "Employee Benefits", nameAr: "مزايا الموظفين", function: "administrative", glCode: "5700" },
+      { code: "training", name: "Training & Development", nameAr: "التدريب والتطوير", function: "administrative", glCode: "5710" },
+      { code: "travel", name: "Travel & Transportation", nameAr: "السفر والمواصلات", function: "administrative", glCode: "5720" },
+      { code: "meals_entertainment", name: "Meals & Entertainment", nameAr: "الوجبات والترفيه", function: "administrative", glCode: "5730" },
+      // Other
+      { code: "other", name: "Other Expenses", nameAr: "مصروفات أخرى", function: "other_operating", glCode: "5900" },
+    ];
+    res.json({ success: true, data: categories });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get expense categories" });
+  }
+};
+
+// =====================================================
 // REPORTS
 // =====================================================
 
@@ -1297,6 +1759,21 @@ router.post("/expenses", createExpense);
 router.put("/expenses/:id", updateExpense);
 router.delete("/expenses/:id", deleteExpense);
 router.post("/expenses/:id/pay", markExpensePaid);
+router.post("/expenses/:id/approve", approveExpense);
+router.post("/expenses/:id/reject", rejectExpense);
+router.post("/expenses/:id/submit", submitForApproval);
+router.get("/expenses/pending-approvals", getPendingApprovals);
+router.get("/expenses/categories", getExpenseCategories);
+router.get("/expenses/aging", getAgingReport);
+router.get("/vendors", getVendors);
+router.post("/vendors", createVendor);
+router.get("/vendors/:id", getVendorById);
+router.get("/cost-centers", getCostCenters);
+router.post("/cost-centers", createCostCenter);
+router.get("/budgets", getBudgets);
+router.post("/budgets", createBudget);
+router.get("/budgets/vs-actual", getBudgetVsActual);
+router.get("/approval-rules", getApprovalRules);
 router.get("/reports/profit-loss", getProfitLossReport);
 router.get("/reports/cash-flow", getCashFlowReport);
 router.get("/reports/vat", getVATReport);

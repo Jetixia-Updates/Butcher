@@ -90,20 +90,78 @@ export const transactionTypeEnum = pgEnum("transaction_type", [
   "payout",
 ]);
 export const transactionStatusEnum = pgEnum("transaction_status", ["pending", "completed", "failed", "cancelled"]);
+// IFRS/IAS 1 Compliant Expense Categories (Nature-based)
 export const expenseCategoryEnum = pgEnum("expense_category", [
-  "inventory",
-  "utilities",
-  "salaries",
-  "rent",
-  "marketing",
-  "equipment",
-  "maintenance",
-  "delivery",
-  "taxes",
-  "other",
+  // Cost of Sales (COGS)
+  "inventory",           // Raw materials and goods
+  "direct_labor",        // Direct wages
+  "freight_in",          // Inbound shipping
+  // Operating Expenses - Selling & Distribution
+  "marketing",           // Advertising, promotions
+  "delivery",            // Outbound shipping, delivery costs
+  "sales_commission",    // Sales commissions
+  // Operating Expenses - Administrative
+  "salaries",            // Admin salaries & wages
+  "rent",                // Office/warehouse rent
+  "utilities",           // Electric, water, internet
+  "office_supplies",     // Stationery, supplies
+  "insurance",           // Business insurance
+  "professional_fees",   // Legal, accounting, consulting
+  "licenses_permits",    // Business licenses
+  "bank_charges",        // Bank fees, transaction costs
+  // Fixed Asset Related
+  "equipment",           // Equipment purchases
+  "maintenance",         // Repairs & maintenance
+  "depreciation",        // Asset depreciation
+  "amortization",        // Intangible amortization
+  // Finance Costs
+  "interest_expense",    // Loan interest
+  "finance_charges",     // Late fees, finance costs
+  // Taxes & Government
+  "taxes",               // Non-VAT taxes
+  "government_fees",     // Govt charges, fines
+  // Employee Benefits (IAS 19)
+  "employee_benefits",   // Health, pension, end of service
+  "training",            // Staff training
+  "travel",              // Business travel
+  "meals_entertainment", // Client entertainment
+  // Other
+  "other",               // Miscellaneous
 ]);
+
+// Expense Function Classification (IAS 1 - By Function)
+export const expenseFunctionEnum = pgEnum("expense_function", [
+  "cost_of_sales",       // Direct costs of goods sold
+  "selling",             // Selling & distribution
+  "administrative",      // General & administrative
+  "finance",             // Finance costs
+  "other_operating",     // Other operating expenses
+]);
+
+// Approval Status
+export const approvalStatusEnum = pgEnum("approval_status", [
+  "draft",               // Not yet submitted
+  "pending_approval",    // Awaiting approval
+  "approved",            // Approved
+  "rejected",            // Rejected
+  "cancelled",           // Cancelled by submitter
+]);
+
+// Payment Terms
+export const paymentTermsEnum = pgEnum("payment_terms", [
+  "immediate",           // Due immediately
+  "net_7",               // Net 7 days
+  "net_15",              // Net 15 days  
+  "net_30",              // Net 30 days
+  "net_45",              // Net 45 days
+  "net_60",              // Net 60 days
+  "net_90",              // Net 90 days
+  "eom",                 // End of month
+  "custom",              // Custom terms
+]);
+
 export const accountTypeEnum = pgEnum("account_type", ["cash", "bank", "card_payments", "cod_collections", "petty_cash"]);
-export const expenseStatusEnum = pgEnum("expense_status", ["pending", "paid", "overdue", "cancelled"]);
+export const expenseStatusEnum = pgEnum("expense_status", ["pending", "approved", "paid", "overdue", "cancelled", "reimbursed"]);
 export const discountTypeEnum = pgEnum("discount_type", ["percentage", "fixed"]);
 
 // =====================================================
@@ -680,29 +738,227 @@ export const financeTransactions = pgTable("finance_transactions", {
 });
 
 // =====================================================
-// FINANCE EXPENSES TABLE
+// FINANCE EXPENSES TABLE (IFRS/GAAP Enhanced)
 // =====================================================
 
 export const financeExpenses = pgTable("finance_expenses", {
   id: text("id").primaryKey(),
+  expenseNumber: varchar("expense_number", { length: 50 }).notNull(), // Auto-generated EXP-2026-0001
+  
+  // Classification (IFRS/IAS 1)
   category: expenseCategoryEnum("category").notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  function: varchar("function", { length: 50 }).default("administrative"), // cost_of_sales, selling, administrative, finance
+  
+  // Amounts
+  grossAmount: decimal("gross_amount", { precision: 10, scale: 2 }).notNull(), // Amount before VAT
+  vatAmount: decimal("vat_amount", { precision: 10, scale: 2 }).default("0"), // Input VAT (recoverable)
+  vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).default("5"), // VAT rate %
+  isVatRecoverable: boolean("is_vat_recoverable").default(true), // Can claim input VAT?
+  withholdingTax: decimal("withholding_tax", { precision: 10, scale: 2 }).default("0"), // WHT if applicable
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Net amount (gross + VAT - WHT)
   currency: currencyEnum("currency").notNull().default("AED"),
+  exchangeRate: decimal("exchange_rate", { precision: 10, scale: 6 }).default("1"), // For multi-currency
+  baseCurrencyAmount: decimal("base_currency_amount", { precision: 10, scale: 2 }), // Amount in AED
+  
+  // Description
   description: text("description").notNull(),
   descriptionAr: text("description_ar"),
+  
+  // Vendor/Supplier Info
+  vendorId: text("vendor_id"), // Link to vendors table
   vendor: varchar("vendor", { length: 200 }),
+  vendorTrn: varchar("vendor_trn", { length: 20 }), // Vendor Tax Registration Number
+  
+  // Invoice Details
   invoiceNumber: varchar("invoice_number", { length: 100 }),
   invoiceDate: timestamp("invoice_date"),
+  receivedDate: timestamp("received_date"), // When invoice was received
+  
+  // Payment Terms (IFRS 9)
+  paymentTerms: varchar("payment_terms", { length: 20 }).default("net_30"),
   dueDate: timestamp("due_date"),
+  earlyPaymentDiscount: decimal("early_payment_discount", { precision: 5, scale: 2 }).default("0"), // % discount if paid early
+  earlyPaymentDays: integer("early_payment_days").default(0), // Days for early payment
+  
+  // Payment Info
   paidAt: timestamp("paid_at"),
+  paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default("0"),
+  paymentReference: varchar("payment_reference", { length: 100 }),
+  paymentMethod: varchar("payment_method", { length: 50 }), // bank_transfer, cash, card, cheque
+  
+  // Status & Workflow
   status: expenseStatusEnum("status").notNull().default("pending"),
+  approvalStatus: varchar("approval_status", { length: 20 }).default("draft"), // draft, pending_approval, approved, rejected
+  
+  // Cost Allocation
+  costCenterId: text("cost_center_id"), // Link to cost centers
+  costCenterName: varchar("cost_center_name", { length: 100 }),
+  projectId: text("project_id"), // Link to projects if any
+  projectName: varchar("project_name", { length: 100 }),
+  departmentId: text("department_id"),
+  departmentName: varchar("department_name", { length: 100 }),
+  
+  // GL Integration
   accountId: text("account_id").references(() => financeAccounts.id),
+  glAccountCode: varchar("gl_account_code", { length: 20 }), // Chart of accounts code
+  journalEntryId: text("journal_entry_id"), // Link to journal entry when posted
+  
+  // Approval Workflow
   createdBy: text("created_by").notNull(),
+  submittedBy: text("submitted_by"),
+  submittedAt: timestamp("submitted_at"),
   approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  rejectedBy: text("rejected_by"),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  
+  // Reimbursement (for employee expenses)
+  isReimbursement: boolean("is_reimbursement").default(false),
+  employeeId: text("employee_id"), // Employee to reimburse
+  reimbursedAt: timestamp("reimbursed_at"),
+  
+  // Documentation
   attachments: jsonb("attachments").$type<string[]>(),
   notes: text("notes"),
+  internalNotes: text("internal_notes"), // For approvers
+  
+  // Recurring
   isRecurring: boolean("is_recurring").notNull().default(false),
-  recurringFrequency: varchar("recurring_frequency", { length: 20 }),
+  recurringFrequency: varchar("recurring_frequency", { length: 20 }), // daily, weekly, monthly, quarterly, yearly
+  recurringEndDate: timestamp("recurring_end_date"),
+  parentExpenseId: text("parent_expense_id"), // If created from recurring template
+  
+  // Audit
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// COST CENTERS TABLE
+// =====================================================
+
+export const costCenters = pgTable("cost_centers", {
+  id: text("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull().unique(), // CC-001
+  name: varchar("name", { length: 100 }).notNull(),
+  nameAr: varchar("name_ar", { length: 100 }),
+  description: text("description"),
+  parentId: text("parent_id"), // For hierarchical cost centers
+  managerId: text("manager_id"), // Manager responsible
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// EXPENSE BUDGETS TABLE
+// =====================================================
+
+export const expenseBudgets = pgTable("expense_budgets", {
+  id: text("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  
+  // Budget Period
+  periodType: varchar("period_type", { length: 20 }).notNull(), // monthly, quarterly, yearly
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  
+  // Scope
+  category: varchar("category", { length: 50 }), // Specific category or null for all
+  costCenterId: text("cost_center_id"),
+  departmentId: text("department_id"),
+  
+  // Amounts
+  budgetAmount: decimal("budget_amount", { precision: 12, scale: 2 }).notNull(),
+  spentAmount: decimal("spent_amount", { precision: 12, scale: 2 }).default("0"),
+  remainingAmount: decimal("remaining_amount", { precision: 12, scale: 2 }),
+  
+  // Alerts
+  alertThreshold: integer("alert_threshold").default(80), // Alert at 80% spent
+  isAlertSent: boolean("is_alert_sent").default(false),
+  
+  // Status
+  isActive: boolean("is_active").default(true),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// EXPENSE APPROVAL RULES TABLE
+// =====================================================
+
+export const expenseApprovalRules = pgTable("expense_approval_rules", {
+  id: text("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  
+  // Rule Criteria
+  minAmount: decimal("min_amount", { precision: 10, scale: 2 }).default("0"),
+  maxAmount: decimal("max_amount", { precision: 10, scale: 2 }), // Null = no upper limit
+  category: varchar("category", { length: 50 }), // Specific category or null for all
+  costCenterId: text("cost_center_id"),
+  
+  // Approval Chain
+  approverLevel: integer("approver_level").notNull().default(1), // 1, 2, 3...
+  approverId: text("approver_id"), // Specific approver
+  approverRole: varchar("approver_role", { length: 50 }), // Or role-based (manager, finance, cfo)
+  
+  // Settings
+  requiresAllApprovers: boolean("requires_all_approvers").default(false), // All levels or any
+  autoApproveBelow: decimal("auto_approve_below", { precision: 10, scale: 2 }), // Auto-approve small amounts
+  
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(0), // Rule priority
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// VENDORS/SUPPLIERS TABLE
+// =====================================================
+
+export const vendors = pgTable("vendors", {
+  id: text("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull().unique(), // V-001
+  name: varchar("name", { length: 200 }).notNull(),
+  nameAr: varchar("name_ar", { length: 200 }),
+  
+  // Contact
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 20 }),
+  mobile: varchar("mobile", { length: 20 }),
+  website: varchar("website", { length: 255 }),
+  
+  // Address
+  address: text("address"),
+  city: varchar("city", { length: 100 }),
+  emirate: varchar("emirate", { length: 50 }),
+  country: varchar("country", { length: 100 }).default("UAE"),
+  
+  // Tax Info
+  trn: varchar("trn", { length: 20 }), // Tax Registration Number
+  tradeLicense: varchar("trade_license", { length: 50 }),
+  
+  // Payment
+  defaultPaymentTerms: varchar("default_payment_terms", { length: 20 }).default("net_30"),
+  bankName: varchar("bank_name", { length: 100 }),
+  bankAccountNumber: varchar("bank_account_number", { length: 50 }),
+  bankIban: varchar("bank_iban", { length: 50 }),
+  bankSwift: varchar("bank_swift", { length: 20 }),
+  
+  // Categories
+  category: varchar("category", { length: 50 }), // supplier, contractor, service_provider
+  expenseCategories: jsonb("expense_categories").$type<string[]>(), // Typical expense categories
+  
+  // Balance
+  openingBalance: decimal("opening_balance", { precision: 12, scale: 2 }).default("0"),
+  currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).default("0"), // Amount owed
+  
+  // Status
+  isActive: boolean("is_active").default(true),
+  notes: text("notes"),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
