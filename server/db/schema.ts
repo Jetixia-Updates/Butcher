@@ -848,6 +848,13 @@ export const appSettings = pgTable("app_settings", {
   storeAddressAr: text("store_address_ar"),
   workingHoursStart: varchar("working_hours_start", { length: 10 }).default("08:00"),
   workingHoursEnd: varchar("working_hours_end", { length: 10 }).default("22:00"),
+  // UAE Compliance Fields
+  taxRegistrationNumber: varchar("tax_registration_number", { length: 20 }), // TRN for UAE VAT
+  tradeLicenseNumber: varchar("trade_license_number", { length: 50 }),
+  companyNameEn: varchar("company_name_en", { length: 200 }).default("Al Jazira Butcher Shop"),
+  companyNameAr: varchar("company_name_ar", { length: 200 }).default("ملحمة الجزيرة"),
+  fiscalYearStart: varchar("fiscal_year_start", { length: 5 }).default("01-01"), // MM-DD
+  fiscalYearEnd: varchar("fiscal_year_end", { length: 5 }).default("12-31"), // MM-DD
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -982,5 +989,171 @@ export const purchaseOrderItemsRelations = relations(purchaseOrderItems, ({ one 
   product: one(products, {
     fields: [purchaseOrderItems.productId],
     references: [products.id],
+  }),
+}));
+
+// =====================================================
+// UAE COMPLIANCE - CHART OF ACCOUNTS (Double-Entry)
+// =====================================================
+
+export const accountClassEnum = pgEnum("account_class", [
+  "asset",        // Assets (1xxx)
+  "liability",    // Liabilities (2xxx)
+  "equity",       // Equity (3xxx)
+  "revenue",      // Revenue (4xxx)
+  "expense",      // Expenses (5xxx)
+]);
+
+export const chartOfAccounts = pgTable("chart_of_accounts", {
+  id: text("id").primaryKey(),
+  code: varchar("code", { length: 10 }).notNull().unique(), // Account code (e.g., 1100, 2100)
+  name: varchar("name", { length: 100 }).notNull(),
+  nameAr: varchar("name_ar", { length: 100 }),
+  accountClass: accountClassEnum("account_class").notNull(),
+  parentId: text("parent_id"), // For sub-accounts
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  isSystemAccount: boolean("is_system_account").notNull().default(false), // Cannot be deleted
+  balance: decimal("balance", { precision: 14, scale: 2 }).notNull().default("0"),
+  normalBalance: varchar("normal_balance", { length: 10 }).notNull().default("debit"), // debit or credit
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// UAE COMPLIANCE - JOURNAL ENTRIES (Audit Trail)
+// =====================================================
+
+export const journalEntryStatusEnum = pgEnum("journal_entry_status", [
+  "draft",
+  "posted",
+  "reversed",
+]);
+
+export const journalEntries = pgTable("journal_entries", {
+  id: text("id").primaryKey(),
+  entryNumber: varchar("entry_number", { length: 20 }).notNull().unique(), // JE-2026-0001
+  entryDate: timestamp("entry_date").notNull(),
+  description: text("description").notNull(),
+  descriptionAr: text("description_ar"),
+  reference: varchar("reference", { length: 100 }), // Order number, invoice, etc.
+  referenceType: varchar("reference_type", { length: 50 }), // order, expense, adjustment
+  referenceId: text("reference_id"),
+  status: journalEntryStatusEnum("status").notNull().default("draft"),
+  totalDebit: decimal("total_debit", { precision: 14, scale: 2 }).notNull().default("0"),
+  totalCredit: decimal("total_credit", { precision: 14, scale: 2 }).notNull().default("0"),
+  createdBy: text("created_by").notNull(),
+  approvedBy: text("approved_by"),
+  postedAt: timestamp("posted_at"),
+  reversedAt: timestamp("reversed_at"),
+  reversalEntryId: text("reversal_entry_id"), // Links to reversal entry
+  notes: text("notes"),
+  attachments: jsonb("attachments").$type<string[]>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const journalEntryLines = pgTable("journal_entry_lines", {
+  id: text("id").primaryKey(),
+  journalEntryId: text("journal_entry_id").notNull().references(() => journalEntries.id),
+  accountId: text("account_id").notNull().references(() => chartOfAccounts.id),
+  accountCode: varchar("account_code", { length: 10 }).notNull(),
+  accountName: varchar("account_name", { length: 100 }).notNull(),
+  debit: decimal("debit", { precision: 14, scale: 2 }).notNull().default("0"),
+  credit: decimal("credit", { precision: 14, scale: 2 }).notNull().default("0"),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// UAE COMPLIANCE - AUDIT LOG
+// =====================================================
+
+export const auditLog = pgTable("audit_log", {
+  id: text("id").primaryKey(),
+  entityType: varchar("entity_type", { length: 50 }).notNull(), // order, payment, expense, etc.
+  entityId: text("entity_id").notNull(),
+  action: varchar("action", { length: 20 }).notNull(), // create, update, delete, approve, etc.
+  previousValue: jsonb("previous_value"),
+  newValue: jsonb("new_value"),
+  changedFields: jsonb("changed_fields").$type<string[]>(),
+  userId: text("user_id").notNull(),
+  userName: varchar("user_name", { length: 100 }),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// UAE COMPLIANCE - VAT RETURNS
+// =====================================================
+
+export const vatReturnStatusEnum = pgEnum("vat_return_status", [
+  "draft",
+  "submitted",
+  "accepted",
+  "rejected",
+  "amended",
+]);
+
+export const vatReturns = pgTable("vat_returns", {
+  id: text("id").primaryKey(),
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  // Box 1: Standard rated supplies in Abu Dhabi
+  box1Amount: decimal("box1_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  box1Vat: decimal("box1_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Box 2: Standard rated supplies in Dubai
+  box2Amount: decimal("box2_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  box2Vat: decimal("box2_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Box 3: Standard rated supplies in Sharjah
+  box3Amount: decimal("box3_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  box3Vat: decimal("box3_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Box 4: Standard rated supplies in Ajman
+  box4Amount: decimal("box4_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  box4Vat: decimal("box4_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Box 5: Standard rated supplies in UAQ
+  box5Amount: decimal("box5_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  box5Vat: decimal("box5_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Box 6: Standard rated supplies in RAK
+  box6Amount: decimal("box6_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  box6Vat: decimal("box6_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Box 7: Standard rated supplies in Fujairah
+  box7Amount: decimal("box7_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  box7Vat: decimal("box7_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Box 8: Zero-rated supplies
+  box8Amount: decimal("box8_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Box 9: Exempt supplies
+  box9Amount: decimal("box9_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Box 10: Recoverable VAT on expenses
+  box10Vat: decimal("box10_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Calculated fields
+  totalSalesVat: decimal("total_sales_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  totalPurchasesVat: decimal("total_purchases_vat", { precision: 14, scale: 2 }).notNull().default("0"),
+  netVatDue: decimal("net_vat_due", { precision: 14, scale: 2 }).notNull().default("0"),
+  status: vatReturnStatusEnum("status").notNull().default("draft"),
+  submittedAt: timestamp("submitted_at"),
+  submittedBy: text("submitted_by"),
+  ftaReferenceNumber: varchar("fta_reference_number", { length: 50 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Journal entry relations
+export const journalEntriesRelations = relations(journalEntries, ({ many }) => ({
+  lines: many(journalEntryLines),
+}));
+
+export const journalEntryLinesRelations = relations(journalEntryLines, ({ one }) => ({
+  journalEntry: one(journalEntries, {
+    fields: [journalEntryLines.journalEntryId],
+    references: [journalEntries.id],
+  }),
+  account: one(chartOfAccounts, {
+    fields: [journalEntryLines.accountId],
+    references: [chartOfAccounts.id],
   }),
 }));
