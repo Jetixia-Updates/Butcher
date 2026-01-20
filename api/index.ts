@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, or, ilike, desc, and, gte, lte, ne, sql } from 'drizzle-orm';
+import { eq, or, ilike, desc, and, gte, lte, ne } from 'drizzle-orm';
 import {
   pgTable,
   text,
@@ -22,8 +22,8 @@ import {
 // =====================================================
 
 const databaseUrl = process.env.DATABASE_URL;
-const sql = databaseUrl ? neon(databaseUrl) : null;
-const pgDb = sql ? drizzle(sql) : null;
+const neonClient = databaseUrl ? neon(databaseUrl) : null;
+const pgDb = neonClient ? drizzle(neonClient) : null;
 
 // User role enum and table definition (inline for Vercel)
 const userRoleEnum = pgEnum("user_role", ["customer", "admin", "staff", "delivery"]);
