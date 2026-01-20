@@ -439,7 +439,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
                     <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-slate-900">
                       <span className="flex items-center gap-1">
                         <CurrencySymbol size="sm" />
-                        {order.total.toFixed(2)}
+                        {Number(order.total).toFixed(2)}
                       </span>
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
@@ -746,15 +746,15 @@ function OrderDetailsModal({
                 <span className="text-slate-500">{t.subtotal}</span>
                 <span className="flex items-center gap-1">
                   <CurrencySymbol size="sm" />
-                  {order.subtotal.toFixed(2)}
+                  {Number(order.subtotal).toFixed(2)}
                 </span>
               </div>
-              {order.discount > 0 && (
+              {Number(order.discount) > 0 && (
                 <div className="flex justify-between items-center text-green-600">
                   <span>{t.discount}</span>
                   <span className="flex items-center gap-1">
                     -<CurrencySymbol size="sm" />
-                    {order.discount.toFixed(2)}
+                    {Number(order.discount).toFixed(2)}
                   </span>
                 </div>
               )}
@@ -762,21 +762,21 @@ function OrderDetailsModal({
                 <span className="text-slate-500">{t.deliveryFee}</span>
                 <span className="flex items-center gap-1">
                   <CurrencySymbol size="sm" />
-                  {order.deliveryFee.toFixed(2)}
+                  {Number(order.deliveryFee).toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">{t.vat} ({(order.vatRate * 100).toFixed(0)}%)</span>
+                <span className="text-slate-500">{t.vat} ({(Number(order.vatRate) * 100).toFixed(0)}%)</span>
                 <span className="flex items-center gap-1">
                   <CurrencySymbol size="sm" />
-                  {order.vatAmount.toFixed(2)}
+                  {Number(order.vatAmount).toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center font-bold text-lg pt-2 border-t border-slate-300">
                 <span>{t.total}</span>
                 <span className="flex items-center gap-1">
                   <CurrencySymbol size="md" />
-                  {order.total.toFixed(2)}
+                  {Number(order.total).toFixed(2)}
                 </span>
               </div>
             </div>
@@ -814,7 +814,7 @@ function OrderDetailsModal({
                   <DollarSign className="w-5 h-5 text-amber-600" />
                   <div>
                     <p className="font-medium text-amber-800">{t.confirmPayment}</p>
-                    <p className="text-sm text-amber-600">COD - {order.total.toFixed(2)} AED</p>
+                    <p className="text-sm text-amber-600">COD - {Number(order.total).toFixed(2)} AED</p>
                   </div>
                 </div>
                 <button

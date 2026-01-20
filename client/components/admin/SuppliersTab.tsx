@@ -816,7 +816,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
                   </td>
                   <td className="px-3 sm:px-4 py-3 text-slate-600 hidden xl:table-cell">
                     <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 text-amber-500" /> {s.rating.toFixed(1)}
+                      <Star className="w-4 h-4 text-amber-500" /> {Number(s.rating).toFixed(1)}
                     </div>
                     <div className="text-xs text-slate-500">{t.otd} {s.onTimeDeliveryRate}% · {t.quality} {s.qualityScore}%</div>
                   </td>

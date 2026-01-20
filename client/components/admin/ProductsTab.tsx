@@ -395,7 +395,7 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
                     </td>
                     {/* Price */}
                     <td className="px-3 sm:px-4 py-3 text-center font-semibold text-slate-900 text-xs sm:text-sm">
-                      {product.price.toFixed(2)} <span className="text-xs text-slate-500">AED</span>
+                      {Number(product.price).toFixed(2)} <span className="text-xs text-slate-500">AED</span>
                     </td>
                     {/* Status */}
                     <td className="px-3 sm:px-4 py-3 text-center hidden sm:table-cell">
@@ -893,7 +893,7 @@ function DeleteConfirmModal({ product, onClose, onConfirm, isRTL, t }: DeleteCon
                 {isRTL && product.nameAr ? product.nameAr : product.name}
               </p>
               <p className="text-sm text-slate-500">{product.category}</p>
-              <p className="text-sm font-medium text-primary">{product.price.toFixed(2)} AED</p>
+              <p className="text-sm font-medium text-primary">{Number(product.price).toFixed(2)} AED</p>
             </div>
           </div>
 

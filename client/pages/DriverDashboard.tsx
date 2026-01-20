@@ -646,7 +646,7 @@ export default function DriverDashboardPage() {
                         </div>
                         <div className="flex items-center gap-1 text-sm text-slate-500">
                           <CurrencySymbol size="sm" />
-                          <span className="font-medium">{delivery.total.toFixed(2)}</span>
+                          <span className="font-medium">{Number(delivery.total).toFixed(2)}</span>
                         </div>
                       </div>
 

@@ -701,7 +701,7 @@ function DeliveriesList({
               <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
                 <div className={cn(isRTL ? "text-left" : "text-right sm:text-right", "text-left")}>
                   <p className={cn("text-sm font-medium text-slate-900 flex items-center gap-1", isRTL ? "justify-start" : "justify-start sm:justify-end")}>
-                    <CurrencySymbol size="sm" /> {order.total.toFixed(2)}
+                    <CurrencySymbol size="sm" /> {Number(order.total).toFixed(2)}
                   </p>
                   <p className="text-xs text-slate-500">
                     {order.items.length} {t.items}

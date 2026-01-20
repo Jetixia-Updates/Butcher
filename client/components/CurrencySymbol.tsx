@@ -48,10 +48,14 @@ export const PriceDisplay: React.FC<PriceDisplayProps> = ({
   size = "md",
   className = "",
 }) => {
+  // Ensure price is a number (API may return strings for decimal values)
+  const numericPrice = typeof price === 'string' ? parseFloat(price) : (typeof price === 'number' ? price : 0);
+  const displayPrice = isNaN(numericPrice) ? 0 : numericPrice;
+  
   return (
     <span className={`inline-flex items-center gap-1 [text-decoration:inherit] ${className}`}>
       <CurrencySymbol size={size} className="[text-decoration:inherit]" />
-      <span className="[text-decoration:inherit]">{price.toFixed(2)}</span>
+      <span className="[text-decoration:inherit]">{displayPrice.toFixed(2)}</span>
     </span>
   );
 };

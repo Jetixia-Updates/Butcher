@@ -331,10 +331,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               )}
             </div>
             {/* Rating */}
-            {product.rating !== undefined && product.rating > 0 && (
+            {product.rating !== undefined && Number(product.rating) > 0 && (
               <div className="flex items-center gap-1 mt-1">
                 <span className="text-yellow-500 text-sm">★</span>
-                <span className="text-xs text-muted-foreground">{product.rating.toFixed(1)}</span>
+                <span className="text-xs text-muted-foreground">{Number(product.rating).toFixed(1)}</span>
               </div>
             )}
           </div>
@@ -635,9 +635,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                           key={i}
                           className={`w-4 h-4 ${i < Math.round(product.rating!) ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`}
                         />
-                      ))}
-                    </div>
-                    <span className="text-sm text-muted-foreground">({product.rating.toFixed(1)})</span>
+                      ))}n                    </div>
+                    <span className="text-sm text-muted-foreground">({Number(product.rating).toFixed(1)})</span>
                   </div>
                 )}
 

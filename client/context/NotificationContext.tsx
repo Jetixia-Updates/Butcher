@@ -596,19 +596,19 @@ export const formatInvoiceForNotification = (invoice: InvoiceData, language: "en
 
     // Build breakdown lines
     const breakdownLines: string[] = [];
-    breakdownLines.push(`المجموع الفرعي: ${invoice.subtotal.toFixed(2)} د.إ`);
-    if (invoice.discount && invoice.discount > 0) {
-      breakdownLines.push(`الخصم${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -${invoice.discount.toFixed(2)} د.إ`);
+    breakdownLines.push(`المجموع الفرعي: ${Number(invoice.subtotal).toFixed(2)} د.إ`);
+    if (invoice.discount && Number(invoice.discount) > 0) {
+      breakdownLines.push(`الخصم${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -${Number(invoice.discount).toFixed(2)} د.إ`);
     }
-    breakdownLines.push(`ضريبة القيمة المضافة (${invoice.vatRate}%): ${invoice.vatAmount.toFixed(2)} د.إ`);
+    breakdownLines.push(`ضريبة القيمة المضافة (${invoice.vatRate}%): ${Number(invoice.vatAmount).toFixed(2)} د.إ`);
     // Use deliveryFee (total) if provided, otherwise fall back to expressDeliveryFee for backward compatibility
-    const deliveryFeeAmount = invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0;
+    const deliveryFeeAmount = Number(invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0);
     if (deliveryFeeAmount > 0) {
       const deliveryLabel = invoice.isExpressDelivery ? '⚡ توصيل سريع' : '🚚 رسوم التوصيل';
       breakdownLines.push(`${deliveryLabel}: ${deliveryFeeAmount.toFixed(2)} د.إ`);
     }
-    if (invoice.driverTip && invoice.driverTip > 0) {
-      breakdownLines.push(`💚 إكرامية السائق: ${invoice.driverTip.toFixed(2)} د.إ`);
+    if (invoice.driverTip && Number(invoice.driverTip) > 0) {
+      breakdownLines.push(`💚 إكرامية السائق: ${Number(invoice.driverTip).toFixed(2)} د.إ`);
     }
 
     return `
@@ -628,7 +628,7 @@ ${itemsList}
 ${separator}
 ${breakdownLines.join('\n')}
 ${doubleSeparator}
-الإجمالي: ${invoice.total.toFixed(2)} د.إ
+الإجمالي: ${Number(invoice.total).toFixed(2)} د.إ
 ${doubleSeparator}
 طريقة الدفع: ${invoice.paymentMethod === 'card' ? 'بطاقة ائتمان' : 'الدفع عند الاستلام'}
 ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatReference}` : ''}
@@ -638,24 +638,24 @@ ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatRef
   }
 
   const itemsList = invoice.items.map(item => 
-    `• ${item.name} × ${item.quantity.toFixed(3)} gr\n  AED ${item.totalPrice.toFixed(2)}`
+    `• ${item.name} × ${Number(item.quantity).toFixed(3)} gr\n  AED ${Number(item.totalPrice).toFixed(2)}`
   ).join('\n');
 
   // Build breakdown lines
   const breakdownLines: string[] = [];
-  breakdownLines.push(`Subtotal: AED ${invoice.subtotal.toFixed(2)}`);
-  if (invoice.discount && invoice.discount > 0) {
-    breakdownLines.push(`Discount${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -AED ${invoice.discount.toFixed(2)}`);
+  breakdownLines.push(`Subtotal: AED ${Number(invoice.subtotal).toFixed(2)}`);
+  if (invoice.discount && Number(invoice.discount) > 0) {
+    breakdownLines.push(`Discount${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -AED ${Number(invoice.discount).toFixed(2)}`);
   }
-  breakdownLines.push(`VAT (${invoice.vatRate}%): AED ${invoice.vatAmount.toFixed(2)}`);
+  breakdownLines.push(`VAT (${invoice.vatRate}%): AED ${Number(invoice.vatAmount).toFixed(2)}`);
   // Use deliveryFee (total) if provided, otherwise fall back to expressDeliveryFee for backward compatibility
-  const deliveryFeeAmountEn = invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0;
+  const deliveryFeeAmountEn = Number(invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0);
   if (deliveryFeeAmountEn > 0) {
     const deliveryLabelEn = invoice.isExpressDelivery ? '⚡ Express Delivery' : '🚚 Delivery Fee';
     breakdownLines.push(`${deliveryLabelEn}: AED ${deliveryFeeAmountEn.toFixed(2)}`);
   }
-  if (invoice.driverTip && invoice.driverTip > 0) {
-    breakdownLines.push(`💚 Driver Tip: AED ${invoice.driverTip.toFixed(2)}`);
+  if (invoice.driverTip && Number(invoice.driverTip) > 0) {
+    breakdownLines.push(`💚 Driver Tip: AED ${Number(invoice.driverTip).toFixed(2)}`);
   }
 
   return `
@@ -675,7 +675,7 @@ ${itemsList}
 ${separator}
 ${breakdownLines.join('\n')}
 ${doubleSeparator}
-TOTAL: AED ${invoice.total.toFixed(2)}
+TOTAL: AED ${Number(invoice.total).toFixed(2)}
 ${doubleSeparator}
 Payment Method: ${invoice.paymentMethod === 'card' ? 'Credit Card' : 'Cash on Delivery'}
 ${invoice.vatReference ? `VAT Reference: ${invoice.vatReference}` : ''}
@@ -691,8 +691,8 @@ export const createInvoiceNotification = (invoice: InvoiceData) => ({
   type: "payment" as NotificationType,
   title: "TAX Invoice Ready",
   titleAr: "الفاتورة الضريبية جاهزة",
-  message: `Your TAX invoice ${invoice.invoiceNumber} for order ${invoice.orderNumber} is ready. Total: AED ${invoice.total.toFixed(2)}`,
-  messageAr: `فاتورتك الضريبية ${invoice.invoiceNumber} للطلب ${invoice.orderNumber} جاهزة. الإجمالي: ${invoice.total.toFixed(2)} د.إ`,
+  message: `Your TAX invoice ${invoice.invoiceNumber} for order ${invoice.orderNumber} is ready. Total: AED ${Number(invoice.total).toFixed(2)}`,
+  messageAr: `فاتورتك الضريبية ${invoice.invoiceNumber} للطلب ${invoice.orderNumber} جاهزة. الإجمالي: ${Number(invoice.total).toFixed(2)} د.إ`,
 });
 
 /**
