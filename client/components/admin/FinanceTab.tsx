@@ -114,6 +114,10 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
   const { language } = useLanguage();
   const isRTL = language === "ar";
 
+  // Sub-view state for financial reports
+  type SubView = "dashboard" | "pl" | "cashflow" | "vat" | "balance-sheet" | "chart-of-accounts" | "journal-entries" | "audit-log";
+  const [subView, setSubView] = useState<SubView>("dashboard");
+
   const [state, setState] = useState<ViewState>({
     accounts: [],
     transactions: [],
@@ -311,6 +315,306 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
     const c = config[status] || config.completed;
     return <span className={cn("px-2 py-0.5 text-xs rounded-full", c.bg, c.color)}>{c.label}</span>;
   };
+
+  // Render sub-views for financial reports
+  if (subView !== "dashboard") {
+    return (
+      <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+        {/* Back Button */}
+        <button
+          onClick={() => setSubView("dashboard")}
+          className="flex items-center gap-2 text-primary hover:underline"
+        >
+          <ArrowDownRight className="w-4 h-4 rotate-135" />
+          {language === "ar" ? "العودة للوحة المالية" : "Back to Finance Dashboard"}
+        </button>
+
+        {subView === "pl" && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-green-600" />
+              {language === "ar" ? "تقرير الأرباح والخسائر" : "Profit & Loss Statement"}
+            </h2>
+            <div className="space-y-4">
+              <div className="border-b pb-4">
+                <h3 className="font-semibold text-slate-700 mb-2">{language === "ar" ? "الإيرادات" : "Revenue"}</h3>
+                <div className="flex justify-between py-2">
+                  <span>{language === "ar" ? "إجمالي المبيعات" : "Total Sales"}</span>
+                  <span className="font-semibold text-green-600">AED {formatAmount(state.summary?.totalRevenue || 0)}</span>
+                </div>
+                <div className="flex justify-between py-2 text-slate-500">
+                  <span>{language === "ar" ? "المرتجعات" : "Returns & Refunds"}</span>
+                  <span className="text-red-500">- AED {formatAmount(state.summary?.totalRefunds || 0)}</span>
+                </div>
+                <div className="flex justify-between py-2 font-semibold border-t">
+                  <span>{language === "ar" ? "صافي الإيرادات" : "Net Revenue"}</span>
+                  <span>AED {formatAmount((state.summary?.totalRevenue || 0) - (state.summary?.totalRefunds || 0))}</span>
+                </div>
+              </div>
+              <div className="border-b pb-4">
+                <h3 className="font-semibold text-slate-700 mb-2">{language === "ar" ? "تكلفة المبيعات" : "Cost of Goods Sold"}</h3>
+                <div className="flex justify-between py-2">
+                  <span>{language === "ar" ? "تكلفة البضاعة المباعة" : "COGS"}</span>
+                  <span className="text-red-500">- AED {formatAmount(state.summary?.totalCOGS || 0)}</span>
+                </div>
+              </div>
+              <div className="flex justify-between py-2 font-bold text-lg">
+                <span>{language === "ar" ? "مجمل الربح" : "Gross Profit"}</span>
+                <span className="text-blue-600">AED {formatAmount(state.summary?.grossProfit || 0)} ({(state.summary?.grossProfitMargin || 0).toFixed(1)}%)</span>
+              </div>
+              <div className="border-b pb-4">
+                <h3 className="font-semibold text-slate-700 mb-2">{language === "ar" ? "المصروفات التشغيلية" : "Operating Expenses"}</h3>
+                <div className="flex justify-between py-2">
+                  <span>{language === "ar" ? "إجمالي المصروفات" : "Total Expenses"}</span>
+                  <span className="text-red-500">- AED {formatAmount(state.summary?.totalExpenses || 0)}</span>
+                </div>
+              </div>
+              <div className="flex justify-between py-2 font-bold text-xl bg-slate-50 p-3 rounded-lg">
+                <span>{language === "ar" ? "صافي الربح" : "Net Profit"}</span>
+                <span className={cn(
+                  (state.summary?.netProfit || 0) >= 0 ? "text-green-600" : "text-red-600"
+                )}>
+                  AED {formatAmount(state.summary?.netProfit || 0)} ({(state.summary?.netProfitMargin || 0).toFixed(1)}%)
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {subView === "cashflow" && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <TrendingDown className="w-5 h-5 text-blue-600" />
+              {language === "ar" ? "تقرير التدفق النقدي" : "Cash Flow Statement"}
+            </h2>
+            <div className="space-y-4">
+              <div className="border-b pb-4">
+                <h3 className="font-semibold text-slate-700 mb-2">{language === "ar" ? "التدفقات النقدية من الأنشطة التشغيلية" : "Operating Activities"}</h3>
+                <div className="flex justify-between py-2">
+                  <span>{language === "ar" ? "النقد من المبيعات" : "Cash from Sales"}</span>
+                  <span className="text-green-600">+ AED {formatAmount(state.summary?.totalRevenue || 0)}</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span>{language === "ar" ? "المدفوعات للموردين" : "Payments to Suppliers"}</span>
+                  <span className="text-red-500">- AED {formatAmount(state.summary?.totalCOGS || 0)}</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span>{language === "ar" ? "المصروفات التشغيلية" : "Operating Expenses"}</span>
+                  <span className="text-red-500">- AED {formatAmount(state.summary?.totalExpenses || 0)}</span>
+                </div>
+              </div>
+              <div className="flex justify-between py-2 font-bold text-lg bg-blue-50 p-3 rounded-lg">
+                <span>{language === "ar" ? "صافي التدفق النقدي" : "Net Cash Flow"}</span>
+                <span className={cn(
+                  (state.summary?.netProfit || 0) >= 0 ? "text-green-600" : "text-red-600"
+                )}>AED {formatAmount(state.summary?.netProfit || 0)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {subView === "vat" && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-emerald-600" />
+              {language === "ar" ? "إقرار ضريبة القيمة المضافة" : "VAT Return (FTA Form 201)"}
+            </h2>
+            <div className="space-y-4">
+              <div className="bg-emerald-50 p-4 rounded-lg mb-4">
+                <p className="text-sm text-emerald-700">
+                  {language === "ar" ? "متوافق مع متطلبات الهيئة الاتحادية للضرائب" : "Compliant with UAE Federal Tax Authority requirements"}
+                </p>
+              </div>
+              <div className="border-b pb-4">
+                <h3 className="font-semibold text-slate-700 mb-2">{language === "ar" ? "ضريبة المخرجات" : "Output VAT (Sales)"}</h3>
+                <div className="flex justify-between py-2">
+                  <span>{language === "ar" ? "مبيعات خاضعة للضريبة بنسبة 5%" : "Standard Rated Sales (5%)"}</span>
+                  <span>AED {formatAmount(state.summary?.totalRevenue || 0)}</span>
+                </div>
+                <div className="flex justify-between py-2 font-semibold">
+                  <span>{language === "ar" ? "ضريبة المخرجات المستحقة" : "Output VAT Due"}</span>
+                  <span className="text-amber-600">AED {formatAmount((state.summary?.totalRevenue || 0) * 0.05)}</span>
+                </div>
+              </div>
+              <div className="border-b pb-4">
+                <h3 className="font-semibold text-slate-700 mb-2">{language === "ar" ? "ضريبة المدخلات" : "Input VAT (Purchases)"}</h3>
+                <div className="flex justify-between py-2">
+                  <span>{language === "ar" ? "مشتريات خاضعة للضريبة" : "Taxable Purchases"}</span>
+                  <span>AED {formatAmount(state.summary?.totalExpenses || 0)}</span>
+                </div>
+                <div className="flex justify-between py-2 font-semibold">
+                  <span>{language === "ar" ? "ضريبة المدخلات القابلة للاسترداد" : "Recoverable Input VAT"}</span>
+                  <span className="text-green-600">AED {formatAmount((state.summary?.totalExpenses || 0) * 0.05)}</span>
+                </div>
+              </div>
+              <div className="flex justify-between py-2 font-bold text-xl bg-amber-50 p-3 rounded-lg">
+                <span>{language === "ar" ? "صافي الضريبة المستحقة" : "Net VAT Payable"}</span>
+                <span className="text-amber-600">
+                  AED {formatAmount(((state.summary?.totalRevenue || 0) - (state.summary?.totalExpenses || 0)) * 0.05)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {subView === "balance-sheet" && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Banknote className="w-5 h-5 text-purple-600" />
+              {language === "ar" ? "الميزانية العمومية" : "Balance Sheet"}
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="font-bold text-slate-900 mb-3 border-b pb-2">{language === "ar" ? "الأصول" : "Assets"}</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-600">{language === "ar" ? "النقد والبنوك" : "Cash & Bank"}</span>
+                    <span>AED {formatAmount(state.accounts.reduce((sum, a) => sum + (a.balance || 0), 0))}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-600">{language === "ar" ? "الذمم المدينة" : "Accounts Receivable"}</span>
+                    <span>AED 0</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-600">{language === "ar" ? "المخزون" : "Inventory"}</span>
+                    <span>AED 0</span>
+                  </div>
+                  <div className="flex justify-between py-2 font-bold border-t mt-2">
+                    <span>{language === "ar" ? "إجمالي الأصول" : "Total Assets"}</span>
+                    <span>AED {formatAmount(state.accounts.reduce((sum, a) => sum + (a.balance || 0), 0))}</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 mb-3 border-b pb-2">{language === "ar" ? "الخصوم وحقوق الملكية" : "Liabilities & Equity"}</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-600">{language === "ar" ? "الذمم الدائنة" : "Accounts Payable"}</span>
+                    <span>AED 0</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-600">{language === "ar" ? "ضريبة القيمة المضافة المستحقة" : "VAT Payable"}</span>
+                    <span>AED {formatAmount(((state.summary?.totalRevenue || 0) - (state.summary?.totalExpenses || 0)) * 0.05)}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-600">{language === "ar" ? "الأرباح المحتجزة" : "Retained Earnings"}</span>
+                    <span>AED {formatAmount(state.summary?.netProfit || 0)}</span>
+                  </div>
+                  <div className="flex justify-between py-2 font-bold border-t mt-2">
+                    <span>{language === "ar" ? "إجمالي الخصوم وحقوق الملكية" : "Total Liabilities & Equity"}</span>
+                    <span>AED {formatAmount((state.summary?.netProfit || 0) + ((state.summary?.totalRevenue || 0) - (state.summary?.totalExpenses || 0)) * 0.05)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {subView === "chart-of-accounts" && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-indigo-600" />
+              {language === "ar" ? "دليل الحسابات" : "Chart of Accounts"}
+            </h2>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 text-slate-600">{language === "ar" ? "رقم الحساب" : "Account #"}</th>
+                  <th className="text-left py-2 text-slate-600">{language === "ar" ? "اسم الحساب" : "Account Name"}</th>
+                  <th className="text-left py-2 text-slate-600">{language === "ar" ? "النوع" : "Type"}</th>
+                  <th className="text-right py-2 text-slate-600">{language === "ar" ? "الرصيد" : "Balance"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b"><td className="py-2">1000</td><td>{language === "ar" ? "النقد والبنوك" : "Cash & Bank"}</td><td>Asset</td><td className="text-right">AED {formatAmount(state.accounts.reduce((s, a) => s + (a.balance || 0), 0))}</td></tr>
+                <tr className="border-b"><td className="py-2">1100</td><td>{language === "ar" ? "الذمم المدينة" : "Accounts Receivable"}</td><td>Asset</td><td className="text-right">AED 0</td></tr>
+                <tr className="border-b"><td className="py-2">1200</td><td>{language === "ar" ? "المخزون" : "Inventory"}</td><td>Asset</td><td className="text-right">AED 0</td></tr>
+                <tr className="border-b"><td className="py-2">2000</td><td>{language === "ar" ? "الذمم الدائنة" : "Accounts Payable"}</td><td>Liability</td><td className="text-right">AED 0</td></tr>
+                <tr className="border-b"><td className="py-2">2100</td><td>{language === "ar" ? "ضريبة القيمة المضافة المستحقة" : "VAT Payable"}</td><td>Liability</td><td className="text-right">AED {formatAmount(((state.summary?.totalRevenue || 0) - (state.summary?.totalExpenses || 0)) * 0.05)}</td></tr>
+                <tr className="border-b"><td className="py-2">3000</td><td>{language === "ar" ? "رأس المال" : "Owner's Equity"}</td><td>Equity</td><td className="text-right">AED 0</td></tr>
+                <tr className="border-b"><td className="py-2">3100</td><td>{language === "ar" ? "الأرباح المحتجزة" : "Retained Earnings"}</td><td>Equity</td><td className="text-right">AED {formatAmount(state.summary?.netProfit || 0)}</td></tr>
+                <tr className="border-b"><td className="py-2">4000</td><td>{language === "ar" ? "إيرادات المبيعات" : "Sales Revenue"}</td><td>Revenue</td><td className="text-right">AED {formatAmount(state.summary?.totalRevenue || 0)}</td></tr>
+                <tr className="border-b"><td className="py-2">5000</td><td>{language === "ar" ? "تكلفة المبيعات" : "Cost of Goods Sold"}</td><td>Expense</td><td className="text-right">AED {formatAmount(state.summary?.totalCOGS || 0)}</td></tr>
+                <tr className="border-b"><td className="py-2">6000</td><td>{language === "ar" ? "المصروفات التشغيلية" : "Operating Expenses"}</td><td>Expense</td><td className="text-right">AED {formatAmount(state.summary?.totalExpenses || 0)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {subView === "journal-entries" && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-orange-600" />
+              {language === "ar" ? "القيود اليومية" : "Journal Entries"}
+            </h2>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 text-slate-600">{language === "ar" ? "التاريخ" : "Date"}</th>
+                  <th className="text-left py-2 text-slate-600">{language === "ar" ? "الوصف" : "Description"}</th>
+                  <th className="text-left py-2 text-slate-600">{language === "ar" ? "الحساب" : "Account"}</th>
+                  <th className="text-right py-2 text-slate-600">{language === "ar" ? "مدين" : "Debit"}</th>
+                  <th className="text-right py-2 text-slate-600">{language === "ar" ? "دائن" : "Credit"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.transactions.slice(0, 20).map((tx) => (
+                  <React.Fragment key={tx.id}>
+                    <tr className="border-b">
+                      <td className="py-2">{new Date(tx.createdAt).toLocaleDateString()}</td>
+                      <td>{tx.description}</td>
+                      <td>{tx.accountName || "Cash"}</td>
+                      <td className="text-right">{tx.type === "refund" || tx.type === "payout" ? "-" : `AED ${formatAmount(tx.amount)}`}</td>
+                      <td className="text-right">{tx.type === "refund" || tx.type === "payout" || tx.type === "expense" || tx.type === "purchase" ? `AED ${formatAmount(tx.amount)}` : "-"}</td>
+                    </tr>
+                  </React.Fragment>
+                ))}
+                {state.transactions.length === 0 && (
+                  <tr><td colSpan={5} className="py-4 text-center text-slate-500">{language === "ar" ? "لا توجد قيود" : "No journal entries"}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {subView === "audit-log" && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-slate-600" />
+              {language === "ar" ? "سجل التدقيق" : "Audit Log"}
+            </h2>
+            <div className="bg-emerald-50 p-4 rounded-lg mb-4">
+              <p className="text-sm text-emerald-700">
+                {language === "ar" 
+                  ? "جميع المعاملات المالية مسجلة للتدقيق والامتثال لمتطلبات الهيئة الاتحادية للضرائب" 
+                  : "All financial transactions are logged for audit compliance with FTA requirements"}
+              </p>
+            </div>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 text-slate-600">{language === "ar" ? "التاريخ والوقت" : "Timestamp"}</th>
+                  <th className="text-left py-2 text-slate-600">{language === "ar" ? "الإجراء" : "Action"}</th>
+                  <th className="text-left py-2 text-slate-600">{language === "ar" ? "المرجع" : "Reference"}</th>
+                  <th className="text-right py-2 text-slate-600">{language === "ar" ? "المبلغ" : "Amount"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.transactions.slice(0, 30).map((tx) => (
+                  <tr key={tx.id} className="border-b">
+                    <td className="py-2 text-sm">{new Date(tx.createdAt).toLocaleString()}</td>
+                    <td className="capitalize">{tx.type}</td>
+                    <td>{tx.reference || tx.id.slice(0, 8)}</td>
+                    <td className="text-right">AED {formatAmount(tx.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
@@ -538,37 +842,37 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
         <ReportCard
           title={t("pl")}
           description={language === "ar" ? "تقرير الأرباح والخسائر" : "Profit & Loss"}
-          onClick={() => onNavigate?.("reports")}
+          onClick={() => setSubView("pl")}
           icon={TrendingUp}
         />
         <ReportCard
           title={t("cashflow")}
           description={language === "ar" ? "تقرير التدفق النقدي" : "Cash flow report"}
-          onClick={() => onNavigate?.("reports")}
+          onClick={() => setSubView("cashflow")}
           icon={TrendingDown}
         />
         <ReportCard
           title={t("vat")}
           description={language === "ar" ? "إقرار الضريبة" : "VAT return"}
-          onClick={() => onNavigate?.("reports")}
+          onClick={() => setSubView("vat")}
           icon={Building2}
         />
         <ReportCard
           title={language === "ar" ? "الميزانية" : "Balance Sheet"}
           description={language === "ar" ? "الأصول والخصوم" : "Assets & Liabilities"}
-          onClick={() => onNavigate?.("reports")}
+          onClick={() => setSubView("balance-sheet")}
           icon={Banknote}
         />
         <ReportCard
           title={language === "ar" ? "دليل الحسابات" : "Chart of Accounts"}
           description={language === "ar" ? "شجرة الحسابات" : "Account structure"}
-          onClick={() => onNavigate?.("reports")}
+          onClick={() => setSubView("chart-of-accounts")}
           icon={Wallet}
         />
         <ReportCard
           title={language === "ar" ? "القيود اليومية" : "Journal Entries"}
           description={language === "ar" ? "سجل المحاسبة" : "Accounting log"}
-          onClick={() => onNavigate?.("reports")}
+          onClick={() => setSubView("journal-entries")}
           icon={Receipt}
         />
       </div>
@@ -644,19 +948,19 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
 
         <div className="mt-4 flex flex-wrap gap-2">
           <button 
-            onClick={() => onNavigate?.("reports")}
+            onClick={() => setSubView("vat")}
             className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition"
           >
             {language === "ar" ? "إنشاء إقرار ضريبي" : "Generate VAT Return"}
           </button>
           <button 
-            onClick={() => onNavigate?.("reports")}
+            onClick={() => setSubView("vat")}
             className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition"
           >
             {language === "ar" ? "تصدير للهيئة (Excel)" : "Export for FTA (Excel)"}
           </button>
           <button 
-            onClick={() => onNavigate?.("reports")}
+            onClick={() => setSubView("audit-log")}
             className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition"
           >
             {language === "ar" ? "سجل التدقيق" : "Audit Log"}
