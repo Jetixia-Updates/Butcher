@@ -72,6 +72,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await fetch('/api/chat/all');
       const data = await res.json();
+      console.log('[Chat Admin] Fetched chats:', data.success, 'count:', data.data?.length || 0);
       if (data.success && data.data) {
         const chats: UserChat[] = data.data.map((chat: any) => ({
           userId: chat.userId,
@@ -84,7 +85,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAllChats(chats);
       }
     } catch (err) {
-      console.error('Failed to fetch chats:', err);
+      console.error('[Chat Admin] Failed to fetch chats:', err);
     }
   }, []);
 
@@ -136,12 +137,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUserMessages(prev => [...prev, tempMessage]);
 
       // Send to API
+      console.log('[Chat] Sending message to API:', { userId, userName, text: text.substring(0, 50) });
       const res = await fetch('/api/chat/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, userName, userEmail, text, sender: 'user', attachments }),
       });
       const data = await res.json();
+      console.log('[Chat] API response:', data);
       
       if (data.success) {
         // Notify admin
@@ -153,9 +156,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Refresh to get the real message
         loadUserMessages(userId);
+      } else {
+        console.error('[Chat] Failed to send message:', data.error);
       }
     } catch (err) {
-      console.error('Failed to send message:', err);
+      console.error('[Chat] Failed to send message:', err);
     }
   }, [loadUserMessages]);
 
