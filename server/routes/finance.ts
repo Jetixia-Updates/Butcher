@@ -411,16 +411,24 @@ const getExpenses: RequestHandler = async (req, res) => {
 
 const createExpense: RequestHandler = async (req, res) => {
   const data = req.body as CreateExpenseRequest;
+  const grossAmount = data.grossAmount || 0;
+  const vatAmount = data.vatAmount || grossAmount * 0.05;
+  const totalAmount = grossAmount + vatAmount;
+  
   const [newExpense] = await db.insert(financeExpenses).values({
     id: generateId("exp"),
+    expenseNumber: `EXP-${Date.now()}`,
     category: data.category,
-    amount: String(data.amount),
+    grossAmount: String(grossAmount),
+    vatAmount: String(vatAmount),
+    amount: String(totalAmount),
     description: data.description,
     descriptionAr: data.descriptionAr,
     vendor: data.vendor,
     invoiceNumber: data.invoiceNumber,
     invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : undefined,
     dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+    paymentTerms: data.paymentTerms || "net_30",
     notes: data.notes,
     isRecurring: data.isRecurring,
     recurringFrequency: data.recurringFrequency,

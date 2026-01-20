@@ -896,7 +896,6 @@ const updatePaymentStatus: RequestHandler = async (req, res) => {
         // Update existing payment
         await db.update(payments).set({
           status: "captured",
-          capturedAt: now,
           updatedAt: now,
         }).where(eq(payments.orderId, id));
       } else {
@@ -906,12 +905,10 @@ const updatePaymentStatus: RequestHandler = async (req, res) => {
           id: paymentId,
           orderId: id,
           orderNumber: order.orderNumber,
-          userId: order.userId || "guest",
           amount: order.total,
           currency: "AED",
-          paymentMethod: order.paymentMethod || "cod",
+          method: (order.paymentMethod as "card" | "cod" | "bank_transfer") || "cod",
           status: "captured",
-          capturedAt: now,
           createdAt: now,
           updatedAt: now,
         });

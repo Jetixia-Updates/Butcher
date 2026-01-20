@@ -71,7 +71,7 @@ export const deliveryTrackingStatusEnum = pgEnum("delivery_tracking_status", [
   "failed",
 ]);
 export const supplierStatusEnum = pgEnum("supplier_status", ["active", "inactive", "pending", "suspended"]);
-export const paymentTermsEnum = pgEnum("payment_terms", ["net_7", "net_15", "net_30", "net_60", "cod", "prepaid"]);
+export const supplierPaymentTermsEnum = pgEnum("supplier_payment_terms", ["net_7", "net_15", "net_30", "net_60", "cod", "prepaid"]);
 export const purchaseOrderStatusEnum = pgEnum("purchase_order_status", [
   "draft",
   "pending",
@@ -583,7 +583,7 @@ export const suppliers = pgTable("suppliers", {
     phone: string;
     isPrimary: boolean;
   }[]>().default([]),
-  paymentTerms: paymentTermsEnum("payment_terms").notNull().default("net_30"),
+  paymentTerms: supplierPaymentTermsEnum("payment_terms").notNull().default("net_30"),
   currency: currencyEnum("currency").notNull().default("AED"),
   creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }).notNull().default("0"),
   currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).notNull().default("0"),

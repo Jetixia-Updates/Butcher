@@ -744,7 +744,7 @@ export interface ValidateDiscountResponse {
 
 export type SupplierStatus = "active" | "inactive" | "pending" | "suspended";
 
-export type PaymentTerms = "net_7" | "net_15" | "net_30" | "net_60" | "cod" | "prepaid";
+export type SupplierPaymentTerms = "net_7" | "net_15" | "net_30" | "net_60" | "cod" | "prepaid";
 
 export type PurchaseOrderStatus = 
   | "draft"
@@ -789,7 +789,7 @@ export interface Supplier {
   contacts: SupplierContact[];
   
   // Business Terms
-  paymentTerms: PaymentTerms;
+  paymentTerms: SupplierPaymentTerms;
   currency: Currency;
   creditLimit: number;
   currentBalance: number;
@@ -906,7 +906,7 @@ export interface CreateSupplierRequest {
   taxNumber?: string;
   address: SupplierAddress;
   contacts: Omit<SupplierContact, "id">[];
-  paymentTerms: PaymentTerms;
+  paymentTerms: SupplierPaymentTerms;
   currency?: Currency;
   creditLimit?: number;
   categories: string[];
@@ -921,7 +921,7 @@ export interface UpdateSupplierRequest {
   website?: string;
   taxNumber?: string;
   address?: Partial<SupplierAddress>;
-  paymentTerms?: PaymentTerms;
+  paymentTerms?: SupplierPaymentTerms;
   currency?: Currency;
   creditLimit?: number;
   categories?: string[];

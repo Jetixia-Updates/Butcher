@@ -334,9 +334,9 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
         // Sales by Category
         if (categorySales.length > 0) {
           csvContent += "=== SALES BY CATEGORY ===\n";
-          csvContent += "Category,Orders,Revenue (AED)\n";
+          csvContent += "Category,Quantity,Revenue (AED)\n";
           categorySales.forEach(c => {
-            csvContent += `"${c.categoryName}",${c.orderCount},${c.revenue.toFixed(2)}\n`;
+            csvContent += `"${c.category}",${c.totalQuantity},${c.totalSales.toFixed(2)}\n`;
           });
           csvContent += "\n";
         }
@@ -425,8 +425,8 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
             ${categorySales.length > 0 ? `
               <h2>Sales by Category</h2>
               <table>
-                <tr><th>Category</th><th class="text-right">Orders</th><th class="text-right">Revenue (AED)</th></tr>
-                ${categorySales.map(c => `<tr><td>${c.categoryName}</td><td class="text-right">${c.orderCount}</td><td class="text-right">${c.revenue.toFixed(2)}</td></tr>`).join('')}
+                <tr><th>Category</th><th class="text-right">Quantity</th><th class="text-right">Revenue (AED)</th></tr>
+                ${categorySales.map(c => `<tr><td>${c.category}</td><td class="text-right">${c.totalQuantity}</td><td class="text-right">${c.totalSales.toFixed(2)}</td></tr>`).join('')}
               </table>
             ` : ''}
             

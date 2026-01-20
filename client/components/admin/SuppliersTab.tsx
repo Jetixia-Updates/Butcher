@@ -35,7 +35,7 @@ import type {
   SupplierProduct,
   PurchaseOrder,
   CreateSupplierRequest,
-  PaymentTerms,
+  SupplierPaymentTerms,
   CreatePurchaseOrderRequest,
   Currency,
 } from "@shared/api";
@@ -49,7 +49,7 @@ const statusColors: Record<SupplierStatus, string> = {
   suspended: "bg-red-100 text-red-700",
 };
 
-const paymentLabels: Record<PaymentTerms, string> = {
+const paymentLabels: Record<SupplierPaymentTerms, string> = {
   net_7: "Net 7",
   net_15: "Net 15",
   net_30: "Net 30",
@@ -256,7 +256,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     prepaid: isRTL ? "مدفوع مقدماً" : "Prepaid",
   };
 
-  const paymentLabelsTranslated: Record<PaymentTerms, string> = {
+  const paymentLabelsTranslated: Record<SupplierPaymentTerms, string> = {
     net_7: t.net7,
     net_15: t.net15,
     net_30: t.net30,
@@ -1032,7 +1032,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
               <Select
                 label={t.paymentTerms}
                 value={form.paymentTerms}
-                onChange={(v) => setForm((f) => ({ ...f, paymentTerms: v as PaymentTerms }))}
+                onChange={(v) => setForm((f) => ({ ...f, paymentTerms: v as SupplierPaymentTerms }))}
                 options={Object.entries(paymentLabelsTranslated).map(([value, label]) => ({ value, label }))}
               />
               <Input label={t.creditLimitAED} type="number" value={form.creditLimit?.toString() ?? "0"} onChange={(v) => setForm((f) => ({ ...f, creditLimit: Number(v) }))} />
