@@ -616,7 +616,7 @@ const createOrder: RequestHandler = async (req, res) => {
         titleAr: "تم استلام طلب جديد",
         message: `New order ${orderNumber} from ${user.firstName} ${user.familyName} - Total: ${total.toFixed(2)} AED`,
         messageAr: `طلب جديد ${orderNumber} من ${user.firstName} ${user.familyName} - المجموع: ${total.toFixed(2)} درهم`,
-        link: `/admin`,
+        link: `/admin/dashboard`,
         linkTab: "orders",
         linkId: orderId,
         unread: true,
