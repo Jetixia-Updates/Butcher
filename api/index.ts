@@ -2956,41 +2956,142 @@ function createApp() {
     { id: 'zone_4', name: 'Sharjah', nameAr: 'الشارقة', emirate: 'Sharjah', deliveryFee: 30, minimumOrder: 100, estimatedMinutes: 75, isActive: true, areas: ['Al Majaz', 'Rolla', 'Industrial Area'] },
   ];
 
-  app.get('/api/delivery/zones', (req, res) => {
-    const { emirate, activeOnly } = req.query;
-    let zones = [...deliveryZones];
-    
-    if (emirate) {
-      zones = zones.filter(z => z.emirate === emirate);
+  // =====================================================
+  // DELIVERY ZONES API - DATABASE BACKED
+  // =====================================================
+
+  app.get('/api/delivery/zones', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { emirate, activeOnly } = req.query;
+      let zones = await pgDb.select().from(deliveryZonesTable);
+
+      if (emirate) {
+        zones = zones.filter((z) => z.emirate === emirate);
+      }
+
+      if (activeOnly === 'true') {
+        zones = zones.filter((z) => z.isActive);
+      }
+
+      res.json({ success: true, data: zones });
+    } catch (error) {
+      console.error('[Delivery Zones Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch delivery zones' });
     }
-    if (activeOnly === 'true') {
-      zones = zones.filter(z => z.isActive);
-    }
-    
-    res.json({ success: true, data: zones });
   });
 
   // Get zone by ID
-  app.get('/api/delivery/zones/:id', (req, res) => {
-    const zone = deliveryZones.find(z => z.id === req.params.id);
-    if (!zone) {
-      return res.status(404).json({ success: false, error: 'Delivery zone not found' });
+  app.get('/api/delivery/zones/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const zones = await pgDb.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, req.params.id));
+
+      if (zones.length === 0) {
+        return res.status(404).json({ success: false, error: 'Delivery zone not found' });
+      }
+
+      res.json({ success: true, data: zones[0] });
+    } catch (error) {
+      console.error('[Delivery Zone Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch delivery zone' });
     }
-    res.json({ success: true, data: zone });
   });
 
-  app.post('/api/delivery/zones', (req, res) => {
-    const zone = { id: `zone_${Date.now()}`, ...req.body };
-    res.json({ success: true, data: zone });
+  app.post('/api/delivery/zones', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
+
+      const [zone] = await pgDb.insert(deliveryZonesTable).values({
+        id: `zone_${Date.now()}`,
+        name,
+        nameAr,
+        emirate,
+        areas: areas || [],
+        deliveryFee: String(deliveryFee || 20),
+        minimumOrder: String(minimumOrder || 50),
+        estimatedMinutes: estimatedMinutes || 60,
+        isActive: isActive ?? true,
+        expressEnabled: expressEnabled ?? false,
+        expressFee: String(expressFee || 25),
+        expressHours: expressHours || 1,
+      }).returning();
+
+      res.status(201).json({ success: true, data: zone, message: 'Delivery zone created' });
+    } catch (error) {
+      console.error('[Create Zone Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create delivery zone' });
+    }
   });
 
-  app.put('/api/delivery/zones/:id', (req, res) => {
-    const zone = { id: req.params.id, ...req.body };
-    res.json({ success: true, data: zone });
+  app.put('/api/delivery/zones/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const zones = await pgDb.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, req.params.id));
+
+      if (zones.length === 0) {
+        return res.status(404).json({ success: false, error: 'Delivery zone not found' });
+      }
+
+      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
+      const updateData: Record<string, unknown> = {};
+
+      if (name !== undefined) updateData.name = name;
+      if (nameAr !== undefined) updateData.nameAr = nameAr;
+      if (emirate !== undefined) updateData.emirate = emirate;
+      if (areas !== undefined) updateData.areas = areas;
+      if (deliveryFee !== undefined) updateData.deliveryFee = String(deliveryFee);
+      if (minimumOrder !== undefined) updateData.minimumOrder = String(minimumOrder);
+      if (estimatedMinutes !== undefined) updateData.estimatedMinutes = estimatedMinutes;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      if (expressEnabled !== undefined) updateData.expressEnabled = expressEnabled;
+      if (expressFee !== undefined) updateData.expressFee = String(expressFee);
+      if (expressHours !== undefined) updateData.expressHours = expressHours;
+
+      const [updated] = await pgDb.update(deliveryZonesTable)
+        .set(updateData)
+        .where(eq(deliveryZonesTable.id, req.params.id))
+        .returning();
+
+      res.json({ success: true, data: updated, message: 'Delivery zone updated' });
+    } catch (error) {
+      console.error('[Update Zone Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update delivery zone' });
+    }
   });
 
-  app.delete('/api/delivery/zones/:id', (req, res) => {
-    res.json({ success: true, message: 'Zone deleted' });
+  app.delete('/api/delivery/zones/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const zones = await pgDb.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, req.params.id));
+
+      if (zones.length === 0) {
+        return res.status(404).json({ success: false, error: 'Delivery zone not found' });
+      }
+
+      await pgDb.delete(deliveryZonesTable).where(eq(deliveryZonesTable.id, req.params.id));
+
+      res.json({ success: true, message: 'Zone deleted' });
+    } catch (error) {
+      console.error('[Delete Zone Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete delivery zone' });
+    }
   });
 
   app.get('/api/delivery/addresses', (req, res) => {
