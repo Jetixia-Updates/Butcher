@@ -144,6 +144,58 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Account Modal State
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [accountForm, setAccountForm] = useState({
+    name: "",
+    nameAr: "",
+    type: "bank" as "cash" | "bank" | "card_payments" | "cod_collections" | "petty_cash",
+    currency: "AED" as "AED" | "USD" | "EUR",
+    bankName: "",
+    accountNumber: "",
+    iban: "",
+  });
+  const [accountSubmitting, setAccountSubmitting] = useState(false);
+
+  const accountTypes = [
+    { value: "bank", label: "Bank Account", labelAr: "حساب بنكي" },
+    { value: "cash", label: "Cash", labelAr: "نقدي" },
+    { value: "card_payments", label: "Card Payments", labelAr: "مدفوعات البطاقات" },
+    { value: "cod_collections", label: "COD Collections", labelAr: "تحصيلات الدفع عند الاستلام" },
+    { value: "petty_cash", label: "Petty Cash", labelAr: "مصروفات نثرية" },
+  ];
+
+  const handleCreateAccount = async () => {
+    if (!accountForm.name) {
+      alert(language === "ar" ? "يرجى إدخال اسم الحساب" : "Please enter account name");
+      return;
+    }
+    setAccountSubmitting(true);
+    try {
+      const res = await financeApi.createAccount({
+        name: accountForm.name,
+        nameAr: accountForm.nameAr || accountForm.name,
+        type: accountForm.type,
+        currency: accountForm.currency,
+        isActive: true,
+        bankName: accountForm.bankName || undefined,
+        accountNumber: accountForm.accountNumber || undefined,
+        iban: accountForm.iban || undefined,
+      });
+      if (res.success) {
+        setShowAccountModal(false);
+        setAccountForm({ name: "", nameAr: "", type: "bank", currency: "AED", bankName: "", accountNumber: "", iban: "" });
+        await loadData();
+      } else {
+        alert(res.error || "Failed to create account");
+      }
+    } catch (err) {
+      alert("Failed to create account");
+    } finally {
+      setAccountSubmitting(false);
+    }
+  };
+
   const getRangeFromPreset = (period: PeriodPreset) => {
     const now = new Date();
     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
@@ -702,7 +754,7 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
             <div className="flex items-center gap-2 font-semibold text-slate-900">
               <Wallet className="w-4 h-4" /> {t("accounts")}
             </div>
-            <button className="text-sm text-primary flex items-center gap-1" onClick={() => onNavigate?.("finance")}> 
+            <button className="text-sm text-primary flex items-center gap-1" onClick={() => setShowAccountModal(true)}> 
               <PlusIcon /> {language === "ar" ? "إنشاء" : "Create"}
             </button>
           </div>
@@ -1193,6 +1245,177 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
                   <>
                     <FileText className="w-4 h-4" />
                     {language === "ar" ? "حفظ المصروف" : "Save Expense"}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Account Modal */}
+      {showAccountModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowAccountModal(false)}>
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto m-4"
+            onClick={(e) => e.stopPropagation()}
+            dir={isRTL ? "rtl" : "ltr"}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">
+                    {language === "ar" ? "إنشاء حساب جديد" : "Create New Account"}
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    {language === "ar" ? "حساب بنكي، نقدي، أو بطاقات" : "Bank, Cash, or Card Account"}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAccountModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {/* Account Type */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {language === "ar" ? "نوع الحساب *" : "Account Type *"}
+                </label>
+                <select
+                  value={accountForm.type}
+                  onChange={(e) => setAccountForm((prev) => ({ ...prev, type: e.target.value as typeof accountForm.type }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                >
+                  {accountTypes.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {language === "ar" ? t.labelAr : t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Account Name */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {language === "ar" ? "اسم الحساب (English) *" : "Account Name *"}
+                  </label>
+                  <input
+                    type="text"
+                    value={accountForm.name}
+                    onChange={(e) => setAccountForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    placeholder={language === "ar" ? "مثال: حساب البنك الرئيسي" : "e.g., Main Bank Account"}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {language === "ar" ? "الاسم بالعربية" : "Name in Arabic"}
+                  </label>
+                  <input
+                    type="text"
+                    value={accountForm.nameAr}
+                    onChange={(e) => setAccountForm((prev) => ({ ...prev, nameAr: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    placeholder="الحساب الرئيسي"
+                    dir="rtl"
+                  />
+                </div>
+              </div>
+
+              {/* Currency */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {language === "ar" ? "العملة" : "Currency"}
+                </label>
+                <select
+                  value={accountForm.currency}
+                  onChange={(e) => setAccountForm((prev) => ({ ...prev, currency: e.target.value as typeof accountForm.currency }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                >
+                  <option value="AED">AED - UAE Dirham</option>
+                  <option value="USD">USD - US Dollar</option>
+                  <option value="EUR">EUR - Euro</option>
+                </select>
+              </div>
+
+              {/* Bank Details (shown for bank type) */}
+              {accountForm.type === "bank" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      {language === "ar" ? "اسم البنك" : "Bank Name"}
+                    </label>
+                    <input
+                      type="text"
+                      value={accountForm.bankName}
+                      onChange={(e) => setAccountForm((prev) => ({ ...prev, bankName: e.target.value }))}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                      placeholder={language === "ar" ? "مثال: بنك دبي التجاري" : "e.g., Commercial Bank of Dubai"}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {language === "ar" ? "رقم الحساب" : "Account Number"}
+                      </label>
+                      <input
+                        type="text"
+                        value={accountForm.accountNumber}
+                        onChange={(e) => setAccountForm((prev) => ({ ...prev, accountNumber: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                        placeholder="1234567890"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {language === "ar" ? "رقم IBAN" : "IBAN"}
+                      </label>
+                      <input
+                        type="text"
+                        value={accountForm.iban}
+                        onChange={(e) => setAccountForm((prev) => ({ ...prev, iban: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                        placeholder="AE12 3456 7890 1234 5678 901"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
+              <button
+                onClick={() => setShowAccountModal(false)}
+                className="px-4 py-2 text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-100 transition"
+              >
+                {language === "ar" ? "إلغاء" : "Cancel"}
+              </button>
+              <button
+                onClick={handleCreateAccount}
+                disabled={accountSubmitting}
+                className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {accountSubmitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    {language === "ar" ? "جاري الإنشاء..." : "Creating..."}
+                  </>
+                ) : (
+                  <>
+                    <Wallet className="w-4 h-4" />
+                    {language === "ar" ? "إنشاء الحساب" : "Create Account"}
                   </>
                 )}
               </button>
