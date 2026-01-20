@@ -4461,18 +4461,18 @@ function createApp() {
   app.get('/api/users/me', (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
     if (!token) {
-      return res.status(401).json({ success: false, error: 'Not authenticated' });
+      return res.json({ success: true, data: null }); // Return null instead of error for unauthenticated
     }
 
     const session = sessions.get(token);
     if (!session || new Date(session.expiresAt) < new Date()) {
       sessions.delete(token);
-      return res.status(401).json({ success: false, error: 'Session expired' });
+      return res.json({ success: true, data: null }); // Return null for expired session
     }
 
     const user = users.get(session.userId);
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return res.json({ success: true, data: null }); // Return null if user not found
     }
 
     res.json({ success: true, data: sanitizeUser(user) });
