@@ -1116,7 +1116,12 @@ const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
     const orderResult = await db.select().from(orders).where(eq(orders.id, tracking.orderId));
     if (orderResult.length > 0 && orderResult[0].userId) {
       const order = orderResult[0];
-      if (status === "in_transit" || status === "picked_up") {
+      if (status === "assigned") {
+        // Send driver assigned notification with driver details
+        const driverName = tracking.driverName || updated.driverName || "Driver";
+        const driverMobile = tracking.driverMobile || updated.driverMobile || "N/A";
+        await createDriverAssignedNotification(order.userId, order.orderNumber, driverName, driverMobile);
+      } else if (status === "in_transit" || status === "picked_up") {
         await createOrderNotification(order.userId, order.orderNumber, "out_for_delivery");
       } else if (status === "delivered") {
         await createOrderNotification(order.userId, order.orderNumber, "delivered");

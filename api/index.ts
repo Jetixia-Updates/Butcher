@@ -3947,12 +3947,35 @@ function createApp() {
 
           // Create delivery status notification for customer
           const deliveryMessages: Record<string, { en: string; ar: string }> = {
-            'assigned': { en: 'A driver has been assigned to your order', ar: 'تم تعيين سائق لطلبك' },
             'picked_up': { en: 'Your order has been picked up by the driver', ar: 'تم استلام طلبك من قبل السائق' },
             'in_transit': { en: 'Your order is on its way', ar: 'طلبك في الطريق إليك' },
             'nearby': { en: 'Your driver is nearby and will arrive soon', ar: 'السائق قريب منك وسيصل قريباً' },
             'delivered': { en: 'Your order has been delivered', ar: 'تم توصيل طلبك' },
           };
+
+          // Special handling for 'assigned' status to include driver details
+          if (status === 'assigned' && order.userId && dbTracking) {
+            const driverName = dbTracking.driverName || 'Driver';
+            const driverMobile = dbTracking.driverMobile || 'N/A';
+            try {
+              await pgDb.insert(inAppNotificationsTable).values({
+                id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                userId: String(order.userId),
+                type: 'driver_assigned',
+                title: 'Driver Assigned to Your Order',
+                titleAr: 'تم تعيين سائق لطلبك',
+                message: `Good news! A driver has been assigned to your order #${order.orderNumber}. Driver: ${driverName}, Mobile: ${driverMobile}`,
+                messageAr: `أخبار سارة! تم تعيين سائق لطلبك #${order.orderNumber}. السائق: ${driverName}، الهاتف: ${driverMobile}`,
+                link: `/orders`,
+                linkTab: 'orders',
+                linkId: order.id,
+                unread: true,
+              });
+              console.log(`[Driver Assigned Update] ✅ Notification with driver details sent to customer ${order.userId}`);
+            } catch (notifError) {
+              console.error('[Driver Assigned Notification Error]', notifError);
+            }
+          }
 
           const deliveryMsg = deliveryMessages[status];
           if (deliveryMsg && order.userId) {
