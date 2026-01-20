@@ -197,7 +197,23 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
     }
     
     if (notification.link) {
-      navigate(notification.link);
+      // Sanitize old/invalid links - redirect to base page instead of non-existent detail pages
+      let targetLink = notification.link;
+      
+      // Fix: /orders/order_xxx -> /orders (order detail page doesn't exist)
+      if (targetLink.startsWith("/orders/")) {
+        targetLink = "/orders";
+      }
+      // Fix: /admin/orders/xxx -> /admin/dashboard (admin order detail page doesn't exist)
+      if (targetLink.startsWith("/admin/orders/")) {
+        targetLink = "/admin/dashboard";
+      }
+      // Fix: /admin -> /admin/dashboard
+      if (targetLink === "/admin") {
+        targetLink = "/admin/dashboard";
+      }
+      
+      navigate(targetLink);
     }
     setShowNotifications(false);
   };
