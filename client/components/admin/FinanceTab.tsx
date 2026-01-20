@@ -19,6 +19,9 @@ import {
   TrendingUp,
   TrendingDown,
   ReceiptCent,
+  X,
+  Calendar,
+  FileText,
 } from "lucide-react";
 import { financeApi } from "@/lib/api";
 import type {
@@ -71,6 +74,42 @@ const typeFilters: { value: TransactionType | "all"; label: string; labelAr: str
   { value: "payout", label: "Payouts", labelAr: "الدفعات" },
 ];
 
+// IFRS-compliant expense categories
+const expenseCategories = [
+  { code: "rent", name: "Rent", nameAr: "الإيجار", function: "administrative" },
+  { code: "utilities", name: "Utilities (Electric, Water, Internet)", nameAr: "المرافق", function: "administrative" },
+  { code: "salaries", name: "Salaries & Wages", nameAr: "الرواتب والأجور", function: "administrative" },
+  { code: "inventory", name: "Inventory / Raw Materials", nameAr: "المخزون", function: "cost_of_sales" },
+  { code: "delivery", name: "Delivery & Shipping", nameAr: "التوصيل والشحن", function: "selling" },
+  { code: "marketing", name: "Marketing & Advertising", nameAr: "التسويق والإعلان", function: "selling" },
+  { code: "equipment", name: "Equipment", nameAr: "المعدات", function: "administrative" },
+  { code: "maintenance", name: "Repairs & Maintenance", nameAr: "الصيانة والإصلاحات", function: "administrative" },
+  { code: "insurance", name: "Insurance", nameAr: "التأمين", function: "administrative" },
+  { code: "professional_fees", name: "Professional Fees (Legal, Accounting)", nameAr: "الرسوم المهنية", function: "administrative" },
+  { code: "licenses_permits", name: "Licenses & Permits", nameAr: "الرخص والتصاريح", function: "administrative" },
+  { code: "bank_charges", name: "Bank Charges", nameAr: "رسوم البنك", function: "administrative" },
+  { code: "office_supplies", name: "Office Supplies", nameAr: "مستلزمات المكتب", function: "administrative" },
+  { code: "travel", name: "Travel & Transportation", nameAr: "السفر والمواصلات", function: "administrative" },
+  { code: "employee_benefits", name: "Employee Benefits", nameAr: "مزايا الموظفين", function: "administrative" },
+  { code: "taxes", name: "Taxes (Non-VAT)", nameAr: "الضرائب", function: "other_operating" },
+  { code: "interest_expense", name: "Interest Expense", nameAr: "مصروفات الفوائد", function: "finance" },
+  { code: "depreciation", name: "Depreciation", nameAr: "الإهلاك", function: "administrative" },
+  { code: "other", name: "Other / Petty Cash", nameAr: "أخرى / مصروفات نثرية", function: "other_operating" },
+];
+
+type ExpenseFormData = {
+  category: string;
+  grossAmount: string;
+  vatAmount: string;
+  description: string;
+  vendor: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  paymentTerms: string;
+  notes: string;
+};
+
 export function FinanceTab({ onNavigate }: AdminTabProps) {
   const { language } = useLanguage();
   const isRTL = language === "ar";
@@ -84,6 +123,22 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
     search: "",
     type: "all",
   });
+
+  // Expense Modal State
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [expenseForm, setExpenseForm] = useState<ExpenseFormData>({
+    category: "rent",
+    grossAmount: "",
+    vatAmount: "",
+    description: "",
+    vendor: "",
+    invoiceNumber: "",
+    invoiceDate: new Date().toISOString().split("T")[0],
+    dueDate: "",
+    paymentTerms: "net_30",
+    notes: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
 
   const getRangeFromPreset = (period: PeriodPreset) => {
     const now = new Date();
@@ -146,6 +201,65 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Handle expense form submission
+  const handleCreateExpense = async () => {
+    if (!expenseForm.grossAmount || !expenseForm.description) {
+      alert(language === "ar" ? "يرجى ملء الحقول المطلوبة" : "Please fill in required fields");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const grossAmount = parseFloat(expenseForm.grossAmount) || 0;
+      const vatAmount = parseFloat(expenseForm.vatAmount) || grossAmount * 0.05; // Default 5% VAT
+
+      await financeApi.createExpense({
+        category: expenseForm.category as any,
+        grossAmount,
+        description: expenseForm.description,
+        vatAmount,
+        vendor: expenseForm.vendor || undefined,
+        invoiceNumber: expenseForm.invoiceNumber || undefined,
+        invoiceDate: expenseForm.invoiceDate || undefined,
+        dueDate: expenseForm.dueDate || undefined,
+        paymentTerms: expenseForm.paymentTerms as any,
+        notes: expenseForm.notes || undefined,
+      });
+
+      // Reset form and close modal
+      setExpenseForm({
+        category: "rent",
+        grossAmount: "",
+        vatAmount: "",
+        description: "",
+        vendor: "",
+        invoiceNumber: "",
+        invoiceDate: new Date().toISOString().split("T")[0],
+        dueDate: "",
+        paymentTerms: "net_30",
+        notes: "",
+      });
+      setShowExpenseModal(false);
+      
+      // Reload expenses
+      void loadData();
+    } catch (error) {
+      console.error("Failed to create expense:", error);
+      alert(language === "ar" ? "فشل في إنشاء المصروف" : "Failed to create expense");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Auto-calculate VAT when gross amount changes
+  const handleGrossAmountChange = (value: string) => {
+    setExpenseForm((prev) => ({
+      ...prev,
+      grossAmount: value,
+      vatAmount: value ? (parseFloat(value) * 0.05).toFixed(2) : "",
+    }));
+  };
 
   const filteredTransactions = useMemo(() => {
     if (!state.search) return state.transactions;
@@ -379,7 +493,10 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
           <div className="flex items-center gap-2 font-semibold text-slate-900">
               <ReceiptCent className="w-4 h-4" /> {t("expensesList")}
           </div>
-          <button className="text-sm text-primary flex items-center gap-1" onClick={() => onNavigate?.("suppliers")}> 
+          <button 
+            className="text-sm text-primary flex items-center gap-1" 
+            onClick={() => setShowExpenseModal(true)}
+          > 
             <PlusIcon /> {language === "ar" ? "إضافة" : "Add"}
           </button>
         </div>
@@ -546,6 +663,239 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
           </button>
         </div>
       </div>
+
+      {/* Add Expense Modal */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowExpenseModal(false)}>
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4"
+            onClick={(e) => e.stopPropagation()}
+            dir={isRTL ? "rtl" : "ltr"}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">
+                    {language === "ar" ? "إضافة مصروف جديد" : "Add New Expense"}
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    {language === "ar" ? "فواتير، إيجار، مصروفات نثرية" : "Bills, Rent, Petty Cash"}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowExpenseModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {language === "ar" ? "الفئة *" : "Category *"}
+                </label>
+                <select
+                  value={expenseForm.category}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, category: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                >
+                  {expenseCategories.map((cat) => (
+                    <option key={cat.code} value={cat.code}>
+                      {language === "ar" ? cat.nameAr : cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Amount Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {language === "ar" ? "المبلغ (قبل الضريبة) *" : "Gross Amount (excl. VAT) *"}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-slate-400">AED</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={expenseForm.grossAmount}
+                      onChange={(e) => handleGrossAmountChange(e.target.value)}
+                      className="w-full pl-14 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {language === "ar" ? "ضريبة القيمة المضافة (5%)" : "VAT Amount (5%)"}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-slate-400">AED</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={expenseForm.vatAmount}
+                      onChange={(e) => setExpenseForm((prev) => ({ ...prev, vatAmount: e.target.value }))}
+                      className="w-full pl-14 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {language === "ar" ? "الوصف *" : "Description *"}
+                </label>
+                <input
+                  type="text"
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder={language === "ar" ? "مثال: فاتورة كهرباء يناير 2026" : "e.g., January 2026 Electricity Bill"}
+                />
+              </div>
+
+              {/* Vendor & Invoice Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {language === "ar" ? "المورد / الجهة" : "Vendor / Supplier"}
+                  </label>
+                  <input
+                    type="text"
+                    value={expenseForm.vendor}
+                    onChange={(e) => setExpenseForm((prev) => ({ ...prev, vendor: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    placeholder={language === "ar" ? "اسم المورد" : "Vendor name"}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {language === "ar" ? "رقم الفاتورة" : "Invoice Number"}
+                  </label>
+                  <input
+                    type="text"
+                    value={expenseForm.invoiceNumber}
+                    onChange={(e) => setExpenseForm((prev) => ({ ...prev, invoiceNumber: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    placeholder="INV-001"
+                  />
+                </div>
+              </div>
+
+              {/* Date Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {language === "ar" ? "تاريخ الفاتورة" : "Invoice Date"}
+                  </label>
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="date"
+                      value={expenseForm.invoiceDate}
+                      onChange={(e) => setExpenseForm((prev) => ({ ...prev, invoiceDate: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {language === "ar" ? "تاريخ الاستحقاق" : "Due Date"}
+                  </label>
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="date"
+                      value={expenseForm.dueDate}
+                      onChange={(e) => setExpenseForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {language === "ar" ? "شروط الدفع" : "Payment Terms"}
+                  </label>
+                  <select
+                    value={expenseForm.paymentTerms}
+                    onChange={(e) => setExpenseForm((prev) => ({ ...prev, paymentTerms: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  >
+                    <option value="immediate">{language === "ar" ? "فوري" : "Immediate"}</option>
+                    <option value="net_7">{language === "ar" ? "صافي 7 أيام" : "Net 7 days"}</option>
+                    <option value="net_15">{language === "ar" ? "صافي 15 يوم" : "Net 15 days"}</option>
+                    <option value="net_30">{language === "ar" ? "صافي 30 يوم" : "Net 30 days"}</option>
+                    <option value="net_60">{language === "ar" ? "صافي 60 يوم" : "Net 60 days"}</option>
+                    <option value="net_90">{language === "ar" ? "صافي 90 يوم" : "Net 90 days"}</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {language === "ar" ? "ملاحظات" : "Notes"}
+                </label>
+                <textarea
+                  value={expenseForm.notes}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+                  placeholder={language === "ar" ? "ملاحظات إضافية..." : "Additional notes..."}
+                />
+              </div>
+
+              {/* Total */}
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600">{language === "ar" ? "الإجمالي (شامل الضريبة)" : "Total (incl. VAT)"}</span>
+                  <span className="text-xl font-bold text-slate-900">
+                    AED {formatAmount((parseFloat(expenseForm.grossAmount) || 0) + (parseFloat(expenseForm.vatAmount) || 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
+              <button
+                onClick={() => setShowExpenseModal(false)}
+                className="px-4 py-2 text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-100 transition"
+              >
+                {language === "ar" ? "إلغاء" : "Cancel"}
+              </button>
+              <button
+                onClick={handleCreateExpense}
+                disabled={submitting}
+                className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {submitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    {language === "ar" ? "جاري الحفظ..." : "Saving..."}
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    {language === "ar" ? "حفظ المصروف" : "Save Expense"}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
