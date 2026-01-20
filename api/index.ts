@@ -232,6 +232,9 @@ const deliveryZonesTable = pgTable("delivery_zones", {
   minimumOrder: decimal("minimum_order", { precision: 10, scale: 2 }).notNull(),
   estimatedMinutes: integer("estimated_minutes").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  expressEnabled: boolean("express_enabled").notNull().default(false),
+  expressFee: decimal("express_fee", { precision: 10, scale: 2 }).notNull().default("25"),
+  expressHours: integer("express_hours").notNull().default(1),
 });
 
 // Delivery tracking table
@@ -3214,6 +3217,21 @@ function createApp() {
   // Store delivery zones in memory
   // Finance expenses placeholder (no DB table yet)
   const financeExpenses: { id: string; category: string; description: string; amount: number; status: string; date?: string }[] = [];
+
+  // Get all delivery zones
+  app.get('/api/delivery/zones', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const zones = await pgDb.select().from(deliveryZonesTable);
+      res.json({ success: true, data: zones });
+    } catch (error) {
+      console.error('[Delivery Zones Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch delivery zones' });
+    }
+  });
 
   // Get zone by ID
   app.get('/api/delivery/zones/:id', async (req, res) => {
