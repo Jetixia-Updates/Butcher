@@ -119,6 +119,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }];
       }
     });
+
+    // Notify admin via API (fire and forget)
+    fetch('/api/chat/notify-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, userName, message: text }),
+    }).catch(() => {
+      // Ignore errors - notification is best-effort
+    });
   }, []);
 
   // Send message from admin to user
@@ -145,6 +154,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return updated;
       }
       return prev;
+    });
+
+    // Notify user via API (fire and forget)
+    fetch('/api/chat/notify-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, message: text }),
+    }).catch(() => {
+      // Ignore errors - notification is best-effort
     });
   }, []);
 

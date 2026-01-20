@@ -2106,7 +2106,7 @@ function createApp() {
           type: 'order_placed',
           title: 'Order Placed Successfully',
           titleAr: 'تم تقديم الطلب بنجاح',
-          message: `Your order #${orderNumber} has been placed and is being processed.`,
+          message: `Your order #${orderNumber} has been placed and is being processing.`,
           messageAr: `تم تقديم طلبك #${orderNumber} وجاري معالجته.`,
           link: `/orders/${orderId}`,
           linkTab: 'orders',
@@ -2114,7 +2114,26 @@ function createApp() {
           unread: true,
         });
       } catch (notifError) {
-        console.error('[Order Notification Error]', notifError);
+        console.error('[User Order Notification Error]', notifError);
+      }
+
+      // Create notification for admin about new order
+      try {
+        await pgDb.insert(inAppNotificationsTable).values({
+          id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_admin`,
+          userId: 'admin',
+          type: 'order',
+          title: 'New Order Received',
+          titleAr: 'طلب جديد',
+          message: `New order #${orderNumber} from ${customerName}. Total: AED ${total.toFixed(2)}`,
+          messageAr: `طلب جديد #${orderNumber} من ${customerName}. المجموع: ${total.toFixed(2)} درهم`,
+          link: `/admin/orders/${orderId}`,
+          linkTab: 'orders',
+          linkId: orderId,
+          unread: true,
+        });
+      } catch (notifError) {
+        console.error('[Admin Order Notification Error]', notifError);
       }
     } catch (error) {
       console.error('[Create Order Error]', error);
@@ -3863,6 +3882,36 @@ function createApp() {
               actualDeliveryAt: status === 'delivered' ? now : null,
             })
             .where(eq(ordersTable.id, orderId));
+
+          // Create delivery status notification for customer
+          const deliveryMessages: Record<string, { en: string; ar: string }> = {
+            'assigned': { en: 'A driver has been assigned to your order', ar: 'تم تعيين سائق لطلبك' },
+            'picked_up': { en: 'Your order has been picked up by the driver', ar: 'تم استلام طلبك من قبل السائق' },
+            'in_transit': { en: 'Your order is on its way', ar: 'طلبك في الطريق إليك' },
+            'nearby': { en: 'Your driver is nearby and will arrive soon', ar: 'السائق قريب منك وسيصل قريباً' },
+            'delivered': { en: 'Your order has been delivered', ar: 'تم توصيل طلبك' },
+          };
+
+          const deliveryMsg = deliveryMessages[status];
+          if (deliveryMsg && order.userId) {
+            try {
+              await pgDb.insert(inAppNotificationsTable).values({
+                id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                userId: String(order.userId),
+                type: `delivery_${status}`,
+                title: status === 'delivered' ? 'Order Delivered!' : 'Delivery Update',
+                titleAr: status === 'delivered' ? 'تم التوصيل!' : 'تحديث التوصيل',
+                message: `${deliveryMsg.en}. Order #${order.orderNumber}`,
+                messageAr: `${deliveryMsg.ar}. طلب #${order.orderNumber}`,
+                link: `/orders/${order.id}`,
+                linkTab: 'orders',
+                linkId: order.id,
+                unread: true,
+              });
+            } catch (notifError) {
+              console.error('[Delivery Status Notification Error]', notifError);
+            }
+          }
         }
 
         // Update in-memory tracking
@@ -5876,6 +5925,80 @@ function createApp() {
     } catch (error) {
       console.error('Error clearing notifications:', error);
       res.status(500).json({ success: false, error: 'Failed to clear notifications' });
+    }
+  });
+
+  // =====================================================
+  // CHAT MESSAGE NOTIFICATIONS API
+  // =====================================================
+
+  // Create notification when admin sends a chat message to user
+  app.post('/api/chat/notify-user', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId, message } = req.body;
+      
+      if (!userId || !message) {
+        return res.status(400).json({ success: false, error: 'userId and message are required' });
+      }
+
+      // Create notification for the user
+      await pgDb.insert(inAppNotificationsTable).values({
+        id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        userId: String(userId),
+        type: 'chat',
+        title: 'New Message from Support',
+        titleAr: 'رسالة جديدة من الدعم',
+        message: message.length > 100 ? message.substring(0, 100) + '...' : message,
+        messageAr: message.length > 100 ? message.substring(0, 100) + '...' : message,
+        link: '/profile',
+        linkTab: 'chat',
+        linkId: null,
+        unread: true,
+      });
+
+      res.json({ success: true, message: 'User notified' });
+    } catch (error) {
+      console.error('[Chat User Notification Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to notify user' });
+    }
+  });
+
+  // Create notification when user sends a chat message to admin
+  app.post('/api/chat/notify-admin', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId, userName, message } = req.body;
+      
+      if (!userId || !message) {
+        return res.status(400).json({ success: false, error: 'userId and message are required' });
+      }
+
+      // Create notification for the admin
+      await pgDb.insert(inAppNotificationsTable).values({
+        id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        userId: 'admin',
+        type: 'chat',
+        title: `New Message from ${userName || 'Customer'}`,
+        titleAr: `رسالة جديدة من ${userName || 'عميل'}`,
+        message: message.length > 100 ? message.substring(0, 100) + '...' : message,
+        messageAr: message.length > 100 ? message.substring(0, 100) + '...' : message,
+        link: '/admin/support',
+        linkTab: 'support',
+        linkId: userId,
+        unread: true,
+      });
+
+      res.json({ success: true, message: 'Admin notified' });
+    } catch (error) {
+      console.error('[Chat Admin Notification Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to notify admin' });
     }
   });
 

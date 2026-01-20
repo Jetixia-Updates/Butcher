@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useAuth } from "./AuthContext";
 import { notificationsApi, InAppNotification } from "@/lib/api";
 
-export type NotificationType = "order" | "stock" | "delivery" | "payment" | "system";
+// Allow any notification type string for flexibility with server-side generated types
+export type NotificationType = string;
 
 export interface Notification {
   id: string;

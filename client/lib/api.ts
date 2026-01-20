@@ -889,7 +889,7 @@ export const financeApi = {
 export interface InAppNotification {
   id: string;
   userId: string;
-  type: "order" | "stock" | "delivery" | "payment" | "system";
+  type: string; // Flexible type to support various notification types like order_placed, order_confirmed, etc.
   title: string;
   titleAr: string;
   message: string;
@@ -908,7 +908,7 @@ export const notificationsApi = {
   // Create a notification for a user (used by admin/system)
   create: (data: {
     userId: string;
-    type: "order" | "stock" | "delivery" | "payment" | "system";
+    type: string;
     title: string;
     titleAr: string;
     message: string;
