@@ -2250,6 +2250,112 @@ function createApp() {
     }
   });
 
+  // Update payment status (for COD confirmation) - DATABASE BACKED
+  app.post('/api/orders/:id/payment', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const { id } = req.params;
+      const { status } = req.body;
+      
+      // Validate payment status
+      const validStatuses = ['pending', 'authorized', 'captured', 'failed', 'refunded', 'partially_refunded'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid payment status' });
+      }
+      
+      const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, id));
+      if (orderResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Order not found' });
+      }
+      
+      const order = orderResult[0];
+      const now = new Date();
+      
+      // Update order payment status
+      await pgDb.update(ordersTable)
+        .set({ 
+          paymentStatus: status as any,
+          updatedAt: now 
+        })
+        .where(eq(ordersTable.id, id));
+      
+      // If payment is captured, also update the payments table
+      if (status === 'captured') {
+        // Check if payment record exists for this order
+        const existingPayment = await pgDb.select().from(paymentsTable).where(eq(paymentsTable.orderId, id));
+        
+        if (existingPayment.length > 0) {
+          // Update existing payment
+          await pgDb.update(paymentsTable)
+            .set({
+              status: 'captured',
+              capturedAt: now,
+              updatedAt: now,
+            })
+            .where(eq(paymentsTable.orderId, id));
+        } else {
+          // Create new payment record for COD
+          await pgDb.insert(paymentsTable).values({
+            id: `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            orderId: id,
+            orderNumber: order.orderNumber,
+            userId: order.userId || 'guest',
+            amount: parseFloat(String(order.total)),
+            currency: 'AED',
+            paymentMethod: order.paymentMethod || 'cod',
+            status: 'captured',
+            capturedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+        
+        console.log(`[Payment Confirmed] Order ${order.orderNumber} payment marked as captured`);
+      }
+      
+      // Fetch updated order
+      const updated = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, id));
+      const orderItems = await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id));
+      
+      const formattedOrder = {
+        id: updated[0].id,
+        orderNumber: updated[0].orderNumber,
+        userId: updated[0].userId,
+        customerName: updated[0].customerName,
+        items: orderItems.map(item => ({
+          id: item.id,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: parseFloat(String(item.quantity)),
+          unitPrice: parseFloat(String(item.unitPrice)),
+          totalPrice: parseFloat(String(item.totalPrice)),
+        })),
+        subtotal: parseFloat(String(updated[0].subtotal)),
+        discount: parseFloat(String(updated[0].discount)),
+        deliveryFee: parseFloat(String(updated[0].deliveryFee)),
+        vat: parseFloat(String(updated[0].vatAmount)),
+        total: parseFloat(String(updated[0].total)),
+        status: updated[0].status,
+        paymentStatus: updated[0].paymentStatus,
+        paymentMethod: updated[0].paymentMethod,
+        createdAt: updated[0].createdAt.toISOString(),
+        updatedAt: updated[0].updatedAt.toISOString(),
+      };
+      
+      res.json({ 
+        success: true, 
+        data: formattedOrder,
+        message: `Payment status updated to ${status}` 
+      });
+    } catch (error) {
+      console.error('[Update Payment Status Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update payment status' });
+    }
+  });
+
   // Get order by order number - DATABASE BACKED
   app.get('/api/orders/number/:orderNumber', async (req, res) => {
     try {
@@ -4900,10 +5006,12 @@ function createApp() {
       }
 
       const allOrders = await pgDb.select().from(ordersTable);
-      const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
-      const totalOrders = allOrders.length;
-      const totalVat = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
-      const totalDiscount = allOrders.reduce((sum, o) => sum + parseFloat(String(o.discount || 0)), 0);
+      // Only include orders with captured payments for accurate sales reporting
+      const paidOrders = allOrders.filter(o => o.paymentStatus === 'captured' && o.status !== 'cancelled');
+      const totalRevenue = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
+      const totalOrders = paidOrders.length;
+      const totalVat = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
+      const totalDiscount = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.discount || 0)), 0);
       
       res.json({
         success: true,

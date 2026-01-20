@@ -869,6 +869,8 @@ const updatePaymentStatus: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
+    const order = orderResult[0];
+
     // Validate payment status
     const validStatuses = ["pending", "authorized", "captured", "failed", "refunded", "partially_refunded"];
     if (!validStatuses.includes(status)) {
@@ -879,10 +881,44 @@ const updatePaymentStatus: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
+    const now = new Date();
+
     await db.update(orders).set({
       paymentStatus: status,
-      updatedAt: new Date(),
+      updatedAt: now,
     }).where(eq(orders.id, id));
+
+    // If payment is captured, update/create payment record
+    if (status === "captured") {
+      const existingPayment = await db.select().from(payments).where(eq(payments.orderId, id));
+      
+      if (existingPayment.length > 0) {
+        // Update existing payment
+        await db.update(payments).set({
+          status: "captured",
+          capturedAt: now,
+          updatedAt: now,
+        }).where(eq(payments.orderId, id));
+      } else {
+        // Create new payment record for COD
+        const paymentId = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await db.insert(payments).values({
+          id: paymentId,
+          orderId: id,
+          orderNumber: order.orderNumber,
+          userId: order.userId || "guest",
+          amount: order.total,
+          currency: "AED",
+          paymentMethod: order.paymentMethod || "cod",
+          status: "captured",
+          capturedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      
+      console.log(`[Payment Confirmed] Order ${order.orderNumber} payment marked as captured`);
+    }
 
     const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
     const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, id));

@@ -74,10 +74,12 @@ const getFinanceSummary: RequestHandler = async (req, res) => {
       end = range.end;
     }
 
-    // Get orders in date range
+    // Get orders in date range - only include orders with captured payments for revenue
     const allOrders = await db.select().from(orders);
     const filteredOrders = allOrders.filter(
-      (o) => new Date(o.createdAt) >= start && new Date(o.createdAt) <= end && o.status !== "cancelled"
+      (o) => new Date(o.createdAt) >= start && new Date(o.createdAt) <= end && 
+             o.status !== "cancelled" && 
+             o.paymentStatus === "captured"
     );
 
     // Get all products for cost calculation
