@@ -283,18 +283,281 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
   const handleExport = async (format: "csv" | "pdf") => {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 1);
+    
+    switch (period) {
+      case "today":
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      case "week":
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case "month":
+        startDate.setMonth(startDate.getMonth() - 1);
+        break;
+      case "year":
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        break;
+    }
 
-    const response = await reportsApi.export(
-      "sales",
-      format,
-      startDate.toISOString().split("T")[0],
-      endDate.toISOString().split("T")[0]
-    );
+    const dateStr = `${startDate.toISOString().split("T")[0]}_to_${endDate.toISOString().split("T")[0]}`;
+    const periodLabel = periodLabels[period];
 
-    if (response.success && response.data) {
-      // In a real implementation, handle the download
-      console.log("Export successful:", response.data);
+    if (reportType === "sales") {
+      if (format === "csv") {
+        // Generate Sales Report CSV
+        let csvContent = "Butcher Shop - Sales Report\n";
+        csvContent += `Period: ${periodLabel}\n`;
+        csvContent += `Generated: ${new Date().toLocaleString()}\n\n`;
+        
+        // Summary section
+        csvContent += "=== SUMMARY ===\n";
+        csvContent += "Metric,Value\n";
+        csvContent += `Total Revenue,AED ${salesReport?.totalRevenue?.toFixed(2) || 0}\n`;
+        csvContent += `Total Orders,${salesReport?.totalOrders || 0}\n`;
+        csvContent += `Items Sold,${salesReport?.itemsSold || 0}\n`;
+        csvContent += `Average Order Value,AED ${salesReport?.averageOrderValue?.toFixed(2) || 0}\n`;
+        csvContent += `Tax Collected,AED ${salesReport?.taxCollected?.toFixed(2) || 0}\n`;
+        csvContent += `Total Discounts,AED ${salesReport?.totalDiscounts?.toFixed(2) || 0}\n`;
+        csvContent += `Total Refunds,AED ${salesReport?.totalRefunds?.toFixed(2) || 0}\n`;
+        csvContent += `Net Revenue,AED ${((salesReport?.totalRevenue || 0) - (salesReport?.totalRefunds || 0)).toFixed(2)}\n\n`;
+        
+        // Top Products
+        if (topProducts.length > 0) {
+          csvContent += "=== TOP SELLING PRODUCTS ===\n";
+          csvContent += "Product Name,Quantity Sold,Sales (AED)\n";
+          topProducts.forEach(p => {
+            csvContent += `"${p.productName}",${p.quantity},${p.sales.toFixed(2)}\n`;
+          });
+          csvContent += "\n";
+        }
+        
+        // Sales by Category
+        if (categorySales.length > 0) {
+          csvContent += "=== SALES BY CATEGORY ===\n";
+          csvContent += "Category,Orders,Revenue (AED)\n";
+          categorySales.forEach(c => {
+            csvContent += `"${c.categoryName}",${c.orderCount},${c.revenue.toFixed(2)}\n`;
+          });
+          csvContent += "\n";
+        }
+        
+        // Daily Sales
+        if (salesReport?.dailySales && salesReport.dailySales.length > 0) {
+          csvContent += "=== DAILY SALES ===\n";
+          csvContent += "Date,Orders,Revenue (AED)\n";
+          salesReport.dailySales.forEach(d => {
+            csvContent += `${d.date},${d.orders},${d.revenue.toFixed(2)}\n`;
+          });
+        }
+        
+        // Download CSV
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `sales_report_${dateStr}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        
+      } else if (format === "pdf") {
+        // Generate Sales Report PDF using HTML and print
+        const printContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Sales Report - ${periodLabel}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+              h1 { color: #dc2626; border-bottom: 2px solid #dc2626; padding-bottom: 10px; }
+              h2 { color: #64748b; margin-top: 30px; }
+              table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+              th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+              th { background-color: #f8fafc; font-weight: bold; }
+              .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; }
+              .summary-card { background: #f8fafc; padding: 15px; border-radius: 8px; }
+              .summary-card h3 { margin: 0; color: #64748b; font-size: 14px; }
+              .summary-card p { margin: 5px 0 0; font-size: 24px; font-weight: bold; color: #0f172a; }
+              .text-right { text-align: right; }
+              .footer { margin-top: 30px; text-align: center; color: #94a3b8; font-size: 12px; }
+              @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            </style>
+          </head>
+          <body>
+            <h1>🥩 Butcher Shop - Sales Report</h1>
+            <p><strong>Period:</strong> ${periodLabel} (${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()})</p>
+            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+            
+            <h2>Summary</h2>
+            <div class="summary-grid">
+              <div class="summary-card">
+                <h3>Total Revenue</h3>
+                <p>AED ${salesReport?.totalRevenue?.toFixed(2) || '0.00'}</p>
+              </div>
+              <div class="summary-card">
+                <h3>Total Orders</h3>
+                <p>${salesReport?.totalOrders || 0}</p>
+              </div>
+              <div class="summary-card">
+                <h3>Items Sold</h3>
+                <p>${salesReport?.itemsSold || 0}</p>
+              </div>
+              <div class="summary-card">
+                <h3>Avg. Order Value</h3>
+                <p>AED ${salesReport?.averageOrderValue?.toFixed(2) || '0.00'}</p>
+              </div>
+            </div>
+            
+            <table>
+              <tr><th>Metric</th><th class="text-right">Value</th></tr>
+              <tr><td>Tax Collected</td><td class="text-right">AED ${salesReport?.taxCollected?.toFixed(2) || '0.00'}</td></tr>
+              <tr><td>Total Discounts</td><td class="text-right">AED ${salesReport?.totalDiscounts?.toFixed(2) || '0.00'}</td></tr>
+              <tr><td>Total Refunds</td><td class="text-right">AED ${salesReport?.totalRefunds?.toFixed(2) || '0.00'}</td></tr>
+              <tr style="font-weight: bold;"><td>Net Revenue</td><td class="text-right">AED ${((salesReport?.totalRevenue || 0) - (salesReport?.totalRefunds || 0)).toFixed(2)}</td></tr>
+            </table>
+            
+            ${topProducts.length > 0 ? `
+              <h2>Top Selling Products</h2>
+              <table>
+                <tr><th>Product</th><th class="text-right">Quantity Sold</th><th class="text-right">Revenue (AED)</th></tr>
+                ${topProducts.map(p => `<tr><td>${p.productName}</td><td class="text-right">${p.quantity}</td><td class="text-right">${p.sales.toFixed(2)}</td></tr>`).join('')}
+              </table>
+            ` : ''}
+            
+            ${categorySales.length > 0 ? `
+              <h2>Sales by Category</h2>
+              <table>
+                <tr><th>Category</th><th class="text-right">Orders</th><th class="text-right">Revenue (AED)</th></tr>
+                ${categorySales.map(c => `<tr><td>${c.categoryName}</td><td class="text-right">${c.orderCount}</td><td class="text-right">${c.revenue.toFixed(2)}</td></tr>`).join('')}
+              </table>
+            ` : ''}
+            
+            ${salesReport?.dailySales && salesReport.dailySales.length > 0 ? `
+              <h2>Daily Sales</h2>
+              <table>
+                <tr><th>Date</th><th class="text-right">Orders</th><th class="text-right">Revenue (AED)</th></tr>
+                ${salesReport.dailySales.slice(0, 30).map(d => `<tr><td>${d.date}</td><td class="text-right">${d.orders}</td><td class="text-right">${d.revenue.toFixed(2)}</td></tr>`).join('')}
+              </table>
+            ` : ''}
+            
+            <div class="footer">
+              <p>Generated by Butcher Shop Admin Dashboard</p>
+            </div>
+          </body>
+          </html>
+        `;
+        
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(printContent);
+          printWindow.document.close();
+          printWindow.onload = () => {
+            printWindow.print();
+          };
+        }
+      }
+    } else if (reportType === "customers") {
+      // Customer Report Export
+      if (format === "csv") {
+        let csvContent = "Butcher Shop - Customer Orders Report\n";
+        csvContent += `Period: ${periodLabel}\n`;
+        csvContent += `Generated: ${new Date().toLocaleString()}\n\n`;
+        
+        csvContent += "Customer Name,Email,Total Orders,Completed,Canceled,Pending,Total Spent (AED)\n";
+        customerStats.forEach(c => {
+          csvContent += `"${c.customerName}","${c.customerEmail}",${c.totalOrders},${c.completedOrders},${c.canceledOrders},${c.pendingOrders},${c.totalSpent.toFixed(2)}\n`;
+        });
+        
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `customer_report_${dateStr}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        
+      } else if (format === "pdf") {
+        const totalCustomers = customerStats.length;
+        const totalSpentAll = customerStats.reduce((sum, c) => sum + c.totalSpent, 0);
+        const totalOrdersAll = customerStats.reduce((sum, c) => sum + c.totalOrders, 0);
+        
+        const printContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Customer Report - ${periodLabel}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+              h1 { color: #dc2626; border-bottom: 2px solid #dc2626; padding-bottom: 10px; }
+              h2 { color: #64748b; margin-top: 30px; }
+              table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+              th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; font-size: 12px; }
+              th { background-color: #f8fafc; font-weight: bold; }
+              .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0; }
+              .summary-card { background: #f8fafc; padding: 15px; border-radius: 8px; }
+              .summary-card h3 { margin: 0; color: #64748b; font-size: 14px; }
+              .summary-card p { margin: 5px 0 0; font-size: 24px; font-weight: bold; color: #0f172a; }
+              .text-right { text-align: right; }
+              .text-center { text-align: center; }
+              .footer { margin-top: 30px; text-align: center; color: #94a3b8; font-size: 12px; }
+              @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            </style>
+          </head>
+          <body>
+            <h1>🥩 Butcher Shop - Customer Orders Report</h1>
+            <p><strong>Period:</strong> ${periodLabel} (${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()})</p>
+            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+            
+            <div class="summary-grid">
+              <div class="summary-card">
+                <h3>Total Customers</h3>
+                <p>${totalCustomers}</p>
+              </div>
+              <div class="summary-card">
+                <h3>Total Orders</h3>
+                <p>${totalOrdersAll}</p>
+              </div>
+              <div class="summary-card">
+                <h3>Total Revenue</h3>
+                <p>AED ${totalSpentAll.toFixed(2)}</p>
+              </div>
+            </div>
+            
+            <h2>Customer Details</h2>
+            <table>
+              <tr>
+                <th>Customer</th>
+                <th>Email</th>
+                <th class="text-center">Orders</th>
+                <th class="text-center">Completed</th>
+                <th class="text-center">Canceled</th>
+                <th class="text-right">Total Spent</th>
+              </tr>
+              ${customerStats.map(c => `
+                <tr>
+                  <td>${c.customerName}</td>
+                  <td>${c.customerEmail}</td>
+                  <td class="text-center">${c.totalOrders}</td>
+                  <td class="text-center">${c.completedOrders}</td>
+                  <td class="text-center">${c.canceledOrders}</td>
+                  <td class="text-right">AED ${c.totalSpent.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </table>
+            
+            <div class="footer">
+              <p>Generated by Butcher Shop Admin Dashboard</p>
+            </div>
+          </body>
+          </html>
+        `;
+        
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(printContent);
+          printWindow.document.close();
+          printWindow.onload = () => {
+            printWindow.print();
+          };
+        }
+      }
     }
   };
 

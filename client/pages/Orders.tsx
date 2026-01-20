@@ -189,29 +189,133 @@ export default function OrdersPage() {
   };
 
   const handleDownloadInvoice = (order: CustomerOrder) => {
-    // In production, this would generate/download a PDF
-    const invoiceData = `
-INVOICE
-Order: ${order.orderNumber}
-Date: ${new Date(order.createdAt).toLocaleDateString()}
-
-Items:
-${order.items.map((item) => `- ${item.name} x${item.quantity} = AED ${(Number(item.price) * Number(item.quantity)).toFixed(2)}`).join("\n")}
-
-Subtotal: AED ${Number(order.subtotal).toFixed(2)}
-VAT: AED ${Number(order.vat).toFixed(2)}
-Delivery: AED ${Number(order.deliveryFee).toFixed(2)}
-${Number(order.discount) > 0 ? `Discount: -AED ${Number(order.discount).toFixed(2)}\n` : ""}
-Total: AED ${Number(order.total).toFixed(2)}
+    // Generate a professional PDF invoice
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice - ${order.orderNumber}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #dc2626; padding-bottom: 20px; margin-bottom: 30px; }
+          .logo { font-size: 28px; font-weight: bold; color: #dc2626; }
+          .logo-sub { font-size: 12px; color: #64748b; }
+          .invoice-title { text-align: right; }
+          .invoice-title h1 { font-size: 32px; color: #0f172a; margin-bottom: 5px; }
+          .invoice-title p { color: #64748b; font-size: 14px; }
+          .info-section { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
+          .info-box h3 { font-size: 12px; text-transform: uppercase; color: #64748b; margin-bottom: 8px; letter-spacing: 1px; }
+          .info-box p { font-size: 14px; line-height: 1.6; }
+          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+          .items-table th { background: #f8fafc; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #e2e8f0; }
+          .items-table td { padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+          .items-table .text-right { text-align: right; }
+          .totals { margin-left: auto; width: 300px; }
+          .totals-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
+          .totals-row.border-top { border-top: 1px solid #e2e8f0; margin-top: 8px; padding-top: 12px; }
+          .totals-row.total { font-size: 18px; font-weight: bold; border-top: 2px solid #0f172a; margin-top: 8px; padding-top: 12px; }
+          .footer { margin-top: 50px; text-align: center; color: #94a3b8; font-size: 12px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+          .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+          .status-delivered { background: #dcfce7; color: #166534; }
+          .status-processing { background: #fef3c7; color: #92400e; }
+          .status-pending { background: #f1f5f9; color: #475569; }
+          @media print { 
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 20px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">🥩 Butcher Shop</div>
+            <div class="logo-sub">Premium Quality Meats</div>
+          </div>
+          <div class="invoice-title">
+            <h1>INVOICE</h1>
+            <p>${order.orderNumber}</p>
+          </div>
+        </div>
+        
+        <div class="info-section">
+          <div class="info-box">
+            <h3>Invoice Details</h3>
+            <p><strong>Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
+            <p><strong>Status:</strong> <span class="status-badge status-${order.status}">${order.status.replace(/_/g, ' ')}</span></p>
+            <p><strong>Payment:</strong> ${order.paymentMethod}</p>
+          </div>
+          <div class="info-box">
+            <h3>Delivery Address</h3>
+            <p>${order.deliveryAddress ? 
+              `${(order.deliveryAddress as any).building || ''}, ${(order.deliveryAddress as any).street || ''}<br/>
+               ${(order.deliveryAddress as any).area || ''}, ${(order.deliveryAddress as any).emirate || ''}` 
+              : 'N/A'}</p>
+          </div>
+        </div>
+        
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th class="text-right">Qty</th>
+              <th class="text-right">Unit Price</th>
+              <th class="text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${order.items.map(item => `
+              <tr>
+                <td>${item.name}</td>
+                <td class="text-right">${item.quantity}</td>
+                <td class="text-right">AED ${Number(item.price).toFixed(2)}</td>
+                <td class="text-right">AED ${(Number(item.price) * Number(item.quantity)).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="totals">
+          <div class="totals-row">
+            <span>Subtotal</span>
+            <span>AED ${Number(order.subtotal).toFixed(2)}</span>
+          </div>
+          <div class="totals-row">
+            <span>VAT (5%)</span>
+            <span>AED ${Number(order.vat).toFixed(2)}</span>
+          </div>
+          <div class="totals-row">
+            <span>Delivery Fee</span>
+            <span>AED ${Number(order.deliveryFee).toFixed(2)}</span>
+          </div>
+          ${Number(order.discount) > 0 ? `
+            <div class="totals-row" style="color: #dc2626;">
+              <span>Discount</span>
+              <span>-AED ${Number(order.discount).toFixed(2)}</span>
+            </div>
+          ` : ''}
+          <div class="totals-row total">
+            <span>Total</span>
+            <span>AED ${Number(order.total).toFixed(2)}</span>
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p>Thank you for your order!</p>
+          <p style="margin-top: 10px;">Butcher Shop • Premium Quality Meats • UAE</p>
+        </div>
+      </body>
+      </html>
     `;
     
-    const blob = new Blob([invoiceData], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `invoice_${order.orderNumber}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
   };
 
   if (!isLoggedIn) {
