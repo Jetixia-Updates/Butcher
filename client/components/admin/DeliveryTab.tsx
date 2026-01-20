@@ -879,9 +879,9 @@ function ZonesList({
                     <Zap className="w-3 h-3 text-orange-500" />
                     {isRTL ? "توصيل سريع" : "Express"}
                   </span>
-                  {(zone as any).expressEnabled ? (
+                  {zone.expressEnabled ? (
                     <span className="font-medium text-orange-600 flex items-center gap-1">
-                      <CurrencySymbol size="xs" /> {(zone as any).expressFee} • {(zone as any).expressHours}h
+                      <CurrencySymbol size="xs" /> {zone.expressFee} • {zone.expressHours}h
                     </span>
                   ) : (
                     <span className="text-slate-400 text-xs">{isRTL ? "معطل" : "Disabled"}</span>
@@ -936,9 +936,9 @@ function ZoneFormModal({
     estimatedMinutes: zone?.estimatedMinutes?.toString() || "1",
     isActive: zone?.isActive ?? true,
     // Express delivery settings
-    expressEnabled: (zone as any)?.expressEnabled ?? false,
-    expressFee: (zone as any)?.expressFee?.toString() || "25",
-    expressHours: (zone as any)?.expressHours?.toString() || "1",
+    expressEnabled: zone?.expressEnabled ?? false,
+    expressFee: zone?.expressFee?.toString() || "25",
+    expressHours: zone?.expressHours?.toString() || "1",
   });
   const [submitting, setSubmitting] = useState(false);
 

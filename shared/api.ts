@@ -172,6 +172,10 @@ export interface DeliveryZone {
   minimumOrder: number;
   estimatedMinutes: number;
   isActive: boolean;
+  // Express delivery settings
+  expressEnabled?: boolean;
+  expressFee?: number;
+  expressHours?: number;
 }
 
 // =====================================================

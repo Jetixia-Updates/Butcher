@@ -394,6 +394,10 @@ export const deliveryZones = pgTable("delivery_zones", {
   minimumOrder: decimal("minimum_order", { precision: 10, scale: 2 }).notNull(),
   estimatedMinutes: integer("estimated_minutes").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  // Express delivery settings
+  expressEnabled: boolean("express_enabled").notNull().default(false),
+  expressFee: decimal("express_fee", { precision: 10, scale: 2 }).notNull().default("25"),
+  expressHours: integer("express_hours").notNull().default(1),
 });
 
 // =====================================================

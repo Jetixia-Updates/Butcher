@@ -12,7 +12,7 @@ import type {
   DeliveryTracking, 
   ApiResponse 
 } from "../../shared/api";
-import { db, addresses, deliveryZones, deliveryTracking, orders, users, inAppNotifications } from "../db/connection";
+import { db, addresses, deliveryZones, deliveryTracking, orders, orderItems, users, inAppNotifications } from "../db/connection";
 import { sendOrderNotification } from "../services/notifications";
 import { randomUUID } from "crypto";
 // Types are inferred within handlers; explicit DeliveryAvailabilityRequest not exported in shared api.
@@ -481,7 +481,7 @@ const getDeliveryZoneById: RequestHandler = async (req, res) => {
 // POST /api/delivery/zones - Create delivery zone
 const createDeliveryZone: RequestHandler = async (req, res) => {
   try {
-    const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive } = req.body;
+    const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
 
     const [zone] = await db.insert(deliveryZones).values({
       id: generateId("zone"),
@@ -493,6 +493,9 @@ const createDeliveryZone: RequestHandler = async (req, res) => {
       minimumOrder: minimumOrder || 50,
       estimatedMinutes: estimatedMinutes || 60,
       isActive: isActive ?? true,
+      expressEnabled: expressEnabled ?? false,
+      expressFee: expressFee || 25,
+      expressHours: expressHours || 1,
     }).returning();
 
     const response: ApiResponse<typeof zone> = {
@@ -524,7 +527,7 @@ const updateDeliveryZone: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive } = req.body;
+    const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
     const updateData: Partial<typeof deliveryZones.$inferInsert> = {};
 
     if (name !== undefined) updateData.name = name;
@@ -535,6 +538,9 @@ const updateDeliveryZone: RequestHandler = async (req, res) => {
     if (minimumOrder !== undefined) updateData.minimumOrder = minimumOrder;
     if (estimatedMinutes !== undefined) updateData.estimatedMinutes = estimatedMinutes;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (expressEnabled !== undefined) updateData.expressEnabled = expressEnabled;
+    if (expressFee !== undefined) updateData.expressFee = expressFee;
+    if (expressHours !== undefined) updateData.expressHours = expressHours;
 
     const [updated] = await db.update(deliveryZones)
       .set(updateData)
@@ -646,11 +652,24 @@ const getDeliveryTrackings: RequestHandler = async (req, res) => {
     // Sort by creation date (newest first)
     trackings.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // Enrich tracking data with order details
+    // Enrich tracking data with order details and items
     const allOrders = await db.select().from(orders);
+    const allOrderItems = await db.select().from(orderItems);
+    
     const enrichedTrackings = trackings.map((tracking) => {
       const order = allOrders.find((o) => o.id === tracking.orderId);
       if (order) {
+        // Get items for this order
+        const items = allOrderItems
+          .filter((item) => item.orderId === order.id)
+          .map((item) => ({
+            name: item.productName,
+            nameAr: item.productNameAr,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unitPrice),
+            totalPrice: Number(item.totalPrice),
+          }));
+        
         return {
           ...tracking,
           customerName: order.customerName,
@@ -658,6 +677,7 @@ const getDeliveryTrackings: RequestHandler = async (req, res) => {
           customerId: order.userId,
           deliveryAddress: order.deliveryAddress,
           total: Number(order.total),
+          items,
         };
       }
       return tracking;
