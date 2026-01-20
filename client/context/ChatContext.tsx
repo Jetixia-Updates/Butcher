@@ -1,9 +1,10 @@
 /**
  * Chat Context
  * Manages chat messages between users and admin support
+ * Uses server-side storage for real-time sync between users and admin
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 
 export interface ChatAttachment {
   id: string;
@@ -37,6 +38,7 @@ interface ChatContextType {
   sendUserMessage: (userId: string, userName: string, userEmail: string, text: string, attachments?: ChatAttachment[]) => void;
   markUserMessagesAsRead: (userId: string) => void;
   userUnreadCount: number;
+  loadUserMessages: (userId: string) => Promise<void>;
   
   // For admin
   allChats: UserChat[];
@@ -44,170 +46,188 @@ interface ChatContextType {
   markAdminMessagesAsRead: (userId: string) => void;
   totalUnreadForAdmin: number;
   getUnreadCountForUser: (userId: string) => number;
+  refreshChats: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
-const STORAGE_KEY = "butcher_chat_messages";
-
-// Helper to generate unique ID
-const generateId = () => `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+// Convert API message to ChatMessage format
+const apiToMessage = (msg: any): ChatMessage => ({
+  id: msg.id,
+  text: msg.text,
+  sender: msg.sender,
+  timestamp: msg.createdAt,
+  read: msg.sender === 'admin' ? msg.readByUser : msg.readByAdmin,
+  attachments: msg.attachments,
+});
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [allChats, setAllChats] = useState<UserChat[]>([]);
+  const [userMessages, setUserMessages] = useState<ChatMessage[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load chats from localStorage on mount
-  useEffect(() => {
+  // Fetch all chats for admin
+  const refreshChats = useCallback(async () => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as UserChat[];
-        setAllChats(parsed);
+      const res = await fetch('/api/chat/all');
+      const data = await res.json();
+      if (data.success && data.data) {
+        const chats: UserChat[] = data.data.map((chat: any) => ({
+          userId: chat.userId,
+          userName: chat.userName,
+          userEmail: chat.userEmail,
+          messages: chat.messages.map(apiToMessage),
+          lastMessageAt: chat.lastMessageAt,
+          unreadCount: chat.unreadCount,
+        }));
+        setAllChats(chats);
       }
-    } catch {
-      // Ignore parse errors
+    } catch (err) {
+      console.error('Failed to fetch chats:', err);
     }
   }, []);
 
-  // Save to localStorage whenever chats change
-  useEffect(() => {
+  // Fetch messages for a specific user
+  const loadUserMessages = useCallback(async (userId: string) => {
+    setCurrentUserId(userId);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(allChats));
-    } catch {
-      // Ignore storage errors
+      const res = await fetch(`/api/chat/${userId}`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        const messages = data.data.map(apiToMessage);
+        setUserMessages(messages);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user messages:', err);
     }
-  }, [allChats]);
+  }, []);
 
-  // Get messages for a specific user
-  const getUserChat = useCallback((userId: string): UserChat | undefined => {
-    return allChats.find(chat => chat.userId === userId);
-  }, [allChats]);
+  // Poll for updates every 5 seconds
+  useEffect(() => {
+    refreshChats();
+    
+    pollingRef.current = setInterval(() => {
+      refreshChats();
+      if (currentUserId) {
+        loadUserMessages(currentUserId);
+      }
+    }, 5000);
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, [refreshChats, loadUserMessages, currentUserId]);
 
   // Send message from user to admin
-  const sendUserMessage = useCallback((userId: string, userName: string, userEmail: string, text: string, attachments?: ChatAttachment[]) => {
-    const newMessage: ChatMessage = {
-      id: generateId(),
-      text,
-      sender: "user",
-      timestamp: new Date().toISOString(),
-      read: false, // Admin hasn't read it yet
-      attachments,
-    };
+  const sendUserMessage = useCallback(async (userId: string, userName: string, userEmail: string, text: string, attachments?: ChatAttachment[]) => {
+    try {
+      // Optimistically add to local state
+      const tempMessage: ChatMessage = {
+        id: `temp_${Date.now()}`,
+        text,
+        sender: "user",
+        timestamp: new Date().toISOString(),
+        read: false,
+        attachments,
+      };
+      setUserMessages(prev => [...prev, tempMessage]);
 
-    setAllChats(prev => {
-      const existingChatIndex = prev.findIndex(chat => chat.userId === userId);
+      // Send to API
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, userName, userEmail, text, sender: 'user', attachments }),
+      });
+      const data = await res.json();
       
-      if (existingChatIndex >= 0) {
-        // Update existing chat
-        const updated = [...prev];
-        updated[existingChatIndex] = {
-          ...updated[existingChatIndex],
-          messages: [...updated[existingChatIndex].messages, newMessage],
-          lastMessageAt: newMessage.timestamp,
-          unreadCount: updated[existingChatIndex].unreadCount + 1,
-        };
-        return updated;
-      } else {
-        // Create new chat
-        return [...prev, {
-          userId,
-          userName,
-          userEmail,
-          messages: [newMessage],
-          lastMessageAt: newMessage.timestamp,
-          unreadCount: 1,
-        }];
+      if (data.success) {
+        // Notify admin
+        fetch('/api/chat/notify-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, userName, message: text }),
+        }).catch(() => {});
+        
+        // Refresh to get the real message
+        loadUserMessages(userId);
       }
-    });
-
-    // Notify admin via API (fire and forget)
-    fetch('/api/chat/notify-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, userName, message: text }),
-    }).catch(() => {
-      // Ignore errors - notification is best-effort
-    });
-  }, []);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    }
+  }, [loadUserMessages]);
 
   // Send message from admin to user
-  const sendAdminMessage = useCallback((userId: string, text: string, attachments?: ChatAttachment[]) => {
-    const newMessage: ChatMessage = {
-      id: generateId(),
-      text,
-      sender: "admin",
-      timestamp: new Date().toISOString(),
-      read: false, // User hasn't read it yet
-      attachments,
-    };
-
-    setAllChats(prev => {
-      const existingChatIndex = prev.findIndex(chat => chat.userId === userId);
+  const sendAdminMessage = useCallback(async (userId: string, text: string, attachments?: ChatAttachment[]) => {
+    try {
+      const chat = allChats.find(c => c.userId === userId);
       
-      if (existingChatIndex >= 0) {
-        const updated = [...prev];
-        updated[existingChatIndex] = {
-          ...updated[existingChatIndex],
-          messages: [...updated[existingChatIndex].messages, newMessage],
-          lastMessageAt: newMessage.timestamp,
-        };
-        return updated;
+      // Send to API
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId, 
+          userName: chat?.userName || 'Customer',
+          userEmail: chat?.userEmail || '',
+          text, 
+          sender: 'admin', 
+          attachments 
+        }),
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        // Notify user
+        fetch('/api/chat/notify-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, message: text }),
+        }).catch(() => {});
+        
+        // Refresh chats
+        refreshChats();
       }
-      return prev;
-    });
+    } catch (err) {
+      console.error('Failed to send admin message:', err);
+    }
+  }, [allChats, refreshChats]);
 
-    // Notify user via API (fire and forget)
-    fetch('/api/chat/notify-user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, message: text }),
-    }).catch(() => {
-      // Ignore errors - notification is best-effort
-    });
+  // Mark all admin messages as read by user
+  const markUserMessagesAsRead = useCallback(async (userId: string) => {
+    try {
+      await fetch(`/api/chat/${userId}/read-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      // Update local state
+      setUserMessages(prev => prev.map(msg => 
+        msg.sender === 'admin' ? { ...msg, read: true } : msg
+      ));
+    } catch (err) {
+      console.error('Failed to mark as read:', err);
+    }
   }, []);
 
-  // Mark all admin messages as read (called by user when they open chat)
-  const markUserMessagesAsRead = useCallback((userId: string) => {
-    setAllChats(prev => {
-      const chatIndex = prev.findIndex(chat => chat.userId === userId);
-      if (chatIndex >= 0) {
-        const updated = [...prev];
-        updated[chatIndex] = {
-          ...updated[chatIndex],
-          messages: updated[chatIndex].messages.map(msg => 
-            msg.sender === "admin" ? { ...msg, read: true } : msg
-          ),
-        };
-        return updated;
-      }
-      return prev;
-    });
+  // Mark all user messages as read by admin
+  const markAdminMessagesAsRead = useCallback(async (userId: string) => {
+    try {
+      await fetch(`/api/chat/${userId}/read-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      // Update local state
+      setAllChats(prev => prev.map(chat => 
+        chat.userId === userId 
+          ? { ...chat, unreadCount: 0, messages: chat.messages.map(m => ({ ...m, read: true })) }
+          : chat
+      ));
+    } catch (err) {
+      console.error('Failed to mark as read:', err);
+    }
   }, []);
-
-  // Mark all user messages as read (called by admin when they open a chat)
-  const markAdminMessagesAsRead = useCallback((userId: string) => {
-    setAllChats(prev => {
-      const chatIndex = prev.findIndex(chat => chat.userId === userId);
-      if (chatIndex >= 0) {
-        const updated = [...prev];
-        updated[chatIndex] = {
-          ...updated[chatIndex],
-          messages: updated[chatIndex].messages.map(msg => 
-            msg.sender === "user" ? { ...msg, read: true } : msg
-          ),
-          unreadCount: 0,
-        };
-        return updated;
-      }
-      return prev;
-    });
-  }, []);
-
-  // Get user messages (for user view)
-  const getUserMessages = useCallback((userId: string): ChatMessage[] => {
-    const chat = allChats.find(c => c.userId === userId);
-    return chat?.messages || [];
-  }, [allChats]);
 
   // Get unread count for user (messages from admin that user hasn't read)
   const getUnreadCountForUser = useCallback((userId: string): number => {
@@ -219,10 +239,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Total unread for admin (all unread messages from all users)
   const totalUnreadForAdmin = allChats.reduce((sum, chat) => sum + chat.unreadCount, 0);
 
-  // Create a userMessages getter that can be used with a userId
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const userMessages = currentUserId ? getUserMessages(currentUserId) : [];
-  const userUnreadCount = currentUserId ? getUnreadCountForUser(currentUserId) : 0;
+  // Unread count for current user
+  const userUnreadCount = userMessages.filter(m => m.sender === 'admin' && !m.read).length;
 
   return (
     <ChatContext.Provider
@@ -231,11 +249,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendUserMessage,
         markUserMessagesAsRead,
         userUnreadCount,
+        loadUserMessages,
         allChats,
         sendAdminMessage,
         markAdminMessagesAsRead,
         totalUnreadForAdmin,
         getUnreadCountForUser,
+        refreshChats,
       }}
     >
       {children}
@@ -253,10 +273,15 @@ export const useChat = () => {
 
 // Hook for user-specific chat
 export const useUserChat = (userId: string | undefined) => {
-  const { allChats, sendUserMessage, markUserMessagesAsRead, getUnreadCountForUser } = useChat();
+  const { userMessages, sendUserMessage, markUserMessagesAsRead, loadUserMessages, getUnreadCountForUser } = useChat();
   
-  const chat = allChats.find(c => c.userId === userId);
-  const messages = chat?.messages || [];
+  // Load messages when userId changes
+  useEffect(() => {
+    if (userId) {
+      loadUserMessages(userId);
+    }
+  }, [userId, loadUserMessages]);
+
   const unreadCount = userId ? getUnreadCountForUser(userId) : 0;
 
   const sendMessage = useCallback((userName: string, userEmail: string, text: string, attachments?: ChatAttachment[]) => {
@@ -272,7 +297,7 @@ export const useUserChat = (userId: string | undefined) => {
   }, [userId, markUserMessagesAsRead]);
 
   return {
-    messages,
+    messages: userMessages,
     unreadCount,
     sendMessage,
     markAsRead,
@@ -281,7 +306,7 @@ export const useUserChat = (userId: string | undefined) => {
 
 // Hook for admin chat management
 export const useAdminChat = () => {
-  const { allChats, sendAdminMessage, markAdminMessagesAsRead, totalUnreadForAdmin } = useChat();
+  const { allChats, sendAdminMessage, markAdminMessagesAsRead, totalUnreadForAdmin, refreshChats } = useChat();
 
   // Sort chats by last message time (newest first)
   const sortedChats = [...allChats].sort(
@@ -293,5 +318,6 @@ export const useAdminChat = () => {
     sendMessage: sendAdminMessage,
     markAsRead: markAdminMessagesAsRead,
     totalUnread: totalUnreadForAdmin,
+    refresh: refreshChats,
   };
 };

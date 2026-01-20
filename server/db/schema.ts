@@ -556,6 +556,36 @@ export const inAppNotifications = pgTable("in_app_notifications", {
 });
 
 // =====================================================
+// CHAT MESSAGES TABLE
+// =====================================================
+
+export const chatMessages = pgTable("chat_messages", {
+  id: text("id").primaryKey(),
+  
+  // User info (for both user and admin to see)
+  userId: text("user_id").notNull(),
+  userName: varchar("user_name", { length: 200 }).notNull(),
+  userEmail: varchar("user_email", { length: 255 }).notNull(),
+  
+  // Message content
+  text: text("text").notNull(),
+  sender: varchar("sender", { length: 10 }).notNull(), // "user" or "admin"
+  attachments: jsonb("attachments").$type<{
+    id: string;
+    name: string;
+    type: string;
+    size: number;
+    url: string;
+  }[]>(),
+  
+  // Read status
+  readByAdmin: boolean("read_by_admin").notNull().default(false),
+  readByUser: boolean("read_by_user").notNull().default(false),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// =====================================================
 // SUPPLIERS TABLE
 // =====================================================
 

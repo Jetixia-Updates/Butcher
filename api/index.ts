@@ -253,6 +253,26 @@ const inAppNotificationsTable = pgTable("in_app_notifications", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Chat messages table
+const chatMessagesTable = pgTable("chat_messages", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  userName: varchar("user_name", { length: 200 }).notNull(),
+  userEmail: varchar("user_email", { length: 255 }).notNull(),
+  text: text("text").notNull(),
+  sender: varchar("sender", { length: 10 }).notNull(),
+  attachments: jsonb("attachments").$type<{
+    id: string;
+    name: string;
+    type: string;
+    size: number;
+    url: string;
+  }[]>(),
+  readByAdmin: boolean("read_by_admin").notNull().default(false),
+  readByUser: boolean("read_by_user").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Delivery tracking table
 const deliveryTrackingStatusEnum = pgEnum("delivery_tracking_status", [
   "assigned", "picked_up", "in_transit", "nearby", "delivered", "failed"
@@ -6192,6 +6212,170 @@ function createApp() {
     } catch (error) {
       console.error('[Chat Admin Notification Error]', error);
       res.status(500).json({ success: false, error: 'Failed to notify admin' });
+    }
+  });
+
+  // =====================================================
+  // CHAT MESSAGES API (Server-side storage)
+  // =====================================================
+
+  // Get all chats for admin (grouped by user)
+  app.get('/api/chat/all', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const messages = await pgDb
+        .select()
+        .from(chatMessagesTable)
+        .orderBy(desc(chatMessagesTable.createdAt));
+
+      // Group messages by userId
+      const chatsMap = new Map<string, {
+        userId: string;
+        userName: string;
+        userEmail: string;
+        messages: typeof messages;
+        lastMessageAt: string;
+        unreadCount: number;
+      }>();
+
+      for (const msg of messages) {
+        if (!chatsMap.has(msg.userId)) {
+          chatsMap.set(msg.userId, {
+            userId: msg.userId,
+            userName: msg.userName,
+            userEmail: msg.userEmail,
+            messages: [],
+            lastMessageAt: msg.createdAt.toISOString(),
+            unreadCount: 0,
+          });
+        }
+        const chat = chatsMap.get(msg.userId)!;
+        chat.messages.push(msg);
+        if (msg.sender === 'user' && !msg.readByAdmin) {
+          chat.unreadCount++;
+        }
+      }
+
+      // Convert to array and sort by lastMessageAt descending
+      const chats = Array.from(chatsMap.values())
+        .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+
+      res.json({ success: true, data: chats });
+    } catch (error) {
+      console.error('[Chat All Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch chats' });
+    }
+  });
+
+  // Get chat messages for a specific user
+  app.get('/api/chat/:userId', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId } = req.params;
+
+      const messages = await pgDb
+        .select()
+        .from(chatMessagesTable)
+        .where(eq(chatMessagesTable.userId, userId))
+        .orderBy(chatMessagesTable.createdAt);
+
+      res.json({ success: true, data: messages });
+    } catch (error) {
+      console.error('[Chat Get Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch messages' });
+    }
+  });
+
+  // Send a message (from user or admin)
+  app.post('/api/chat/send', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId, userName, userEmail, text, sender, attachments } = req.body;
+
+      if (!userId || !text || !sender) {
+        return res.status(400).json({ success: false, error: 'userId, text, and sender are required' });
+      }
+
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      await pgDb.insert(chatMessagesTable).values({
+        id: messageId,
+        userId: String(userId),
+        userName: userName || 'Customer',
+        userEmail: userEmail || '',
+        text,
+        sender,
+        attachments: attachments || null,
+        readByAdmin: sender === 'admin',
+        readByUser: sender === 'user',
+      });
+
+      const [newMessage] = await pgDb
+        .select()
+        .from(chatMessagesTable)
+        .where(eq(chatMessagesTable.id, messageId));
+
+      res.json({ success: true, data: newMessage });
+    } catch (error) {
+      console.error('[Chat Send Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to send message' });
+    }
+  });
+
+  // Mark messages as read by admin
+  app.post('/api/chat/:userId/read-admin', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId } = req.params;
+
+      await pgDb
+        .update(chatMessagesTable)
+        .set({ readByAdmin: true })
+        .where(and(
+          eq(chatMessagesTable.userId, userId),
+          eq(chatMessagesTable.sender, 'user')
+        ));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('[Chat Read Admin Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to mark as read' });
+    }
+  });
+
+  // Mark messages as read by user
+  app.post('/api/chat/:userId/read-user', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId } = req.params;
+
+      await pgDb
+        .update(chatMessagesTable)
+        .set({ readByUser: true })
+        .where(and(
+          eq(chatMessagesTable.userId, userId),
+          eq(chatMessagesTable.sender, 'admin')
+        ));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('[Chat Read User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to mark as read' });
     }
   });
 
