@@ -329,7 +329,8 @@ export const ordersApi = {
     deliveryNotes?: string;
     discountCode?: string;
     discountAmount?: number;
-    expressDeliveryFee?: number;
+    deliveryFee: number;
+    isExpressDelivery?: boolean;
     driverTip?: number;
     subtotal: number;
     vatAmount: number;

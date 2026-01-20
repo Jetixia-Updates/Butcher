@@ -1891,7 +1891,8 @@ function createApp() {
         deliveryNotes, 
         discountCode,
         discountAmount: providedDiscountAmount,
-        expressDeliveryFee: providedExpressDeliveryFee,
+        deliveryFee: providedDeliveryFee,
+        isExpressDelivery: providedIsExpressDelivery,
         driverTip: providedDriverTip,
         subtotal: providedSubtotal,
         vatAmount: providedVatAmount,
@@ -1953,17 +1954,16 @@ function createApp() {
 
       // Use provided values from checkout or calculate
       const discount = Number(providedDiscountAmount) || 0;
-      const expressDeliveryFee = Number(providedExpressDeliveryFee) || 0;
       const driverTip = Number(providedDriverTip) || 0;
+      const isExpressDelivery = Boolean(providedIsExpressDelivery);
       
       // Use subtotal from checkout if provided (which already has discounts on item prices)
       // Otherwise use calculated subtotal
       const subtotal = providedSubtotal !== undefined ? Number(providedSubtotal) : calculatedSubtotal;
       
-      // Delivery fee = express delivery fee if express, otherwise standard delivery
-      // Express delivery fee of 0 means either not express or free express
+      // Use delivery fee from checkout if provided, otherwise use standard calculation
       const standardDeliveryFee = subtotal > 200 ? 0 : 15;
-      const deliveryFee = expressDeliveryFee > 0 ? expressDeliveryFee : standardDeliveryFee;
+      const deliveryFee = providedDeliveryFee !== undefined ? Number(providedDeliveryFee) : standardDeliveryFee;
       
       const vatRate = 0.05;
       // Use VAT from checkout if provided
@@ -2068,7 +2068,7 @@ function createApp() {
         discount,
         discountCode: discountCode || null,
         deliveryFee,
-        expressDeliveryFee,
+        isExpressDelivery,
         driverTip,
         vatRate,
         vatAmount,

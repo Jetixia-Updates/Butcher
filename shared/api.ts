@@ -363,7 +363,8 @@ export interface CreateOrderRequest {
   deliveryNotes?: string;
   discountCode?: string;
   discountAmount?: number; // Promo code discount amount
-  expressDeliveryFee?: number;
+  deliveryFee: number; // Zone delivery fee or express delivery fee
+  isExpressDelivery?: boolean;
   driverTip?: number;
   subtotal: number; // Subtotal from checkout
   vatAmount: number; // VAT from checkout

@@ -265,7 +265,8 @@ export default function PaymentCardPage() {
         deliveryNotes: deliveryNotes,
         discountCode: promoCode,
         discountAmount: discountAmount,
-        expressDeliveryFee: expressDeliveryFee,
+        deliveryFee: totalDeliveryFee,
+        isExpressDelivery: isExpressDelivery,
         driverTip: driverTip,
         // Send calculated totals from checkout
         subtotal: adjustedSubtotal,

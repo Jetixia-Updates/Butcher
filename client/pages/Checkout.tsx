@@ -1095,7 +1095,8 @@ export default function CheckoutPage() {
         deliveryNotes: deliveryNotes,
         discountCode: promoApplied?.code,
         discountAmount: discountAmount,
-        expressDeliveryFee: isExpressDelivery ? expressDeliveryFee : 0,
+        deliveryFee: deliveryFeeTotal,
+        isExpressDelivery: isExpressDelivery,
         driverTip: driverTip,
         // Send calculated totals from checkout
         subtotal: adjustedSubtotal,
