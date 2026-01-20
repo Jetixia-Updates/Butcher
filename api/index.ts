@@ -6253,7 +6253,11 @@ function createApp() {
           });
         }
         const chat = chatsMap.get(msg.userId)!;
-        chat.messages.push(msg);
+        // Serialize message with proper date format
+        chat.messages.push({
+          ...msg,
+          createdAt: msg.createdAt.toISOString(),
+        });
         if (msg.sender === 'user' && !msg.readByAdmin) {
           chat.unreadCount++;
         }
@@ -6285,7 +6289,13 @@ function createApp() {
         .where(eq(chatMessagesTable.userId, userId))
         .orderBy(chatMessagesTable.createdAt);
 
-      res.json({ success: true, data: messages });
+      // Convert Date objects to ISO strings for JSON serialization
+      const serializedMessages = messages.map(msg => ({
+        ...msg,
+        createdAt: msg.createdAt.toISOString(),
+      }));
+
+      res.json({ success: true, data: serializedMessages });
     } catch (error) {
       console.error('[Chat Get Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch messages' });
@@ -6324,7 +6334,13 @@ function createApp() {
         .from(chatMessagesTable)
         .where(eq(chatMessagesTable.id, messageId));
 
-      res.json({ success: true, data: newMessage });
+      // Serialize date for JSON response
+      const serializedMessage = {
+        ...newMessage,
+        createdAt: newMessage.createdAt.toISOString(),
+      };
+
+      res.json({ success: true, data: serializedMessage });
     } catch (error) {
       console.error('[Chat Send Error]', error);
       res.status(500).json({ success: false, error: 'Failed to send message' });
