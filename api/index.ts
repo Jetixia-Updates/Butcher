@@ -73,7 +73,7 @@ const productsTable = pgTable("products", {
   barcode: varchar("barcode", { length: 100 }),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   costPrice: decimal("cost_price", { precision: 10, scale: 2 }).notNull(),
-  // Note: discount, rating, badges columns don't exist in actual DB
+  discount: decimal("discount", { precision: 5, scale: 2 }).notNull().default("0"), // Discount percentage (0-100)
   category: varchar("category", { length: 100 }).notNull(),
   description: text("description"),
   descriptionAr: text("description_ar"),
@@ -83,7 +83,9 @@ const productsTable = pgTable("products", {
   maxOrderQuantity: decimal("max_order_quantity", { precision: 10, scale: 2 }).notNull().default("10"),
   isActive: boolean("is_active").notNull().default(true),
   isFeatured: boolean("is_featured").notNull().default(false),
+  rating: decimal("rating", { precision: 3, scale: 2 }).notNull().default("0"), // Product rating (0-5)
   tags: jsonb("tags").$type<string[]>().default([]),
+  badges: jsonb("badges").$type<string[]>().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -1121,7 +1123,7 @@ function createApp() {
         result = result.filter(p => p.isFeatured);
       }
       
-      // Convert to API format (without discount, rating, badges which don't exist in DB)
+      // Convert to API format
       const products = result.map(p => ({
         id: p.id,
         name: p.name,
@@ -1129,7 +1131,7 @@ function createApp() {
         sku: p.sku,
         price: parseFloat(p.price),
         costPrice: parseFloat(p.costPrice),
-        discount: 0, // Column doesn't exist in DB
+        discount: parseFloat(p.discount || '0'),
         category: p.category,
         description: p.description,
         descriptionAr: p.descriptionAr,
@@ -1139,9 +1141,9 @@ function createApp() {
         maxOrderQuantity: parseFloat(p.maxOrderQuantity),
         isActive: p.isActive,
         isFeatured: p.isFeatured,
-        rating: 0, // Column doesn't exist in DB
+        rating: parseFloat(p.rating || '0'),
         tags: p.tags || [],
-        badges: [], // Column doesn't exist in DB
+        badges: p.badges || [],
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
       }));
@@ -1173,7 +1175,7 @@ function createApp() {
         sku: p.sku,
         price: parseFloat(p.price),
         costPrice: parseFloat(p.costPrice),
-        discount: 0, // Column doesn't exist in DB
+        discount: parseFloat(p.discount || '0'),
         category: p.category,
         description: p.description,
         descriptionAr: p.descriptionAr,
@@ -1183,9 +1185,9 @@ function createApp() {
         maxOrderQuantity: parseFloat(p.maxOrderQuantity),
         isActive: p.isActive,
         isFeatured: p.isFeatured,
-        rating: 0, // Column doesn't exist in DB
+        rating: parseFloat(p.rating || '0'),
         tags: p.tags || [],
-        badges: [], // Column doesn't exist in DB
+        badges: p.badges || [],
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
       };
@@ -1215,7 +1217,7 @@ function createApp() {
         barcode: req.body.barcode || null,
         price: String(req.body.price),
         costPrice: String(req.body.costPrice || req.body.price * 0.6),
-        // discount, rating, badges columns don't exist in DB
+        discount: String(req.body.discount || 0),
         category: req.body.category,
         description: req.body.description || null,
         descriptionAr: req.body.descriptionAr || null,
@@ -1225,7 +1227,9 @@ function createApp() {
         maxOrderQuantity: String(req.body.maxOrderQuantity || 10),
         isActive: req.body.isActive !== false,
         isFeatured: req.body.isFeatured || false,
+        rating: String(req.body.rating || 0),
         tags: req.body.tags || [],
+        badges: req.body.badges || [],
         createdAt: now,
         updatedAt: now,
       };
@@ -1253,11 +1257,10 @@ function createApp() {
           ...newProduct,
           price: parseFloat(newProduct.price),
           costPrice: parseFloat(newProduct.costPrice),
-          discount: 0, // Column doesn't exist in DB
+          discount: parseFloat(newProduct.discount),
           minOrderQuantity: parseFloat(newProduct.minOrderQuantity),
           maxOrderQuantity: parseFloat(newProduct.maxOrderQuantity),
-          rating: 0, // Column doesn't exist in DB
-          badges: [], // Column doesn't exist in DB
+          rating: parseFloat(newProduct.rating),
           createdAt: now.toISOString(),
           updatedAt: now.toISOString(),
         }
@@ -1289,7 +1292,9 @@ function createApp() {
       if (req.body.barcode !== undefined) updateData.barcode = req.body.barcode;
       if (req.body.price !== undefined) updateData.price = String(req.body.price);
       if (req.body.costPrice !== undefined) updateData.costPrice = String(req.body.costPrice);
-      // discount, rating, badges columns don't exist in DB
+      if (req.body.discount !== undefined) updateData.discount = String(req.body.discount);
+      if (req.body.rating !== undefined) updateData.rating = String(req.body.rating);
+      if (req.body.badges !== undefined) updateData.badges = req.body.badges;
       if (req.body.category !== undefined) updateData.category = req.body.category;
       if (req.body.description !== undefined) updateData.description = req.body.description;
       if (req.body.descriptionAr !== undefined) updateData.descriptionAr = req.body.descriptionAr;
@@ -1316,7 +1321,7 @@ function createApp() {
           sku: p.sku,
           price: parseFloat(p.price),
           costPrice: parseFloat(p.costPrice),
-          discount: 0, // Column doesn't exist in DB
+          discount: parseFloat(p.discount || '0'),
           category: p.category,
           description: p.description,
           descriptionAr: p.descriptionAr,
@@ -1326,9 +1331,9 @@ function createApp() {
           maxOrderQuantity: parseFloat(p.maxOrderQuantity),
           isActive: p.isActive,
           isFeatured: p.isFeatured,
-          rating: 0, // Column doesn't exist in DB
+          rating: parseFloat(p.rating || '0'),
           tags: p.tags || [],
-          badges: [], // Column doesn't exist in DB
+          badges: p.badges || [],
           createdAt: p.createdAt.toISOString(),
           updatedAt: p.updatedAt.toISOString(),
         }
