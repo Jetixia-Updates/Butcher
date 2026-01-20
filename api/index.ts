@@ -6305,17 +6305,22 @@ function createApp() {
   // Send a message (from user or admin)
   app.post('/api/chat/send', async (req, res) => {
     try {
+      console.log('[Chat Send] Request received:', JSON.stringify(req.body));
+      
       if (!isDatabaseAvailable() || !pgDb) {
+        console.log('[Chat Send] Database not available');
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
       const { userId, userName, userEmail, text, sender, attachments } = req.body;
 
       if (!userId || !text || !sender) {
+        console.log('[Chat Send] Missing required fields:', { userId, text, sender });
         return res.status(400).json({ success: false, error: 'userId, text, and sender are required' });
       }
 
       const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log('[Chat Send] Inserting message:', messageId);
 
       await pgDb.insert(chatMessagesTable).values({
         id: messageId,
