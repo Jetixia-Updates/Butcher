@@ -1882,7 +1882,21 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
       
-      const { userId, items, addressId: providedAddressId, deliveryAddress: providedAddress, paymentMethod, deliveryNotes, discountCode } = req.body;
+      const { 
+        userId, 
+        items, 
+        addressId: providedAddressId, 
+        deliveryAddress: providedAddress, 
+        paymentMethod, 
+        deliveryNotes, 
+        discountCode,
+        discountAmount: providedDiscountAmount,
+        expressDeliveryFee: providedExpressDeliveryFee,
+        driverTip: providedDriverTip,
+        subtotal: providedSubtotal,
+        vatAmount: providedVatAmount,
+        total: providedTotal,
+      } = req.body;
 
       if (!userId || !items || !items.length || !paymentMethod) {
         return res.status(400).json({ 
@@ -1899,20 +1913,21 @@ function createApp() {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
       
-      // Get products from database to calculate prices
+      // Get products from database for product names and SKUs
       const products = await pgDb.select().from(productsTable);
       const productMap = new Map(products.map(p => [p.id, p]));
 
-      // Calculate order items with prices
+      // Calculate order items - use prices sent from checkout if available
       const orderItemsData: Array<{
         id: string;
         productId: string;
         productName: string;
+        productNameAr: string;
         quantity: number;
         unitPrice: number;
         totalPrice: number;
       }> = [];
-      let subtotal = 0;
+      let calculatedSubtotal = 0;
 
       for (const item of items) {
         const product = productMap.get(item.productId);
@@ -1920,25 +1935,42 @@ function createApp() {
           return res.status(404).json({ success: false, error: `Product ${item.productId} not found` });
         }
 
-        const price = parseFloat(product.price);
-        const totalPrice = price * item.quantity;
+        // Use price from checkout if provided, otherwise fall back to database price
+        const unitPrice = item.unitPrice !== undefined ? Number(item.unitPrice) : parseFloat(product.price);
+        const totalPrice = unitPrice * item.quantity;
+        
         orderItemsData.push({
           id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           productId: product.id,
           productName: product.name,
+          productNameAr: product.nameAr || product.name,
           quantity: item.quantity,
-          unitPrice: price,
+          unitPrice,
           totalPrice,
         });
-        subtotal += totalPrice;
+        calculatedSubtotal += totalPrice;
       }
 
-      // Calculate totals
-      const discount = 0;
-      const deliveryFee = subtotal > 200 ? 0 : 15;
+      // Use provided values from checkout or calculate
+      const discount = Number(providedDiscountAmount) || 0;
+      const expressDeliveryFee = Number(providedExpressDeliveryFee) || 0;
+      const driverTip = Number(providedDriverTip) || 0;
+      
+      // Use subtotal from checkout if provided (which already has discounts on item prices)
+      // Otherwise use calculated subtotal
+      const subtotal = providedSubtotal !== undefined ? Number(providedSubtotal) : calculatedSubtotal;
+      
+      // Delivery fee = express delivery fee if express, otherwise standard delivery
+      // Express delivery fee of 0 means either not express or free express
+      const standardDeliveryFee = subtotal > 200 ? 0 : 15;
+      const deliveryFee = expressDeliveryFee > 0 ? expressDeliveryFee : standardDeliveryFee;
+      
       const vatRate = 0.05;
-      const vatAmount = (subtotal - discount) * vatRate;
-      const total = subtotal - discount + deliveryFee + vatAmount;
+      // Use VAT from checkout if provided
+      const vatAmount = providedVatAmount !== undefined ? Number(providedVatAmount) : (subtotal * vatRate);
+      
+      // Use total from checkout if provided
+      const total = providedTotal !== undefined ? Number(providedTotal) : (subtotal + deliveryFee + vatAmount + driverTip);
 
       // Generate order number and ID
       const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
@@ -1960,6 +1992,7 @@ function createApp() {
         customerMobile: user?.mobile || address.mobile || '',
         subtotal: String(subtotal),
         discount: String(discount),
+        discountCode: discountCode || null,
         deliveryFee: String(deliveryFee),
         vatRate: String(vatRate),
         vatAmount: String(vatAmount),
@@ -1996,6 +2029,7 @@ function createApp() {
           orderId,
           productId: item.productId,
           productName: item.productName,
+          productNameAr: item.productNameAr,
           sku: prod?.sku || `SKU-${item.productId}`,
           quantity: String(item.quantity),
           unitPrice: String(item.unitPrice),
@@ -2025,10 +2059,17 @@ function createApp() {
         orderNumber,
         userId,
         customerName,
-        items: orderItemsData,
+        customerMobile: user?.mobile || address.mobile || '',
+        items: orderItemsData.map(item => ({
+          ...item,
+          productNameAr: item.productNameAr,
+        })),
         subtotal,
         discount,
+        discountCode: discountCode || null,
         deliveryFee,
+        expressDeliveryFee,
+        driverTip,
         vatRate,
         vatAmount,
         total,

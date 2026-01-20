@@ -1073,6 +1073,7 @@ export default function CheckoutPage() {
           return {
             productId,
             quantity: item.quantity,
+            unitPrice: item.price, // Send the price from basket (already has discounts applied)
             notes: item.notes,
           };
         }),
@@ -1093,8 +1094,13 @@ export default function CheckoutPage() {
         paymentMethod: "cod",
         deliveryNotes: deliveryNotes,
         discountCode: promoApplied?.code,
+        discountAmount: discountAmount,
         expressDeliveryFee: isExpressDelivery ? expressDeliveryFee : 0,
         driverTip: driverTip,
+        // Send calculated totals from checkout
+        subtotal: adjustedSubtotal,
+        vatAmount: adjustedVat,
+        total: adjustedTotal,
       });
 
       if (response.success && response.data) {

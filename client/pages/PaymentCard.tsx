@@ -244,15 +244,33 @@ export default function PaymentCardPage() {
           return {
             productId,
             quantity: item.quantity,
+            unitPrice: item.price, // Send the price from basket (already has discounts applied)
             notes: item.notes,
           };
         }),
         addressId: addressId,
+        deliveryAddress: selectedAddress ? {
+          fullName: selectedAddress.fullName,
+          mobile: selectedAddress.mobile,
+          emirate: selectedAddress.emirate,
+          area: selectedAddress.area,
+          street: selectedAddress.street,
+          building: selectedAddress.building,
+          floor: selectedAddress.floor,
+          apartment: selectedAddress.apartment,
+          latitude: selectedAddress.latitude,
+          longitude: selectedAddress.longitude,
+        } : undefined,
         paymentMethod: "card",
         deliveryNotes: deliveryNotes,
         discountCode: promoCode,
+        discountAmount: discountAmount,
         expressDeliveryFee: expressDeliveryFee,
         driverTip: driverTip,
+        // Send calculated totals from checkout
+        subtotal: adjustedSubtotal,
+        vatAmount: adjustedVat,
+        total: adjustedTotal,
       });
 
       if (response.success && response.data) {

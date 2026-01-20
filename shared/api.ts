@@ -343,14 +343,31 @@ export interface CreateOrderRequest {
   items: {
     productId: string;
     quantity: number;
+    unitPrice: number; // Price per unit (already with discount applied)
     notes?: string;
   }[];
   addressId: string;
+  deliveryAddress?: {
+    fullName?: string;
+    mobile?: string;
+    emirate?: string;
+    area?: string;
+    street?: string;
+    building?: string;
+    floor?: string;
+    apartment?: string;
+    latitude?: number;
+    longitude?: number;
+  };
   paymentMethod: "card" | "cod" | "bank_transfer";
   deliveryNotes?: string;
   discountCode?: string;
+  discountAmount?: number; // Promo code discount amount
   expressDeliveryFee?: number;
   driverTip?: number;
+  subtotal: number; // Subtotal from checkout
+  vatAmount: number; // VAT from checkout
+  total: number; // Total from checkout
 }
 
 export interface UpdateOrderStatusRequest {

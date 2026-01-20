@@ -311,7 +311,7 @@ export const ordersApi = {
 
   create: async (orderData: {
     userId: string;
-    items: { productId: string; quantity: number; notes?: string }[];
+    items: { productId: string; quantity: number; unitPrice: number; notes?: string }[];
     addressId: string;
     deliveryAddress?: {
       fullName: string;
@@ -328,8 +328,12 @@ export const ordersApi = {
     paymentMethod: "card" | "cod" | "bank_transfer";
     deliveryNotes?: string;
     discountCode?: string;
+    discountAmount?: number;
     expressDeliveryFee?: number;
     driverTip?: number;
+    subtotal: number;
+    vatAmount: number;
+    total: number;
   }): Promise<ApiResponse<Order>> => {
     return fetchApi<Order>("/orders", {
       method: "POST",
