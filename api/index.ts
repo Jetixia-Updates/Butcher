@@ -699,16 +699,10 @@ function createApp() {
           }
         } catch (dbError) {
           console.error('[Login DB Error]', dbError);
-          // Fall back to in-memory
+          return res.status(500).json({ success: false, error: 'Database error during login' });
         }
-      }
-      
-      // Fallback to in-memory if not found in DB
-      if (!user) {
-        user = Array.from(users.values()).find(
-          u => u.username?.toLowerCase() === username.toLowerCase() || 
-               u.email.toLowerCase() === username.toLowerCase()
-        );
+      } else {
+        return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
       if (!user) {
@@ -797,14 +791,10 @@ function createApp() {
           }
         } catch (dbError) {
           console.error('[Admin Login DB Error]', dbError);
+          return res.status(500).json({ success: false, error: 'Database error during login' });
         }
-      }
-      
-      // Fallback to in-memory
-      if (!user) {
-        user = Array.from(users.values()).find(
-          u => u.username?.toLowerCase() === username.toLowerCase() && u.role === 'admin'
-        );
+      } else {
+        return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
       if (!user || user.password !== password) {
@@ -949,28 +939,8 @@ function createApp() {
           }
           return res.status(500).json({ success: false, error: 'Registration failed: Database error' });
         }
-      }
-
-      // Fallback to in-memory only if database is not available
-      const existingUsername = Array.from(users.values()).find(
-        u => u.username?.toLowerCase() === username.toLowerCase()
-      );
-      if (existingUsername) {
-        return res.status(400).json({ success: false, error: 'Username already taken' });
-      }
-
-      const existingEmail = Array.from(users.values()).find(
-        u => u.email.toLowerCase() === email.toLowerCase()
-      );
-      if (existingEmail) {
-        return res.status(400).json({ success: false, error: 'Email already registered' });
-      }
-
-      const existingMobile = Array.from(users.values()).find(
-        u => u.mobile.replace(/\s/g, '') === normalizedMobile
-      );
-      if (existingMobile) {
-        return res.status(400).json({ success: false, error: 'Phone number already registered' });
+      } else {
+        return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
       const newUser: User = {
@@ -1564,22 +1534,32 @@ function createApp() {
   });
 
   // Real-time stats
-  app.get('/api/analytics/real-time', (req, res) => {
-    const allOrders = Array.from(orders.values());
-    const last30Min = new Date(Date.now() - 30 * 60 * 1000);
-    const recentOrders = allOrders.filter(o => new Date(o.createdAt) >= last30Min);
-    
-    res.json({
-      success: true,
-      data: {
-        activeOrders: allOrders.filter(o => ['pending', 'confirmed', 'processing', 'out_for_delivery'].includes(o.status)).length,
-        ordersLast30Min: recentOrders.length,
-        revenueLast30Min: recentOrders.reduce((sum, o) => sum + o.total, 0),
-        activeDrivers: Array.from(users.values()).filter(u => u.role === 'delivery' && u.isActive).length,
-        pendingDeliveries: allOrders.filter(o => o.status === 'out_for_delivery').length,
-        timestamp: new Date().toISOString(),
-      },
-    });
+  app.get('/api/analytics/real-time', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const allOrders = await pgDb.select().from(ordersTable);
+      const last30Min = new Date(Date.now() - 30 * 60 * 1000);
+      const recentOrders = allOrders.filter(o => new Date(o.createdAt) >= last30Min);
+      const allUsers = await pgDb.select().from(usersTable);
+      
+      res.json({
+        success: true,
+        data: {
+          activeOrders: allOrders.filter(o => ['pending', 'confirmed', 'processing', 'out_for_delivery'].includes(o.status)).length,
+          ordersLast30Min: recentOrders.length,
+          revenueLast30Min: recentOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0),
+          activeDrivers: allUsers.filter(u => u.role === 'delivery' && u.isActive).length,
+          pendingDeliveries: allOrders.filter(o => o.status === 'out_for_delivery').length,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('[Real-time Stats Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch real-time stats' });
+    }
   });
 
   // =====================================================
@@ -2019,25 +1999,38 @@ function createApp() {
   });
 
   // Delete/Cancel order
-  app.delete('/api/orders/:id', (req, res) => {
-    const order = orders.get(req.params.id);
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
+  app.delete('/api/orders/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
+      if (orderResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Order not found' });
+      }
+      
+      const order = orderResult[0];
+      if (['delivered', 'cancelled'].includes(order.status)) {
+        return res.status(400).json({ success: false, error: 'Cannot delete delivered or already cancelled orders' });
+      }
+      
+      const newHistory = [...(order.statusHistory as any[] || []), {
+        status: 'cancelled',
+        changedAt: new Date().toISOString(),
+        changedBy: 'admin',
+      }];
+      
+      const [updated] = await pgDb.update(ordersTable)
+        .set({ status: 'cancelled', statusHistory: newHistory, updatedAt: new Date() })
+        .where(eq(ordersTable.id, req.params.id))
+        .returning();
+      
+      res.json({ success: true, data: updated, message: 'Order cancelled successfully' });
+    } catch (error) {
+      console.error('[Cancel Order Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to cancel order' });
     }
-    
-    if (['delivered', 'cancelled'].includes(order.status)) {
-      return res.status(400).json({ success: false, error: 'Cannot delete delivered or already cancelled orders' });
-    }
-    
-    order.status = 'cancelled';
-    order.updatedAt = new Date().toISOString();
-    order.statusHistory.push({
-      status: 'cancelled',
-      changedAt: new Date().toISOString(),
-      changedBy: 'admin',
-    });
-    
-    res.json({ success: true, data: order, message: 'Order cancelled successfully' });
   });
 
   // =====================================================
@@ -2839,105 +2832,181 @@ function createApp() {
   // USERS API
   // =====================================================
 
-  app.get('/api/users', (req, res) => {
-    const { role, search } = req.query;
-    let allUsers = Array.from(users.values());
-    
-    if (role && role !== 'all') {
-      allUsers = allUsers.filter(u => u.role === role);
+  app.get('/api/users', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { role, search } = req.query;
+      let allUsers = await pgDb.select().from(usersTable);
+      
+      if (role && role !== 'all') {
+        allUsers = allUsers.filter(u => u.role === role);
+      }
+      if (search) {
+        const q = (search as string).toLowerCase();
+        allUsers = allUsers.filter(u => 
+          u.firstName.toLowerCase().includes(q) ||
+          u.familyName.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          u.mobile.includes(q)
+        );
+      }
+      
+      const sanitized = allUsers.map(u => {
+        const { password, ...userWithoutPassword } = u;
+        return userWithoutPassword;
+      });
+      res.json({ success: true, data: sanitized });
+    } catch (error) {
+      console.error('[Users List Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch users' });
     }
-    if (search) {
-      const q = (search as string).toLowerCase();
-      allUsers = allUsers.filter(u => 
-        u.firstName.toLowerCase().includes(q) ||
-        u.familyName.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        u.mobile.includes(q)
-      );
-    }
-    
-    const sanitized = allUsers.map(u => {
-      const { password, ...userWithoutPassword } = u;
-      return userWithoutPassword;
-    });
-    res.json({ success: true, data: sanitized });
   });
 
-  app.get('/api/users/stats', (req, res) => {
-    const allUsers = Array.from(users.values());
-    res.json({
-      success: true,
-      data: {
-        total: allUsers.length,
-        customers: allUsers.filter(u => u.role === 'customer').length,
-        admins: allUsers.filter(u => u.role === 'admin').length,
-        staff: allUsers.filter(u => u.role === 'staff').length,
-        delivery: allUsers.filter(u => u.role === 'delivery').length,
-        active: allUsers.filter(u => u.isActive).length,
-        verified: allUsers.filter(u => u.isVerified).length,
-        newThisMonth: 3,
-      },
-    });
+  app.get('/api/users/stats', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const allUsers = await pgDb.select().from(usersTable);
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      
+      res.json({
+        success: true,
+        data: {
+          total: allUsers.length,
+          customers: allUsers.filter(u => u.role === 'customer').length,
+          admins: allUsers.filter(u => u.role === 'admin').length,
+          staff: allUsers.filter(u => u.role === 'staff').length,
+          delivery: allUsers.filter(u => u.role === 'delivery').length,
+          active: allUsers.filter(u => u.isActive).length,
+          verified: allUsers.filter(u => u.isVerified).length,
+          newThisMonth: allUsers.filter(u => new Date(u.createdAt) >= monthStart).length,
+        },
+      });
+    } catch (error) {
+      console.error('[User Stats Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch user stats' });
+    }
   });
 
   // Get user by ID
-  app.get('/api/users/:id', (req, res) => {
-    const user = users.get(req.params.id);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+  app.get('/api/users/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, req.params.id));
+      if (userResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      const user = userResult[0];
+      const { password, ...userWithoutPassword } = user;
+      res.json({ success: true, data: userWithoutPassword });
+    } catch (error) {
+      console.error('[Get User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch user' });
     }
-    const { password, ...userWithoutPassword } = user;
-    res.json({ success: true, data: userWithoutPassword });
   });
 
-  app.put('/api/users/:id', (req, res) => {
-    const user = users.get(req.params.id);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+  app.put('/api/users/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, req.params.id));
+      if (userResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+      
+      const updates = req.body;
+      const updateData: Record<string, unknown> = { ...updates, updatedAt: new Date() };
+      
+      const [updated] = await pgDb.update(usersTable)
+        .set(updateData)
+        .where(eq(usersTable.id, req.params.id))
+        .returning();
+      
+      const { password, ...userWithoutPassword } = updated;
+      res.json({ success: true, data: userWithoutPassword });
+    } catch (error) {
+      console.error('[Update User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update user' });
     }
-    
-    const updates = req.body;
-    Object.assign(user, updates, { updatedAt: new Date().toISOString() });
-    
-    const { password, ...userWithoutPassword } = user;
-    res.json({ success: true, data: userWithoutPassword });
   });
 
-  app.delete('/api/users/:id', (req, res) => {
-    const user = users.get(req.params.id);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+  app.delete('/api/users/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, req.params.id));
+      if (userResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      await pgDb.delete(usersTable).where(eq(usersTable.id, req.params.id));
+      res.json({ success: true, message: 'User deleted' });
+    } catch (error) {
+      console.error('[Delete User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete user' });
     }
-    users.delete(req.params.id);
-    res.json({ success: true, message: 'User deleted' });
   });
 
   // Change user password
-  app.post('/api/users/:id/change-password', (req, res) => {
-    const user = users.get(req.params.id);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+  app.post('/api/users/:id/change-password', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, req.params.id));
+      if (userResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      const user = userResult[0];
+      const { currentPassword, newPassword } = req.body;
+      
+      if (user.password !== currentPassword) {
+        return res.status(400).json({ success: false, error: 'Current password is incorrect' });
+      }
+      
+      await pgDb.update(usersTable)
+        .set({ password: newPassword, updatedAt: new Date() })
+        .where(eq(usersTable.id, req.params.id));
+      
+      res.json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+      console.error('[Change Password Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to change password' });
     }
-    
-    const { currentPassword, newPassword } = req.body;
-    if (user.password !== currentPassword) {
-      return res.status(400).json({ success: false, error: 'Current password is incorrect' });
-    }
-    
-    user.password = newPassword;
-    user.updatedAt = new Date().toISOString();
-    
-    res.json({ success: true, message: 'Password changed successfully' });
   });
 
   // Verify user (admin)
-  app.post('/api/users/:id/verify', (req, res) => {
-    const user = users.get(req.params.id);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-    
-    user.isVerified = true;
+  app.post('/api/users/:id/verify', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, req.params.id));
+      if (userResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+      
+      await pgDb.update(usersTable)
+        .set({ isVerified: true })
+        .where(eq(usersTable.id, req.params.id));
     user.updatedAt = new Date().toISOString();
     
     const { password, ...userWithoutPassword } = user;
@@ -3287,17 +3356,29 @@ function createApp() {
   });
 
   // Get delivery drivers
-  app.get('/api/delivery/drivers', (req, res) => {
-    const drivers = Array.from(users.values())
-      .filter(u => u.role === 'delivery' && u.isActive)
-      .map(d => ({
-        id: d.id,
-        name: `${d.firstName} ${d.familyName}`,
-        mobile: d.mobile,
-        email: d.email,
-        activeDeliveries: Array.from(deliveryTracking.values()).filter(t => t.driverId === d.id && t.status !== 'delivered').length,
-      }));
-    res.json({ success: true, data: drivers });
+  app.get('/api/delivery/drivers', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const allUsers = await pgDb.select().from(usersTable);
+      const allTracking = await pgDb.select().from(deliveryTrackingTable);
+      
+      const drivers = allUsers
+        .filter(u => u.role === 'delivery' && u.isActive)
+        .map(d => ({
+          id: d.id,
+          name: `${d.firstName} ${d.familyName}`,
+          mobile: d.mobile,
+          email: d.email,
+          activeDeliveries: allTracking.filter(t => t.driverId === d.id && t.status !== 'delivered').length,
+        }));
+      res.json({ success: true, data: drivers });
+    } catch (error) {
+      console.error('[Delivery Drivers Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch drivers' });
+    }
   });
 
   // Assign delivery to driver (orderId in body) - DATABASE BACKED
@@ -3791,126 +3872,141 @@ function createApp() {
   });
 
   // Get all active delivery tracking
-  app.get('/api/delivery/tracking', (req, res) => {
-    // First, ensure any orders with trackingInfo are in the map
-    Array.from(orders.values()).forEach(order => {
-      if (order.trackingInfo && !deliveryTracking.has(order.id)) {
-        const tracking = {
-          id: order.trackingInfo.id,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          driverId: order.trackingInfo.driverId,
-          driverName: order.trackingInfo.driverName,
-          driverMobile: order.trackingInfo.driverMobile,
-          status: order.trackingInfo.status,
-          customerName: order.customerName,
-          customerMobile: order.customerMobile,
-          deliveryAddress: order.deliveryAddress,
-          deliveryNotes: order.deliveryNotes,
-          items: order.items.map(i => ({ name: i.productName, quantity: i.quantity })),
-          total: order.total,
-          estimatedArrival: order.trackingInfo.estimatedArrival,
-          timeline: order.trackingInfo.timeline,
-          createdAt: order.trackingInfo.createdAt,
-          updatedAt: order.trackingInfo.updatedAt,
-        };
-        deliveryTracking.set(order.id, tracking);
-      }
-    });
-    
-    const allTracking = Array.from(deliveryTracking.values());
-    res.json({ success: true, data: allTracking });
+  app.get('/api/delivery/tracking', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });\n      }
+
+      const allTracking = await pgDb.select().from(deliveryTrackingTable);
+      res.json({ success: true, data: allTracking });
+    } catch (error) {
+      console.error('[Get All Tracking Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch tracking' });
+    }
   });
 
   // Get tracking by ID
-  app.get('/api/delivery/tracking/:id', (req, res) => {
-    const tracking = Array.from(deliveryTracking.values()).find(t => t.id === req.params.id);
-    if (!tracking) {
-      return res.status(404).json({ success: false, error: 'Tracking not found' });
+  app.get('/api/delivery/tracking/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const trackingResult = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.id, req.params.id));
+      if (trackingResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
+      }
+      res.json({ success: true, data: trackingResult[0] });
+    } catch (error) {
+      console.error('[Get Tracking Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch tracking' });
     }
-    res.json({ success: true, data: tracking });
   });
 
   // Update tracking location (for driver app)
-  app.patch('/api/delivery/tracking/:id/location', (req, res) => {
-    const tracking = Array.from(deliveryTracking.values()).find(t => t.id === req.params.id);
-    if (!tracking) {
-      return res.status(404).json({ success: false, error: 'Tracking not found' });
+  app.patch('/api/delivery/tracking/:id/location', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const trackingResult = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.id, req.params.id));
+      if (trackingResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
+      }
+      
+      const { latitude, longitude } = req.body;
+      const [updated] = await pgDb.update(deliveryTrackingTable)
+        .set({ updatedAt: new Date() })
+        .where(eq(deliveryTrackingTable.id, req.params.id))
+        .returning();
+      
+      res.json({ success: true, data: { ...updated, currentLocation: { latitude, longitude } } });
+    } catch (error) {
+      console.error('[Update Tracking Location Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update location' });
     }
-    
-    const { latitude, longitude } = req.body;
-    // In a real app, we'd store the location history
-    tracking.updatedAt = new Date().toISOString();
-    
-    res.json({ success: true, data: { ...tracking, currentLocation: { latitude, longitude } } });
   });
 
   // Update tracking status
-  app.patch('/api/delivery/tracking/:id/status', (req, res) => {
-    const tracking = Array.from(deliveryTracking.values()).find(t => t.id === req.params.id);
-    if (!tracking) {
-      return res.status(404).json({ success: false, error: 'Tracking not found' });
+  app.patch('/api/delivery/tracking/:id/status', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const trackingResult = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.id, req.params.id));
+      if (trackingResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
+      }
+      
+      const tracking = trackingResult[0];
+      const { status, notes } = req.body;
+      const newTimeline = [...(tracking.timeline as any[] || []), {
+        status,
+        timestamp: new Date().toISOString(),
+        notes,
+      }];
+      
+      const [updated] = await pgDb.update(deliveryTrackingTable)
+        .set({ status, timeline: newTimeline, updatedAt: new Date() })
+        .where(eq(deliveryTrackingTable.id, req.params.id))
+        .returning();
+      
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('[Update Tracking Status Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update status' });
     }
-    
-    const { status, notes } = req.body;
-    tracking.status = status;
-    tracking.updatedAt = new Date().toISOString();
-    tracking.timeline.push({
-      status,
-      timestamp: new Date().toISOString(),
-      notes,
-    });
-    
-    res.json({ success: true, data: tracking });
   });
 
   // Complete delivery
-  app.post('/api/delivery/tracking/:id/complete', (req, res) => {
-    const tracking = Array.from(deliveryTracking.values()).find(t => t.id === req.params.id);
-    if (!tracking) {
-      return res.status(404).json({ success: false, error: 'Tracking not found' });
-    }
-    
-    const { signature, photo, notes } = req.body;
-    
-    tracking.status = 'delivered';
-    tracking.updatedAt = new Date().toISOString();
-    tracking.timeline.push({
-      status: 'delivered',
-      timestamp: new Date().toISOString(),
-      notes: notes || 'Delivery completed',
-    });
-    
-    // Update order status
-    const order = orders.get(tracking.orderId);
-    if (order) {
-      order.status = 'delivered';
-      order.updatedAt = new Date().toISOString();
-      order.statusHistory.push({
+  app.post('/api/delivery/tracking/:id/complete', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const trackingResult = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.id, req.params.id));
+      if (trackingResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
+      }
+      
+      const tracking = trackingResult[0];
+      const { signature, photo, notes } = req.body;
+      
+      const newTimeline = [...(tracking.timeline as any[] || []), {
+        status: 'delivered',
+        timestamp: new Date().toISOString(),
+        notes: notes || 'Delivery completed',
+      }];
+      
+      // Update tracking status
+      const [updatedTracking] = await pgDb.update(deliveryTrackingTable)
+        .set({ status: 'delivered', timeline: newTimeline, updatedAt: new Date() })
+        .where(eq(deliveryTrackingTable.id, req.params.id))
+        .returning();
+      
+      // Update order status
+      const newHistory = [...(tracking.statusHistory as any[] || []), {
         status: 'delivered',
         changedAt: new Date().toISOString(),
         changedBy: tracking.driverId,
-      });
+      }];
       
-      // Update trackingInfo on order for persistence
-      order.trackingInfo = {
-        id: tracking.id,
-        driverId: tracking.driverId,
-        driverName: tracking.driverName,
-        driverMobile: tracking.driverMobile,
-        status: 'delivered',
-        estimatedArrival: tracking.estimatedArrival,
-        timeline: [...tracking.timeline],
-        createdAt: tracking.createdAt,
-        updatedAt: tracking.updatedAt,
-      };
+      await pgDb.update(ordersTable)
+        .set({ status: 'delivered', statusHistory: newHistory, updatedAt: new Date() })
+        .where(eq(ordersTable.id, tracking.orderId));
+      
+      res.json({ 
+        success: true, 
+        data: updatedTracking, 
+        message: 'Delivery completed successfully' 
+      });
+    } catch (error) {
+      console.error('[Complete Delivery Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to complete delivery' });
     }
-    
-    res.json({ 
-      success: true, 
-      data: tracking, 
-      message: 'Delivery completed successfully' 
-    });
   });
 
   // Check delivery availability for area
@@ -4811,83 +4907,101 @@ function createApp() {
   ];
 
   // Finance summary
-  app.get('/api/finance/summary', (req, res) => {
-    const allOrders = Array.from(orders.values());
-    const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
-    const totalVAT = allOrders.reduce((sum, o) => sum + o.vatAmount, 0);
-    const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
-    const grossProfit = totalRevenue * 0.35; // 35% margin
-    const netProfit = grossProfit - totalExpenses;
+  app.get('/api/finance/summary', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
 
-    res.json({
-      success: true,
-      data: {
-        period: req.query.period || 'month',
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date().toISOString(),
-        totalRevenue,
-        totalCOGS: totalRevenue * 0.65,
-        grossProfit,
-        grossProfitMargin: 35,
-        totalExpenses,
-        netProfit,
-        netProfitMargin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
-        totalRefunds: 0,
-        totalVAT,
-        vatCollected: totalVAT,
-        vatPaid: 0,
-        vatDue: totalVAT,
-        cashFlow: { inflow: totalRevenue, outflow: totalExpenses, net: totalRevenue - totalExpenses },
-        revenueByPaymentMethod: [
-          { method: 'card', amount: totalRevenue * 0.6, count: Math.floor(allOrders.length * 0.6) },
-          { method: 'cod', amount: totalRevenue * 0.35, count: Math.floor(allOrders.length * 0.35) },
-          { method: 'bank_transfer', amount: totalRevenue * 0.05, count: Math.floor(allOrders.length * 0.05) },
-        ],
-        expensesByCategory: [
-          { category: 'rent', amount: 15000, count: 1 },
-          { category: 'salaries', amount: 35000, count: 1 },
-          { category: 'utilities', amount: 1500, count: 1 },
-          { category: 'marketing', amount: 5000, count: 1 },
-          { category: 'delivery', amount: 2500, count: 1 },
-        ],
-        accountBalances: financeAccounts.map(a => ({ accountId: a.id, accountName: a.name, balance: a.balance })),
-      },
-    });
+      const allOrders = await pgDb.select().from(ordersTable);
+      const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
+      const totalVAT = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
+      const totalExpenses = 0; // TODO: Implement expenses table
+      const grossProfit = totalRevenue * 0.35;
+      const netProfit = grossProfit - totalExpenses;
+
+      // Calculate payment method breakdown
+      const paymentMethodBreakdown = allOrders.reduce((acc, o) => {
+        const method = o.paymentMethod || 'card';
+        if (!acc[method]) acc[method] = { amount: 0, count: 0 };
+        acc[method].amount += parseFloat(String(o.total));
+        acc[method].count += 1;
+        return acc;
+      }, {} as Record<string, { amount: number; count: number }>);
+
+      res.json({
+        success: true,
+        data: {
+          period: req.query.period || 'month',
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          endDate: new Date().toISOString(),
+          totalRevenue,
+          totalCOGS: totalRevenue * 0.65,
+          grossProfit,
+          grossProfitMargin: 35,
+          totalExpenses,
+          netProfit,
+          netProfitMargin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
+          totalRefunds: 0,
+          totalVAT,
+          vatCollected: totalVAT,
+          vatPaid: 0,
+          vatDue: totalVAT,
+          cashFlow: { inflow: totalRevenue, outflow: totalExpenses, net: totalRevenue - totalExpenses },
+          revenueByPaymentMethod: Object.entries(paymentMethodBreakdown).map(([method, stats]) => ({
+            method,
+            amount: stats.amount,
+            count: stats.count
+          })),
+          expensesByCategory: [],
+          accountBalances: [],
+        },
+      });
+    } catch (error) {
+      console.error('[Finance Summary Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch finance summary' });
+    }
   });
 
   // Finance transactions
-  app.get('/api/finance/transactions', (req, res) => {
-    const allOrders = Array.from(orders.values());
-    const transactions = allOrders.slice(0, 10).map((o, i) => ({
-      id: `txn-${i + 1}`,
-      type: 'sale',
-      status: 'completed',
-      amount: o.total,
-      currency: 'AED',
-      description: `Order #${o.orderNumber}`,
-      reference: o.orderNumber,
-      referenceType: 'order',
-      referenceId: o.id,
-      accountId: o.paymentMethod === 'card' ? 'acc-002' : 'acc-003',
-      accountName: o.paymentMethod === 'card' ? 'Card Payments' : 'COD Collections',
-      createdBy: 'system',
-      createdAt: o.createdAt,
-      updatedAt: o.createdAt,
-    }));
-    res.json({ success: true, data: transactions });
+  app.get('/api/finance/transactions', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const allOrders = await pgDb.select().from(ordersTable);
+      const transactions = allOrders.slice(0, 10).map((o, i) => ({
+        id: `txn-${i + 1}`,
+        type: 'sale',
+        status: 'completed',
+        amount: parseFloat(String(o.total)),
+        currency: 'AED',
+        description: `Order #${o.orderNumber}`,
+        reference: o.orderNumber,
+        referenceType: 'order',
+        referenceId: o.id,
+        accountId: o.paymentMethod === 'card' ? 'acc-002' : 'acc-003',
+        accountName: o.paymentMethod === 'card' ? 'Card Payments' : 'COD Collections',
+        createdBy: 'system',
+        createdAt: o.createdAt.toISOString(),
+        updatedAt: o.createdAt.toISOString(),
+      }));
+      res.json({ success: true, data: transactions });
+    } catch (error) {
+      console.error('[Finance Transactions Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch transactions' });
+    }
   });
 
   // Finance accounts
   app.get('/api/finance/accounts', (req, res) => {
-    res.json({ success: true, data: financeAccounts });
+    res.json({ success: true, data: [] }); // TODO: Implement finance accounts table
   });
 
   // Get finance account by ID
   app.get('/api/finance/accounts/:id', (req, res) => {
-    const account = financeAccounts.find(a => a.id === req.params.id);
-    if (!account) {
-      return res.status(404).json({ success: false, error: 'Account not found' });
-    }
+    return res.status(404).json({ success: false, error: 'Account not found' }); // TODO: Implement finance accounts table
     res.json({ success: true, data: account });
   });
 
