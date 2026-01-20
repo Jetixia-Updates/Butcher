@@ -305,7 +305,7 @@ const discountCodesTable = pgTable("discount_codes", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// App settings table
+// App settings table - matches server/db/schema.ts (no createdAt column)
 const appSettingsTable = pgTable("app_settings", {
   id: text("id").primaryKey().default("default"),
   vatRate: decimal("vat_rate", { precision: 5, scale: 4 }).notNull().default("0.05"),
@@ -327,13 +327,12 @@ const appSettingsTable = pgTable("app_settings", {
   cashbackPercentage: decimal("cashback_percentage", { precision: 5, scale: 2 }).notNull().default("2"),
   loyaltyPointsPerAed: decimal("loyalty_points_per_aed", { precision: 5, scale: 2 }).notNull().default("1"),
   loyaltyPointValue: decimal("loyalty_point_value", { precision: 5, scale: 4 }).notNull().default("0.1"),
-  storePhone: varchar("store_phone", { length: 50 }),
+  storePhone: varchar("store_phone", { length: 20 }),
   storeEmail: varchar("store_email", { length: 255 }),
   storeAddress: text("store_address"),
   storeAddressAr: text("store_address_ar"),
   workingHoursStart: varchar("working_hours_start", { length: 10 }).default("08:00"),
   workingHoursEnd: varchar("working_hours_end", { length: 10 }).default("22:00"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -4853,100 +4852,94 @@ function createApp() {
   // SETTINGS API
   // =====================================================
 
+  // Default settings fallback
+  const DEFAULT_SETTINGS_DATA = {
+    settings: {
+      id: 'default',
+      vatRate: '0.05',
+      deliveryFee: '15.00',
+      freeDeliveryThreshold: '200.00',
+      expressDeliveryFee: '25.00',
+      minimumOrderAmount: '50.00',
+      maxOrdersPerDay: 100,
+      enableCashOnDelivery: true,
+      enableCardPayment: true,
+      enableWallet: true,
+      enableLoyalty: true,
+      enableReviews: true,
+      enableWishlist: true,
+      enableExpressDelivery: true,
+      enableScheduledDelivery: true,
+      enableWelcomeBonus: true,
+      welcomeBonus: '50.00',
+      cashbackPercentage: '2.00',
+      loyaltyPointsPerAed: '1.00',
+      loyaltyPointValue: '0.10',
+      storePhone: '+971501234567',
+      storeEmail: 'contact@butcher.ae',
+      storeAddress: 'Dubai, UAE',
+      storeAddressAr: 'دبي، الإمارات العربية المتحدة',
+      workingHoursStart: '08:00',
+      workingHoursEnd: '22:00',
+    },
+    banners: [],
+    timeSlots: [],
+    promoCodes: [],
+  };
+
   app.get('/api/settings', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         // Fallback to static data if database not available
-        return res.json({
-          success: true,
-          data: {
-            settings: {
-              id: 'settings_1',
-              vatRate: '0.05',
-              deliveryFee: '15.00',
-              freeDeliveryThreshold: '200.00',
-              expressDeliveryFee: '25.00',
-              minimumOrderAmount: '50.00',
-              maxOrdersPerDay: 100,
-              enableCashOnDelivery: true,
-              enableCardPayment: true,
-              enableWallet: true,
-              enableLoyalty: true,
-              enableReviews: true,
-              enableWishlist: true,
-              enableExpressDelivery: true,
-              enableScheduledDelivery: true,
-              enableWelcomeBonus: true,
-              welcomeBonus: '50.00',
-              cashbackPercentage: '2.00',
-              loyaltyPointsPerAed: '1.00',
-              loyaltyPointValue: '0.10',
-              storePhone: '+971501234567',
-              storeEmail: 'contact@butcher.ae',
-              storeAddress: 'Dubai, UAE',
-              storeAddressAr: 'دبي، الإمارات العربية المتحدة',
-              workingHoursStart: '08:00',
-              workingHoursEnd: '22:00',
-            },
-            banners: [],
-            timeSlots: [],
-            promoCodes: [],
-          },
-        });
+        return res.json({ success: true, data: DEFAULT_SETTINGS_DATA });
       }
 
-      // Fetch settings from database
-      let settingsResult = await pgDb.select().from(appSettingsTable).where(eq(appSettingsTable.id, "default"));
-      const settings = settingsResult[0] || {
-        id: 'default',
-        vatRate: '0.05',
-        deliveryFee: '15.00',
-        freeDeliveryThreshold: '200.00',
-        expressDeliveryFee: '25.00',
-        minimumOrderAmount: '50.00',
-        maxOrdersPerDay: 100,
-        enableCashOnDelivery: true,
-        enableCardPayment: true,
-        enableWallet: true,
-        enableLoyalty: true,
-        enableReviews: true,
-        enableWishlist: true,
-        enableExpressDelivery: true,
-        enableScheduledDelivery: true,
-        enableWelcomeBonus: true,
-        welcomeBonus: '50.00',
-        cashbackPercentage: '2.00',
-        loyaltyPointsPerAed: '1.00',
-        loyaltyPointValue: '0.10',
-        storePhone: '+971501234567',
-        storeEmail: 'contact@butcher.ae',
-        storeAddress: 'Dubai, UAE',
-        storeAddressAr: 'دبي، الإمارات العربية المتحدة',
-        workingHoursStart: '08:00',
-        workingHoursEnd: '22:00',
-      };
+      // Fetch each table with individual error handling
+      let settings = DEFAULT_SETTINGS_DATA.settings;
+      let banners: any[] = [];
+      let timeSlots: any[] = [];
+      let promoCodes: any[] = [];
 
-      // Fetch banners
-      const bannersResult = await pgDb.select().from(bannersTable);
+      try {
+        const settingsResult = await pgDb.select().from(appSettingsTable).where(eq(appSettingsTable.id, "default"));
+        if (settingsResult.length > 0) {
+          settings = settingsResult[0] as any;
+        }
+      } catch (e) {
+        console.error('[Settings fetch error]', e);
+      }
 
-      // Fetch time slots
-      const timeSlotsResult = await pgDb.select().from(deliveryTimeSlotsTable);
+      try {
+        banners = await pgDb.select().from(bannersTable);
+      } catch (e) {
+        console.error('[Banners fetch error]', e);
+      }
 
-      // Fetch promo codes
-      const promoCodesResult = await pgDb.select().from(discountCodesTable);
+      try {
+        timeSlots = await pgDb.select().from(deliveryTimeSlotsTable);
+      } catch (e) {
+        console.error('[TimeSlots fetch error]', e);
+      }
+
+      try {
+        promoCodes = await pgDb.select().from(discountCodesTable);
+      } catch (e) {
+        console.error('[PromoCodes fetch error]', e);
+      }
 
       res.json({
         success: true,
         data: {
           settings,
-          banners: bannersResult,
-          timeSlots: timeSlotsResult,
-          promoCodes: promoCodesResult,
+          banners,
+          timeSlots,
+          promoCodes,
         },
       });
     } catch (error) {
       console.error('[Get Settings Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to fetch settings' });
+      // Return default data instead of 500 error
+      res.json({ success: true, data: DEFAULT_SETTINGS_DATA });
     }
   });
 
