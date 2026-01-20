@@ -3018,40 +3018,8 @@ function createApp() {
   // =====================================================
 
   // Store delivery zones in memory
-  const deliveryZones = [
-    { id: 'zone_1', name: 'Dubai Downtown', nameAr: 'وسط دبي', emirate: 'Dubai', deliveryFee: 15, minimumOrder: 50, estimatedMinutes: 45, isActive: true, areas: ['Downtown', 'Business Bay', 'DIFC'] },
-    { id: 'zone_2', name: 'Dubai Marina', nameAr: 'مرسى دبي', emirate: 'Dubai', deliveryFee: 20, minimumOrder: 75, estimatedMinutes: 60, isActive: true, areas: ['Marina', 'JBR', 'JLT'] },
-    { id: 'zone_3', name: 'Abu Dhabi Central', nameAr: 'وسط أبوظبي', emirate: 'Abu Dhabi', deliveryFee: 25, minimumOrder: 100, estimatedMinutes: 90, isActive: true, areas: ['Corniche', 'Tourist Club', 'Hamdan Street'] },
-    { id: 'zone_4', name: 'Sharjah', nameAr: 'الشارقة', emirate: 'Sharjah', deliveryFee: 30, minimumOrder: 100, estimatedMinutes: 75, isActive: true, areas: ['Al Majaz', 'Rolla', 'Industrial Area'] },
-  ];
-
-  // =====================================================
-  // DELIVERY ZONES API - DATABASE BACKED
-  // =====================================================
-
-  app.get('/api/delivery/zones', async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !pgDb) {
-        return res.status(500).json({ success: false, error: 'Database not available' });
-      }
-
-      const { emirate, activeOnly } = req.query;
-      let zones = await pgDb.select().from(deliveryZonesTable);
-
-      if (emirate) {
-        zones = zones.filter((z) => z.emirate === emirate);
-      }
-
-      if (activeOnly === 'true') {
-        zones = zones.filter((z) => z.isActive);
-      }
-
-      res.json({ success: true, data: zones });
-    } catch (error) {
-      console.error('[Delivery Zones Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to fetch delivery zones' });
-    }
-  });
+  // Finance expenses placeholder (no DB table yet)
+  const financeExpenses: { id: string; category: string; description: string; amount: number; status: string; date?: string }[] = [];
 
   // Get zone by ID
   app.get('/api/delivery/zones/:id', async (req, res) => {
@@ -4447,73 +4415,191 @@ function createApp() {
     }
   });
 
-  app.get('/api/reports/sales-by-category', (req, res) => {
-    res.json({
-      success: true,
-      data: [
-        { category: 'Beef', totalSales: 4500, revenue: 4500, orders: 45, percentage: 40 },
-        { category: 'Lamb', totalSales: 2800, revenue: 2800, orders: 28, percentage: 25 },
-        { category: 'Chicken', totalSales: 2200, revenue: 2200, orders: 35, percentage: 20 },
-        { category: 'Goat', totalSales: 1700, revenue: 1700, orders: 12, percentage: 15 },
-      ],
-    });
+  app.get('/api/reports/sales-by-category', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [items, products] = await Promise.all([
+        pgDb.select().from(orderItemsTable),
+        pgDb.select().from(productsTable),
+      ]);
+
+      const productMap = new Map(products.map(p => [p.id, p]));
+      const categoryMap = new Map<string, { category: string; totalSales: number; revenue: number; orders: Set<string> }>();
+
+      items.forEach(item => {
+        const product = productMap.get(item.productId);
+        const category = product?.category || 'Uncategorized';
+        const quantity = parseFloat(String(item.quantity));
+        const revenue = parseFloat(String(item.totalPrice));
+
+        const existing = categoryMap.get(category) || { category, totalSales: 0, revenue: 0, orders: new Set<string>() };
+        existing.totalSales += quantity;
+        existing.revenue += revenue;
+        existing.orders.add(item.orderId);
+        categoryMap.set(category, existing);
+      });
+
+      const totalRevenue = Array.from(categoryMap.values()).reduce((sum, c) => sum + c.revenue, 0);
+      const data = Array.from(categoryMap.values())
+        .map(c => ({
+          category: c.category,
+          totalSales: c.totalSales,
+          revenue: c.revenue,
+          orders: c.orders.size,
+          percentage: totalRevenue > 0 ? (c.revenue / totalRevenue) * 100 : 0,
+        }))
+        .sort((a, b) => b.revenue - a.revenue);
+
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('[Sales By Category Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch sales by category' });
+    }
   });
 
-  app.get('/api/reports/sales-by-product', (req, res) => {
-    res.json({
-      success: true,
-      data: demoProducts.map((p, i) => ({
-        productId: p.id,
-        productName: p.name,
-        quantitySold: 50 - i * 5,
-        revenue: (50 - i * 5) * p.price,
-        category: p.category,
-      })),
-    });
+  app.get('/api/reports/sales-by-product', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [items, products] = await Promise.all([
+        pgDb.select().from(orderItemsTable),
+        pgDb.select().from(productsTable),
+      ]);
+
+      const productMap = new Map(products.map(p => [p.id, p]));
+      const productTotals = new Map<string, { productId: string; productName: string; quantitySold: number; revenue: number; category: string }>();
+
+      items.forEach(item => {
+        const product = productMap.get(item.productId);
+        const quantity = parseFloat(String(item.quantity));
+        const revenue = parseFloat(String(item.totalPrice));
+        const entry = productTotals.get(item.productId) || {
+          productId: item.productId,
+          productName: item.productName || product?.name || 'Unknown',
+          quantitySold: 0,
+          revenue: 0,
+          category: product?.category || 'Uncategorized',
+        };
+        entry.quantitySold += quantity;
+        entry.revenue += revenue;
+        productTotals.set(item.productId, entry);
+      });
+
+      const data = Array.from(productTotals.values()).sort((a, b) => b.revenue - a.revenue);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('[Sales By Product Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch sales by product' });
+    }
   });
 
-  app.get('/api/reports/customers', (req, res) => {
-    res.json({
-      success: true,
-      data: {
-        totalCustomers: 5,
-        newCustomers: 2,
-        returningCustomers: 3,
-        customerRetentionRate: 75,
-        averageOrdersPerCustomer: 3,
-        topCustomers: (async () => {
-          if (isDatabaseAvailable() && pgDb) {
-            const users = await pgDb.select().from(usersTable).where(eq(usersTable.role, 'customer')).limit(5);
-            return users.map(u => ({
-              userId: u.id,
-              name: `${u.firstName} ${u.familyName}`,
-              totalOrders: 3,
-              totalSpent: 750,
-            }));
-          }
-          return [];
-        })(),
-      },
-    });
+  app.get('/api/reports/customers', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [customers, ordersData] = await Promise.all([
+        pgDb.select().from(usersTable).where(eq(usersTable.role, 'customer')),
+        pgDb.select().from(ordersTable),
+      ]);
+
+      const orderStats = new Map<string, { orders: number; revenue: number }>();
+      ordersData.forEach(o => {
+        const revenue = parseFloat(String(o.total));
+        const stat = orderStats.get(o.userId) || { orders: 0, revenue: 0 };
+        stat.orders += 1;
+        stat.revenue += revenue;
+        orderStats.set(o.userId, stat);
+      });
+
+      const totalCustomers = customers.length;
+      const totalOrders = ordersData.length;
+      const now = new Date();
+      const last30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const newCustomers = customers.filter(c => c.createdAt && new Date(c.createdAt) >= last30).length;
+      const returningCustomers = Array.from(orderStats.values()).filter(s => s.orders > 1).length;
+      const averageOrdersPerCustomer = totalCustomers > 0 ? totalOrders / totalCustomers : 0;
+
+      const topCustomers = customers
+        .map(c => {
+          const stats = orderStats.get(c.id) || { orders: 0, revenue: 0 };
+          return {
+            userId: c.id,
+            name: `${c.firstName} ${c.familyName}`,
+            totalOrders: stats.orders,
+            totalSpent: stats.revenue,
+          };
+        })
+        .sort((a, b) => b.totalSpent - a.totalSpent)
+        .slice(0, 5);
+
+      res.json({
+        success: true,
+        data: {
+          totalCustomers,
+          newCustomers,
+          returningCustomers,
+          customerRetentionRate: totalCustomers > 0 ? (returningCustomers / totalCustomers) * 100 : 0,
+          averageOrdersPerCustomer,
+          topCustomers,
+        },
+      });
+    } catch (error) {
+      console.error('[Customers Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch customer report' });
+    }
   });
 
-  app.get('/api/reports/inventory', (req, res) => {
-    res.json({
-      success: true,
-      data: {
-        totalProducts: demoProducts.length,
-        inStock: demoProducts.length - 1,
-        lowStock: 1,
-        outOfStock: 0,
-        totalValue: demoProducts.reduce((sum, p) => sum + p.price * 50, 0),
-        categories: [
-          { category: 'Beef', count: 3, value: 7500 },
-          { category: 'Lamb', count: 1, value: 3725 },
-          { category: 'Chicken', count: 1, value: 1750 },
-          { category: 'Goat', count: 1, value: 6250 },
-        ],
-      },
-    });
+  app.get('/api/reports/inventory', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [products, stock] = await Promise.all([
+        pgDb.select().from(productsTable),
+        pgDb.select().from(stockTable),
+      ]);
+
+      const stockMap = new Map(stock.map(s => [s.productId, s]));
+      const inStockItems = stock.filter(s => parseFloat(String(s.availableQuantity)) > 0);
+      const lowStockItems = stock.filter(s => parseFloat(String(s.availableQuantity)) <= (s.lowStockThreshold || 0));
+      const outOfStockItems = stock.filter(s => parseFloat(String(s.availableQuantity)) <= 0);
+
+      const categoryMap = new Map<string, { category: string; count: number; value: number }>();
+      products.forEach(p => {
+        const stockItem = stockMap.get(p.id);
+        const availableQty = stockItem ? parseFloat(String(stockItem.availableQuantity)) : 0;
+        const value = availableQty * parseFloat(String(p.price));
+        const entry = categoryMap.get(p.category) || { category: p.category, count: 0, value: 0 };
+        entry.count += 1;
+        entry.value += value;
+        categoryMap.set(p.category, entry);
+      });
+
+      const totalValue = Array.from(categoryMap.values()).reduce((sum, c) => sum + c.value, 0);
+
+      res.json({
+        success: true,
+        data: {
+          totalProducts: products.length,
+          inStock: inStockItems.length,
+          lowStock: lowStockItems.length,
+          outOfStock: outOfStockItems.length,
+          totalValue,
+          categories: Array.from(categoryMap.values()).sort((a, b) => b.value - a.value),
+        },
+      });
+    } catch (error) {
+      console.error('[Inventory Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch inventory report' });
+    }
   });
 
   app.get('/api/reports/orders', async (req, res) => {

@@ -243,59 +243,6 @@ export const analyticsApi = {
 };
 
 // =====================================================
-// LOCAL ORDERS STORAGE (for demo persistence)
-// =====================================================
-
-const LOCAL_ORDERS_KEY = 'butcher_local_orders';
-
-function getLocalOrders(): Order[] {
-  try {
-    const stored = localStorage.getItem(LOCAL_ORDERS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalOrder(order: Order): void {
-  try {
-    const orders = getLocalOrders();
-    // Add or update order
-    const existingIndex = orders.findIndex(o => o.id === order.id);
-    if (existingIndex >= 0) {
-      orders[existingIndex] = order;
-    } else {
-      orders.unshift(order); // Add to beginning
-    }
-    localStorage.setItem(LOCAL_ORDERS_KEY, JSON.stringify(orders));
-  } catch {
-    // Ignore storage errors
-  }
-}
-
-function updateLocalOrderStatus(orderId: string, status: OrderStatus): Order | null {
-  try {
-    const orders = getLocalOrders();
-    const order = orders.find(o => o.id === orderId);
-    if (order) {
-      order.status = status;
-      order.updatedAt = new Date().toISOString();
-      order.statusHistory = order.statusHistory || [];
-      order.statusHistory.push({
-        status,
-        changedAt: new Date().toISOString(),
-        changedBy: 'admin',
-      });
-      localStorage.setItem(LOCAL_ORDERS_KEY, JSON.stringify(orders));
-      return order;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-// =====================================================
 // ORDERS API
 // =====================================================
 
@@ -316,57 +263,15 @@ export const ordersApi = {
     if (params?.startDate) searchParams.set("startDate", params.startDate);
     if (params?.endDate) searchParams.set("endDate", params.endDate);
 
-    const response = await fetchApi<Order[]>(`/orders?${searchParams.toString()}`);
-    
-    // Merge with local orders for demo persistence
-    const localOrders = getLocalOrders();
-    if (response.success && response.data) {
-      // Combine API orders with local orders, avoiding duplicates
-      const apiOrderIds = new Set(response.data.map(o => o.id));
-      const uniqueLocalOrders = localOrders.filter(o => !apiOrderIds.has(o.id));
-      
-      // Apply status filter to local orders if needed
-      let filteredLocalOrders = uniqueLocalOrders;
-      if (params?.status && params.status !== 'all') {
-        filteredLocalOrders = uniqueLocalOrders.filter(o => o.status === params.status);
-      }
-      
-      // Combine and sort by date
-      const allOrders = [...filteredLocalOrders, ...response.data];
-      allOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
-      return { success: true, data: allOrders };
-    }
-    
-    // If API fails, return local orders
-    if (localOrders.length > 0) {
-      let filteredOrders = localOrders;
-      if (params?.status && params.status !== 'all') {
-        filteredOrders = localOrders.filter(o => o.status === params.status);
-      }
-      return { success: true, data: filteredOrders };
-    }
-    
-    return response;
+    const query = searchParams.toString();
+    return fetchApi<Order[]>(query ? `/orders?${query}` : "/orders");
   },
 
   getById: async (id: string): Promise<ApiResponse<Order>> => {
-    // First check local orders
-    const localOrders = getLocalOrders();
-    const localOrder = localOrders.find(o => o.id === id);
-    if (localOrder) {
-      return { success: true, data: localOrder };
-    }
     return fetchApi<Order>(`/orders/${id}`);
   },
 
   getByOrderNumber: async (orderNumber: string): Promise<ApiResponse<Order>> => {
-    // First check local orders
-    const localOrders = getLocalOrders();
-    const localOrder = localOrders.find(o => o.orderNumber === orderNumber);
-    if (localOrder) {
-      return { success: true, data: localOrder };
-    }
     return fetchApi<Order>(`/orders/number/${orderNumber}`);
   },
 
@@ -381,7 +286,7 @@ export const ordersApi = {
     todayOrders: number;
     todayRevenue: number;
   }>> => {
-    const response = await fetchApi<{
+    return fetchApi<{
       total: number;
       pending: number;
       confirmed: number;
@@ -392,52 +297,13 @@ export const ordersApi = {
       todayOrders: number;
       todayRevenue: number;
     }>("/orders/stats");
-    
-    // Add local orders to stats
-    const localOrders = getLocalOrders();
-    if (response.success && response.data && localOrders.length > 0) {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayLocalOrders = localOrders.filter(o => new Date(o.createdAt) >= todayStart);
-      
-      return {
-        success: true,
-        data: {
-          total: response.data.total + localOrders.length,
-          pending: response.data.pending + localOrders.filter(o => o.status === 'pending').length,
-          confirmed: response.data.confirmed + localOrders.filter(o => o.status === 'confirmed').length,
-          processing: response.data.processing + localOrders.filter(o => o.status === 'processing').length,
-          outForDelivery: response.data.outForDelivery + localOrders.filter(o => o.status === 'out_for_delivery').length,
-          delivered: response.data.delivered + localOrders.filter(o => o.status === 'delivered').length,
-          cancelled: response.data.cancelled + localOrders.filter(o => o.status === 'cancelled').length,
-          todayOrders: response.data.todayOrders + todayLocalOrders.length,
-          todayRevenue: response.data.todayRevenue + todayLocalOrders.reduce((sum, o) => sum + o.total, 0),
-        },
-      };
-    }
-    
-    return response;
   },
 
   updateStatus: async (id: string, status: OrderStatus, notes?: string): Promise<ApiResponse<Order>> => {
-    // First try to update in API
-    const response = await fetchApi<Order>(`/orders/${id}/status`, {
+    return fetchApi<Order>(`/orders/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status, notes }),
     });
-    
-    // Also update local storage
-    const updatedLocal = updateLocalOrderStatus(id, status);
-    if (updatedLocal && !response.success) {
-      return { success: true, data: updatedLocal };
-    }
-    
-    // Save updated order to local storage
-    if (response.success && response.data) {
-      saveLocalOrder(response.data);
-    }
-    
-    return response;
   },
 
   delete: (id: string) =>
@@ -465,17 +331,10 @@ export const ordersApi = {
     expressDeliveryFee?: number;
     driverTip?: number;
   }): Promise<ApiResponse<Order>> => {
-    const response = await fetchApi<Order>("/orders", {
+    return fetchApi<Order>("/orders", {
       method: "POST",
       body: JSON.stringify(orderData),
     });
-    
-    // Save to local storage for demo persistence
-    if (response.success && response.data) {
-      saveLocalOrder(response.data);
-    }
-    
-    return response;
   },
 };
 
