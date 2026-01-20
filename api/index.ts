@@ -1624,16 +1624,20 @@ function createApp() {
           id: item.id,
           productId: item.productId,
           productName: item.productName,
-          quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice),
-          totalPrice: parseFloat(item.totalPrice),
+          productNameAr: item.productNameAr,
+          quantity: parseFloat(String(item.quantity)),
+          unitPrice: parseFloat(String(item.unitPrice)),
+          totalPrice: parseFloat(String(item.totalPrice)),
+          price: parseFloat(String(item.unitPrice)), // Alias for compatibility
+          name: item.productName, // Alias for compatibility
         })),
-        subtotal: parseFloat(o.subtotal),
-        discount: parseFloat(o.discount),
-        deliveryFee: parseFloat(o.deliveryFee),
-        vatRate: parseFloat(o.vatRate),
-        vatAmount: parseFloat(o.vatAmount),
-        total: parseFloat(o.total),
+        subtotal: parseFloat(String(o.subtotal)),
+        discount: parseFloat(String(o.discount)),
+        deliveryFee: parseFloat(String(o.deliveryFee)),
+        vatRate: parseFloat(String(o.vatRate)),
+        vat: parseFloat(String(o.vatAmount)), // Alias for compatibility
+        vatAmount: parseFloat(String(o.vatAmount)),
+        total: parseFloat(String(o.total)),
         status: o.status,
         paymentStatus: o.paymentStatus,
         paymentMethod: o.paymentMethod,
@@ -1707,16 +1711,20 @@ function createApp() {
           id: item.id,
           productId: item.productId,
           productName: item.productName,
-          quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice),
-          totalPrice: parseFloat(item.totalPrice),
+          productNameAr: item.productNameAr,
+          quantity: parseFloat(String(item.quantity)),
+          unitPrice: parseFloat(String(item.unitPrice)),
+          totalPrice: parseFloat(String(item.totalPrice)),
+          price: parseFloat(String(item.unitPrice)),
+          name: item.productName,
         })),
-        subtotal: parseFloat(o.subtotal),
-        discount: parseFloat(o.discount),
-        deliveryFee: parseFloat(o.deliveryFee),
-        vatRate: parseFloat(o.vatRate),
-        vatAmount: parseFloat(o.vatAmount),
-        total: parseFloat(o.total),
+        subtotal: parseFloat(String(o.subtotal)),
+        discount: parseFloat(String(o.discount)),
+        deliveryFee: parseFloat(String(o.deliveryFee)),
+        vatRate: parseFloat(String(o.vatRate)),
+        vat: parseFloat(String(o.vatAmount)),
+        vatAmount: parseFloat(String(o.vatAmount)),
+        total: parseFloat(String(o.total)),
         status: o.status,
         paymentStatus: o.paymentStatus,
         paymentMethod: o.paymentMethod,
@@ -1980,16 +1988,20 @@ function createApp() {
           id: item.id,
           productId: item.productId,
           productName: item.productName,
-          quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice),
-          totalPrice: parseFloat(item.totalPrice),
+          productNameAr: item.productNameAr,
+          quantity: parseFloat(String(item.quantity)),
+          unitPrice: parseFloat(String(item.unitPrice)),
+          totalPrice: parseFloat(String(item.totalPrice)),
+          price: parseFloat(String(item.unitPrice)),
+          name: item.productName,
         })),
-        subtotal: parseFloat(o.subtotal),
-        discount: parseFloat(o.discount),
-        deliveryFee: parseFloat(o.deliveryFee),
-        vatRate: parseFloat(o.vatRate),
-        vatAmount: parseFloat(o.vatAmount),
-        total: parseFloat(o.total),
+        subtotal: parseFloat(String(o.subtotal)),
+        discount: parseFloat(String(o.discount)),
+        deliveryFee: parseFloat(String(o.deliveryFee)),
+        vatRate: parseFloat(String(o.vatRate)),
+        vat: parseFloat(String(o.vatAmount)),
+        vatAmount: parseFloat(String(o.vatAmount)),
+        total: parseFloat(String(o.total)),
         status: o.status,
         paymentStatus: o.paymentStatus,
         paymentMethod: o.paymentMethod,
@@ -4464,6 +4476,193 @@ function createApp() {
     }
 
     res.json({ success: true, data: sanitizeUser(user) });
+  });
+
+  // =====================================================
+  // SETTINGS API
+  // =====================================================
+
+  app.get('/api/settings', (req, res) => {
+    res.json({
+      success: true,
+      data: {
+        general: {
+          storeName: 'Butcher Shop',
+          storeNameAr: 'محل الجزارة',
+          email: 'contact@butcher.ae',
+          phone: '+971501234567',
+          address: 'Dubai, UAE',
+          currency: 'AED',
+          timezone: 'Asia/Dubai',
+          language: 'en',
+          vatRate: 5,
+          vatEnabled: true,
+        },
+        delivery: {
+          minimumOrder: 50,
+          freeDeliveryThreshold: 200,
+          standardDeliveryFee: 15,
+          expressDeliveryEnabled: true,
+          expressDeliveryFee: 25,
+          expressDeliveryHours: 1,
+        },
+        payments: {
+          codEnabled: true,
+          cardEnabled: true,
+          bankTransferEnabled: true,
+        },
+        notifications: {
+          emailEnabled: true,
+          smsEnabled: true,
+          pushEnabled: true,
+        },
+      },
+    });
+  });
+
+  app.put('/api/settings', (req, res) => {
+    res.json({ success: true, data: req.body, message: 'Settings updated successfully' });
+  });
+
+  // =====================================================
+  // REVIEWS API
+  // =====================================================
+
+  app.get('/api/reviews', (req, res) => {
+    res.json({ success: true, data: [] });
+  });
+
+  app.get('/api/reviews/product/:productId', (req, res) => {
+    res.json({ success: true, data: { reviews: [], stats: { averageRating: 0, totalReviews: 0 } } });
+  });
+
+  app.post('/api/reviews', (req, res) => {
+    const newReview = { id: `review_${Date.now()}`, ...req.body, createdAt: new Date().toISOString() };
+    res.status(201).json({ success: true, data: newReview });
+  });
+
+  app.put('/api/reviews/:id', (req, res) => {
+    res.json({ success: true, data: { id: req.params.id, ...req.body } });
+  });
+
+  app.delete('/api/reviews/:id', (req, res) => {
+    res.json({ success: true, message: 'Review deleted successfully' });
+  });
+
+  // =====================================================
+  // WALLET API
+  // =====================================================
+
+  app.get('/api/wallet', (req, res) => {
+    res.json({
+      success: true,
+      data: {
+        balance: 0,
+        transactions: [],
+      },
+    });
+  });
+
+  app.post('/api/wallet/topup', (req, res) => {
+    const { amount } = req.body;
+    res.json({ success: true, data: { balance: amount, transaction: { id: `txn_${Date.now()}`, amount, type: 'topup', createdAt: new Date().toISOString() } } });
+  });
+
+  app.post('/api/wallet/deduct', (req, res) => {
+    const { amount } = req.body;
+    res.json({ success: true, data: { balance: 0, transaction: { id: `txn_${Date.now()}`, amount, type: 'deduct', createdAt: new Date().toISOString() } } });
+  });
+
+  app.post('/api/wallet/credit', (req, res) => {
+    const { amount } = req.body;
+    res.json({ success: true, data: { balance: amount, transaction: { id: `txn_${Date.now()}`, amount, type: 'credit', createdAt: new Date().toISOString() } } });
+  });
+
+  // =====================================================
+  // WISHLIST API
+  // =====================================================
+
+  app.get('/api/wishlist', (req, res) => {
+    res.json({ success: true, data: [] });
+  });
+
+  app.post('/api/wishlist', (req, res) => {
+    const { productId } = req.body;
+    res.status(201).json({ success: true, data: { id: `wishlist_${Date.now()}`, productId, createdAt: new Date().toISOString() } });
+  });
+
+  app.delete('/api/wishlist/:productId', (req, res) => {
+    res.json({ success: true, message: 'Item removed from wishlist' });
+  });
+
+  app.delete('/api/wishlist', (req, res) => {
+    res.json({ success: true, message: 'Wishlist cleared' });
+  });
+
+  // =====================================================
+  // LOYALTY API
+  // =====================================================
+
+  app.get('/api/loyalty', (req, res) => {
+    res.json({
+      success: true,
+      data: {
+        points: 0,
+        tier: 'bronze',
+        tierProgress: 0,
+        nextTierPoints: 1000,
+      },
+    });
+  });
+
+  app.post('/api/loyalty/earn', (req, res) => {
+    const { points } = req.body;
+    res.json({ success: true, data: { points, transaction: { id: `loyalty_${Date.now()}`, points, type: 'earn', createdAt: new Date().toISOString() } } });
+  });
+
+  app.post('/api/loyalty/redeem', (req, res) => {
+    const { points } = req.body;
+    res.json({ success: true, data: { points: 0, transaction: { id: `loyalty_${Date.now()}`, points, type: 'redeem', createdAt: new Date().toISOString() } } });
+  });
+
+  app.get('/api/loyalty/tiers', (req, res) => {
+    res.json({
+      success: true,
+      data: [
+        { name: 'bronze', minPoints: 0, benefits: [] },
+        { name: 'silver', minPoints: 1000, benefits: [] },
+        { name: 'gold', minPoints: 5000, benefits: [] },
+      ],
+    });
+  });
+
+  // =====================================================
+  // NOTIFICATIONS API
+  // =====================================================
+
+  app.get('/api/notifications', (req, res) => {
+    res.json({ success: true, data: [] });
+  });
+
+  app.post('/api/notifications', (req, res) => {
+    const newNotification = { id: `notif_${Date.now()}`, ...req.body, isRead: false, createdAt: new Date().toISOString() };
+    res.status(201).json({ success: true, data: newNotification });
+  });
+
+  app.patch('/api/notifications/:id/read', (req, res) => {
+    res.json({ success: true, data: { id: req.params.id, isRead: true } });
+  });
+
+  app.patch('/api/notifications/read-all', (req, res) => {
+    res.json({ success: true, message: 'All notifications marked as read' });
+  });
+
+  app.delete('/api/notifications/:id', (req, res) => {
+    res.json({ success: true, message: 'Notification deleted' });
+  });
+
+  app.delete('/api/notifications', (req, res) => {
+    res.json({ success: true, message: 'All notifications cleared' });
   });
 
   // =====================================================
