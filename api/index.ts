@@ -2007,6 +2007,8 @@ function createApp() {
           area: address.area || '',
           emirate: address.emirate || '',
           landmark: address.landmark || null,
+          latitude: address.latitude || null,
+          longitude: address.longitude || null,
         },
         deliveryNotes: deliveryNotes || null,
         statusHistory: [{
@@ -2082,6 +2084,8 @@ function createApp() {
           area: address.area || '',
           emirate: address.emirate || '',
           landmark: address.landmark || '',
+          latitude: address.latitude || null,
+          longitude: address.longitude || null,
         },
         deliveryNotes,
         createdAt: now.toISOString(),

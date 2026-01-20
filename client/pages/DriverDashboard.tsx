@@ -45,6 +45,8 @@ interface DeliveryOrder {
     floor?: string;
     apartment?: string;
     landmark?: string;
+    latitude?: number;
+    longitude?: number;
   };
   items: { name: string; quantity: number }[];
   total: number;
@@ -333,10 +335,20 @@ export default function DriverDashboardPage() {
   };
 
   const handleNavigate = (address: DeliveryOrder["deliveryAddress"]) => {
-    const query = encodeURIComponent(
-      `${address.building}, ${address.street}, ${address.area}, ${address.emirate}`
-    );
-    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
+    // If we have latitude and longitude, use them for precise navigation
+    if (address.latitude && address.longitude) {
+      // Use Google Maps directions with coordinates for precise navigation
+      window.open(
+        `https://www.google.com/maps/dir/?api=1&destination=${address.latitude},${address.longitude}`,
+        "_blank"
+      );
+    } else {
+      // Fallback to text-based search
+      const query = encodeURIComponent(
+        `${address.building}, ${address.street}, ${address.area}, ${address.emirate}`
+      );
+      window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
+    }
   };
 
   const formatTime = (dateString: string) => {
