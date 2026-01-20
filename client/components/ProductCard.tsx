@@ -268,7 +268,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
           
           {/* Discount Badge */}
-          {product.discount && product.discount > 0 && (
+          {product.discount !== undefined && product.discount > 0 && (
             <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
               -{product.discount}%
             </div>
@@ -324,14 +324,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 <PriceDisplay price={product.discount ? product.price * (1 - product.discount / 100) : product.price} size={compact ? "md" : "lg"} />
                 <span className="text-[10px] sm:text-sm text-muted-foreground font-normal"> / {priceUnit}</span>
               </p>
-              {product.discount && product.discount > 0 && (
+              {product.discount !== undefined && product.discount > 0 && (
                 <span className="text-xs text-muted-foreground line-through">
                   <PriceDisplay price={product.price} size="sm" />
                 </span>
               )}
             </div>
             {/* Rating */}
-            {product.rating && product.rating > 0 && (
+            {product.rating !== undefined && product.rating > 0 && (
               <div className="flex items-center gap-1 mt-1">
                 <span className="text-yellow-500 text-sm">★</span>
                 <span className="text-xs text-muted-foreground">{product.rating.toFixed(1)}</span>
@@ -588,7 +588,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 )}
                 
                 {/* Discount Badge */}
-                {product.discount && product.discount > 0 && (
+                {product.discount !== undefined && product.discount > 0 && (
                   <div className="absolute top-4 left-4 bg-red-500 text-white text-sm font-bold px-3 py-1.5 rounded-full">
                     -{product.discount}% {language === "ar" ? "خصم" : "OFF"}
                   </div>
@@ -627,7 +627,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 </h2>
 
                 {/* Rating */}
-                {product.rating && product.rating > 0 && (
+                {product.rating !== undefined && product.rating > 0 && (
                   <div className="flex items-center gap-2 mt-2">
                     <div className="flex items-center gap-1">
                       {[...Array(5)].map((_, i) => (
@@ -647,7 +647,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     <PriceDisplay price={discountedPrice} size="lg" />
                   </span>
                   <span className="text-gray-600 dark:text-gray-400">/ {priceUnit}</span>
-                  {product.discount && product.discount > 0 && (
+                  {product.discount !== undefined && product.discount > 0 && (
                     <span className="text-lg text-gray-500 dark:text-gray-500 line-through">
                       <PriceDisplay price={product.price} size="md" />
                     </span>
