@@ -82,6 +82,11 @@ async function processRefundWithGateway(
 // GET /api/payments - Get all payments (admin)
 const getPayments: RequestHandler = async (req, res) => {
   try {
+    // Prevent caching to ensure fresh data
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
     const { userId, orderId, status, method, page = "1", limit = "20", startDate, endDate } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
