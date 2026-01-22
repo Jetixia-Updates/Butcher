@@ -6703,7 +6703,9 @@ function createApp() {
       
       const paymentId = `pay_${Date.now()}`;
       const now = new Date();
-      const paymentStatus = method === 'cod' ? 'pending' : 'authorized';
+      // For card payments, mark as captured directly (since payment is complete)
+      // COD payments stay pending until delivery
+      const paymentStatus = method === 'cod' ? 'pending' : 'captured';
       
       // Insert payment into database
       await pgDb.insert(paymentsTable).values({
@@ -7457,8 +7459,8 @@ function createApp() {
       }
 
       const allOrders = await pgDb.select().from(ordersTable);
-      // Only include orders with captured payments for accurate sales reporting
-      const paidOrders = allOrders.filter(o => o.paymentStatus === 'captured' && o.status !== 'cancelled');
+      // Include orders with captured or authorized payments for accurate sales reporting
+      const paidOrders = allOrders.filter(o => (o.paymentStatus === 'captured' || o.paymentStatus === 'authorized') && o.status !== 'cancelled');
       const totalRevenue = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
       const totalOrders = paidOrders.length;
       const totalVat = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
@@ -8842,14 +8844,57 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      // Get orders for revenue calculation
-      const allOrders = await pgDb.select().from(ordersTable);
-      const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
-      const totalVAT = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
+      // Parse date range parameters
+      const { period = 'month', startDate: startDateParam, endDate: endDateParam } = req.query;
+      let start: Date, end: Date;
       
-      // Get expenses from database
+      if (startDateParam && endDateParam) {
+        start = new Date(startDateParam as string);
+        end = new Date(endDateParam as string);
+      } else {
+        // Calculate date range based on period
+        const now = new Date();
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        switch (period) {
+          case 'today':
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            break;
+          case 'week':
+            start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case 'quarter':
+            start = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+            break;
+          case 'year':
+            start = new Date(now.getFullYear(), 0, 1);
+            break;
+          case 'month':
+          default:
+            start = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
+      }
+
+      // Get orders for revenue calculation - filter by date range and payment status
+      const allOrders = await pgDb.select().from(ordersTable);
+      // Filter orders: within date range, not cancelled, and payment captured or authorized
+      const filteredOrders = allOrders.filter(o => {
+        const orderDate = new Date(o.createdAt);
+        return orderDate >= start && 
+               orderDate <= end && 
+               o.status !== 'cancelled' &&
+               (o.paymentStatus === 'captured' || o.paymentStatus === 'authorized');
+      });
+      
+      const totalRevenue = filteredOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
+      const totalVAT = filteredOrders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
+      
+      // Get expenses from database - filter by date range
       const allExpenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.status, 'paid'));
-      const totalExpenses = allExpenses.reduce((sum, e) => sum + parseFloat(String(e.amount)), 0);
+      const periodExpenses = allExpenses.filter(e => {
+        const expenseDate = new Date(e.createdAt);
+        return expenseDate >= start && expenseDate <= end;
+      });
+      const totalExpenses = periodExpenses.reduce((sum, e) => sum + parseFloat(String(e.amount)), 0);
       
       // Get account balances
       const accounts = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.isActive, true));
@@ -8863,8 +8908,8 @@ function createApp() {
       const grossProfit = totalRevenue * 0.35;
       const netProfit = grossProfit - totalExpenses;
 
-      // Calculate payment method breakdown
-      const paymentMethodBreakdown = allOrders.reduce((acc, o) => {
+      // Calculate payment method breakdown from filtered orders
+      const paymentMethodBreakdown = filteredOrders.reduce((acc, o) => {
         const method = o.paymentMethod || 'card';
         if (!acc[method]) acc[method] = { amount: 0, count: 0 };
         acc[method].amount += parseFloat(String(o.total));
@@ -8872,8 +8917,8 @@ function createApp() {
         return acc;
       }, {} as Record<string, { amount: number; count: number }>);
 
-      // Calculate expenses by category
-      const expensesByCategory = allExpenses.reduce((acc, e) => {
+      // Calculate expenses by category from filtered expenses
+      const expensesByCategory = periodExpenses.reduce((acc, e) => {
         const cat = e.category || 'other';
         if (!acc[cat]) acc[cat] = 0;
         acc[cat] += parseFloat(String(e.amount));
@@ -8883,13 +8928,13 @@ function createApp() {
       res.json({
         success: true,
         data: {
-          period: req.query.period || 'month',
-          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          endDate: new Date().toISOString(),
+          period: period as string,
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
           totalRevenue,
           totalCOGS: totalRevenue * 0.65,
           grossProfit,
-          grossProfitMargin: 35,
+          grossProfitMargin: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,
           totalExpenses,
           netProfit,
           netProfitMargin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
