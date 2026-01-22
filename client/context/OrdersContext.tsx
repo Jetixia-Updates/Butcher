@@ -50,135 +50,6 @@ interface OrdersContextType {
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
 
-// Demo orders
-const INITIAL_ORDERS: CustomerOrder[] = [
-  {
-    id: "order_demo_1",
-    orderNumber: "ORD-2026-0001",
-    items: [
-      {
-        id: "item_1",
-        productId: "prod_1",
-        name: "Premium Beef Steak",
-        nameAr: "ستيك لحم بقري ممتاز",
-        quantity: 1,
-        price: 89.99,
-        notes: "Boneless | Curry Cut",
-      },
-      {
-        id: "item_2",
-        productId: "prod_3",
-        name: "Chicken Breast",
-        nameAr: "صدر دجاج",
-        quantity: 2,
-        price: 34.99,
-      },
-    ],
-    subtotal: 159.97,
-    vat: 8.0,
-    deliveryFee: 15,
-    discount: 0,
-    total: 182.97,
-    status: "delivered",
-    paymentStatus: "paid",
-    paymentMethod: "card",
-    deliveryAddress: {
-      fullName: "Mohamed Ali",
-      mobile: "+971501234567",
-      emirate: "Dubai",
-      area: "Downtown",
-      street: "Sheikh Mohammed Bin Rashid Blvd",
-      building: "Burj Vista",
-      floor: "25",
-      apartment: "2501",
-    },
-    estimatedDelivery: "2025-12-20T14:00:00Z",
-    createdAt: "2025-12-19T10:30:00Z",
-    updatedAt: "2025-12-20T14:15:00Z",
-  },
-  {
-    id: "order_demo_2",
-    orderNumber: "ORD-2026-0002",
-    items: [
-      {
-        id: "item_3",
-        productId: "prod_2",
-        name: "Lamb Chops",
-        nameAr: "ريش لحم ضأن",
-        quantity: 1.5,
-        price: 74.5,
-        notes: "Bone | Whole",
-      },
-    ],
-    subtotal: 111.75,
-    vat: 5.59,
-    deliveryFee: 0,
-    discount: 10,
-    total: 107.34,
-    status: "out_for_delivery",
-    paymentStatus: "paid",
-    paymentMethod: "cod",
-    deliveryAddress: {
-      fullName: "Mohamed Ali",
-      mobile: "+971501234567",
-      emirate: "Abu Dhabi",
-      area: "Corniche",
-      street: "Corniche Road",
-      building: "Marina Tower",
-      floor: "10",
-    },
-    deliveryTimeSlot: "2:00 PM - 4:00 PM",
-    estimatedDelivery: "2026-01-12T14:00:00Z",
-    createdAt: "2026-01-10T08:00:00Z",
-    updatedAt: "2026-01-10T10:00:00Z",
-  },
-  {
-    id: "order_demo_3",
-    orderNumber: "ORD-2026-0003",
-    items: [
-      {
-        id: "item_4",
-        productId: "prod_6",
-        name: "Goat Leg",
-        nameAr: "فخذ ماعز",
-        quantity: 1,
-        price: 125.0,
-        notes: "Whole",
-      },
-      {
-        id: "item_5",
-        productId: "prod_4",
-        name: "Ground Beef",
-        nameAr: "لحم بقري مفروم",
-        quantity: 0.5,
-        price: 45.0,
-      },
-    ],
-    subtotal: 147.5,
-    vat: 7.38,
-    deliveryFee: 15,
-    discount: 0,
-    total: 169.88,
-    status: "processing",
-    paymentStatus: "paid",
-    paymentMethod: "card",
-    deliveryAddress: {
-      fullName: "Mohamed Ali",
-      mobile: "+971501234567",
-      emirate: "Dubai",
-      area: "Marina",
-      street: "Marina Walk",
-      building: "Trident Grand",
-      floor: "15",
-      apartment: "1502",
-    },
-    deliveryTimeSlot: "10:00 AM - 12:00 PM",
-    estimatedDelivery: "2026-01-15T11:00:00Z",
-    createdAt: "2026-01-14T09:00:00Z",
-    updatedAt: "2026-01-14T09:30:00Z",
-  },
-];
-
 export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
@@ -190,7 +61,7 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     
     setIsLoading(true);
     try {
-      // Fetch orders from API
+      // Fetch orders from API - database is the source of truth
       const response = await fetch(`/api/orders?userId=${user.id}`);
       if (response.ok) {
         const data = await response.json();
@@ -240,44 +111,57 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             updatedAt: order.updatedAt,
           }));
           
-          // Merge with existing orders (keep local orders that aren't in API)
-          setOrders(prevOrders => {
-            const localOrders = prevOrders.filter(o => !apiOrders.find(ao => ao.id === o.id));
-            return [...apiOrders, ...localOrders];
-          });
+          // Set orders from API (database is source of truth)
+          setOrders(apiOrders);
+          // Cache in localStorage
+          localStorage.setItem(`customer_orders_${user.id}`, JSON.stringify(apiOrders));
+        } else {
+          // No orders from API
+          setOrders([]);
+        }
+      } else {
+        // API error - try localStorage cache
+        const saved = localStorage.getItem(`customer_orders_${user.id}`);
+        if (saved) {
+          try {
+            setOrders(JSON.parse(saved));
+          } catch {
+            setOrders([]);
+          }
         }
       }
     } catch (error) {
       console.error("Failed to fetch orders from API:", error);
-      // Keep using localStorage orders as fallback
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.id]);
-
-  // Load orders from localStorage on mount
-  useEffect(() => {
-    if (user?.id) {
+      // Try localStorage cache as fallback
       const saved = localStorage.getItem(`customer_orders_${user.id}`);
       if (saved) {
         try {
           setOrders(JSON.parse(saved));
         } catch {
-          setOrders(INITIAL_ORDERS);
+          setOrders([]);
         }
-      } else {
-        // Load demo orders for first time
-        setOrders(INITIAL_ORDERS);
       }
-    } else {
-      setOrders([]);
+    } finally {
+      setIsLoading(false);
     }
   }, [user?.id]);
 
-  // Fetch from API after initial load
+  // Initial load - fetch from API
   useEffect(() => {
     if (user?.id) {
+      // Try localStorage cache first for instant display
+      const saved = localStorage.getItem(`customer_orders_${user.id}`);
+      if (saved) {
+        try {
+          setOrders(JSON.parse(saved));
+        } catch {
+          // Ignore parse errors
+        }
+      }
+      // Then fetch from API to get latest data
       fetchOrders();
+    } else {
+      setOrders([]);
     }
   }, [user?.id, fetchOrders]);
 

@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { useNotifications, formatRelativeTime, createOrderNotification, createStockNotification, Notification } from "@/context/NotificationContext";
+import { useNotifications, formatRelativeTime, Notification } from "@/context/NotificationContext";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -188,20 +188,6 @@ export function AdminLayout({
     setAdminMessage("");
     setAdminAttachments([]);
   };
-
-  // Seed some initial demo notifications if none exist
-  useEffect(() => {
-    if (notifications.length === 0) {
-      // Add demo notifications
-      addNotification(createOrderNotification("ORD-2026-0015", "new"));
-      setTimeout(() => {
-        addNotification(createStockNotification("Premium Beef Steak", 2.5));
-      }, 100);
-      setTimeout(() => {
-        addNotification(createOrderNotification("ORD-2026-0012", "delivered"));
-      }, 200);
-    }
-  }, []);
 
   const handleLogout = () => {
     logout();

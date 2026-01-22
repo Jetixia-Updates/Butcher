@@ -34,159 +34,6 @@ interface ProductsContextType {
 
 const ProductsContext = createContext<ProductsContextType | undefined>(undefined);
 
-const INITIAL_PRODUCTS: Product[] = [
-  {
-    id: "prod_1",
-    name: "Premium Beef Steak",
-    nameAr: "ستيك لحم بقري ممتاز",
-    price: 89.99,
-    category: "Beef",
-    description: "Aged premium ribeye steak, perfect for grilling",
-    descriptionAr: "ستيك ريب آي معتق ممتاز، مثالي للشوي",
-    image: "https://images.unsplash.com/photo-1588347818036-558601350947?w=400&h=300&fit=crop",
-    available: true,
-    discount: 15,
-    rating: 4.8,
-    badges: ["premium", "halal", "grass-fed"],
-  },
-  {
-    id: "prod_2",
-    name: "Lamb Chops",
-    nameAr: "ريش لحم ضأن",
-    price: 74.5,
-    category: "Lamb",
-    description: "Fresh lamb chops, ideal for Mediterranean cuisine",
-    descriptionAr: "ريش لحم ضأن طازجة، مثالية للمطبخ المتوسطي",
-    image: "https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?w=400&h=300&fit=crop",
-    available: true,
-    discount: 10,
-    rating: 4.6,
-    badges: ["halal", "fresh", "local"],
-  },
-  {
-    id: "prod_6",
-    name: "Goat Leg",
-    nameAr: "فخذ ماعز",
-    price: 125,
-    category: "Goat",
-    description: "Whole goat leg, perfect for traditional dishes",
-    descriptionAr: "فخذ ماعز كامل، مثالي للأطباق التقليدية",
-    image: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400&h=300&fit=crop",
-    available: true,
-    discount: 20,
-    rating: 4.9,
-    badges: ["halal", "premium", "fresh"],
-  },
-  {
-    id: "prod_3",
-    name: "Chicken Breast",
-    nameAr: "صدر دجاج",
-    price: 34.99,
-    category: "Chicken",
-    description: "Boneless, skinless chicken breasts - versatile and healthy",
-    descriptionAr: "صدور دجاج بدون عظم وجلد - متعددة الاستخدامات وصحية",
-    image: "https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&h=300&fit=crop",
-    available: true,
-    rating: 4.5,
-    badges: ["halal", "fresh"],
-  },
-  {
-    id: "prod_4",
-    name: "Ground Beef",
-    nameAr: "لحم بقري مفروم",
-    price: 45.0,
-    category: "Beef",
-    description: "Lean ground beef for burgers and meatballs",
-    descriptionAr: "لحم بقري مفروم قليل الدهن للبرغر وكرات اللحم",
-    image: "https://images.unsplash.com/photo-1551028150-64b9f398f678?w=400&h=300&fit=crop",
-    available: true,
-    discount: 5,
-    rating: 4.4,
-    badges: ["halal", "local"],
-  },
-  {
-    id: "prod_5",
-    name: "Beef Brisket",
-    nameAr: "صدر لحم بقري",
-    price: 95.0,
-    category: "Beef",
-    description: "Slow-cooked perfection for your BBQ",
-    descriptionAr: "مثالي للطهي البطيء والشواء",
-    image: "https://images.unsplash.com/photo-1594041680534-e8c8cdebd659?w=400&h=300&fit=crop",
-    available: true,
-    rating: 4.7,
-    badges: ["halal", "grass-fed"],
-  },
-  {
-    id: "prod_7",
-    name: "Lamb Leg",
-    nameAr: "فخذ ضأن",
-    price: 125.0,
-    category: "Lamb",
-    description: "Whole lamb leg, perfect for family dinners",
-    descriptionAr: "فخذ ضأن كامل، مثالي لعشاء العائلة",
-    image: "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=400&h=300&fit=crop",
-    available: false,
-    rating: 4.6,
-    badges: ["halal", "premium"],
-  },
-  {
-    id: "prod_8",
-    name: "Goat Ribs",
-    nameAr: "ريش ماعز",
-    price: 95,
-    category: "Goat",
-    description: "Premium goat ribs, perfect for grilling",
-    descriptionAr: "ريش ماعز ممتازة، مثالية للشوي",
-    image: "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=400&h=300&fit=crop",
-    available: true,
-    discount: 25,
-    rating: 4.8,
-    badges: ["halal", "organic", "local"],
-  },
-  {
-    id: "prod_9",
-    name: "Wagyu Ribeye",
-    nameAr: "واغيو ريب آي",
-    price: 249.99,
-    category: "Beef",
-    description: "Premium Australian Wagyu A5, melt-in-your-mouth texture",
-    descriptionAr: "واغيو أسترالي ممتاز A5، قوام يذوب في الفم",
-    image: "https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=400&h=300&fit=crop",
-    available: true,
-    discount: 30,
-    rating: 5.0,
-    badges: ["premium", "halal", "grass-fed"],
-  },
-  {
-    id: "prod_10",
-    name: "Organic Chicken Thighs",
-    nameAr: "أفخاذ دجاج عضوي",
-    price: 42.99,
-    category: "Chicken",
-    description: "Free-range organic chicken thighs, extra juicy",
-    descriptionAr: "أفخاذ دجاج عضوي حر، طرية وغنية بالعصارة",
-    image: "https://images.unsplash.com/photo-1587593810167-a84920ea0781?w=400&h=300&fit=crop",
-    available: true,
-    rating: 4.7,
-    badges: ["organic", "halal", "fresh"],
-  },
-];
-
-// Create a map of default images by product id - RAW MEAT IMAGES
-const DEFAULT_IMAGES: Record<string, string> = {
-  prod_1: "https://images.unsplash.com/photo-1588347818036-558601350947?w=400&h=300&fit=crop", // Raw beef steak
-  prod_2: "https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?w=400&h=300&fit=crop", // Raw lamb chops
-  prod_3: "https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&h=300&fit=crop", // Raw chicken breast
-  prod_4: "https://images.unsplash.com/photo-1551028150-64b9f398f678?w=400&h=300&fit=crop", // Raw ground beef
-  prod_5: "https://images.unsplash.com/photo-1594041680534-e8c8cdebd659?w=400&h=300&fit=crop", // Raw beef brisket
-  prod_6: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400&h=300&fit=crop", // Raw goat/sheep leg
-  prod_7: "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=400&h=300&fit=crop", // Raw lamb leg
-  prod_8: "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=400&h=300&fit=crop", // Raw ribs
-  prod_9: "https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=400&h=300&fit=crop", // Raw wagyu
-  prod_10: "https://images.unsplash.com/photo-1587593810167-a84920ea0781?w=400&h=300&fit=crop", // Raw chicken thighs
-};
-
 // Category-based fallback images - RAW MEAT
 const CATEGORY_IMAGES: Record<string, string> = {
   beef: "https://images.unsplash.com/photo-1588347818036-558601350947?w=400&h=300&fit=crop", // Raw beef
@@ -198,19 +45,10 @@ const CATEGORY_IMAGES: Record<string, string> = {
   premium: "https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=400&h=300&fit=crop", // Premium raw meat
 };
 
-// Version number - increment this to add new default products (not to override admin changes)
-const PRODUCTS_VERSION = 2;
-
 // Helper function to ensure product has the correct image
 const ensureProductImage = (product: Product): Product => {
-  // If product already has an image, keep it (respect admin changes)
+  // If product already has an image, keep it
   if (product.image) return product;
-  
-  // For known product IDs without images, use the default image
-  const defaultImage = DEFAULT_IMAGES[product.id];
-  if (defaultImage) {
-    return { ...product, image: defaultImage };
-  }
   
   // Fallback to category-based image
   const categoryImage = CATEGORY_IMAGES[product.category.toLowerCase()];
@@ -220,26 +58,6 @@ const ensureProductImage = (product: Product): Product => {
   
   // Final fallback - use beef image
   return { ...product, image: CATEGORY_IMAGES.beef };
-};
-
-// Helper to merge saved products with any new INITIAL_PRODUCTS (adds new products, respects admin changes)
-const mergeWithInitialProducts = (savedProducts: Product[]): Product[] => {
-  const savedProductsMap = new Map(savedProducts.map(p => [p.id, p]));
-  const result: Product[] = [];
-  
-  // Keep all saved products (with their admin-modified values)
-  savedProducts.forEach(saved => {
-    result.push(ensureProductImage(saved));
-  });
-  
-  // Add any new products from INITIAL_PRODUCTS that don't exist in saved
-  INITIAL_PRODUCTS.forEach(initial => {
-    if (!savedProductsMap.has(initial.id)) {
-      result.push(initial);
-    }
-  });
-  
-  return result;
 };
 
 export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -322,17 +140,17 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
               return;
             }
           } catch {
-            // Continue to fallback
+            // Continue - no cached data available
           }
         }
-        // Use initial products as last resort
-        setProducts(INITIAL_PRODUCTS);
+        // No products available - set empty array (database is source of truth)
+        setProducts([]);
         setHasFetchedFromApi(true);
-        localStorage.setItem("butcher_products", JSON.stringify(INITIAL_PRODUCTS));
+        setError("No products available. Please add products in the admin panel.");
       }
     } catch (err) {
       console.error("Failed to fetch products from API:", err);
-      setError("Failed to fetch products");
+      setError("Failed to fetch products from server");
       // Try localStorage as cache fallback
       const saved = localStorage.getItem("butcher_products");
       if (saved) {
@@ -342,15 +160,15 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
             setProducts(parsed);
             setHasFetchedFromApi(true);
           } else {
-            setProducts(INITIAL_PRODUCTS);
+            setProducts([]);
             setHasFetchedFromApi(true);
           }
         } catch {
-          setProducts(INITIAL_PRODUCTS);
+          setProducts([]);
           setHasFetchedFromApi(true);
         }
       } else {
-        setProducts(INITIAL_PRODUCTS);
+        setProducts([]);
         setHasFetchedFromApi(true);
       }
     }
@@ -491,12 +309,11 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
     return products.find((product) => product.id === id);
   };
 
-  // Reset products to initial defaults
+  // Reset products by refetching from database
   const resetToDefaults = () => {
-    const productsWithImages = INITIAL_PRODUCTS.map(ensureProductImage);
-    setProducts(productsWithImages);
-    localStorage.setItem("butcher_products", JSON.stringify(productsWithImages));
-    localStorage.setItem("butcher_products_version", String(PRODUCTS_VERSION));
+    // Clear local cache and refetch from API
+    localStorage.removeItem("butcher_products");
+    fetchProducts();
   };
 
   // Export products as JSON string for syncing
@@ -526,7 +343,6 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
       const productsWithImages = validProducts.map(ensureProductImage);
       setProducts(productsWithImages);
       localStorage.setItem("butcher_products", JSON.stringify(productsWithImages));
-      localStorage.setItem("butcher_products_version", String(PRODUCTS_VERSION));
       return true;
     } catch {
       return false;

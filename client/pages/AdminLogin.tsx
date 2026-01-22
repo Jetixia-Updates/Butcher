@@ -122,13 +122,6 @@ export default function AdminLoginPage() {
             </p>
           </div>
         </div>
-
-        {/* Demo Credentials */}
-        <div className="mt-4 sm:mt-6 text-center">
-          <p className="text-slate-400 text-xs sm:text-sm">
-            Demo: admin / admin123
-          </p>
-        </div>
       </div>
     </div>
   );
