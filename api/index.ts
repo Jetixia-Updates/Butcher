@@ -4243,153 +4243,354 @@ function createApp() {
   });
 
   // =====================================================
-  // PAYMENTS API
+  // PAYMENTS API - DATABASE BACKED
   // =====================================================
 
-  app.get('/api/payments', (req, res) => {
-    let allPayments = Array.from(payments.values());
-    
-    // Filter by status if provided
-    const status = req.query.status as string;
-    if (status) {
-      allPayments = allPayments.filter(p => p.status === status);
-    }
-    
-    // Filter by method if provided
-    const method = req.query.method as string;
-    if (method) {
-      allPayments = allPayments.filter(p => p.method === method);
-    }
+  app.get('/api/payments', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
 
-    // Sort by date (newest first)
-    allPayments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    res.json({ success: true, data: allPayments });
+      let allPayments = await pgDb.select().from(paymentsTable);
+      
+      // Filter by status if provided
+      const status = req.query.status as string;
+      if (status) {
+        allPayments = allPayments.filter(p => p.status === status);
+      }
+      
+      // Filter by method if provided
+      const method = req.query.method as string;
+      if (method) {
+        allPayments = allPayments.filter(p => p.method === method);
+      }
+
+      // Sort by date (newest first)
+      allPayments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      // Format for API response
+      const formattedPayments = allPayments.map(p => ({
+        id: p.id,
+        orderId: p.orderId,
+        orderNumber: p.orderNumber,
+        amount: parseFloat(String(p.amount)),
+        currency: p.currency,
+        method: p.method,
+        status: p.status,
+        cardBrand: p.cardBrand,
+        cardLast4: p.cardLast4,
+        cardExpiryMonth: p.cardExpiryMonth,
+        cardExpiryYear: p.cardExpiryYear,
+        gatewayTransactionId: p.gatewayTransactionId,
+        refundedAmount: parseFloat(String(p.refundedAmount || '0')),
+        refunds: p.refunds || [],
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+      }));
+      
+      res.json({ success: true, data: formattedPayments });
+    } catch (error) {
+      console.error('[Payments Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch payments' });
+    }
   });
 
-  app.get('/api/payments/stats', (req, res) => {
-    const allPayments = Array.from(payments.values());
-    const totalRevenue = allPayments.filter(p => p.status === 'captured').reduce((sum, p) => sum + p.amount, 0);
-    const pendingAmount = allPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0);
+  app.get('/api/payments/stats', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
 
-    res.json({
-      success: true,
-      data: {
-        totalPayments: allPayments.length,
-        totalRevenue,
-        pendingAmount,
+      const allPayments = await pgDb.select().from(paymentsTable);
+      
+      const captured = allPayments.filter(p => p.status === 'captured');
+      const pending = allPayments.filter(p => p.status === 'pending');
+      const authorized = allPayments.filter(p => p.status === 'authorized');
+      const refunded = allPayments.filter(p => p.status === 'refunded' || p.status === 'partially_refunded');
+      
+      const totalRevenue = captured.reduce((sum, p) => sum + parseFloat(String(p.amount)), 0);
+      const pendingAmount = pending.reduce((sum, p) => sum + parseFloat(String(p.amount)), 0);
+      const refundedAmount = refunded.reduce((sum, p) => sum + parseFloat(String(p.refundedAmount || '0')), 0);
+      
+      const cardPayments = allPayments.filter(p => p.method === 'card');
+      const codPayments = allPayments.filter(p => p.method === 'cod');
+      const bankPayments = allPayments.filter(p => p.method === 'bank_transfer');
+
+      res.json({
+        success: true,
+        data: {
+          totalPayments: allPayments.length,
+          totalRevenue,
+          pendingAmount,
+          refundedAmount,
+          byMethod: [
+            { method: 'card', count: cardPayments.length, amount: cardPayments.reduce((s, p) => s + parseFloat(String(p.amount)), 0) },
+            { method: 'cod', count: codPayments.length, amount: codPayments.reduce((s, p) => s + parseFloat(String(p.amount)), 0) },
+            { method: 'bank_transfer', count: bankPayments.length, amount: bankPayments.reduce((s, p) => s + parseFloat(String(p.amount)), 0) },
+          ],
+          byStatus: [
+            { status: 'captured', count: captured.length, amount: totalRevenue },
+            { status: 'pending', count: pending.length, amount: pendingAmount },
+            { status: 'authorized', count: authorized.length, amount: authorized.reduce((s, p) => s + parseFloat(String(p.amount)), 0) },
+          ],
+        },
+      });
+    } catch (error) {
+      console.error('[Payments Stats Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch payment stats' });
+    }
+  });
+
+  app.post('/api/payments/:id/refund', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const paymentResult = await pgDb.select().from(paymentsTable).where(eq(paymentsTable.id, req.params.id));
+      if (paymentResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Payment not found' });
+      }
+      
+      const payment = paymentResult[0];
+      const { amount, reason } = req.body;
+      const currentAmount = parseFloat(String(payment.amount));
+      const currentRefunded = parseFloat(String(payment.refundedAmount || '0'));
+      const newRefundedAmount = currentRefunded + amount;
+      const newStatus = newRefundedAmount >= currentAmount ? 'refunded' : 'partially_refunded';
+      
+      const currentRefunds = (payment.refunds as any[]) || [];
+      const newRefunds = [...currentRefunds, {
+        id: `refund_${Date.now()}`,
+        amount,
+        reason,
+        createdAt: new Date().toISOString(),
+      }];
+
+      const [updated] = await pgDb.update(paymentsTable)
+        .set({
+          status: newStatus,
+          refundedAmount: String(newRefundedAmount),
+          refunds: newRefunds,
+          updatedAt: new Date(),
+        })
+        .where(eq(paymentsTable.id, req.params.id))
+        .returning();
+      
+      res.json({ 
+        success: true, 
+        data: {
+          ...updated,
+          amount: parseFloat(String(updated.amount)),
+          refundedAmount: parseFloat(String(updated.refundedAmount)),
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
+        }
+      });
+    } catch (error) {
+      console.error('[Refund Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to process refund' });
+    }
+  });
+
+  // Get payment by ID - DATABASE BACKED
+  app.get('/api/payments/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const paymentResult = await pgDb.select().from(paymentsTable).where(eq(paymentsTable.id, req.params.id));
+      if (paymentResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Payment not found' });
+      }
+      
+      const p = paymentResult[0];
+      res.json({ 
+        success: true, 
+        data: {
+          id: p.id,
+          orderId: p.orderId,
+          orderNumber: p.orderNumber,
+          amount: parseFloat(String(p.amount)),
+          currency: p.currency,
+          method: p.method,
+          status: p.status,
+          cardBrand: p.cardBrand,
+          cardLast4: p.cardLast4,
+          gatewayTransactionId: p.gatewayTransactionId,
+          refundedAmount: parseFloat(String(p.refundedAmount || '0')),
+          refunds: p.refunds || [],
+          createdAt: p.createdAt.toISOString(),
+          updatedAt: p.updatedAt.toISOString(),
+        }
+      });
+    } catch (error) {
+      console.error('[Payment Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch payment' });
+    }
+  });
+
+  // Get payment by order ID - DATABASE BACKED
+  app.get('/api/payments/order/:orderId', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const paymentResult = await pgDb.select().from(paymentsTable).where(eq(paymentsTable.orderId, req.params.orderId));
+      if (paymentResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Payment not found for this order' });
+      }
+      
+      const p = paymentResult[0];
+      res.json({ 
+        success: true, 
+        data: {
+          id: p.id,
+          orderId: p.orderId,
+          orderNumber: p.orderNumber,
+          amount: parseFloat(String(p.amount)),
+          currency: p.currency,
+          method: p.method,
+          status: p.status,
+          cardBrand: p.cardBrand,
+          cardLast4: p.cardLast4,
+          gatewayTransactionId: p.gatewayTransactionId,
+          refundedAmount: parseFloat(String(p.refundedAmount || '0')),
+          refunds: p.refunds || [],
+          createdAt: p.createdAt.toISOString(),
+          updatedAt: p.updatedAt.toISOString(),
+        }
+      });
+    } catch (error) {
+      console.error('[Payment by Order Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch payment' });
+    }
+  });
+
+  // Process payment - DATABASE BACKED
+  app.post('/api/payments/process', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderId, amount, method, currency = 'AED', saveCard } = req.body;
+      
+      if (!orderId || !amount || !method) {
+        return res.status(400).json({ success: false, error: 'orderId, amount, and method are required' });
+      }
+
+      // Get order from database
+      const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+      const order = orderResult[0];
+      
+      const paymentId = `pay_${Date.now()}`;
+      const now = new Date();
+      const paymentStatus = method === 'cod' ? 'pending' : 'authorized';
+      
+      // Insert payment into database
+      await pgDb.insert(paymentsTable).values({
+        id: paymentId,
+        orderId,
+        orderNumber: order?.orderNumber || `ORD-${Date.now()}`,
+        amount: String(amount),
+        currency: currency as 'AED' | 'USD' | 'EUR',
+        method: method as 'card' | 'cod' | 'bank_transfer',
+        status: paymentStatus,
+        gatewayTransactionId: `gtxn_${Date.now()}`,
+        refundedAmount: '0',
+        refunds: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // Update order payment status in database
+      if (order) {
+        await pgDb.update(ordersTable)
+          .set({
+            paymentStatus: paymentStatus,
+            updatedAt: now,
+          })
+          .where(eq(ordersTable.id, orderId));
+      }
+
+      const newPayment = {
+        id: paymentId,
+        orderId,
+        orderNumber: order?.orderNumber || `ORD-${Date.now()}`,
+        amount,
+        currency,
+        method,
+        status: paymentStatus,
+        gatewayTransactionId: `gtxn_${Date.now()}`,
         refundedAmount: 0,
-        byMethod: [
-          { method: 'card', count: allPayments.filter(p => p.method === 'card').length, amount: allPayments.filter(p => p.method === 'card').reduce((s, p) => s + p.amount, 0) },
-          { method: 'cod', count: allPayments.filter(p => p.method === 'cod').length, amount: allPayments.filter(p => p.method === 'cod').reduce((s, p) => s + p.amount, 0) },
-          { method: 'bank_transfer', count: allPayments.filter(p => p.method === 'bank_transfer').length, amount: allPayments.filter(p => p.method === 'bank_transfer').reduce((s, p) => s + p.amount, 0) },
-        ],
-        byStatus: [
-          { status: 'captured', count: allPayments.filter(p => p.status === 'captured').length, amount: totalRevenue },
-          { status: 'pending', count: allPayments.filter(p => p.status === 'pending').length, amount: pendingAmount },
-          { status: 'authorized', count: allPayments.filter(p => p.status === 'authorized').length, amount: allPayments.filter(p => p.status === 'authorized').reduce((s, p) => s + p.amount, 0) },
-        ],
-      },
-    });
+        refunds: [],
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
+
+      res.status(201).json({ success: true, data: newPayment });
+    } catch (error) {
+      console.error('[Process Payment Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to process payment' });
+    }
   });
 
-  app.post('/api/payments/:id/refund', (req, res) => {
-    const payment = payments.get(req.params.id);
-    if (!payment) {
-      return res.status(404).json({ success: false, error: 'Payment not found' });
+  // Capture payment (finalize after authorization) - DATABASE BACKED
+  app.post('/api/payments/:id/capture', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const paymentResult = await pgDb.select().from(paymentsTable).where(eq(paymentsTable.id, req.params.id));
+      if (paymentResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Payment not found' });
+      }
+      
+      const payment = paymentResult[0];
+      
+      if (payment.status !== 'authorized') {
+        return res.status(400).json({ success: false, error: 'Payment must be authorized before capture' });
+      }
+
+      const now = new Date();
+      
+      // Update payment status
+      const [updated] = await pgDb.update(paymentsTable)
+        .set({
+          status: 'captured',
+          updatedAt: now,
+        })
+        .where(eq(paymentsTable.id, req.params.id))
+        .returning();
+
+      // Update order payment status
+      await pgDb.update(ordersTable)
+        .set({
+          paymentStatus: 'captured',
+          updatedAt: now,
+        })
+        .where(eq(ordersTable.id, payment.orderId));
+
+      res.json({ 
+        success: true, 
+        data: {
+          ...updated,
+          amount: parseFloat(String(updated.amount)),
+          refundedAmount: parseFloat(String(updated.refundedAmount)),
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
+        },
+        message: 'Payment captured successfully' 
+      });
+    } catch (error) {
+      console.error('[Capture Payment Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to capture payment' });
     }
-    
-    const { amount, reason } = req.body;
-    payment.status = amount >= payment.amount ? 'refunded' : 'partially_refunded';
-    payment.refundedAmount = (payment.refundedAmount || 0) + amount;
-    payment.refunds.push({
-      id: `refund_${Date.now()}`,
-      amount,
-      reason,
-      createdAt: new Date().toISOString(),
-    });
-    payment.updatedAt = new Date().toISOString();
-    
-    res.json({ success: true, data: payment });
-  });
-
-  // Get payment by ID
-  app.get('/api/payments/:id', (req, res) => {
-    const payment = payments.get(req.params.id);
-    if (!payment) {
-      return res.status(404).json({ success: false, error: 'Payment not found' });
-    }
-    res.json({ success: true, data: payment });
-  });
-
-  // Get payment by order ID
-  app.get('/api/payments/order/:orderId', (req, res) => {
-    const payment = Array.from(payments.values()).find(p => p.orderId === req.params.orderId);
-    if (!payment) {
-      return res.status(404).json({ success: false, error: 'Payment not found for this order' });
-    }
-    res.json({ success: true, data: payment });
-  });
-
-  // Process payment
-  app.post('/api/payments/process', (req, res) => {
-    const { orderId, amount, method, currency = 'AED', saveCard } = req.body;
-    
-    if (!orderId || !amount || !method) {
-      return res.status(400).json({ success: false, error: 'orderId, amount, and method are required' });
-    }
-
-    const order = orders.get(orderId);
-    const paymentId = `pay_${Date.now()}`;
-    const newPayment: Payment = {
-      id: paymentId,
-      orderId,
-      orderNumber: order?.orderNumber || `ORD-${Date.now()}`,
-      amount,
-      currency,
-      method,
-      status: method === 'cod' ? 'pending' : 'authorized',
-      customerName: order ? `${order.customerName}` : 'Guest',
-      gatewayTransactionId: `gtxn_${Date.now()}`,
-      refundedAmount: 0,
-      refunds: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    payments.set(paymentId, newPayment);
-
-    // Update order payment status
-    if (order) {
-      order.paymentStatus = method === 'cod' ? 'pending' : 'authorized';
-      order.updatedAt = new Date().toISOString();
-    }
-
-    res.status(201).json({ success: true, data: newPayment });
-  });
-
-  // Capture payment (finalize after authorization)
-  app.post('/api/payments/:id/capture', (req, res) => {
-    const payment = payments.get(req.params.id);
-    if (!payment) {
-      return res.status(404).json({ success: false, error: 'Payment not found' });
-    }
-    
-    if (payment.status !== 'authorized') {
-      return res.status(400).json({ success: false, error: 'Payment must be authorized before capture' });
-    }
-
-    payment.status = 'captured';
-    payment.updatedAt = new Date().toISOString();
-
-    // Update order payment status
-    const order = orders.get(payment.orderId);
-    if (order) {
-      order.paymentStatus = 'paid';
-      order.updatedAt = new Date().toISOString();
-    }
-
-    res.json({ success: true, data: payment, message: 'Payment captured successfully' });
   });
 
   // Get all active delivery tracking
