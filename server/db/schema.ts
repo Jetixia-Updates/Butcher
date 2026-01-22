@@ -601,7 +601,7 @@ export const suppliers = pgTable("suppliers", {
   address: jsonb("address").$type<{
     street: string;
     city: string;
-    state: string;
+    emirate: string;
     country: string;
     postalCode: string;
   }>().notNull(),

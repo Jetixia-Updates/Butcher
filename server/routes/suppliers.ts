@@ -1,9 +1,23 @@
 /**
- * Supplier Management Routes
- * Comprehensive supplier and purchase order management API
+ * Supplier Management Routes - Database Backed
+ * All data is stored in PostgreSQL via Drizzle ORM
  */
 
 import { Router, RequestHandler } from "express";
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import { eq, desc, and, ne } from 'drizzle-orm';
+import {
+  pgTable,
+  text,
+  varchar,
+  decimal,
+  integer,
+  boolean,
+  timestamp,
+  jsonb,
+  pgEnum,
+} from 'drizzle-orm/pg-core';
 import type {
   Supplier,
   SupplierProduct,
@@ -12,960 +26,974 @@ import type {
   CreateSupplierRequest,
   UpdateSupplierRequest,
   CreatePurchaseOrderRequest,
-  SupplierStatus,
   PurchaseOrderStatus,
 } from "../../shared/api";
 
 const router = Router();
 
 // =====================================================
-// MOCK DATA - In production, this would be in database
+// DATABASE CONNECTION
 // =====================================================
 
-const suppliers: Supplier[] = [
-  {
-    id: "sup-001",
-    code: "SUP-001",
-    name: "Premium Meat Suppliers LLC",
-    nameAr: "موردو اللحوم الممتازة",
-    email: "orders@premiummeat.ae",
-    phone: "+971501234567",
-    website: "https://premiummeat.ae",
-    taxNumber: "100123456700001",
-    address: {
-      street: "Industrial Area 5, Warehouse 23",
-      city: "Dubai",
-      emirate: "Dubai",
-      country: "UAE",
-      postalCode: "00000",
-    },
-    contacts: [
-      {
-        id: "contact-001",
-        name: "Ahmed Al Maktoum",
-        position: "Sales Manager",
-        email: "ahmed@premiummeat.ae",
-        phone: "+971501234567",
-        isPrimary: true,
-      },
-      {
-        id: "contact-002",
-        name: "Sara Hassan",
-        position: "Account Executive",
-        email: "sara@premiummeat.ae",
-        phone: "+971509876543",
-        isPrimary: false,
-      },
-    ],
-    paymentTerms: "net_30",
-    currency: "AED",
-    creditLimit: 100000,
-    currentBalance: 25000,
-    categories: ["beef", "lamb"],
-    rating: 4.5,
-    onTimeDeliveryRate: 95,
-    qualityScore: 98,
-    totalOrders: 156,
-    totalSpent: 450000,
-    status: "active",
-    notes: "Premium supplier with excellent quality beef and lamb products.",
-    createdAt: "2024-01-15T10:00:00Z",
-    updatedAt: "2026-01-05T14:30:00Z",
-    lastOrderAt: "2026-01-05T14:30:00Z",
-  },
-  {
-    id: "sup-002",
-    code: "SUP-002",
-    name: "Gulf Poultry Farms",
-    nameAr: "مزارع الخليج للدواجن",
-    email: "sales@gulfpoultry.ae",
-    phone: "+971502345678",
-    website: "https://gulfpoultry.ae",
-    taxNumber: "100123456700002",
-    address: {
-      street: "Al Ain Road, Farm Complex B",
-      city: "Al Ain",
-      emirate: "Abu Dhabi",
-      country: "UAE",
-      postalCode: "00000",
-    },
-    contacts: [
-      {
-        id: "contact-003",
-        name: "Mohammed Rashid",
-        position: "General Manager",
-        email: "mohammed@gulfpoultry.ae",
-        phone: "+971502345678",
-        isPrimary: true,
-      },
-    ],
-    paymentTerms: "net_15",
-    currency: "AED",
-    creditLimit: 50000,
-    currentBalance: 12000,
-    categories: ["chicken"],
-    rating: 4.2,
-    onTimeDeliveryRate: 92,
-    qualityScore: 95,
-    totalOrders: 89,
-    totalSpent: 180000,
-    status: "active",
-    notes: "Reliable poultry supplier with fresh daily deliveries.",
-    createdAt: "2024-03-20T09:00:00Z",
-    updatedAt: "2026-01-04T11:00:00Z",
-    lastOrderAt: "2026-01-04T11:00:00Z",
-  },
-  {
-    id: "sup-003",
-    code: "SUP-003",
-    name: "Al Shamsi Livestock",
-    nameAr: "الشمسي للمواشي",
-    email: "info@alshamsilivestock.ae",
-    phone: "+971503456789",
-    taxNumber: "100123456700003",
-    address: {
-      street: "Emirates Road, Livestock Market",
-      city: "Sharjah",
-      emirate: "Sharjah",
-      country: "UAE",
-      postalCode: "00000",
-    },
-    contacts: [
-      {
-        id: "contact-004",
-        name: "Khalid Al Shamsi",
-        position: "Owner",
-        email: "khalid@alshamsilivestock.ae",
-        phone: "+971503456789",
-        isPrimary: true,
-      },
-    ],
-    paymentTerms: "cod",
-    currency: "AED",
-    creditLimit: 0,
-    currentBalance: 0,
-    categories: ["goat", "lamb"],
-    rating: 4.0,
-    onTimeDeliveryRate: 88,
-    qualityScore: 90,
-    totalOrders: 45,
-    totalSpent: 95000,
-    status: "active",
-    notes: "Local livestock supplier specializing in sheep and lamb.",
-    createdAt: "2024-06-10T08:00:00Z",
-    updatedAt: "2026-01-02T16:00:00Z",
-    lastOrderAt: "2026-01-02T16:00:00Z",
-  },
-  {
-    id: "sup-004",
-    code: "SUP-004",
-    name: "International Meats Trading",
-    nameAr: "التجارة الدولية للحوم",
-    email: "contact@intmeats.com",
-    phone: "+971504567890",
-    website: "https://intmeats.com",
-    taxNumber: "100123456700004",
-    address: {
-      street: "Jebel Ali Free Zone, Building C5",
-      city: "Dubai",
-      emirate: "Dubai",
-      country: "UAE",
-      postalCode: "00000",
-    },
-    contacts: [
-      {
-        id: "contact-005",
-        name: "John Smith",
-        position: "Regional Director",
-        email: "john@intmeats.com",
-        phone: "+971504567890",
-        isPrimary: true,
-      },
-    ],
-    paymentTerms: "net_60",
-    currency: "AED",
-    creditLimit: 200000,
-    currentBalance: 75000,
-    categories: ["beef", "lamb", "chicken"],
-    rating: 4.8,
-    onTimeDeliveryRate: 98,
-    qualityScore: 99,
-    totalOrders: 234,
-    totalSpent: 890000,
-    status: "active",
-    notes: "Premium international supplier with certified Halal products.",
-    createdAt: "2023-11-01T12:00:00Z",
-    updatedAt: "2026-01-08T10:00:00Z",
-    lastOrderAt: "2026-01-08T10:00:00Z",
-  },
-  {
-    id: "sup-005",
-    code: "SUP-005",
-    name: "Pending Supplier Co",
-    email: "info@pendingsupplier.ae",
-    phone: "+971505678901",
-    address: {
-      street: "Business Bay, Tower 3",
-      city: "Dubai",
-      emirate: "Dubai",
-      country: "UAE",
-      postalCode: "00000",
-    },
-    contacts: [
-      {
-        id: "contact-006",
-        name: "New Contact",
-        position: "Sales",
-        email: "sales@pendingsupplier.ae",
-        phone: "+971505678901",
-        isPrimary: true,
-      },
-    ],
-    paymentTerms: "net_30",
-    currency: "AED",
-    creditLimit: 25000,
-    currentBalance: 0,
-    categories: ["beef"],
-    rating: 0,
-    onTimeDeliveryRate: 0,
-    qualityScore: 0,
-    totalOrders: 0,
-    totalSpent: 0,
-    status: "pending",
-    notes: "New supplier pending approval and verification.",
-    createdAt: "2026-01-07T14:00:00Z",
-    updatedAt: "2026-01-07T14:00:00Z",
-  },
-];
+const databaseUrl = process.env.DATABASE_URL;
+const neonClient = databaseUrl ? neon(databaseUrl) : null;
+const pgDb = neonClient ? drizzle(neonClient) : null;
 
-const supplierProducts: SupplierProduct[] = [
-  {
-    id: "sp-001",
-    supplierId: "sup-001",
-    productId: "beef-ribeye",
-    productName: "Premium Ribeye Steak",
-    supplierSku: "PMS-RIB-001",
-    unitCost: 85,
-    minimumOrderQuantity: 5000, // 5kg
-    leadTimeDays: 2,
-    isPreferred: true,
-    lastPurchasePrice: 85,
-    lastPurchaseDate: "2026-01-05T14:30:00Z",
-    createdAt: "2024-01-15T10:00:00Z",
-    updatedAt: "2026-01-05T14:30:00Z",
-  },
-  {
-    id: "sp-002",
-    supplierId: "sup-001",
-    productId: "beef-tenderloin",
-    productName: "Beef Tenderloin",
-    supplierSku: "PMS-TEN-001",
-    unitCost: 120,
-    minimumOrderQuantity: 3000,
-    leadTimeDays: 2,
-    isPreferred: true,
-    lastPurchasePrice: 118,
-    lastPurchaseDate: "2026-01-03T10:00:00Z",
-    createdAt: "2024-01-15T10:00:00Z",
-    updatedAt: "2026-01-03T10:00:00Z",
-  },
-  {
-    id: "sp-003",
-    supplierId: "sup-002",
-    productId: "chicken-breast",
-    productName: "Chicken Breast",
-    supplierSku: "GPF-CHK-001",
-    unitCost: 28,
-    minimumOrderQuantity: 10000,
-    leadTimeDays: 1,
-    isPreferred: true,
-    lastPurchasePrice: 28,
-    lastPurchaseDate: "2026-01-04T11:00:00Z",
-    createdAt: "2024-03-20T09:00:00Z",
-    updatedAt: "2026-01-04T11:00:00Z",
-  },
-  {
-    id: "sp-004",
-    supplierId: "sup-003",
-    productId: "lamb-leg",
-    productName: "Lamb Leg",
-    supplierSku: "ALS-LMB-001",
-    unitCost: 65,
-    minimumOrderQuantity: 8000,
-    leadTimeDays: 3,
-    isPreferred: false,
-    lastPurchasePrice: 65,
-    lastPurchaseDate: "2026-01-02T16:00:00Z",
-    createdAt: "2024-06-10T08:00:00Z",
-    updatedAt: "2026-01-02T16:00:00Z",
-  },
-];
+const isDatabaseAvailable = () => !!pgDb;
 
-const purchaseOrders: PurchaseOrder[] = [
-  {
-    id: "po-001",
-    orderNumber: "PO-2026-0001",
-    supplierId: "sup-001",
-    supplierName: "Premium Meat Suppliers LLC",
-    items: [
-      {
-        id: "poi-001",
-        productId: "beef-ribeye",
-        productName: "Premium Ribeye Steak",
-        supplierSku: "PMS-RIB-001",
-        quantity: 20000,
-        unitCost: 85,
-        totalCost: 1700,
-        receivedQuantity: 20000,
-        notes: "",
-      },
-      {
-        id: "poi-002",
-        productId: "beef-tenderloin",
-        productName: "Beef Tenderloin",
-        supplierSku: "PMS-TEN-001",
-        quantity: 10000,
-        unitCost: 120,
-        totalCost: 1200,
-        receivedQuantity: 10000,
-        notes: "",
-      },
-    ],
-    subtotal: 2900,
-    taxAmount: 145,
-    taxRate: 5,
-    shippingCost: 50,
-    discount: 0,
-    total: 3095,
-    status: "received",
-    paymentStatus: "paid",
-    orderDate: "2026-01-03T10:00:00Z",
-    expectedDeliveryDate: "2026-01-05T10:00:00Z",
-    actualDeliveryDate: "2026-01-05T09:30:00Z",
-    deliveryAddress: "Butcher Shop, Al Barsha, Dubai",
-    deliveryNotes: "Deliver to cold storage entrance",
-    trackingNumber: "TRK-12345",
-    createdBy: "admin",
-    approvedBy: "admin",
-    approvedAt: "2026-01-03T10:30:00Z",
-    internalNotes: "Regular weekly order",
-    statusHistory: [
-      { status: "draft", changedBy: "admin", changedAt: "2026-01-03T10:00:00Z" },
-      { status: "approved", changedBy: "admin", changedAt: "2026-01-03T10:30:00Z" },
-      { status: "ordered", changedBy: "admin", changedAt: "2026-01-03T11:00:00Z" },
-      { status: "received", changedBy: "admin", changedAt: "2026-01-05T09:30:00Z" },
-    ],
-    createdAt: "2026-01-03T10:00:00Z",
-    updatedAt: "2026-01-05T09:30:00Z",
-  },
-  {
-    id: "po-002",
-    orderNumber: "PO-2026-0002",
-    supplierId: "sup-002",
-    supplierName: "Gulf Poultry Farms",
-    items: [
-      {
-        id: "poi-003",
-        productId: "chicken-breast",
-        productName: "Chicken Breast",
-        supplierSku: "GPF-CHK-001",
-        quantity: 50000,
-        unitCost: 28,
-        totalCost: 1400,
-        receivedQuantity: 0,
-        notes: "",
-      },
-    ],
-    subtotal: 1400,
-    taxAmount: 70,
-    taxRate: 5,
-    shippingCost: 0,
-    discount: 50,
-    total: 1420,
-    status: "ordered",
-    paymentStatus: "pending",
-    orderDate: "2026-01-08T09:00:00Z",
-    expectedDeliveryDate: "2026-01-09T09:00:00Z",
-    deliveryAddress: "Butcher Shop, Al Barsha, Dubai",
-    createdBy: "admin",
-    approvedBy: "admin",
-    approvedAt: "2026-01-08T09:15:00Z",
-    statusHistory: [
-      { status: "draft", changedBy: "admin", changedAt: "2026-01-08T09:00:00Z" },
-      { status: "approved", changedBy: "admin", changedAt: "2026-01-08T09:15:00Z" },
-      { status: "ordered", changedBy: "admin", changedAt: "2026-01-08T09:30:00Z" },
-    ],
-    createdAt: "2026-01-08T09:00:00Z",
-    updatedAt: "2026-01-08T09:30:00Z",
-  },
-  {
-    id: "po-003",
-    orderNumber: "PO-2026-0003",
-    supplierId: "sup-004",
-    supplierName: "International Meats Trading",
-    items: [
-      {
-        id: "poi-004",
-        productId: "beef-ribeye",
-        productName: "Premium Ribeye Steak",
-        quantity: 50000,
-        unitCost: 82,
-        totalCost: 4100,
-        receivedQuantity: 25000,
-        notes: "Partial delivery received",
-      },
-    ],
-    subtotal: 4100,
-    taxAmount: 205,
-    taxRate: 5,
-    shippingCost: 100,
-    discount: 0,
-    total: 4405,
-    status: "partially_received",
-    paymentStatus: "partial",
-    orderDate: "2026-01-06T11:00:00Z",
-    expectedDeliveryDate: "2026-01-08T11:00:00Z",
-    deliveryAddress: "Butcher Shop, Al Barsha, Dubai",
-    trackingNumber: "TRK-67890",
-    createdBy: "admin",
-    approvedBy: "admin",
-    approvedAt: "2026-01-06T11:30:00Z",
-    internalNotes: "Large order - split delivery expected",
-    statusHistory: [
-      { status: "draft", changedBy: "admin", changedAt: "2026-01-06T11:00:00Z" },
-      { status: "approved", changedBy: "admin", changedAt: "2026-01-06T11:30:00Z" },
-      { status: "ordered", changedBy: "admin", changedAt: "2026-01-06T12:00:00Z" },
-      { status: "partially_received", changedBy: "admin", changedAt: "2026-01-08T10:00:00Z", notes: "First batch of 25kg received" },
-    ],
-    createdAt: "2026-01-06T11:00:00Z",
-    updatedAt: "2026-01-08T10:00:00Z",
-  },
-  {
-    id: "po-004",
-    orderNumber: "PO-2026-0004",
-    supplierId: "sup-001",
-    supplierName: "Premium Meat Suppliers LLC",
-    items: [
-      {
-        id: "poi-005",
-        productId: "beef-tenderloin",
-        productName: "Beef Tenderloin",
-        supplierSku: "PMS-TEN-001",
-        quantity: 15000,
-        unitCost: 120,
-        totalCost: 1800,
-        receivedQuantity: 0,
-      },
-    ],
-    subtotal: 1800,
-    taxAmount: 90,
-    taxRate: 5,
-    shippingCost: 50,
-    discount: 0,
-    total: 1940,
-    status: "pending",
-    paymentStatus: "pending",
-    orderDate: "2026-01-09T08:00:00Z",
-    expectedDeliveryDate: "2026-01-11T08:00:00Z",
-    deliveryAddress: "Butcher Shop, Al Barsha, Dubai",
-    createdBy: "admin",
-    statusHistory: [
-      { status: "draft", changedBy: "admin", changedAt: "2026-01-09T08:00:00Z" },
-      { status: "pending", changedBy: "admin", changedAt: "2026-01-09T08:00:00Z", notes: "Awaiting approval" },
-    ],
-    createdAt: "2026-01-09T08:00:00Z",
-    updatedAt: "2026-01-09T08:00:00Z",
-  },
-];
+// =====================================================
+// TABLE DEFINITIONS
+// =====================================================
 
-// Helper to generate IDs
+const supplierStatusEnum = pgEnum("supplier_status", ["active", "inactive", "pending", "suspended"]);
+const supplierPaymentTermsEnum = pgEnum("supplier_payment_terms", ["net_7", "net_15", "net_30", "net_60", "cod", "prepaid"]);
+const currencyEnum = pgEnum("currency", ["AED", "USD", "EUR"]);
+const purchaseOrderStatusEnum = pgEnum("purchase_order_status", [
+  "draft", "pending", "approved", "ordered", "partially_received", "received", "cancelled"
+]);
+
+const suppliersTable = pgTable("suppliers", {
+  id: text("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull().unique(),
+  name: varchar("name", { length: 200 }).notNull(),
+  nameAr: varchar("name_ar", { length: 200 }),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  website: text("website"),
+  taxNumber: varchar("tax_number", { length: 50 }),
+  address: jsonb("address").$type<{
+    street: string;
+    city: string;
+    emirate: string;
+    country: string;
+    postalCode: string;
+  }>().notNull(),
+  contacts: jsonb("contacts").$type<{
+    id: string;
+    name: string;
+    position: string;
+    email: string;
+    phone: string;
+    isPrimary: boolean;
+  }[]>().default([]),
+  paymentTerms: supplierPaymentTermsEnum("payment_terms").notNull().default("net_30"),
+  currency: currencyEnum("currency").notNull().default("AED"),
+  creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }).notNull().default("0"),
+  currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).notNull().default("0"),
+  categories: jsonb("categories").$type<string[]>().default([]),
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
+  onTimeDeliveryRate: decimal("on_time_delivery_rate", { precision: 5, scale: 2 }).default("0"),
+  qualityScore: decimal("quality_score", { precision: 5, scale: 2 }).default("0"),
+  totalOrders: integer("total_orders").notNull().default(0),
+  totalSpent: decimal("total_spent", { precision: 12, scale: 2 }).notNull().default("0"),
+  status: supplierStatusEnum("status").notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  lastOrderAt: timestamp("last_order_at"),
+});
+
+const supplierProductsTable = pgTable("supplier_products", {
+  id: text("id").primaryKey(),
+  supplierId: text("supplier_id").notNull(),
+  productId: text("product_id").notNull(),
+  productName: varchar("product_name", { length: 200 }).notNull(),
+  supplierSku: varchar("supplier_sku", { length: 100 }),
+  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }).notNull(),
+  minimumOrderQuantity: integer("minimum_order_quantity").notNull().default(1),
+  leadTimeDays: integer("lead_time_days").notNull().default(7),
+  isPreferred: boolean("is_preferred").notNull().default(false),
+  lastPurchasePrice: decimal("last_purchase_price", { precision: 10, scale: 2 }),
+  lastPurchaseDate: timestamp("last_purchase_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+const purchaseOrdersTable = pgTable("purchase_orders", {
+  id: text("id").primaryKey(),
+  orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
+  supplierId: text("supplier_id").notNull(),
+  supplierName: varchar("supplier_name", { length: 200 }).notNull(),
+  subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
+  taxAmount: decimal("tax_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 4 }).notNull().default("0.05"),
+  shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  discount: decimal("discount", { precision: 10, scale: 2 }).notNull().default("0"),
+  total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+  status: purchaseOrderStatusEnum("status").notNull().default("draft"),
+  paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"),
+  orderDate: timestamp("order_date").notNull().defaultNow(),
+  expectedDeliveryDate: timestamp("expected_delivery_date").notNull(),
+  actualDeliveryDate: timestamp("actual_delivery_date"),
+  deliveryAddress: text("delivery_address").notNull(),
+  deliveryNotes: text("delivery_notes"),
+  trackingNumber: varchar("tracking_number", { length: 100 }),
+  createdBy: text("created_by").notNull(),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  internalNotes: text("internal_notes"),
+  supplierNotes: text("supplier_notes"),
+  statusHistory: jsonb("status_history").$type<{
+    status: string;
+    changedBy: string;
+    changedAt: string;
+    notes?: string;
+  }[]>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+const purchaseOrderItemsTable = pgTable("purchase_order_items", {
+  id: text("id").primaryKey(),
+  purchaseOrderId: text("purchase_order_id").notNull(),
+  productId: text("product_id").notNull(),
+  productName: varchar("product_name", { length: 200 }).notNull(),
+  supplierSku: varchar("supplier_sku", { length: 100 }),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
+  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }).notNull(),
+  totalCost: decimal("total_cost", { precision: 10, scale: 2 }).notNull(),
+  receivedQuantity: decimal("received_quantity", { precision: 10, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+});
+
+// =====================================================
+// HELPER FUNCTIONS
+// =====================================================
+
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-const generateCode = (prefix: string, items: { code?: string }[]) => {
-  const lastCode = items
-    .map(i => i.code)
-    .filter(Boolean)
-    .sort()
-    .pop();
-  const lastNum = lastCode ? parseInt(lastCode.split("-")[1]) : 0;
-  return `${prefix}-${String(lastNum + 1).padStart(3, "0")}`;
+
+const generateSupplierCode = async (): Promise<string> => {
+  if (!pgDb) return `SUP-001`;
+  const suppliers = await pgDb.select().from(suppliersTable).orderBy(desc(suppliersTable.code)).limit(1);
+  if (suppliers.length === 0) return `SUP-001`;
+  const lastNum = parseInt(suppliers[0].code.split('-')[1]) || 0;
+  return `SUP-${String(lastNum + 1).padStart(3, '0')}`;
 };
-const generateOrderNumber = (orders: PurchaseOrder[]) => {
+
+const generatePONumber = async (): Promise<string> => {
   const year = new Date().getFullYear();
-  const yearOrders = orders.filter(o => o.orderNumber.includes(String(year)));
-  const lastNum = yearOrders.length > 0 
-    ? Math.max(...yearOrders.map(o => parseInt(o.orderNumber.split("-")[2])))
-    : 0;
-  return `PO-${year}-${String(lastNum + 1).padStart(4, "0")}`;
+  if (!pgDb) return `PO-${year}-0001`;
+  const orders = await pgDb.select().from(purchaseOrdersTable).orderBy(desc(purchaseOrdersTable.orderNumber)).limit(1);
+  if (orders.length === 0) return `PO-${year}-0001`;
+  const lastNum = parseInt(orders[0].orderNumber.split('-')[2]) || 0;
+  return `PO-${year}-${String(lastNum + 1).padStart(4, '0')}`;
 };
+
+const formatSupplier = (s: typeof suppliersTable.$inferSelect): Supplier => ({
+  id: s.id,
+  code: s.code,
+  name: s.name,
+  nameAr: s.nameAr || undefined,
+  email: s.email,
+  phone: s.phone,
+  website: s.website || undefined,
+  taxNumber: s.taxNumber || undefined,
+  address: s.address,
+  contacts: s.contacts || [],
+  paymentTerms: s.paymentTerms,
+  currency: s.currency,
+  creditLimit: parseFloat(s.creditLimit) || 0,
+  currentBalance: parseFloat(s.currentBalance) || 0,
+  categories: s.categories || [],
+  rating: parseFloat(s.rating || '0') || 0,
+  onTimeDeliveryRate: parseFloat(s.onTimeDeliveryRate || '0') || 0,
+  qualityScore: parseFloat(s.qualityScore || '0') || 0,
+  totalOrders: s.totalOrders || 0,
+  totalSpent: parseFloat(s.totalSpent) || 0,
+  status: s.status,
+  notes: s.notes || undefined,
+  createdAt: s.createdAt?.toISOString() || new Date().toISOString(),
+  updatedAt: s.updatedAt?.toISOString() || new Date().toISOString(),
+  lastOrderAt: s.lastOrderAt?.toISOString(),
+});
+
+const formatSupplierProduct = (sp: typeof supplierProductsTable.$inferSelect): SupplierProduct => ({
+  id: sp.id,
+  supplierId: sp.supplierId,
+  productId: sp.productId,
+  productName: sp.productName,
+  supplierSku: sp.supplierSku || '',
+  unitCost: parseFloat(sp.unitCost) || 0,
+  minimumOrderQuantity: sp.minimumOrderQuantity || 1,
+  leadTimeDays: sp.leadTimeDays || 7,
+  isPreferred: sp.isPreferred || false,
+  lastPurchasePrice: parseFloat(sp.lastPurchasePrice || '0') || 0,
+  lastPurchaseDate: sp.lastPurchaseDate?.toISOString(),
+  notes: sp.notes || undefined,
+  createdAt: sp.createdAt?.toISOString() || new Date().toISOString(),
+  updatedAt: sp.updatedAt?.toISOString() || new Date().toISOString(),
+});
 
 // =====================================================
-// SUPPLIER ROUTES
+// SUPPLIER HANDLERS
 // =====================================================
 
-// GET /api/suppliers - List all suppliers
-const getAllSuppliers: RequestHandler = (req, res) => {
-  const { status, category, search } = req.query;
-  
-  let filtered = [...suppliers];
-  
-  if (status && status !== "all") {
-    filtered = filtered.filter(s => s.status === status);
+// GET / - List all suppliers
+const getAllSuppliers: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const { status, category, search } = req.query;
+    let suppliers = await pgDb.select().from(suppliersTable);
+
+    if (status && status !== 'all') {
+      suppliers = suppliers.filter(s => s.status === status);
+    }
+    if (category && category !== 'all') {
+      suppliers = suppliers.filter(s => (s.categories as string[] || []).includes(category as string));
+    }
+    if (search) {
+      const q = (search as string).toLowerCase();
+      suppliers = suppliers.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.code.toLowerCase().includes(q) ||
+        s.email.toLowerCase().includes(q) ||
+        s.phone.includes(q)
+      );
+    }
+
+    suppliers.sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ success: true, data: suppliers.map(formatSupplier) });
+  } catch (error) {
+    console.error('[Suppliers List Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch suppliers' });
   }
-  
-  if (category && category !== "all") {
-    filtered = filtered.filter(s => s.categories.includes(category as string));
-  }
-  
-  if (search) {
-    const query = (search as string).toLowerCase();
-    filtered = filtered.filter(s => 
-      s.name.toLowerCase().includes(query) ||
-      s.code.toLowerCase().includes(query) ||
-      s.email.toLowerCase().includes(query) ||
-      s.phone.includes(query)
-    );
-  }
-  
-  // Sort by name
-  filtered.sort((a, b) => a.name.localeCompare(b.name));
-  
-  res.json({ success: true, data: filtered });
 };
 
-// GET /api/suppliers/stats - Get supplier statistics
-const getSupplierStats: RequestHandler = (_req, res) => {
-  const stats: SupplierStats = {
-    totalSuppliers: suppliers.length,
-    activeSuppliers: suppliers.filter(s => s.status === "active").length,
-    pendingSuppliers: suppliers.filter(s => s.status === "pending").length,
-    totalPurchaseOrders: purchaseOrders.length,
-    pendingOrders: purchaseOrders.filter(po => po.status === "pending" || po.status === "ordered").length,
-    totalSpent: suppliers.reduce((sum, s) => sum + s.totalSpent, 0),
-    averageLeadTime: supplierProducts.length > 0 
-      ? supplierProducts.reduce((sum, sp) => sum + sp.leadTimeDays, 0) / supplierProducts.length
-      : 0,
-    topCategories: ["beef", "lamb", "chicken", "sheep"].map(cat => ({
-      category: cat,
-      count: suppliers.filter(s => s.categories.includes(cat)).length,
-    })).filter(c => c.count > 0).sort((a, b) => b.count - a.count),
-  };
-  
-  res.json({ success: true, data: stats });
-};
+// GET /stats - Get supplier statistics
+const getSupplierStats: RequestHandler = async (_req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
 
-// GET /api/suppliers/:id - Get supplier by ID
-const getSupplierById: RequestHandler = (req, res) => {
-  const supplier = suppliers.find(s => s.id === req.params.id);
-  if (!supplier) {
-    return res.status(404).json({ success: false, error: "Supplier not found" });
-  }
-  res.json({ success: true, data: supplier });
-};
+    const suppliers = await pgDb.select().from(suppliersTable);
+    const purchaseOrders = await pgDb.select().from(purchaseOrdersTable);
+    const supplierProds = await pgDb.select().from(supplierProductsTable);
 
-// POST /api/suppliers - Create new supplier
-const createSupplier: RequestHandler = (req, res) => {
-  const data: CreateSupplierRequest = req.body;
-  
-  const newSupplier: Supplier = {
-    id: generateId(),
-    code: generateCode("SUP", suppliers),
-    name: data.name,
-    nameAr: data.nameAr,
-    email: data.email,
-    phone: data.phone,
-    website: data.website,
-    taxNumber: data.taxNumber,
-    address: data.address,
-    contacts: data.contacts.map(c => ({ ...c, id: generateId() })),
-    paymentTerms: data.paymentTerms,
-    currency: data.currency || "AED",
-    creditLimit: data.creditLimit || 0,
-    currentBalance: 0,
-    categories: data.categories,
-    rating: 0,
-    onTimeDeliveryRate: 0,
-    qualityScore: 0,
-    totalOrders: 0,
-    totalSpent: 0,
-    status: "pending",
-    notes: data.notes,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  
-  suppliers.push(newSupplier);
-  res.status(201).json({ success: true, data: newSupplier });
-};
-
-// PUT /api/suppliers/:id - Update supplier
-const updateSupplier: RequestHandler = (req, res) => {
-  const index = suppliers.findIndex(s => s.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ success: false, error: "Supplier not found" });
-  }
-  
-  const data: UpdateSupplierRequest = req.body;
-  const supplier = suppliers[index];
-  
-  suppliers[index] = {
-    ...supplier,
-    ...data,
-    address: data.address ? { ...supplier.address, ...data.address } : supplier.address,
-    updatedAt: new Date().toISOString(),
-  };
-  
-  res.json({ success: true, data: suppliers[index] });
-};
-
-// DELETE /api/suppliers/:id - Delete supplier
-const deleteSupplier: RequestHandler = (req, res) => {
-  const index = suppliers.findIndex(s => s.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ success: false, error: "Supplier not found" });
-  }
-  
-  // Check for pending orders
-  const hasPendingOrders = purchaseOrders.some(
-    po => po.supplierId === req.params.id && !["received", "cancelled"].includes(po.status)
-  );
-  
-  if (hasPendingOrders) {
-    return res.status(400).json({ 
-      success: false, 
-      error: "Cannot delete supplier with pending purchase orders" 
-    });
-  }
-  
-  suppliers.splice(index, 1);
-  res.json({ success: true, data: null });
-};
-
-// PATCH /api/suppliers/:id/status - Update supplier status
-const updateSupplierStatus: RequestHandler = (req, res) => {
-  const index = suppliers.findIndex(s => s.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ success: false, error: "Supplier not found" });
-  }
-  
-  const { status } = req.body as { status: SupplierStatus };
-  suppliers[index] = {
-    ...suppliers[index],
-    status,
-    updatedAt: new Date().toISOString(),
-  };
-  
-  res.json({ success: true, data: suppliers[index] });
-};
-
-// =====================================================
-// SUPPLIER PRODUCTS ROUTES
-// =====================================================
-
-// GET /api/suppliers/:id/products - Get products for a supplier
-const getSupplierProducts: RequestHandler = (req, res) => {
-  const products = supplierProducts.filter(sp => sp.supplierId === req.params.id);
-  res.json({ success: true, data: products });
-};
-
-// POST /api/suppliers/:id/products - Add product to supplier
-const addSupplierProduct: RequestHandler = (req, res) => {
-  const supplierId = req.params.id;
-  const supplier = suppliers.find(s => s.id === supplierId);
-  
-  if (!supplier) {
-    return res.status(404).json({ success: false, error: "Supplier not found" });
-  }
-  
-  const data = req.body;
-  const newProduct: SupplierProduct = {
-    id: generateId(),
-    supplierId,
-    productId: data.productId,
-    productName: data.productName,
-    supplierSku: data.supplierSku || "",
-    unitCost: data.unitCost,
-    minimumOrderQuantity: data.minimumOrderQuantity || 1000,
-    leadTimeDays: data.leadTimeDays || 3,
-    isPreferred: data.isPreferred || false,
-    lastPurchasePrice: data.unitCost,
-    notes: data.notes,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  
-  supplierProducts.push(newProduct);
-  res.status(201).json({ success: true, data: newProduct });
-};
-
-// DELETE /api/suppliers/products/:productId - Remove supplier product
-const removeSupplierProduct: RequestHandler = (req, res) => {
-  const index = supplierProducts.findIndex(sp => sp.id === req.params.productId);
-  if (index === -1) {
-    return res.status(404).json({ success: false, error: "Supplier product not found" });
-  }
-  
-  supplierProducts.splice(index, 1);
-  res.json({ success: true, data: null });
-};
-
-// =====================================================
-// PURCHASE ORDER ROUTES
-// =====================================================
-
-// GET /api/suppliers/purchase-orders - List all purchase orders
-const getAllPurchaseOrders: RequestHandler = (req, res) => {
-  const { status, supplierId, startDate, endDate } = req.query;
-  
-  let filtered = [...purchaseOrders];
-  
-  if (status && status !== "all") {
-    filtered = filtered.filter(po => po.status === status);
-  }
-  
-  if (supplierId) {
-    filtered = filtered.filter(po => po.supplierId === supplierId);
-  }
-  
-  if (startDate) {
-    filtered = filtered.filter(po => new Date(po.orderDate) >= new Date(startDate as string));
-  }
-  
-  if (endDate) {
-    filtered = filtered.filter(po => new Date(po.orderDate) <= new Date(endDate as string));
-  }
-  
-  // Sort by date descending
-  filtered.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
-  
-  res.json({ success: true, data: filtered });
-};
-
-// GET /api/suppliers/purchase-orders/:id - Get purchase order by ID
-const getPurchaseOrderById: RequestHandler = (req, res) => {
-  const order = purchaseOrders.find(po => po.id === req.params.id);
-  if (!order) {
-    return res.status(404).json({ success: false, error: "Purchase order not found" });
-  }
-  res.json({ success: true, data: order });
-};
-
-// POST /api/suppliers/purchase-orders - Create purchase order
-const createPurchaseOrder: RequestHandler = (req, res) => {
-  const data: CreatePurchaseOrderRequest = req.body;
-  
-  const supplier = suppliers.find(s => s.id === data.supplierId);
-  if (!supplier) {
-    return res.status(404).json({ success: false, error: "Supplier not found" });
-  }
-  
-  const items: PurchaseOrder["items"] = data.items.map(item => {
-    const sp = supplierProducts.find(p => p.productId === item.productId && p.supplierId === data.supplierId);
-    return {
-      id: generateId(),
-      productId: item.productId,
-      productName: sp?.productName || item.productId,
-      supplierSku: sp?.supplierSku,
-      quantity: item.quantity,
-      unitCost: item.unitCost,
-      totalCost: (item.quantity / 1000) * item.unitCost, // Convert grams to kg for cost
-      receivedQuantity: 0,
-      notes: item.notes,
+    const stats: SupplierStats = {
+      totalSuppliers: suppliers.length,
+      activeSuppliers: suppliers.filter(s => s.status === 'active').length,
+      pendingSuppliers: suppliers.filter(s => s.status === 'pending').length,
+      totalPurchaseOrders: purchaseOrders.length,
+      pendingOrders: purchaseOrders.filter(po => ['pending', 'ordered'].includes(po.status)).length,
+      totalSpent: suppliers.reduce((sum, s) => sum + parseFloat(s.totalSpent), 0),
+      averageLeadTime: supplierProds.length
+        ? supplierProds.reduce((sum, sp) => sum + sp.leadTimeDays, 0) / supplierProds.length
+        : 0,
+      topCategories: Array.from(new Set(suppliers.flatMap(s => (s.categories as string[]) || [])))
+        .map(cat => ({
+          category: cat,
+          count: suppliers.filter(s => ((s.categories as string[]) || []).includes(cat)).length
+        })),
     };
-  });
-  
-  const subtotal = items.reduce((sum, item) => sum + item.totalCost, 0);
-  const taxRate = 5;
-  const taxAmount = subtotal * (taxRate / 100);
-  const shippingCost = data.shippingCost || 0;
-  const discount = data.discount || 0;
-  const total = subtotal + taxAmount + shippingCost - discount;
-  
-  const newOrder: PurchaseOrder = {
-    id: generateId(),
-    orderNumber: generateOrderNumber(purchaseOrders),
-    supplierId: data.supplierId,
-    supplierName: supplier.name,
-    items,
-    subtotal,
-    taxAmount,
-    taxRate,
-    shippingCost,
-    discount,
-    total,
-    status: "draft",
-    paymentStatus: "pending",
-    orderDate: new Date().toISOString(),
-    expectedDeliveryDate: data.expectedDeliveryDate,
-    deliveryAddress: data.deliveryAddress,
-    deliveryNotes: data.deliveryNotes,
-    createdBy: "admin",
-    internalNotes: data.internalNotes,
-    supplierNotes: data.supplierNotes,
-    statusHistory: [
-      { status: "draft", changedBy: "admin", changedAt: new Date().toISOString() },
-    ],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  
-  purchaseOrders.push(newOrder);
-  res.status(201).json({ success: true, data: newOrder });
+
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    console.error('[Supplier Stats Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch supplier stats' });
+  }
 };
 
-// PATCH /api/suppliers/purchase-orders/:id/status - Update purchase order status
-const updatePurchaseOrderStatus: RequestHandler = (req, res) => {
-  const index = purchaseOrders.findIndex(po => po.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ success: false, error: "Purchase order not found" });
-  }
-  
-  const { status, notes } = req.body as { status: PurchaseOrderStatus; notes?: string };
-  const order = purchaseOrders[index];
-  
-  // Update supplier stats if order is being received
-  if (status === "received" && order.status !== "received") {
-    const supplierIndex = suppliers.findIndex(s => s.id === order.supplierId);
-    if (supplierIndex !== -1) {
-      suppliers[supplierIndex].totalOrders += 1;
-      suppliers[supplierIndex].totalSpent += order.total;
-      suppliers[supplierIndex].lastOrderAt = new Date().toISOString();
+// GET /:id - Get supplier by ID
+const getSupplierById: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
     }
-  }
-  
-  purchaseOrders[index] = {
-    ...order,
-    status,
-    actualDeliveryDate: status === "received" ? new Date().toISOString() : order.actualDeliveryDate,
-    approvedBy: status === "approved" ? "admin" : order.approvedBy,
-    approvedAt: status === "approved" ? new Date().toISOString() : order.approvedAt,
-    statusHistory: [
-      ...order.statusHistory,
-      { status, changedBy: "admin", changedAt: new Date().toISOString(), notes },
-    ],
-    updatedAt: new Date().toISOString(),
-  };
-  
-  res.json({ success: true, data: purchaseOrders[index] });
-};
 
-// PUT /api/suppliers/purchase-orders/:id/receive - Receive items
-const receivePurchaseOrderItems: RequestHandler = (req, res) => {
-  const index = purchaseOrders.findIndex(po => po.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ success: false, error: "Purchase order not found" });
-  }
-  
-  const { items } = req.body as { items: { itemId: string; receivedQuantity: number }[] };
-  const order = purchaseOrders[index];
-  
-  // Update received quantities
-  const updatedItems = order.items.map(item => {
-    const received = items.find(i => i.itemId === item.id);
-    return received 
-      ? { ...item, receivedQuantity: item.receivedQuantity + received.receivedQuantity }
-      : item;
-  });
-  
-  // Check if fully received or partially received
-  const allReceived = updatedItems.every(item => item.receivedQuantity >= item.quantity);
-  const anyReceived = updatedItems.some(item => item.receivedQuantity > 0);
-  const newStatus: PurchaseOrderStatus = allReceived 
-    ? "received" 
-    : anyReceived 
-      ? "partially_received" 
-      : order.status;
-  
-  purchaseOrders[index] = {
-    ...order,
-    items: updatedItems,
-    status: newStatus,
-    actualDeliveryDate: allReceived ? new Date().toISOString() : order.actualDeliveryDate,
-    statusHistory: newStatus !== order.status 
-      ? [...order.statusHistory, { status: newStatus, changedBy: "admin", changedAt: new Date().toISOString() }]
-      : order.statusHistory,
-    updatedAt: new Date().toISOString(),
-  };
-  
-  // Update supplier stats if fully received
-  if (allReceived && order.status !== "received") {
-    const supplierIndex = suppliers.findIndex(s => s.id === order.supplierId);
-    if (supplierIndex !== -1) {
-      suppliers[supplierIndex].totalOrders += 1;
-      suppliers[supplierIndex].totalSpent += order.total;
-      suppliers[supplierIndex].lastOrderAt = new Date().toISOString();
+    const [supplier] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+    if (!supplier) {
+      return res.status(404).json({ success: false, error: 'Supplier not found' });
     }
+
+    res.json({ success: true, data: formatSupplier(supplier) });
+  } catch (error) {
+    console.error('[Get Supplier Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch supplier' });
   }
-  
-  res.json({ success: true, data: purchaseOrders[index] });
 };
 
-// DELETE /api/suppliers/purchase-orders/:id - Cancel/delete purchase order
-const deletePurchaseOrder: RequestHandler = (req, res) => {
-  const index = purchaseOrders.findIndex(po => po.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ success: false, error: "Purchase order not found" });
+// POST / - Create new supplier
+const createSupplier: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const data: CreateSupplierRequest = req.body;
+    const id = generateId();
+    const code = await generateSupplierCode();
+
+    const newSupplier = {
+      id,
+      code,
+      name: data.name,
+      nameAr: data.nameAr || null,
+      email: data.email,
+      phone: data.phone,
+      website: data.website || null,
+      taxNumber: data.taxNumber || null,
+      address: data.address,
+      contacts: data.contacts.map(c => ({ ...c, id: generateId() })),
+      paymentTerms: data.paymentTerms as "net_7" | "net_15" | "net_30" | "net_60" | "cod" | "prepaid",
+      currency: (data.currency || 'AED') as "AED" | "USD" | "EUR",
+      creditLimit: String(data.creditLimit || 0),
+      currentBalance: '0',
+      categories: data.categories || [],
+      rating: '0',
+      onTimeDeliveryRate: '0',
+      qualityScore: '0',
+      totalOrders: 0,
+      totalSpent: '0',
+      status: 'pending' as const,
+      notes: data.notes || null,
+    };
+
+    await pgDb.insert(suppliersTable).values(newSupplier);
+    const [created] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, id));
+
+    res.status(201).json({ success: true, data: formatSupplier(created) });
+  } catch (error) {
+    console.error('[Create Supplier Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to create supplier' });
   }
-  
-  const order = purchaseOrders[index];
-  if (["received", "partially_received"].includes(order.status)) {
-    return res.status(400).json({ 
-      success: false, 
-      error: "Cannot delete received or partially received orders" 
+};
+
+// PUT /:id - Update supplier
+const updateSupplier: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const [existing] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Supplier not found' });
+    }
+
+    const data: UpdateSupplierRequest = req.body;
+    
+    await pgDb.update(suppliersTable)
+      .set({
+        name: data.name || existing.name,
+        nameAr: data.nameAr !== undefined ? data.nameAr : existing.nameAr,
+        email: data.email || existing.email,
+        phone: data.phone || existing.phone,
+        website: data.website !== undefined ? data.website : existing.website,
+        taxNumber: data.taxNumber !== undefined ? data.taxNumber : existing.taxNumber,
+        address: data.address ? { ...existing.address, ...data.address } : existing.address,
+        paymentTerms: data.paymentTerms ? data.paymentTerms as "net_7" | "net_15" | "net_30" | "net_60" | "cod" | "prepaid" : existing.paymentTerms,
+        currency: data.currency ? data.currency as "AED" | "USD" | "EUR" : existing.currency,
+        creditLimit: data.creditLimit !== undefined ? String(data.creditLimit) : existing.creditLimit,
+        categories: data.categories || existing.categories,
+        notes: data.notes !== undefined ? data.notes : existing.notes,
+        updatedAt: new Date(),
+      })
+      .where(eq(suppliersTable.id, req.params.id));
+
+    const [updated] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+    res.json({ success: true, data: formatSupplier(updated) });
+  } catch (error) {
+    console.error('[Update Supplier Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to update supplier' });
+  }
+};
+
+// DELETE /:id - Delete supplier
+const deleteSupplier: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const [existing] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Supplier not found' });
+    }
+
+    // Check for pending orders
+    const pendingPOs = await pgDb.select().from(purchaseOrdersTable)
+      .where(and(
+        eq(purchaseOrdersTable.supplierId, req.params.id),
+        ne(purchaseOrdersTable.status, 'received'),
+        ne(purchaseOrdersTable.status, 'cancelled')
+      ));
+
+    if (pendingPOs.length > 0) {
+      return res.status(400).json({ success: false, error: 'Cannot delete supplier with pending purchase orders' });
+    }
+
+    // Delete related products first
+    await pgDb.delete(supplierProductsTable).where(eq(supplierProductsTable.supplierId, req.params.id));
+    await pgDb.delete(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Delete Supplier Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to delete supplier' });
+  }
+};
+
+// PATCH /:id/status - Update supplier status
+const updateSupplierStatus: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const { status } = req.body;
+    if (!['active', 'inactive', 'pending', 'suspended'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+
+    const [existing] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Supplier not found' });
+    }
+
+    await pgDb.update(suppliersTable)
+      .set({ status: status as "active" | "inactive" | "pending" | "suspended", updatedAt: new Date() })
+      .where(eq(suppliersTable.id, req.params.id));
+
+    const [updated] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+    res.json({ success: true, data: formatSupplier(updated) });
+  } catch (error) {
+    console.error('[Update Supplier Status Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to update supplier status' });
+  }
+};
+
+// =====================================================
+// CONTACT HANDLERS
+// =====================================================
+
+// POST /:id/contacts - Add contact to supplier
+const addSupplierContact: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const [supplier] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+    if (!supplier) {
+      return res.status(404).json({ success: false, error: 'Supplier not found' });
+    }
+
+    const newContact = {
+      id: generateId(),
+      ...req.body,
+    };
+
+    const contacts = [...(supplier.contacts || []), newContact];
+    await pgDb.update(suppliersTable)
+      .set({ contacts, updatedAt: new Date() })
+      .where(eq(suppliersTable.id, req.params.id));
+
+    res.status(201).json({ success: true, data: newContact });
+  } catch (error) {
+    console.error('[Add Contact Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to add contact' });
+  }
+};
+
+// DELETE /:id/contacts/:contactId - Remove contact from supplier
+const removeSupplierContact: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const [supplier] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+    if (!supplier) {
+      return res.status(404).json({ success: false, error: 'Supplier not found' });
+    }
+
+    const contacts = (supplier.contacts || []).filter(c => c.id !== req.params.contactId);
+    await pgDb.update(suppliersTable)
+      .set({ contacts, updatedAt: new Date() })
+      .where(eq(suppliersTable.id, req.params.id));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Remove Contact Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to remove contact' });
+  }
+};
+
+// =====================================================
+// SUPPLIER PRODUCT HANDLERS
+// =====================================================
+
+// GET /:id/products - Get products for a supplier
+const getSupplierProducts: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const products = await pgDb.select().from(supplierProductsTable)
+      .where(eq(supplierProductsTable.supplierId, req.params.id));
+
+    res.json({ success: true, data: products.map(formatSupplierProduct) });
+  } catch (error) {
+    console.error('[Get Supplier Products Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch supplier products' });
+  }
+};
+
+// POST /:id/products - Add product to supplier
+const addSupplierProduct: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const [supplier] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+    if (!supplier) {
+      return res.status(404).json({ success: false, error: 'Supplier not found' });
+    }
+
+    const id = generateId();
+    const newProduct = {
+      id,
+      supplierId: req.params.id,
+      productId: req.body.productId,
+      productName: req.body.productName,
+      supplierSku: req.body.supplierSku || null,
+      unitCost: String(req.body.unitCost),
+      minimumOrderQuantity: req.body.minimumOrderQuantity || 1,
+      leadTimeDays: req.body.leadTimeDays || 7,
+      isPreferred: req.body.isPreferred || false,
+      lastPurchasePrice: null,
+      lastPurchaseDate: null,
+      notes: req.body.notes || null,
+    };
+
+    await pgDb.insert(supplierProductsTable).values(newProduct);
+    const [created] = await pgDb.select().from(supplierProductsTable).where(eq(supplierProductsTable.id, id));
+
+    res.status(201).json({ success: true, data: formatSupplierProduct(created) });
+  } catch (error) {
+    console.error('[Add Supplier Product Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to add supplier product' });
+  }
+};
+
+// DELETE /products/:productId - Remove supplier product
+const removeSupplierProduct: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    await pgDb.delete(supplierProductsTable).where(eq(supplierProductsTable.id, req.params.productId));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Remove Supplier Product Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to remove supplier product' });
+  }
+};
+
+// =====================================================
+// PURCHASE ORDER HANDLERS
+// =====================================================
+
+// GET /purchase-orders/list - Get all purchase orders
+const getAllPurchaseOrders: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const { supplierId, status } = req.query;
+    let orders = await pgDb.select().from(purchaseOrdersTable).orderBy(desc(purchaseOrdersTable.orderDate));
+
+    if (supplierId) {
+      orders = orders.filter(o => o.supplierId === supplierId);
+    }
+    if (status) {
+      orders = orders.filter(o => o.status === status);
+    }
+
+    // Get items for each order
+    const formattedOrders: PurchaseOrder[] = await Promise.all(
+      orders.map(async (order) => {
+        const items = await pgDb!.select().from(purchaseOrderItemsTable)
+          .where(eq(purchaseOrderItemsTable.purchaseOrderId, order.id));
+
+        return {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          supplierId: order.supplierId,
+          supplierName: order.supplierName,
+          items: items.map(item => ({
+            id: item.id,
+            productId: item.productId,
+            productName: item.productName,
+            supplierSku: item.supplierSku || undefined,
+            quantity: parseFloat(item.quantity),
+            unitCost: parseFloat(item.unitCost),
+            totalCost: parseFloat(item.totalCost),
+            receivedQuantity: parseFloat(item.receivedQuantity),
+            notes: item.notes || undefined,
+          })),
+          subtotal: parseFloat(order.subtotal),
+          taxAmount: parseFloat(order.taxAmount),
+          taxRate: parseFloat(order.taxRate),
+          shippingCost: parseFloat(order.shippingCost),
+          discount: parseFloat(order.discount),
+          total: parseFloat(order.total),
+          status: order.status,
+          paymentStatus: order.paymentStatus as "pending" | "partial" | "paid",
+          orderDate: order.orderDate.toISOString(),
+          expectedDeliveryDate: order.expectedDeliveryDate.toISOString(),
+          actualDeliveryDate: order.actualDeliveryDate?.toISOString(),
+          deliveryAddress: order.deliveryAddress,
+          deliveryNotes: order.deliveryNotes || undefined,
+          trackingNumber: order.trackingNumber || undefined,
+          createdBy: order.createdBy,
+          approvedBy: order.approvedBy || undefined,
+          approvedAt: order.approvedAt?.toISOString(),
+          internalNotes: order.internalNotes || undefined,
+          supplierNotes: order.supplierNotes || undefined,
+          statusHistory: (order.statusHistory || []).map(h => ({
+            ...h,
+            status: h.status as PurchaseOrderStatus
+          })),
+          createdAt: order.createdAt.toISOString(),
+          updatedAt: order.updatedAt.toISOString(),
+        };
+      })
+    );
+
+    res.json({ success: true, data: formattedOrders });
+  } catch (error) {
+    console.error('[Get Purchase Orders Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch purchase orders' });
+  }
+};
+
+// GET /purchase-orders/:id - Get purchase order by ID
+const getPurchaseOrderById: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const [order] = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    }
+
+    const items = await pgDb.select().from(purchaseOrderItemsTable)
+      .where(eq(purchaseOrderItemsTable.purchaseOrderId, order.id));
+
+    const formatted: PurchaseOrder = {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      supplierId: order.supplierId,
+      supplierName: order.supplierName,
+      items: items.map(item => ({
+        id: item.id,
+        productId: item.productId,
+        productName: item.productName,
+        supplierSku: item.supplierSku || undefined,
+        quantity: parseFloat(item.quantity),
+        unitCost: parseFloat(item.unitCost),
+        totalCost: parseFloat(item.totalCost),
+        receivedQuantity: parseFloat(item.receivedQuantity),
+        notes: item.notes || undefined,
+      })),
+      subtotal: parseFloat(order.subtotal),
+      taxAmount: parseFloat(order.taxAmount),
+      taxRate: parseFloat(order.taxRate),
+      shippingCost: parseFloat(order.shippingCost),
+      discount: parseFloat(order.discount),
+      total: parseFloat(order.total),
+      status: order.status,
+      paymentStatus: order.paymentStatus as "pending" | "partial" | "paid",
+      orderDate: order.orderDate.toISOString(),
+      expectedDeliveryDate: order.expectedDeliveryDate.toISOString(),
+      actualDeliveryDate: order.actualDeliveryDate?.toISOString(),
+      deliveryAddress: order.deliveryAddress,
+      deliveryNotes: order.deliveryNotes || undefined,
+      trackingNumber: order.trackingNumber || undefined,
+      createdBy: order.createdBy,
+      approvedBy: order.approvedBy || undefined,
+      approvedAt: order.approvedAt?.toISOString(),
+      internalNotes: order.internalNotes || undefined,
+      supplierNotes: order.supplierNotes || undefined,
+      statusHistory: (order.statusHistory || []).map(h => ({
+        ...h,
+        status: h.status as PurchaseOrderStatus
+      })),
+      createdAt: order.createdAt.toISOString(),
+      updatedAt: order.updatedAt.toISOString(),
+    };
+
+    res.json({ success: true, data: formatted });
+  } catch (error) {
+    console.error('[Get Purchase Order Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch purchase order' });
+  }
+};
+
+// POST /purchase-orders - Create purchase order
+const createPurchaseOrder: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const data: CreatePurchaseOrderRequest = req.body;
+
+    const [supplier] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, data.supplierId));
+    if (!supplier) {
+      return res.status(404).json({ success: false, error: 'Supplier not found' });
+    }
+
+    const orderId = generateId();
+    const orderNumber = await generatePONumber();
+
+    // Calculate totals
+    const subtotal = data.items.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
+    const taxRate = 0.05;
+    const taxAmount = subtotal * taxRate;
+    const total = subtotal + taxAmount + (data.shippingCost || 0) - (data.discount || 0);
+
+    const newOrder = {
+      id: orderId,
+      orderNumber,
+      supplierId: data.supplierId,
+      supplierName: supplier.name,
+      subtotal: String(subtotal),
+      taxAmount: String(taxAmount),
+      taxRate: String(taxRate),
+      shippingCost: String(data.shippingCost || 0),
+      discount: String(data.discount || 0),
+      total: String(total),
+      status: 'draft' as const,
+      paymentStatus: 'pending',
+      expectedDeliveryDate: new Date(data.expectedDeliveryDate),
+      deliveryAddress: data.deliveryAddress,
+      deliveryNotes: data.deliveryNotes || null,
+      createdBy: 'admin',
+      statusHistory: [{
+        status: 'draft',
+        changedBy: 'admin',
+        changedAt: new Date().toISOString(),
+      }],
+    };
+
+    await pgDb.insert(purchaseOrdersTable).values(newOrder);
+
+    // Insert items
+    for (const item of data.items) {
+      const itemId = generateId();
+      await pgDb.insert(purchaseOrderItemsTable).values({
+        id: itemId,
+        purchaseOrderId: orderId,
+        productId: item.productId,
+        productName: item.productId,
+        supplierSku: null,
+        quantity: String(item.quantity),
+        unitCost: String(item.unitCost),
+        totalCost: String(item.quantity * item.unitCost),
+        receivedQuantity: '0',
+        notes: item.notes || null,
+      });
+    }
+
+    // Update supplier stats
+    await pgDb.update(suppliersTable)
+      .set({
+        totalOrders: supplier.totalOrders + 1,
+        lastOrderAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(suppliersTable.id, data.supplierId));
+
+    const [created] = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, orderId));
+    const items = await pgDb.select().from(purchaseOrderItemsTable)
+      .where(eq(purchaseOrderItemsTable.purchaseOrderId, orderId));
+
+    res.status(201).json({
+      success: true,
+      data: {
+        ...created,
+        items: items.map(item => ({
+          id: item.id,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: parseFloat(item.quantity),
+          unitCost: parseFloat(item.unitCost),
+          totalCost: parseFloat(item.totalCost),
+          receivedQuantity: parseFloat(item.receivedQuantity),
+        })),
+      }
     });
+  } catch (error) {
+    console.error('[Create Purchase Order Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to create purchase order' });
   }
-  
-  // Mark as cancelled instead of deleting
-  purchaseOrders[index] = {
-    ...order,
-    status: "cancelled",
-    statusHistory: [
-      ...order.statusHistory,
-      { status: "cancelled", changedBy: "admin", changedAt: new Date().toISOString() },
-    ],
-    updatedAt: new Date().toISOString(),
-  };
-  
-  res.json({ success: true, data: purchaseOrders[index] });
 };
 
-// =====================================================
-// CONTACT ROUTES
-// =====================================================
+// PATCH /purchase-orders/:id/status - Update PO status
+const updatePurchaseOrderStatus: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
 
-// POST /api/suppliers/:id/contacts - Add contact to supplier
-const addSupplierContact: RequestHandler = (req, res) => {
-  const index = suppliers.findIndex(s => s.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ success: false, error: "Supplier not found" });
+    const { status } = req.body;
+    const validStatuses = ['draft', 'pending', 'approved', 'ordered', 'partially_received', 'received', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+
+    const [order] = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    }
+
+    const statusHistory = [...(order.statusHistory || []), {
+      status,
+      changedBy: 'admin',
+      changedAt: new Date().toISOString(),
+    }];
+
+    const updateData: Record<string, unknown> = {
+      status: status as "draft" | "pending" | "approved" | "ordered" | "partially_received" | "received" | "cancelled",
+      statusHistory,
+      updatedAt: new Date(),
+    };
+
+    if (status === 'approved') {
+      updateData.approvedBy = 'admin';
+      updateData.approvedAt = new Date();
+    }
+    if (status === 'received') {
+      updateData.actualDeliveryDate = new Date();
+
+      // Update supplier spent
+      const [supplier] = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, order.supplierId));
+      if (supplier) {
+        await pgDb.update(suppliersTable)
+          .set({
+            totalSpent: String(parseFloat(supplier.totalSpent) + parseFloat(order.total)),
+            updatedAt: new Date(),
+          })
+          .where(eq(suppliersTable.id, order.supplierId));
+      }
+    }
+
+    await pgDb.update(purchaseOrdersTable).set(updateData).where(eq(purchaseOrdersTable.id, req.params.id));
+
+    const [updated] = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('[Update PO Status Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to update purchase order status' });
   }
-  
-  const contact = {
-    id: generateId(),
-    ...req.body,
-  };
-  
-  suppliers[index].contacts.push(contact);
-  suppliers[index].updatedAt = new Date().toISOString();
-  
-  res.status(201).json({ success: true, data: contact });
 };
 
-// DELETE /api/suppliers/:id/contacts/:contactId - Remove contact
-const removeSupplierContact: RequestHandler = (req, res) => {
-  const supplierIndex = suppliers.findIndex(s => s.id === req.params.id);
-  if (supplierIndex === -1) {
-    return res.status(404).json({ success: false, error: "Supplier not found" });
+// PUT /purchase-orders/:id/receive - Receive PO items
+const receivePurchaseOrderItems: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const { items } = req.body;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ success: false, error: 'Items must be an array' });
+    }
+
+    const [order] = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    }
+
+    // Update each item's received quantity
+    for (const item of items) {
+      const [existingItem] = await pgDb.select().from(purchaseOrderItemsTable)
+        .where(eq(purchaseOrderItemsTable.id, item.itemId));
+
+      if (existingItem) {
+        const newReceivedQty = parseFloat(existingItem.receivedQuantity) + item.receivedQuantity;
+        await pgDb.update(purchaseOrderItemsTable)
+          .set({ receivedQuantity: String(newReceivedQty) })
+          .where(eq(purchaseOrderItemsTable.id, item.itemId));
+      }
+    }
+
+    // Check if all items are fully received
+    const allItems = await pgDb.select().from(purchaseOrderItemsTable)
+      .where(eq(purchaseOrderItemsTable.purchaseOrderId, req.params.id));
+
+    const fullyReceived = allItems.every(item =>
+      parseFloat(item.receivedQuantity) >= parseFloat(item.quantity)
+    );
+    const partiallyReceived = allItems.some(item =>
+      parseFloat(item.receivedQuantity) > 0
+    );
+
+    const newStatus = fullyReceived ? 'received' : partiallyReceived ? 'partially_received' : order.status;
+
+    if (newStatus !== order.status) {
+      const statusHistory = [...(order.statusHistory || []), {
+        status: newStatus,
+        changedBy: 'admin',
+        changedAt: new Date().toISOString(),
+        notes: 'Items received',
+      }];
+
+      await pgDb.update(purchaseOrdersTable)
+        .set({
+          status: newStatus as "draft" | "pending" | "approved" | "ordered" | "partially_received" | "received" | "cancelled",
+          statusHistory,
+          actualDeliveryDate: fullyReceived ? new Date() : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(purchaseOrdersTable.id, req.params.id));
+    }
+
+    const [updated] = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('[Receive PO Items Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to receive purchase order items' });
   }
-  
-  const contactIndex = suppliers[supplierIndex].contacts.findIndex(c => c.id === req.params.contactId);
-  if (contactIndex === -1) {
-    return res.status(404).json({ success: false, error: "Contact not found" });
+};
+
+// DELETE /purchase-orders/:id - Delete purchase order
+const deletePurchaseOrder: RequestHandler = async (req, res) => {
+  try {
+    if (!isDatabaseAvailable() || !pgDb) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const [order] = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    }
+
+    if (!['draft', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({ success: false, error: 'Can only delete draft or cancelled orders' });
+    }
+
+    await pgDb.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.purchaseOrderId, req.params.id));
+    await pgDb.delete(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Delete PO Error]', error);
+    res.status(500).json({ success: false, error: 'Failed to delete purchase order' });
   }
-  
-  suppliers[supplierIndex].contacts.splice(contactIndex, 1);
-  suppliers[supplierIndex].updatedAt = new Date().toISOString();
-  
-  res.json({ success: true, data: null });
 };
 
 // =====================================================
