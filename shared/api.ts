@@ -767,7 +767,7 @@ export interface SupplierContact {
 export interface SupplierAddress {
   street: string;
   city: string;
-  state: string;
+  emirate: string;
   country: string;
   postalCode: string;
 }

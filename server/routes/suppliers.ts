@@ -35,7 +35,7 @@ const suppliers: Supplier[] = [
     address: {
       street: "Industrial Area 5, Warehouse 23",
       city: "Dubai",
-      state: "Dubai",
+      emirate: "Dubai",
       country: "UAE",
       postalCode: "00000",
     },
@@ -85,7 +85,7 @@ const suppliers: Supplier[] = [
     address: {
       street: "Al Ain Road, Farm Complex B",
       city: "Al Ain",
-      state: "Abu Dhabi",
+      emirate: "Abu Dhabi",
       country: "UAE",
       postalCode: "00000",
     },
@@ -126,7 +126,7 @@ const suppliers: Supplier[] = [
     address: {
       street: "Emirates Road, Livestock Market",
       city: "Sharjah",
-      state: "Sharjah",
+      emirate: "Sharjah",
       country: "UAE",
       postalCode: "00000",
     },
@@ -168,7 +168,7 @@ const suppliers: Supplier[] = [
     address: {
       street: "Jebel Ali Free Zone, Building C5",
       city: "Dubai",
-      state: "Dubai",
+      emirate: "Dubai",
       country: "UAE",
       postalCode: "00000",
     },
@@ -207,7 +207,7 @@ const suppliers: Supplier[] = [
     address: {
       street: "Business Bay, Tower 3",
       city: "Dubai",
-      state: "Dubai",
+      emirate: "Dubai",
       country: "UAE",
       postalCode: "00000",
     },
