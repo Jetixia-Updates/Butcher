@@ -312,6 +312,445 @@ const bannersTable = pgTable("banners", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Supplier status and payment terms enums
+const supplierStatusEnum = pgEnum("supplier_status", ["active", "inactive", "pending", "suspended"]);
+const supplierPaymentTermsEnum = pgEnum("supplier_payment_terms", ["net_7", "net_15", "net_30", "net_60", "cod", "prepaid"]);
+const purchaseOrderStatusEnum = pgEnum("purchase_order_status", [
+  "draft", "pending", "approved", "ordered", "partially_received", "received", "cancelled"
+]);
+
+// Suppliers table
+const suppliersTable = pgTable("suppliers", {
+  id: text("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull().unique(),
+  name: varchar("name", { length: 200 }).notNull(),
+  nameAr: varchar("name_ar", { length: 200 }),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  website: text("website"),
+  taxNumber: varchar("tax_number", { length: 50 }),
+  address: jsonb("address").$type<{
+    street: string;
+    city: string;
+    state: string;
+    country: string;
+    postalCode: string;
+  }>().notNull(),
+  contacts: jsonb("contacts").$type<{
+    id: string;
+    name: string;
+    position: string;
+    email: string;
+    phone: string;
+    isPrimary: boolean;
+  }[]>().default([]),
+  paymentTerms: supplierPaymentTermsEnum("payment_terms").notNull().default("net_30"),
+  currency: currencyEnum("currency").notNull().default("AED"),
+  creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }).notNull().default("0"),
+  currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).notNull().default("0"),
+  categories: jsonb("categories").$type<string[]>().default([]),
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
+  onTimeDeliveryRate: decimal("on_time_delivery_rate", { precision: 5, scale: 2 }).default("0"),
+  qualityScore: decimal("quality_score", { precision: 5, scale: 2 }).default("0"),
+  totalOrders: integer("total_orders").notNull().default(0),
+  totalSpent: decimal("total_spent", { precision: 12, scale: 2 }).notNull().default("0"),
+  status: supplierStatusEnum("status").notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  lastOrderAt: timestamp("last_order_at"),
+});
+
+// Supplier products table
+const supplierProductsTable = pgTable("supplier_products", {
+  id: text("id").primaryKey(),
+  supplierId: text("supplier_id").notNull(),
+  productId: text("product_id").notNull(),
+  productName: varchar("product_name", { length: 200 }).notNull(),
+  supplierSku: varchar("supplier_sku", { length: 100 }),
+  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }).notNull(),
+  minimumOrderQuantity: integer("minimum_order_quantity").notNull().default(1),
+  leadTimeDays: integer("lead_time_days").notNull().default(7),
+  isPreferred: boolean("is_preferred").notNull().default(false),
+  lastPurchasePrice: decimal("last_purchase_price", { precision: 10, scale: 2 }),
+  lastPurchaseDate: timestamp("last_purchase_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Purchase orders table
+const purchaseOrdersTable = pgTable("purchase_orders", {
+  id: text("id").primaryKey(),
+  orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
+  supplierId: text("supplier_id").notNull(),
+  supplierName: varchar("supplier_name", { length: 200 }).notNull(),
+  subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
+  taxAmount: decimal("tax_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 4 }).notNull().default("0.05"),
+  shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  discount: decimal("discount", { precision: 10, scale: 2 }).notNull().default("0"),
+  total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+  status: purchaseOrderStatusEnum("status").notNull().default("draft"),
+  paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"),
+  orderDate: timestamp("order_date").notNull().defaultNow(),
+  expectedDeliveryDate: timestamp("expected_delivery_date").notNull(),
+  actualDeliveryDate: timestamp("actual_delivery_date"),
+  deliveryAddress: text("delivery_address").notNull(),
+  deliveryNotes: text("delivery_notes"),
+  trackingNumber: varchar("tracking_number", { length: 100 }),
+  createdBy: text("created_by").notNull(),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  internalNotes: text("internal_notes"),
+  supplierNotes: text("supplier_notes"),
+  statusHistory: jsonb("status_history").$type<{
+    status: string;
+    changedBy: string;
+    changedAt: string;
+    notes?: string;
+  }[]>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Purchase order items table
+const purchaseOrderItemsTable = pgTable("purchase_order_items", {
+  id: text("id").primaryKey(),
+  purchaseOrderId: text("purchase_order_id").notNull(),
+  productId: text("product_id").notNull(),
+  productName: varchar("product_name", { length: 200 }).notNull(),
+  supplierSku: varchar("supplier_sku", { length: 100 }),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
+  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }).notNull(),
+  totalCost: decimal("total_cost", { precision: 10, scale: 2 }).notNull(),
+  receivedQuantity: decimal("received_quantity", { precision: 10, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+});
+
+// Transaction type and status enums for finance
+const transactionTypeEnum = pgEnum("transaction_type", [
+  "sale", "refund", "expense", "purchase", "adjustment", "payout"
+]);
+const transactionStatusEnum = pgEnum("transaction_status", ["pending", "completed", "failed", "cancelled"]);
+const expenseCategoryEnum = pgEnum("expense_category", [
+  "inventory", "direct_labor", "freight_in", "marketing", "delivery", "sales_commission",
+  "salaries", "rent", "utilities", "office_supplies", "insurance", "professional_fees",
+  "licenses_permits", "bank_charges", "equipment", "maintenance", "depreciation", "amortization",
+  "interest_expense", "finance_charges", "taxes", "government_fees", "employee_benefits",
+  "training", "travel", "meals_entertainment", "other"
+]);
+
+// Finance transactions table
+const financeTransactionsTable = pgTable("finance_transactions", {
+  id: text("id").primaryKey(),
+  type: transactionTypeEnum("type").notNull(),
+  status: transactionStatusEnum("status").notNull().default("pending"),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: currencyEnum("currency").notNull().default("AED"),
+  description: text("description").notNull(),
+  descriptionAr: text("description_ar"),
+  category: expenseCategoryEnum("category"),
+  reference: varchar("reference", { length: 100 }),
+  referenceType: varchar("reference_type", { length: 50 }),
+  referenceId: text("reference_id"),
+  accountId: text("account_id").notNull(),
+  accountName: varchar("account_name", { length: 100 }).notNull(),
+  createdBy: text("created_by").notNull(),
+  notes: text("notes"),
+  attachments: jsonb("attachments").$type<string[]>(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Account type enum for finance accounts
+const accountTypeEnum = pgEnum("account_type", ["cash", "bank", "card_payments", "cod_collections", "petty_cash"]);
+const expenseStatusEnum = pgEnum("expense_status", ["pending", "approved", "paid", "overdue", "cancelled", "reimbursed"]);
+
+// Finance accounts table
+const financeAccountsTable = pgTable("finance_accounts", {
+  id: text("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  nameAr: varchar("name_ar", { length: 100 }),
+  type: accountTypeEnum("type").notNull(),
+  balance: decimal("balance", { precision: 14, scale: 2 }).notNull().default("0"),
+  currency: currencyEnum("currency").notNull().default("AED"),
+  isActive: boolean("is_active").notNull().default(true),
+  bankName: varchar("bank_name", { length: 100 }),
+  accountNumber: varchar("account_number", { length: 50 }),
+  iban: varchar("iban", { length: 50 }),
+  lastReconciled: timestamp("last_reconciled"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Finance expenses table (IFRS/GAAP Enhanced)
+const financeExpensesTable = pgTable("finance_expenses", {
+  id: text("id").primaryKey(),
+  expenseNumber: varchar("expense_number", { length: 50 }).notNull(),
+  category: expenseCategoryEnum("category").notNull(),
+  function: varchar("function", { length: 50 }).default("administrative"),
+  grossAmount: decimal("gross_amount", { precision: 10, scale: 2 }).notNull(),
+  vatAmount: decimal("vat_amount", { precision: 10, scale: 2 }).default("0"),
+  vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).default("5"),
+  isVatRecoverable: boolean("is_vat_recoverable").default(true),
+  withholdingTax: decimal("withholding_tax", { precision: 10, scale: 2 }).default("0"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: currencyEnum("currency").notNull().default("AED"),
+  exchangeRate: decimal("exchange_rate", { precision: 10, scale: 6 }).default("1"),
+  baseCurrencyAmount: decimal("base_currency_amount", { precision: 10, scale: 2 }),
+  description: text("description").notNull(),
+  descriptionAr: text("description_ar"),
+  vendorId: text("vendor_id"),
+  vendor: varchar("vendor", { length: 200 }),
+  vendorTrn: varchar("vendor_trn", { length: 20 }),
+  invoiceNumber: varchar("invoice_number", { length: 100 }),
+  invoiceDate: timestamp("invoice_date"),
+  receivedDate: timestamp("received_date"),
+  paymentTerms: varchar("payment_terms", { length: 20 }).default("net_30"),
+  dueDate: timestamp("due_date"),
+  earlyPaymentDiscount: decimal("early_payment_discount", { precision: 5, scale: 2 }).default("0"),
+  earlyPaymentDays: integer("early_payment_days").default(0),
+  paidAt: timestamp("paid_at"),
+  paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default("0"),
+  paymentReference: varchar("payment_reference", { length: 100 }),
+  paymentMethod: varchar("payment_method", { length: 50 }),
+  status: expenseStatusEnum("status").notNull().default("pending"),
+  approvalStatus: varchar("approval_status", { length: 20 }).default("draft"),
+  costCenterId: text("cost_center_id"),
+  costCenterName: varchar("cost_center_name", { length: 100 }),
+  projectId: text("project_id"),
+  projectName: varchar("project_name", { length: 100 }),
+  departmentId: text("department_id"),
+  departmentName: varchar("department_name", { length: 100 }),
+  accountId: text("account_id"),
+  glAccountCode: varchar("gl_account_code", { length: 20 }),
+  journalEntryId: text("journal_entry_id"),
+  createdBy: text("created_by").notNull(),
+  submittedBy: text("submitted_by"),
+  submittedAt: timestamp("submitted_at"),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  rejectedBy: text("rejected_by"),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  notes: text("notes"),
+  attachments: jsonb("attachments").$type<string[]>().default([]),
+  tags: jsonb("tags").$type<string[]>().default([]),
+  isRecurring: boolean("is_recurring").default(false),
+  recurringSchedule: varchar("recurring_schedule", { length: 20 }),
+  nextRecurrenceDate: timestamp("next_recurrence_date"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Helper to generate expense number
+const generateExpenseNumber = async (): Promise<string> => {
+  const year = new Date().getFullYear();
+  if (!pgDb) return `EXP-${year}-0001`;
+  const result = await pgDb.select().from(financeExpensesTable).orderBy(desc(financeExpensesTable.createdAt)).limit(1);
+  if (result.length === 0) return `EXP-${year}-0001`;
+  const lastNumber = result[0].expenseNumber;
+  const match = lastNumber.match(/EXP-\d+-(\d+)/);
+  const nextSeq = match ? String(parseInt(match[1], 10) + 1).padStart(4, '0') : '0001';
+  return `EXP-${year}-${nextSeq}`;
+};
+
+// Helper to generate account ID
+const generateAccountId = (): string => `acc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// Account class enum for chart of accounts
+const accountClassEnum = pgEnum("account_class", [
+  "asset", "liability", "equity", "revenue", "expense"
+]);
+
+// Journal entry status enum
+const journalEntryStatusEnum = pgEnum("journal_entry_status", [
+  "draft", "posted", "reversed"
+]);
+
+// VAT return status enum
+const vatReturnStatusEnum = pgEnum("vat_return_status", [
+  "draft", "submitted", "accepted", "rejected", "amended"
+]);
+
+// Chart of accounts table
+const chartOfAccountsTable = pgTable("chart_of_accounts", {
+  id: text("id").primaryKey(),
+  code: varchar("code", { length: 10 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  nameAr: varchar("name_ar", { length: 100 }),
+  accountClass: accountClassEnum("account_class").notNull(),
+  parentId: text("parent_id"),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  isSystemAccount: boolean("is_system_account").notNull().default(false),
+  balance: decimal("balance", { precision: 14, scale: 2 }).notNull().default("0"),
+  normalBalance: varchar("normal_balance", { length: 10 }).notNull().default("debit"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Cost centers table
+const costCentersTable = pgTable("cost_centers", {
+  id: text("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  nameAr: varchar("name_ar", { length: 100 }),
+  description: text("description"),
+  parentId: text("parent_id"),
+  managerId: text("manager_id"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Expense budgets table
+const expenseBudgetsTable = pgTable("expense_budgets", {
+  id: text("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  periodType: varchar("period_type", { length: 20 }).notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  category: varchar("category", { length: 50 }),
+  costCenterId: text("cost_center_id"),
+  departmentId: text("department_id"),
+  budgetAmount: decimal("budget_amount", { precision: 12, scale: 2 }).notNull(),
+  spentAmount: decimal("spent_amount", { precision: 12, scale: 2 }).default("0"),
+  remainingAmount: decimal("remaining_amount", { precision: 12, scale: 2 }),
+  alertThreshold: integer("alert_threshold").default(80),
+  isAlertSent: boolean("is_alert_sent").default(false),
+  isActive: boolean("is_active").default(true),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Vendors table (for finance, separate from suppliers)
+const vendorsTable = pgTable("vendors", {
+  id: text("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull().unique(),
+  name: varchar("name", { length: 200 }).notNull(),
+  nameAr: varchar("name_ar", { length: 200 }),
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 20 }),
+  mobile: varchar("mobile", { length: 20 }),
+  website: varchar("website", { length: 255 }),
+  address: text("address"),
+  city: varchar("city", { length: 100 }),
+  emirate: varchar("emirate", { length: 50 }),
+  country: varchar("country", { length: 100 }).default("UAE"),
+  trn: varchar("trn", { length: 20 }),
+  defaultPaymentTerms: varchar("default_payment_terms", { length: 20 }).default("net_30"),
+  currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).default("0"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Journal entries table
+const journalEntriesTable = pgTable("journal_entries", {
+  id: text("id").primaryKey(),
+  entryNumber: varchar("entry_number", { length: 20 }).notNull().unique(),
+  entryDate: timestamp("entry_date").notNull(),
+  description: text("description").notNull(),
+  descriptionAr: text("description_ar"),
+  reference: varchar("reference", { length: 100 }),
+  referenceType: varchar("reference_type", { length: 50 }),
+  referenceId: text("reference_id"),
+  status: journalEntryStatusEnum("status").notNull().default("draft"),
+  totalDebit: decimal("total_debit", { precision: 14, scale: 2 }).notNull().default("0"),
+  totalCredit: decimal("total_credit", { precision: 14, scale: 2 }).notNull().default("0"),
+  createdBy: text("created_by").notNull(),
+  approvedBy: text("approved_by"),
+  postedAt: timestamp("posted_at"),
+  reversedAt: timestamp("reversed_at"),
+  reversalEntryId: text("reversal_entry_id"),
+  notes: text("notes"),
+  attachments: jsonb("attachments").$type<string[]>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Journal entry lines table
+const journalEntryLinesTable = pgTable("journal_entry_lines", {
+  id: text("id").primaryKey(),
+  journalEntryId: text("journal_entry_id").notNull(),
+  accountId: text("account_id").notNull(),
+  accountCode: varchar("account_code", { length: 10 }).notNull(),
+  accountName: varchar("account_name", { length: 100 }).notNull(),
+  debit: decimal("debit", { precision: 14, scale: 2 }).notNull().default("0"),
+  credit: decimal("credit", { precision: 14, scale: 2 }).notNull().default("0"),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Audit log table
+const auditLogTable = pgTable("audit_log", {
+  id: text("id").primaryKey(),
+  entityType: varchar("entity_type", { length: 50 }).notNull(),
+  entityId: text("entity_id").notNull(),
+  action: varchar("action", { length: 20 }).notNull(),
+  previousValue: jsonb("previous_value"),
+  newValue: jsonb("new_value"),
+  changedFields: jsonb("changed_fields").$type<string[]>(),
+  userId: text("user_id").notNull(),
+  userName: varchar("user_name", { length: 100 }),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// VAT returns table
+const vatReturnsTable = pgTable("vat_returns", {
+  id: text("id").primaryKey(),
+  returnNumber: varchar("return_number", { length: 20 }).notNull().unique(),
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  box1StandardRatedSupplies: decimal("box1_standard_rated_supplies", { precision: 14, scale: 2 }).default("0"),
+  box1VatOnSupplies: decimal("box1_vat_on_supplies", { precision: 14, scale: 2 }).default("0"),
+  box2TaxRefundsForTourists: decimal("box2_tax_refunds", { precision: 14, scale: 2 }).default("0"),
+  box3ZeroRatedSupplies: decimal("box3_zero_rated_supplies", { precision: 14, scale: 2 }).default("0"),
+  box4ExemptSupplies: decimal("box4_exempt_supplies", { precision: 14, scale: 2 }).default("0"),
+  box5GoodsImportedFromGcc: decimal("box5_goods_imported_gcc", { precision: 14, scale: 2 }).default("0"),
+  box5VatOnImports: decimal("box5_vat_on_imports", { precision: 14, scale: 2 }).default("0"),
+  box6Adjustments: decimal("box6_adjustments", { precision: 14, scale: 2 }).default("0"),
+  box7TotalVatDue: decimal("box7_total_vat_due", { precision: 14, scale: 2 }).default("0"),
+  box8StandardRatedExpenses: decimal("box8_standard_rated_expenses", { precision: 14, scale: 2 }).default("0"),
+  box8RecoverableVat: decimal("box8_recoverable_vat", { precision: 14, scale: 2 }).default("0"),
+  box9Adjustments: decimal("box9_adjustments", { precision: 14, scale: 2 }).default("0"),
+  box10NetVatDue: decimal("box10_net_vat_due", { precision: 14, scale: 2 }).default("0"),
+  status: vatReturnStatusEnum("status").notNull().default("draft"),
+  submittedAt: timestamp("submitted_at"),
+  submittedBy: text("submitted_by"),
+  ftaReferenceNumber: varchar("fta_reference_number", { length: 50 }),
+  notes: text("notes"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Expense approval rules table
+const expenseApprovalRulesTable = pgTable("expense_approval_rules", {
+  id: text("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  minAmount: decimal("min_amount", { precision: 10, scale: 2 }).default("0"),
+  maxAmount: decimal("max_amount", { precision: 10, scale: 2 }),
+  category: varchar("category", { length: 50 }),
+  costCenterId: text("cost_center_id"),
+  approverLevel: integer("approver_level").notNull().default(1),
+  approverId: text("approver_id"),
+  approverRole: varchar("approver_role", { length: 50 }),
+  requiresAllApprovers: boolean("requires_all_approvers").default(false),
+  autoApproveBelow: decimal("auto_approve_below", { precision: 10, scale: 2 }),
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Delivery time slots table
 const deliveryTimeSlotsTable = pgTable("delivery_time_slots", {
   id: text("id").primaryKey(),
@@ -775,6 +1214,244 @@ async function releaseStockForCancelledOrder(
   }
   
   return { success: true };
+}
+
+/**
+ * Receive stock from Purchase Order (increases inventory)
+ * Called when PO items are received from supplier
+ */
+async function receiveStockFromPurchaseOrder(
+  purchaseOrderId: string,
+  purchaseOrderNumber: string,
+  items: Array<{ productId: string; quantity: number; unitCost: number }>,
+  performedBy: string,
+  db: typeof pgDb
+): Promise<{ success: boolean; error?: string; totalValue: number }> {
+  if (!db) return { success: false, error: 'Database not available', totalValue: 0 };
+  
+  const now = new Date();
+  let totalValue = 0;
+  
+  for (const item of items) {
+    // Check if stock record exists
+    const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
+    
+    if (stockResult.length === 0) {
+      // Create new stock record for this product
+      await db.insert(stockTable).values({
+        id: `stock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        productId: item.productId,
+        quantity: String(item.quantity),
+        reservedQuantity: '0',
+        availableQuantity: String(item.quantity),
+        lowStockThreshold: '10',
+        reorderPoint: '20',
+        reorderQuantity: '50',
+        updatedAt: now,
+      });
+      
+      // Record movement as "in"
+      await db.insert(stockMovementsTable).values({
+        id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        productId: item.productId,
+        type: 'in',
+        quantity: String(item.quantity),
+        previousQuantity: '0',
+        newQuantity: String(item.quantity),
+        reason: `Received from PO ${purchaseOrderNumber}`,
+        referenceType: 'purchase_order',
+        referenceId: purchaseOrderId,
+        performedBy,
+        createdAt: now,
+      });
+    } else {
+      const stockItem = stockResult[0];
+      const currentQuantity = parseFloat(stockItem.quantity);
+      const currentAvailable = parseFloat(stockItem.availableQuantity);
+      
+      const newQuantity = currentQuantity + item.quantity;
+      const newAvailable = currentAvailable + item.quantity;
+      
+      // Update stock - increase quantity
+      await db.update(stockTable)
+        .set({
+          quantity: String(newQuantity),
+          availableQuantity: String(newAvailable),
+          updatedAt: now,
+        })
+        .where(eq(stockTable.productId, item.productId));
+      
+      // Record movement as "in"
+      await db.insert(stockMovementsTable).values({
+        id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        productId: item.productId,
+        type: 'in',
+        quantity: String(item.quantity),
+        previousQuantity: String(currentQuantity),
+        newQuantity: String(newQuantity),
+        reason: `Received from PO ${purchaseOrderNumber}`,
+        referenceType: 'purchase_order',
+        referenceId: purchaseOrderId,
+        performedBy,
+        createdAt: now,
+      });
+    }
+    
+    totalValue += item.quantity * item.unitCost;
+  }
+  
+  console.log(`[Inventory Cycle] Received ${items.length} items from PO ${purchaseOrderNumber}, total value: ${totalValue} AED`);
+  return { success: true, totalValue };
+}
+
+/**
+ * Create finance transaction for a sale (customer order delivered)
+ * IAS 18 / IFRS 15 compliant revenue recognition
+ */
+async function createSaleTransaction(
+  orderId: string,
+  orderNumber: string,
+  total: number,
+  vatAmount: number,
+  paymentMethod: string,
+  customerId: string,
+  performedBy: string,
+  db: typeof pgDb
+): Promise<{ success: boolean; transactionId?: string; error?: string }> {
+  if (!db) return { success: false, error: 'Database not available' };
+  
+  const now = new Date();
+  const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Determine account based on payment method
+  let accountName = 'Bank Account';
+  if (paymentMethod === 'cod') accountName = 'COD Collections';
+  else if (paymentMethod === 'card') accountName = 'Card Payments';
+  
+  await db.insert(financeTransactionsTable).values({
+    id: transactionId,
+    type: 'sale',
+    status: paymentMethod === 'cod' ? 'pending' : 'completed',
+    amount: String(total),
+    currency: 'AED',
+    description: `Sale from order ${orderNumber}`,
+    descriptionAr: `مبيعات من الطلب ${orderNumber}`,
+    category: 'inventory',
+    reference: orderNumber,
+    referenceType: 'order',
+    referenceId: orderId,
+    accountId: 'acc_main', // Default main account
+    accountName,
+    createdBy: performedBy,
+    notes: `Customer ID: ${customerId}, VAT: ${vatAmount} AED`,
+    metadata: {
+      orderId,
+      orderNumber,
+      customerId,
+      vatAmount,
+      paymentMethod,
+    },
+    createdAt: now,
+    updatedAt: now,
+  });
+  
+  console.log(`[Finance Cycle] Created sale transaction ${transactionId} for order ${orderNumber}`);
+  return { success: true, transactionId };
+}
+
+/**
+ * Create finance transaction for a purchase (PO payment)
+ * IAS 2 compliant inventory costing
+ */
+async function createPurchaseTransaction(
+  purchaseOrderId: string,
+  purchaseOrderNumber: string,
+  supplierId: string,
+  supplierName: string,
+  amount: number,
+  vatAmount: number,
+  performedBy: string,
+  db: typeof pgDb
+): Promise<{ success: boolean; transactionId?: string; error?: string }> {
+  if (!db) return { success: false, error: 'Database not available' };
+  
+  const now = new Date();
+  const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  await db.insert(financeTransactionsTable).values({
+    id: transactionId,
+    type: 'purchase',
+    status: 'completed',
+    amount: String(amount),
+    currency: 'AED',
+    description: `Purchase from ${supplierName} - PO ${purchaseOrderNumber}`,
+    descriptionAr: `مشتريات من ${supplierName} - أمر شراء ${purchaseOrderNumber}`,
+    category: 'inventory',
+    reference: purchaseOrderNumber,
+    referenceType: 'purchase_order',
+    referenceId: purchaseOrderId,
+    accountId: 'acc_main',
+    accountName: 'Bank Account',
+    createdBy: performedBy,
+    notes: `Supplier ID: ${supplierId}, VAT: ${vatAmount} AED`,
+    metadata: {
+      purchaseOrderId,
+      purchaseOrderNumber,
+      supplierId,
+      supplierName,
+      vatAmount,
+    },
+    createdAt: now,
+    updatedAt: now,
+  });
+  
+  console.log(`[Finance Cycle] Created purchase transaction ${transactionId} for PO ${purchaseOrderNumber}`);
+  return { success: true, transactionId };
+}
+
+/**
+ * Create refund transaction when order is refunded
+ */
+async function createRefundTransaction(
+  orderId: string,
+  orderNumber: string,
+  amount: number,
+  reason: string,
+  performedBy: string,
+  db: typeof pgDb
+): Promise<{ success: boolean; transactionId?: string; error?: string }> {
+  if (!db) return { success: false, error: 'Database not available' };
+  
+  const now = new Date();
+  const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  await db.insert(financeTransactionsTable).values({
+    id: transactionId,
+    type: 'refund',
+    status: 'completed',
+    amount: String(amount),
+    currency: 'AED',
+    description: `Refund for order ${orderNumber}`,
+    descriptionAr: `استرداد للطلب ${orderNumber}`,
+    category: 'inventory',
+    reference: orderNumber,
+    referenceType: 'order',
+    referenceId: orderId,
+    accountId: 'acc_main',
+    accountName: 'Bank Account',
+    createdBy: performedBy,
+    notes: reason,
+    metadata: {
+      orderId,
+      orderNumber,
+      refundReason: reason,
+    },
+    createdAt: now,
+    updatedAt: now,
+  });
+  
+  console.log(`[Finance Cycle] Created refund transaction ${transactionId} for order ${orderNumber}`);
+  return { success: true, transactionId };
 }
 
 // =====================================================
@@ -2050,11 +2727,12 @@ function createApp() {
 
       // INVENTORY CYCLE: Validate stock availability before creating order (IAS 2 compliance)
       const stockValidation = await validateStockAvailability(
-        pgDb,
         items.map((item: { productId: string; quantity: number }) => ({
           productId: item.productId,
           quantity: item.quantity,
-        }))
+          productName: productMap.get(item.productId)?.name,
+        })),
+        pgDb
       );
 
       if (!stockValidation.valid) {
@@ -2063,7 +2741,7 @@ function createApp() {
           error: 'Insufficient stock',
           insufficientItems: stockValidation.insufficientItems,
           message: `The following items have insufficient stock: ${stockValidation.insufficientItems
-            .map(i => `${i.productName} (requested: ${i.requestedQuantity}, available: ${i.availableQuantity})`)
+            ?.map(i => `${i.productName} (requested: ${i.requested}, available: ${i.available})`)
             .join(', ')}`,
         });
       }
@@ -2157,13 +2835,13 @@ function createApp() {
 
       // INVENTORY CYCLE: Reserve stock for order (IAS 2 compliance)
       await reserveStockForOrder(
-        pgDb,
         orderId,
+        orderNumber,
         items.map((item: { productId: string; quantity: number }) => ({
           productId: item.productId,
           quantity: item.quantity,
         })),
-        'system'
+        pgDb
       );
 
       // Create payment record
@@ -2299,18 +2977,45 @@ function createApp() {
         .where(eq(ordersTable.id, req.params.id));
       
       // INVENTORY CYCLE: Handle stock movements based on status change (IAS 2 compliance)
+      // FINANCE CYCLE: Create transactions for revenue recognition (IFRS 15 compliance)
       if (status === 'delivered' && previousStatus !== 'delivered') {
         // When order is delivered, confirm stock reduction (move from reserved to sold)
-        await confirmStockForDeliveredOrder(pgDb, req.params.id, 'admin');
+        await confirmStockForDeliveredOrder(req.params.id, order.orderNumber, pgDb);
         console.log(`[Inventory Cycle] Confirmed stock reduction for delivered order ${req.params.id}`);
+        
+        // Create sale transaction for revenue recognition
+        const total = parseFloat(order.total);
+        const vatAmount = parseFloat(order.vatAmount);
+        await createSaleTransaction(
+          req.params.id,
+          order.orderNumber,
+          total,
+          vatAmount,
+          order.paymentMethod || 'cod',
+          order.userId || 'guest',
+          'admin',
+          pgDb
+        );
       } else if (status === 'cancelled' && previousStatus !== 'cancelled') {
         // When order is cancelled, release reserved stock back to available
-        await releaseStockForCancelledOrder(pgDb, req.params.id, 'admin');
+        await releaseStockForCancelledOrder(req.params.id, order.orderNumber, pgDb);
         console.log(`[Inventory Cycle] Released reserved stock for cancelled order ${req.params.id}`);
-      } else if (status === 'refunded' && previousStatus !== 'refunded' && previousStatus !== 'delivered') {
-        // If refunded before delivery, release the reserved stock
-        await releaseStockForCancelledOrder(pgDb, req.params.id, 'admin');
-        console.log(`[Inventory Cycle] Released reserved stock for refunded order ${req.params.id}`);
+      } else if (status === 'refunded' && previousStatus !== 'refunded') {
+        // Create refund transaction
+        const total = parseFloat(order.total);
+        await createRefundTransaction(
+          req.params.id,
+          order.orderNumber,
+          total,
+          'Order refunded by admin',
+          'admin',
+          pgDb
+        );
+        // If refunded before delivery, also release the reserved stock
+        if (previousStatus !== 'delivered') {
+          await releaseStockForCancelledOrder(req.params.id, order.orderNumber, pgDb);
+          console.log(`[Inventory Cycle] Released reserved stock for refunded order ${req.params.id}`);
+        }
       }
       
       // Fetch updated order
@@ -3127,442 +3832,897 @@ function createApp() {
   });
 
   // =====================================================
-  // SUPPLIERS API (serverless mock)
+  // SUPPLIERS API - DATABASE BACKED
   // =====================================================
 
-  type SupplierStatus = 'active' | 'inactive' | 'pending' | 'suspended';
-  type PaymentTerms = 'net_7' | 'net_15' | 'net_30' | 'net_60' | 'cod' | 'prepaid';
-
-  interface SupplierContact {
-    id: string;
-    name: string;
-    position: string;
-    email: string;
-    phone: string;
-    isPrimary: boolean;
+  // Helper to generate supplier code
+  async function generateSupplierCode(db: typeof pgDb): Promise<string> {
+    if (!db) return `SUP-${Date.now()}`;
+    const suppliers = await db.select().from(suppliersTable).orderBy(desc(suppliersTable.code));
+    if (suppliers.length === 0) return 'SUP-001';
+    const lastCode = suppliers[0].code;
+    const lastNum = parseInt(lastCode.split('-')[1]) || 0;
+    return `SUP-${String(lastNum + 1).padStart(3, '0')}`;
   }
 
-  interface Supplier {
-    id: string;
-    code: string;
-    name: string;
-    nameAr?: string;
-    email: string;
-    phone: string;
-    website?: string;
-    taxNumber?: string;
-    address: { street: string; city: string; state: string; country: string; postalCode: string };
-    contacts: SupplierContact[];
-    paymentTerms: PaymentTerms;
-    currency: 'AED' | 'USD' | 'EUR';
-    creditLimit: number;
-    currentBalance: number;
-    categories: string[];
-    rating: number;
-    onTimeDeliveryRate: number;
-    qualityScore: number;
-    totalOrders: number;
-    totalSpent: number;
-    status: SupplierStatus;
-    notes?: string;
-    createdAt: string;
-    updatedAt: string;
-    lastOrderAt?: string;
-  }
-
-  interface SupplierProduct {
-    id: string;
-    supplierId: string;
-    productId: string;
-    productName: string;
-    supplierSku: string;
-    unitCost: number;
-    minimumOrderQuantity: number;
-    leadTimeDays: number;
-    isPreferred: boolean;
-    lastPurchasePrice: number;
-    lastPurchaseDate?: string;
-    notes?: string;
-    createdAt: string;
-    updatedAt: string;
-  }
-
-  interface PurchaseOrderItem {
-    id: string;
-    productId: string;
-    productName: string;
-    supplierSku?: string;
-    quantity: number;
-    unitCost: number;
-    totalCost: number;
-    receivedQuantity: number;
-    notes?: string;
-  }
-
-  type PurchaseOrderStatus = 'draft' | 'pending' | 'approved' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
-
-  interface PurchaseOrder {
-    id: string;
-    orderNumber: string;
-    supplierId: string;
-    supplierName: string;
-    items: PurchaseOrderItem[];
-    subtotal: number;
-    taxAmount: number;
-    taxRate: number;
-    shippingCost: number;
-    discount: number;
-    total: number;
-    status: PurchaseOrderStatus;
-    paymentStatus: 'pending' | 'partial' | 'paid';
-    orderDate: string;
-    expectedDeliveryDate: string;
-    actualDeliveryDate?: string;
-    deliveryAddress: string;
-    deliveryNotes?: string;
-    trackingNumber?: string;
-    createdBy: string;
-    approvedBy?: string;
-    approvedAt?: string;
-    internalNotes?: string;
-    supplierNotes?: string;
-    statusHistory: { status: PurchaseOrderStatus; changedBy: string; changedAt: string; notes?: string }[];
-    createdAt: string;
-    updatedAt: string;
-  }
-
-  const supplierList: Supplier[] = [
-    {
-      id: 'sup-001',
-      code: 'SUP-001',
-      name: 'Premium Meat Suppliers LLC',
-      email: 'orders@premiummeat.ae',
-      phone: '+971501234567',
-      website: 'https://premiummeat.ae',
-      taxNumber: '100123456700001',
-      address: { street: 'Industrial Area 5, Warehouse 23', city: 'Dubai', state: 'Dubai', country: 'UAE', postalCode: '00000' },
-      contacts: [
-        { id: 'contact-001', name: 'Ahmed Al Maktoum', position: 'Sales Manager', email: 'ahmed@premiummeat.ae', phone: '+971501234567', isPrimary: true },
-      ],
-      paymentTerms: 'net_30',
-      currency: 'AED',
-      creditLimit: 100000,
-      currentBalance: 25000,
-      categories: ['beef', 'lamb'],
-      rating: 4.5,
-      onTimeDeliveryRate: 95,
-      qualityScore: 98,
-      totalOrders: 156,
-      totalSpent: 450000,
-      status: 'active',
-      notes: 'Premium supplier with excellent quality beef and lamb products.',
-      createdAt: '2024-01-15T10:00:00Z',
-      updatedAt: new Date().toISOString(),
-      lastOrderAt: '2026-01-05T14:30:00Z',
-    },
-  ];
-
-  const supplierProducts: SupplierProduct[] = [
-    {
-      id: 'sp-001',
-      supplierId: 'sup-001',
-      productId: 'beef-ribeye',
-      productName: 'Premium Ribeye Steak',
-      supplierSku: 'PMS-RIB-001',
-      unitCost: 85,
-      minimumOrderQuantity: 5000,
-      leadTimeDays: 2,
-      isPreferred: true,
-      lastPurchasePrice: 85,
-      lastPurchaseDate: '2026-01-05T14:30:00Z',
-      createdAt: '2024-01-15T10:00:00Z',
-      updatedAt: '2026-01-05T14:30:00Z',
-    },
-  ];
-
-  const supplierPOs: PurchaseOrder[] = [];
-
-  const genId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  const genCode = (prefix: string, items: { code: string }[]) => {
-    const last = items.map(i => i.code).sort().pop();
-    const lastNum = last ? parseInt(last.split('-')[1]) : 0;
-    return `${prefix}-${String(lastNum + 1).padStart(3, '0')}`;
-  };
-  const genPoNumber = () => {
+  // Helper to generate PO number
+  async function generatePoNumber(db: typeof pgDb): Promise<string> {
+    if (!db) return `PO-${new Date().getFullYear()}-${Date.now()}`;
     const year = new Date().getFullYear();
-    const yearOrders = supplierPOs.filter(o => o.orderNumber.startsWith(`PO-${year}`));
-    const lastNum = yearOrders.length ? Math.max(...yearOrders.map(o => parseInt(o.orderNumber.split('-')[2]))) : 0;
+    const pos = await db.select().from(purchaseOrdersTable).orderBy(desc(purchaseOrdersTable.orderNumber));
+    const yearOrders = pos.filter(po => po.orderNumber.startsWith(`PO-${year}`));
+    if (yearOrders.length === 0) return `PO-${year}-0001`;
+    const lastNum = Math.max(...yearOrders.map(o => parseInt(o.orderNumber.split('-')[2]) || 0));
     return `PO-${year}-${String(lastNum + 1).padStart(4, '0')}`;
-  };
+  }
 
-  // List suppliers
-  app.get('/api/suppliers', (req, res) => {
-    const { status, category, search } = req.query;
-    let data = [...supplierList];
-    if (status && status !== 'all') data = data.filter(s => s.status === status);
-    if (category && category !== 'all') data = data.filter(s => s.categories.includes(category as string));
-    if (search) {
-      const q = (search as string).toLowerCase();
-      data = data.filter(s =>
-        s.name.toLowerCase().includes(q) ||
-        s.code.toLowerCase().includes(q) ||
-        s.email.toLowerCase().includes(q) ||
-        s.phone.includes(q)
-      );
+  // List suppliers - DATABASE BACKED
+  app.get('/api/suppliers', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const { status, category, search } = req.query;
+      let suppliers = await pgDb.select().from(suppliersTable);
+      
+      if (status && status !== 'all') {
+        suppliers = suppliers.filter(s => s.status === status);
+      }
+      if (category && category !== 'all') {
+        suppliers = suppliers.filter(s => (s.categories as string[] || []).includes(category as string));
+      }
+      if (search) {
+        const q = (search as string).toLowerCase();
+        suppliers = suppliers.filter(s =>
+          s.name.toLowerCase().includes(q) ||
+          s.code.toLowerCase().includes(q) ||
+          s.email.toLowerCase().includes(q) ||
+          s.phone.includes(q)
+        );
+      }
+      
+      suppliers.sort((a, b) => a.name.localeCompare(b.name));
+      
+      const formatted = suppliers.map(s => ({
+        id: s.id,
+        code: s.code,
+        name: s.name,
+        nameAr: s.nameAr,
+        email: s.email,
+        phone: s.phone,
+        website: s.website,
+        taxNumber: s.taxNumber,
+        address: s.address,
+        contacts: s.contacts || [],
+        paymentTerms: s.paymentTerms,
+        currency: s.currency,
+        creditLimit: parseFloat(s.creditLimit),
+        currentBalance: parseFloat(s.currentBalance),
+        categories: s.categories || [],
+        rating: s.rating ? parseFloat(s.rating) : 0,
+        onTimeDeliveryRate: s.onTimeDeliveryRate ? parseFloat(s.onTimeDeliveryRate) : 0,
+        qualityScore: s.qualityScore ? parseFloat(s.qualityScore) : 0,
+        totalOrders: s.totalOrders,
+        totalSpent: parseFloat(s.totalSpent),
+        status: s.status,
+        notes: s.notes,
+        createdAt: s.createdAt?.toISOString(),
+        updatedAt: s.updatedAt?.toISOString(),
+        lastOrderAt: s.lastOrderAt?.toISOString(),
+      }));
+      
+      res.json({ success: true, data: formatted });
+    } catch (error) {
+      console.error('[Suppliers List Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch suppliers' });
     }
-    data.sort((a, b) => a.name.localeCompare(b.name));
-    res.json({ success: true, data });
   });
 
-  // Supplier stats
-  app.get('/api/suppliers/stats', (_req, res) => {
-    const stats = {
-      totalSuppliers: supplierList.length,
-      activeSuppliers: supplierList.filter(s => s.status === 'active').length,
-      pendingSuppliers: supplierList.filter(s => s.status === 'pending').length,
-      totalPurchaseOrders: supplierPOs.length,
-      pendingOrders: supplierPOs.filter(po => ['pending', 'ordered'].includes(po.status)).length,
-      totalSpent: supplierList.reduce((sum, s) => sum + s.totalSpent, 0),
-      averageLeadTime: supplierProducts.length ? supplierProducts.reduce((sum, sp) => sum + sp.leadTimeDays, 0) / supplierProducts.length : 0,
-      topCategories: Array.from(new Set(supplierList.flatMap(s => s.categories))).map(cat => ({ category: cat, count: supplierList.filter(s => s.categories.includes(cat)).length })),
-    };
-    res.json({ success: true, data: stats });
-  });
-
-  // Create supplier
-  app.post('/api/suppliers', (req, res) => {
-    const body = req.body as Partial<Supplier>;
-    if (!body.name || !body.email || !body.phone) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
-    }
-    const newSupplier: Supplier = {
-      id: genId(),
-      code: genCode('SUP', supplierList),
-      name: body.name,
-      nameAr: body.nameAr,
-      email: body.email,
-      phone: body.phone,
-      website: body.website,
-      taxNumber: body.taxNumber,
-      address: body.address || { street: '', city: '', state: '', country: 'UAE', postalCode: '' },
-      contacts: (body.contacts || []).map(c => ({ ...c, id: genId() } as SupplierContact)),
-      paymentTerms: (body.paymentTerms as PaymentTerms) || 'net_30',
-      currency: (body.currency as Supplier['currency']) || 'AED',
-      creditLimit: body.creditLimit ?? 0,
-      currentBalance: 0,
-      categories: body.categories || ['general'],
-      rating: 0,
-      onTimeDeliveryRate: 0,
-      qualityScore: 0,
-      totalOrders: 0,
-      totalSpent: 0,
-      status: 'pending',
-      notes: body.notes,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    supplierList.push(newSupplier);
-    res.status(201).json({ success: true, data: newSupplier });
-  });
-
-  // Update supplier status
-  app.patch('/api/suppliers/:id/status', (req, res) => {
-    const sup = supplierList.find(s => s.id === req.params.id);
-    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
-    sup.status = req.body.status as SupplierStatus;
-    sup.updatedAt = new Date().toISOString();
-    res.json({ success: true, data: sup });
-  });
-
-  // Delete supplier
-  app.delete('/api/suppliers/:id', (req, res) => {
-    const idx = supplierList.findIndex(s => s.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, error: 'Supplier not found' });
-    const hasPending = supplierPOs.some(po => po.supplierId === req.params.id && !['received', 'cancelled'].includes(po.status));
-    if (hasPending) return res.status(400).json({ success: false, error: 'Cannot delete supplier with pending purchase orders' });
-    supplierList.splice(idx, 1);
-    res.json({ success: true, data: null });
-  });
-
-  // Contacts
-  app.post('/api/suppliers/:id/contacts', (req, res) => {
-    const sup = supplierList.find(s => s.id === req.params.id);
-    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
-    const contact: SupplierContact = { id: genId(), ...req.body };
-    sup.contacts.push(contact);
-    sup.updatedAt = new Date().toISOString();
-    res.status(201).json({ success: true, data: contact });
-  });
-
-  app.delete('/api/suppliers/:id/contacts/:contactId', (req, res) => {
-    const sup = supplierList.find(s => s.id === req.params.id);
-    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
-    const idx = sup.contacts.findIndex(c => c.id === req.params.contactId);
-    if (idx === -1) return res.status(404).json({ success: false, error: 'Contact not found' });
-    sup.contacts.splice(idx, 1);
-    sup.updatedAt = new Date().toISOString();
-    res.json({ success: true, data: null });
-  });
-
-  // Supplier products
-  app.get('/api/suppliers/:id/products', (req, res) => {
-    const products = supplierProducts.filter(p => p.supplierId === req.params.id);
-    res.json({ success: true, data: products });
-  });
-
-  app.post('/api/suppliers/:id/products', (req, res) => {
-    const sup = supplierList.find(s => s.id === req.params.id);
-    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
-    const body = req.body as Partial<SupplierProduct>;
-    const product: SupplierProduct = {
-      id: genId(),
-      supplierId: sup.id,
-      productId: body.productId || genId(),
-      productName: body.productName || 'New Product',
-      supplierSku: body.supplierSku || '',
-      unitCost: body.unitCost || 0,
-      minimumOrderQuantity: body.minimumOrderQuantity || 1000,
-      leadTimeDays: body.leadTimeDays || 3,
-      isPreferred: !!body.isPreferred,
-      lastPurchasePrice: body.unitCost || 0,
-      lastPurchaseDate: new Date().toISOString(),
-      notes: body.notes,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    supplierProducts.push(product);
-    res.status(201).json({ success: true, data: product });
-  });
-
-  app.delete('/api/suppliers/products/:productId', (req, res) => {
-    const idx = supplierProducts.findIndex(p => p.id === req.params.productId);
-    if (idx === -1) return res.status(404).json({ success: false, error: 'Supplier product not found' });
-    supplierProducts.splice(idx, 1);
-    res.json({ success: true, data: null });
-  });
-
-  // Purchase orders
-  app.get('/api/suppliers/purchase-orders/list', (req, res) => {
-    const { status, supplierId } = req.query;
-    let data = [...supplierPOs];
-    if (status && status !== 'all') data = data.filter(po => po.status === status);
-    if (supplierId) data = data.filter(po => po.supplierId === supplierId);
-    data.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
-    res.json({ success: true, data });
-  });
-
-  app.post('/api/suppliers/purchase-orders', (req, res) => {
-    const body = req.body as { supplierId: string; items: { productId: string; quantity: number; unitCost: number; notes?: string }[]; expectedDeliveryDate: string; deliveryAddress: string; deliveryNotes?: string; shippingCost?: number; discount?: number; };
-    const sup = supplierList.find(s => s.id === body.supplierId);
-    if (!sup) return res.status(404).json({ success: false, error: 'Supplier not found' });
-    const items: PurchaseOrderItem[] = body.items.map(it => {
-      const sp = supplierProducts.find(p => p.productId === it.productId && p.supplierId === body.supplierId);
-      return {
-        id: genId(),
-        productId: it.productId,
-        productName: sp?.productName || it.productId,
-        supplierSku: sp?.supplierSku,
-        quantity: it.quantity,
-        unitCost: it.unitCost,
-        totalCost: (it.quantity / 1000) * it.unitCost,
-        receivedQuantity: 0,
-        notes: it.notes,
+  // Supplier stats - DATABASE BACKED
+  app.get('/api/suppliers/stats', async (_req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const suppliers = await pgDb.select().from(suppliersTable);
+      const pos = await pgDb.select().from(purchaseOrdersTable);
+      const supplierProds = await pgDb.select().from(supplierProductsTable);
+      
+      const stats = {
+        totalSuppliers: suppliers.length,
+        activeSuppliers: suppliers.filter(s => s.status === 'active').length,
+        pendingSuppliers: suppliers.filter(s => s.status === 'pending').length,
+        totalPurchaseOrders: pos.length,
+        pendingOrders: pos.filter(po => ['pending', 'ordered'].includes(po.status)).length,
+        totalSpent: suppliers.reduce((sum, s) => sum + parseFloat(s.totalSpent), 0),
+        averageLeadTime: supplierProds.length 
+          ? supplierProds.reduce((sum, sp) => sum + sp.leadTimeDays, 0) / supplierProds.length 
+          : 0,
+        topCategories: Array.from(new Set(suppliers.flatMap(s => (s.categories as string[]) || [])))
+          .map(cat => ({ 
+            category: cat, 
+            count: suppliers.filter(s => ((s.categories as string[]) || []).includes(cat)).length 
+          })),
       };
-    });
-    const subtotal = items.reduce((sum, i) => sum + i.totalCost, 0);
-    const taxRate = 5;
-    const taxAmount = subtotal * (taxRate / 100);
-    const shippingCost = body.shippingCost || 0;
-    const discount = body.discount || 0;
-    const total = subtotal + taxAmount + shippingCost - discount;
-    const po: PurchaseOrder = {
-      id: genId(),
-      orderNumber: genPoNumber(),
-      supplierId: sup.id,
-      supplierName: sup.name,
-      items,
-      subtotal,
-      taxAmount,
-      taxRate,
-      shippingCost,
-      discount,
-      total,
-      status: 'draft',
-      paymentStatus: 'pending',
-      orderDate: new Date().toISOString(),
-      expectedDeliveryDate: body.expectedDeliveryDate,
-      deliveryAddress: body.deliveryAddress,
-      deliveryNotes: body.deliveryNotes,
-      createdBy: 'admin',
-      statusHistory: [{ status: 'draft', changedBy: 'admin', changedAt: new Date().toISOString() }],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    supplierPOs.push(po);
-    res.status(201).json({ success: true, data: po });
-  });
-
-  app.patch('/api/suppliers/purchase-orders/:id/status', (req, res) => {
-    const po = supplierPOs.find(p => p.id === req.params.id);
-    if (!po) return res.status(404).json({ success: false, error: 'Purchase order not found' });
-    const { status, notes } = req.body as { status: PurchaseOrderStatus; notes?: string };
-    po.status = status;
-    po.statusHistory.push({ status, changedBy: 'admin', changedAt: new Date().toISOString(), notes });
-    if (status === 'received') po.actualDeliveryDate = new Date().toISOString();
-    po.updatedAt = new Date().toISOString();
-    res.json({ success: true, data: po });
-  });
-
-  app.put('/api/suppliers/purchase-orders/:id/receive', (req, res) => {
-    const po = supplierPOs.find(p => p.id === req.params.id);
-    if (!po) return res.status(404).json({ success: false, error: 'Purchase order not found' });
-    const { items } = req.body as { items: { itemId: string; receivedQuantity: number }[] };
-    po.items = po.items.map(it => {
-      const recv = items.find(i => i.itemId === it.id);
-      return recv ? { ...it, receivedQuantity: it.receivedQuantity + recv.receivedQuantity } : it;
-    });
-    const allReceived = po.items.every(i => i.receivedQuantity >= i.quantity);
-    const anyReceived = po.items.some(i => i.receivedQuantity > 0);
-    po.status = allReceived ? 'received' : anyReceived ? 'partially_received' : po.status;
-    if (po.status === 'received') po.actualDeliveryDate = new Date().toISOString();
-    po.statusHistory.push({ status: po.status, changedBy: 'admin', changedAt: new Date().toISOString() });
-    po.updatedAt = new Date().toISOString();
-    res.json({ success: true, data: po });
-  });
-
-  // Get purchase order by ID
-  app.get('/api/suppliers/purchase-orders/:id', (req, res) => {
-    const po = supplierPOs.find(p => p.id === req.params.id);
-    if (!po) return res.status(404).json({ success: false, error: 'Purchase order not found' });
-    res.json({ success: true, data: po });
-  });
-
-  app.delete('/api/suppliers/purchase-orders/:id', (req, res) => {
-    const po = supplierPOs.find(p => p.id === req.params.id);
-    if (!po) return res.status(404).json({ success: false, error: 'Purchase order not found' });
-    if (['received', 'partially_received'].includes(po.status)) {
-      return res.status(400).json({ success: false, error: 'Cannot delete received or partially received orders' });
+      
+      res.json({ success: true, data: stats });
+    } catch (error) {
+      console.error('[Supplier Stats Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch supplier stats' });
     }
-    po.status = 'cancelled';
-    po.statusHistory.push({ status: 'cancelled', changedBy: 'admin', changedAt: new Date().toISOString() });
-    po.updatedAt = new Date().toISOString();
-    res.json({ success: true, data: po });
   });
 
-  // Get supplier by ID
-  app.get('/api/suppliers/:id', (req, res) => {
-    const supplier = supplierList.find(s => s.id === req.params.id);
-    if (!supplier) return res.status(404).json({ success: false, error: 'Supplier not found' });
-    res.json({ success: true, data: supplier });
+  // Create supplier - DATABASE BACKED
+  app.post('/api/suppliers', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const body = req.body;
+      if (!body.name || !body.email || !body.phone) {
+        return res.status(400).json({ success: false, error: 'Missing required fields' });
+      }
+      
+      const now = new Date();
+      const id = generateId('sup');
+      const code = await generateSupplierCode(pgDb);
+      
+      const newSupplier = {
+        id,
+        code,
+        name: body.name,
+        nameAr: body.nameAr || null,
+        email: body.email,
+        phone: body.phone,
+        website: body.website || null,
+        taxNumber: body.taxNumber || null,
+        address: body.address || { street: '', city: '', state: '', country: 'UAE', postalCode: '' },
+        contacts: (body.contacts || []).map((c: any) => ({ ...c, id: generateId('contact') })),
+        paymentTerms: body.paymentTerms || 'net_30',
+        currency: body.currency || 'AED',
+        creditLimit: String(body.creditLimit || 0),
+        currentBalance: '0',
+        categories: body.categories || ['general'],
+        rating: '0',
+        onTimeDeliveryRate: '0',
+        qualityScore: '0',
+        totalOrders: 0,
+        totalSpent: '0',
+        status: 'pending' as const,
+        notes: body.notes || null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      
+      await pgDb.insert(suppliersTable).values(newSupplier);
+      
+      res.status(201).json({ 
+        success: true, 
+        data: {
+          ...newSupplier,
+          creditLimit: parseFloat(newSupplier.creditLimit),
+          currentBalance: 0,
+          rating: 0,
+          onTimeDeliveryRate: 0,
+          qualityScore: 0,
+          totalSpent: 0,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        }
+      });
+    } catch (error) {
+      console.error('[Create Supplier Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create supplier' });
+    }
   });
 
-  // Update supplier
-  app.put('/api/suppliers/:id', (req, res) => {
-    const supplier = supplierList.find(s => s.id === req.params.id);
-    if (!supplier) return res.status(404).json({ success: false, error: 'Supplier not found' });
-    
-    Object.assign(supplier, req.body, { updatedAt: new Date().toISOString() });
-    res.json({ success: true, data: supplier });
+  // Update supplier status - DATABASE BACKED
+  app.patch('/api/suppliers/:id/status', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Supplier not found' });
+      }
+      
+      const now = new Date();
+      await pgDb.update(suppliersTable)
+        .set({ status: req.body.status, updatedAt: now })
+        .where(eq(suppliersTable.id, req.params.id));
+      
+      const updated = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      res.json({ success: true, data: updated[0] });
+    } catch (error) {
+      console.error('[Update Supplier Status Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update supplier status' });
+    }
+  });
+
+  // Delete supplier - DATABASE BACKED
+  app.delete('/api/suppliers/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Supplier not found' });
+      }
+      
+      // Check for pending POs
+      const pendingPOs = await pgDb.select().from(purchaseOrdersTable)
+        .where(and(
+          eq(purchaseOrdersTable.supplierId, req.params.id),
+          ne(purchaseOrdersTable.status, 'received'),
+          ne(purchaseOrdersTable.status, 'cancelled')
+        ));
+      
+      if (pendingPOs.length > 0) {
+        return res.status(400).json({ success: false, error: 'Cannot delete supplier with pending purchase orders' });
+      }
+      
+      await pgDb.delete(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      res.json({ success: true, data: null });
+    } catch (error) {
+      console.error('[Delete Supplier Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete supplier' });
+    }
+  });
+
+  // Add supplier contact - DATABASE BACKED
+  app.post('/api/suppliers/:id/contacts', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Supplier not found' });
+      }
+      
+      const supplier = result[0];
+      const contact = { id: generateId('contact'), ...req.body };
+      const contacts = [...(supplier.contacts as any[] || []), contact];
+      
+      await pgDb.update(suppliersTable)
+        .set({ contacts, updatedAt: new Date() })
+        .where(eq(suppliersTable.id, req.params.id));
+      
+      res.status(201).json({ success: true, data: contact });
+    } catch (error) {
+      console.error('[Add Contact Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to add contact' });
+    }
+  });
+
+  // Delete supplier contact - DATABASE BACKED
+  app.delete('/api/suppliers/:id/contacts/:contactId', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Supplier not found' });
+      }
+      
+      const supplier = result[0];
+      const contacts = (supplier.contacts as any[] || []).filter((c: any) => c.id !== req.params.contactId);
+      
+      await pgDb.update(suppliersTable)
+        .set({ contacts, updatedAt: new Date() })
+        .where(eq(suppliersTable.id, req.params.id));
+      
+      res.json({ success: true, data: null });
+    } catch (error) {
+      console.error('[Delete Contact Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete contact' });
+    }
+  });
+
+  // Supplier products - DATABASE BACKED
+  app.get('/api/suppliers/:id/products', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const products = await pgDb.select().from(supplierProductsTable)
+        .where(eq(supplierProductsTable.supplierId, req.params.id));
+      
+      const formatted = products.map(p => ({
+        id: p.id,
+        supplierId: p.supplierId,
+        productId: p.productId,
+        productName: p.productName,
+        supplierSku: p.supplierSku,
+        unitCost: parseFloat(p.unitCost),
+        minimumOrderQuantity: p.minimumOrderQuantity,
+        leadTimeDays: p.leadTimeDays,
+        isPreferred: p.isPreferred,
+        lastPurchasePrice: p.lastPurchasePrice ? parseFloat(p.lastPurchasePrice) : null,
+        lastPurchaseDate: p.lastPurchaseDate?.toISOString(),
+        notes: p.notes,
+        createdAt: p.createdAt?.toISOString(),
+        updatedAt: p.updatedAt?.toISOString(),
+      }));
+      
+      res.json({ success: true, data: formatted });
+    } catch (error) {
+      console.error('[Supplier Products Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch supplier products' });
+    }
+  });
+
+  // Add supplier product - DATABASE BACKED
+  app.post('/api/suppliers/:id/products', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Supplier not found' });
+      }
+      
+      const body = req.body;
+      const now = new Date();
+      const id = generateId('sp');
+      
+      const product = {
+        id,
+        supplierId: req.params.id,
+        productId: body.productId || generateId('prod'),
+        productName: body.productName || 'New Product',
+        supplierSku: body.supplierSku || null,
+        unitCost: String(body.unitCost || 0),
+        minimumOrderQuantity: body.minimumOrderQuantity || 1,
+        leadTimeDays: body.leadTimeDays || 7,
+        isPreferred: !!body.isPreferred,
+        lastPurchasePrice: String(body.unitCost || 0),
+        lastPurchaseDate: now,
+        notes: body.notes || null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      
+      await pgDb.insert(supplierProductsTable).values(product);
+      
+      res.status(201).json({ 
+        success: true, 
+        data: {
+          ...product,
+          unitCost: parseFloat(product.unitCost),
+          lastPurchasePrice: parseFloat(product.lastPurchasePrice),
+          lastPurchaseDate: now.toISOString(),
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        }
+      });
+    } catch (error) {
+      console.error('[Add Supplier Product Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to add supplier product' });
+    }
+  });
+
+  // Delete supplier product - DATABASE BACKED
+  app.delete('/api/suppliers/products/:productId', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(supplierProductsTable)
+        .where(eq(supplierProductsTable.id, req.params.productId));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Supplier product not found' });
+      }
+      
+      await pgDb.delete(supplierProductsTable).where(eq(supplierProductsTable.id, req.params.productId));
+      res.json({ success: true, data: null });
+    } catch (error) {
+      console.error('[Delete Supplier Product Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete supplier product' });
+    }
+  });
+
+  // Purchase orders list - DATABASE BACKED
+  app.get('/api/suppliers/purchase-orders/list', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const { status, supplierId } = req.query;
+      let pos = await pgDb.select().from(purchaseOrdersTable).orderBy(desc(purchaseOrdersTable.orderDate));
+      
+      if (status && status !== 'all') {
+        pos = pos.filter(po => po.status === status);
+      }
+      if (supplierId) {
+        pos = pos.filter(po => po.supplierId === supplierId);
+      }
+      
+      // Get items for each PO
+      const formatted = await Promise.all(pos.map(async po => {
+        const items = await pgDb!.select().from(purchaseOrderItemsTable)
+          .where(eq(purchaseOrderItemsTable.purchaseOrderId, po.id));
+        
+        return {
+          id: po.id,
+          orderNumber: po.orderNumber,
+          supplierId: po.supplierId,
+          supplierName: po.supplierName,
+          items: items.map(it => ({
+            id: it.id,
+            productId: it.productId,
+            productName: it.productName,
+            supplierSku: it.supplierSku,
+            quantity: parseFloat(it.quantity),
+            unitCost: parseFloat(it.unitCost),
+            totalCost: parseFloat(it.totalCost),
+            receivedQuantity: parseFloat(it.receivedQuantity),
+            notes: it.notes,
+          })),
+          subtotal: parseFloat(po.subtotal),
+          taxAmount: parseFloat(po.taxAmount),
+          taxRate: parseFloat(po.taxRate),
+          shippingCost: parseFloat(po.shippingCost),
+          discount: parseFloat(po.discount),
+          total: parseFloat(po.total),
+          status: po.status,
+          paymentStatus: po.paymentStatus,
+          orderDate: po.orderDate?.toISOString(),
+          expectedDeliveryDate: po.expectedDeliveryDate?.toISOString(),
+          actualDeliveryDate: po.actualDeliveryDate?.toISOString(),
+          deliveryAddress: po.deliveryAddress,
+          deliveryNotes: po.deliveryNotes,
+          trackingNumber: po.trackingNumber,
+          createdBy: po.createdBy,
+          approvedBy: po.approvedBy,
+          approvedAt: po.approvedAt?.toISOString(),
+          internalNotes: po.internalNotes,
+          supplierNotes: po.supplierNotes,
+          statusHistory: po.statusHistory || [],
+          createdAt: po.createdAt?.toISOString(),
+          updatedAt: po.updatedAt?.toISOString(),
+        };
+      }));
+      
+      res.json({ success: true, data: formatted });
+    } catch (error) {
+      console.error('[PO List Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch purchase orders' });
+    }
+  });
+
+  // Create purchase order - DATABASE BACKED
+  app.post('/api/suppliers/purchase-orders', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const body = req.body;
+      const supplierResult = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, body.supplierId));
+      if (supplierResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Supplier not found' });
+      }
+      
+      const supplier = supplierResult[0];
+      const now = new Date();
+      const poId = generateId('po');
+      const orderNumber = await generatePoNumber(pgDb);
+      
+      // Calculate totals
+      let subtotal = 0;
+      const itemsData = body.items.map((it: any) => {
+        const totalCost = (it.quantity / 1000) * it.unitCost;
+        subtotal += totalCost;
+        return {
+          id: generateId('poi'),
+          purchaseOrderId: poId,
+          productId: it.productId,
+          productName: it.productName || it.productId,
+          supplierSku: it.supplierSku || null,
+          quantity: String(it.quantity),
+          unitCost: String(it.unitCost),
+          totalCost: String(totalCost),
+          receivedQuantity: '0',
+          notes: it.notes || null,
+        };
+      });
+      
+      const taxRate = 0.05;
+      const taxAmount = subtotal * taxRate;
+      const shippingCost = body.shippingCost || 0;
+      const discount = body.discount || 0;
+      const total = subtotal + taxAmount + shippingCost - discount;
+      
+      const po = {
+        id: poId,
+        orderNumber,
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        subtotal: String(subtotal),
+        taxAmount: String(taxAmount),
+        taxRate: String(taxRate),
+        shippingCost: String(shippingCost),
+        discount: String(discount),
+        total: String(total),
+        status: 'draft' as const,
+        paymentStatus: 'pending',
+        orderDate: now,
+        expectedDeliveryDate: new Date(body.expectedDeliveryDate),
+        deliveryAddress: body.deliveryAddress,
+        deliveryNotes: body.deliveryNotes || null,
+        createdBy: 'admin',
+        statusHistory: [{ status: 'draft', changedBy: 'admin', changedAt: now.toISOString() }],
+        createdAt: now,
+        updatedAt: now,
+      };
+      
+      await pgDb.insert(purchaseOrdersTable).values(po);
+      
+      // Insert items
+      for (const item of itemsData) {
+        await pgDb.insert(purchaseOrderItemsTable).values(item);
+      }
+      
+      res.status(201).json({ 
+        success: true, 
+        data: {
+          ...po,
+          items: itemsData.map((it: any) => ({
+            ...it,
+            quantity: parseFloat(it.quantity),
+            unitCost: parseFloat(it.unitCost),
+            totalCost: parseFloat(it.totalCost),
+            receivedQuantity: 0,
+          })),
+          subtotal,
+          taxAmount,
+          taxRate,
+          shippingCost,
+          discount,
+          total,
+          orderDate: now.toISOString(),
+          expectedDeliveryDate: body.expectedDeliveryDate,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        }
+      });
+    } catch (error) {
+      console.error('[Create PO Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create purchase order' });
+    }
+  });
+
+  // Update PO status - DATABASE BACKED
+  app.patch('/api/suppliers/purchase-orders/:id/status', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Purchase order not found' });
+      }
+      
+      const po = result[0];
+      const { status, notes } = req.body;
+      const now = new Date();
+      
+      const statusHistory = [...(po.statusHistory as any[] || []), { status, changedBy: 'admin', changedAt: now.toISOString(), notes }];
+      
+      const updateData: any = { 
+        status, 
+        statusHistory, 
+        updatedAt: now 
+      };
+      
+      if (status === 'received') {
+        updateData.actualDeliveryDate = now;
+      }
+      
+      await pgDb.update(purchaseOrdersTable)
+        .set(updateData)
+        .where(eq(purchaseOrdersTable.id, req.params.id));
+      
+      const updated = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+      res.json({ success: true, data: updated[0] });
+    } catch (error) {
+      console.error('[Update PO Status Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update purchase order status' });
+    }
+  });
+
+  // Receive PO items - DATABASE BACKED with Inventory Integration
+  app.put('/api/suppliers/purchase-orders/:id/receive', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Purchase order not found' });
+      }
+      
+      const po = result[0];
+      const { items } = req.body as { items: { itemId: string; receivedQuantity: number }[] };
+      const now = new Date();
+      
+      // Track items being received for inventory update
+      const itemsToReceive: Array<{ productId: string; quantity: number; unitCost: number }> = [];
+      
+      // Update each item's received quantity
+      const poItems = await pgDb.select().from(purchaseOrderItemsTable)
+        .where(eq(purchaseOrderItemsTable.purchaseOrderId, req.params.id));
+      
+      for (const poItem of poItems) {
+        const recv = items.find(i => i.itemId === poItem.id);
+        if (recv && recv.receivedQuantity > 0) {
+          const newReceivedQty = parseFloat(poItem.receivedQuantity) + recv.receivedQuantity;
+          
+          await pgDb.update(purchaseOrderItemsTable)
+            .set({ receivedQuantity: String(newReceivedQty) })
+            .where(eq(purchaseOrderItemsTable.id, poItem.id));
+          
+          // Add to items for inventory update
+          itemsToReceive.push({
+            productId: poItem.productId,
+            quantity: recv.receivedQuantity,
+            unitCost: parseFloat(poItem.unitCost),
+          });
+        }
+      }
+      
+      // Check if all items received
+      const updatedItems = await pgDb.select().from(purchaseOrderItemsTable)
+        .where(eq(purchaseOrderItemsTable.purchaseOrderId, req.params.id));
+      
+      const allReceived = updatedItems.every(i => parseFloat(i.receivedQuantity) >= parseFloat(i.quantity));
+      const anyReceived = updatedItems.some(i => parseFloat(i.receivedQuantity) > 0);
+      
+      const newStatus = allReceived ? 'received' : anyReceived ? 'partially_received' : po.status;
+      const statusHistory = [...(po.statusHistory as any[] || []), { status: newStatus, changedBy: 'admin', changedAt: now.toISOString() }];
+      
+      const updateData: any = { 
+        status: newStatus, 
+        statusHistory, 
+        updatedAt: now 
+      };
+      
+      if (newStatus === 'received') {
+        updateData.actualDeliveryDate = now;
+      }
+      
+      await pgDb.update(purchaseOrdersTable)
+        .set(updateData)
+        .where(eq(purchaseOrdersTable.id, req.params.id));
+      
+      // INVENTORY CYCLE: Update stock when receiving PO items (IAS 2 compliance)
+      if (itemsToReceive.length > 0) {
+        const invResult = await receiveStockFromPurchaseOrder(
+          po.id,
+          po.orderNumber,
+          itemsToReceive,
+          'admin',
+          pgDb
+        );
+        
+        if (invResult.success) {
+          console.log(`[Inventory Cycle] Received ${itemsToReceive.length} items from PO ${po.orderNumber}`);
+          
+          // FINANCE CYCLE: Create purchase transaction when PO is fully received
+          if (newStatus === 'received') {
+            await createPurchaseTransaction(
+              po.id,
+              po.orderNumber,
+              po.supplierId,
+              po.supplierName,
+              parseFloat(po.total),
+              parseFloat(po.taxAmount),
+              'admin',
+              pgDb
+            );
+          }
+        }
+      }
+      
+      const updatedPo = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+      res.json({ success: true, data: updatedPo[0] });
+    } catch (error) {
+      console.error('[PO Receive Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to receive purchase order items' });
+    }
+  });
+
+  // Get purchase order by ID - DATABASE BACKED
+  app.get('/api/suppliers/purchase-orders/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Purchase order not found' });
+      }
+      
+      const po = result[0];
+      const items = await pgDb.select().from(purchaseOrderItemsTable)
+        .where(eq(purchaseOrderItemsTable.purchaseOrderId, po.id));
+      
+      res.json({ 
+        success: true, 
+        data: {
+          ...po,
+          items: items.map(it => ({
+            id: it.id,
+            productId: it.productId,
+            productName: it.productName,
+            supplierSku: it.supplierSku,
+            quantity: parseFloat(it.quantity),
+            unitCost: parseFloat(it.unitCost),
+            totalCost: parseFloat(it.totalCost),
+            receivedQuantity: parseFloat(it.receivedQuantity),
+            notes: it.notes,
+          })),
+          subtotal: parseFloat(po.subtotal),
+          taxAmount: parseFloat(po.taxAmount),
+          taxRate: parseFloat(po.taxRate),
+          shippingCost: parseFloat(po.shippingCost),
+          discount: parseFloat(po.discount),
+          total: parseFloat(po.total),
+          orderDate: po.orderDate?.toISOString(),
+          expectedDeliveryDate: po.expectedDeliveryDate?.toISOString(),
+          actualDeliveryDate: po.actualDeliveryDate?.toISOString(),
+          approvedAt: po.approvedAt?.toISOString(),
+          createdAt: po.createdAt?.toISOString(),
+          updatedAt: po.updatedAt?.toISOString(),
+        }
+      });
+    } catch (error) {
+      console.error('[Get PO Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch purchase order' });
+    }
+  });
+
+  // Delete/Cancel PO - DATABASE BACKED
+  app.delete('/api/suppliers/purchase-orders/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Purchase order not found' });
+      }
+      
+      const po = result[0];
+      if (['received', 'partially_received'].includes(po.status)) {
+        return res.status(400).json({ success: false, error: 'Cannot delete received or partially received orders' });
+      }
+      
+      const now = new Date();
+      const statusHistory = [...(po.statusHistory as any[] || []), { status: 'cancelled', changedBy: 'admin', changedAt: now.toISOString() }];
+      
+      await pgDb.update(purchaseOrdersTable)
+        .set({ status: 'cancelled', statusHistory, updatedAt: now })
+        .where(eq(purchaseOrdersTable.id, req.params.id));
+      
+      const updated = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
+      res.json({ success: true, data: updated[0] });
+    } catch (error) {
+      console.error('[Delete PO Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to cancel purchase order' });
+    }
+  });
+
+  // Get supplier by ID - DATABASE BACKED
+  app.get('/api/suppliers/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Supplier not found' });
+      }
+      
+      const s = result[0];
+      res.json({ 
+        success: true, 
+        data: {
+          id: s.id,
+          code: s.code,
+          name: s.name,
+          nameAr: s.nameAr,
+          email: s.email,
+          phone: s.phone,
+          website: s.website,
+          taxNumber: s.taxNumber,
+          address: s.address,
+          contacts: s.contacts || [],
+          paymentTerms: s.paymentTerms,
+          currency: s.currency,
+          creditLimit: parseFloat(s.creditLimit),
+          currentBalance: parseFloat(s.currentBalance),
+          categories: s.categories || [],
+          rating: s.rating ? parseFloat(s.rating) : 0,
+          onTimeDeliveryRate: s.onTimeDeliveryRate ? parseFloat(s.onTimeDeliveryRate) : 0,
+          qualityScore: s.qualityScore ? parseFloat(s.qualityScore) : 0,
+          totalOrders: s.totalOrders,
+          totalSpent: parseFloat(s.totalSpent),
+          status: s.status,
+          notes: s.notes,
+          createdAt: s.createdAt?.toISOString(),
+          updatedAt: s.updatedAt?.toISOString(),
+          lastOrderAt: s.lastOrderAt?.toISOString(),
+        }
+      });
+    } catch (error) {
+      console.error('[Get Supplier Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch supplier' });
+    }
+  });
+
+  // Update supplier - DATABASE BACKED
+  app.put('/api/suppliers/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, error: 'Supplier not found' });
+      }
+      
+      const body = req.body;
+      const now = new Date();
+      
+      const updateData: any = { updatedAt: now };
+      if (body.name) updateData.name = body.name;
+      if (body.nameAr !== undefined) updateData.nameAr = body.nameAr;
+      if (body.email) updateData.email = body.email;
+      if (body.phone) updateData.phone = body.phone;
+      if (body.website !== undefined) updateData.website = body.website;
+      if (body.taxNumber !== undefined) updateData.taxNumber = body.taxNumber;
+      if (body.address) updateData.address = body.address;
+      if (body.contacts) updateData.contacts = body.contacts;
+      if (body.paymentTerms) updateData.paymentTerms = body.paymentTerms;
+      if (body.currency) updateData.currency = body.currency;
+      if (body.creditLimit !== undefined) updateData.creditLimit = String(body.creditLimit);
+      if (body.categories) updateData.categories = body.categories;
+      if (body.notes !== undefined) updateData.notes = body.notes;
+      if (body.status) updateData.status = body.status;
+      
+      await pgDb.update(suppliersTable)
+        .set(updateData)
+        .where(eq(suppliersTable.id, req.params.id));
+      
+      const updated = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
+      res.json({ success: true, data: updated[0] });
+    } catch (error) {
+      console.error('[Update Supplier Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update supplier' });
+    }
   });
 
   // =====================================================
@@ -3813,10 +4973,6 @@ function createApp() {
   // =====================================================
   // DELIVERY API
   // =====================================================
-
-  // Store delivery zones in memory
-  // Finance expenses placeholder (no DB table yet)
-  const financeExpenses: { id: string; category: string; description: string; amount: number; status: string; date?: string }[] = [];
 
   // Get all delivery zones
   app.get('/api/delivery/zones', async (req, res) => {
@@ -7015,28 +8171,34 @@ function createApp() {
   });
 
   // =====================================================
-  // FINANCE API
+  // FINANCE API - DATABASE BACKED
   // =====================================================
 
-  // Finance accounts mock data
-  const financeAccounts = [
-    { id: 'acc-001', name: 'Main Business Account', nameAr: 'الحساب التجاري الرئيسي', type: 'bank', balance: 125000, currency: 'AED', isActive: true, bankName: 'Emirates NBD', accountNumber: '****4521' },
-    { id: 'acc-002', name: 'Card Payments', nameAr: 'مدفوعات البطاقات', type: 'card_payments', balance: 45000, currency: 'AED', isActive: true },
-    { id: 'acc-003', name: 'COD Collections', nameAr: 'تحصيلات الدفع عند الاستلام', type: 'cod_collections', balance: 8500, currency: 'AED', isActive: true },
-    { id: 'acc-004', name: 'Petty Cash', nameAr: 'النثرية', type: 'petty_cash', balance: 2500, currency: 'AED', isActive: true },
-  ];
-
-  // Finance summary
+  // Finance summary - calculates from real database data
   app.get('/api/finance/summary', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
+      // Get orders for revenue calculation
       const allOrders = await pgDb.select().from(ordersTable);
       const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
       const totalVAT = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
-      const totalExpenses = 0; // TODO: Implement expenses table
+      
+      // Get expenses from database
+      const allExpenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.status, 'paid'));
+      const totalExpenses = allExpenses.reduce((sum, e) => sum + parseFloat(String(e.amount)), 0);
+      
+      // Get account balances
+      const accounts = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.isActive, true));
+      const accountBalances = accounts.map(a => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        balance: parseFloat(String(a.balance))
+      }));
+
       const grossProfit = totalRevenue * 0.35;
       const netProfit = grossProfit - totalExpenses;
 
@@ -7048,6 +8210,14 @@ function createApp() {
         acc[method].count += 1;
         return acc;
       }, {} as Record<string, { amount: number; count: number }>);
+
+      // Calculate expenses by category
+      const expensesByCategory = allExpenses.reduce((acc, e) => {
+        const cat = e.category || 'other';
+        if (!acc[cat]) acc[cat] = 0;
+        acc[cat] += parseFloat(String(e.amount));
+        return acc;
+      }, {} as Record<string, number>);
 
       res.json({
         success: true,
@@ -7073,8 +8243,11 @@ function createApp() {
             amount: stats.amount,
             count: stats.count
           })),
-          expensesByCategory: [],
-          accountBalances: [],
+          expensesByCategory: Object.entries(expensesByCategory).map(([category, amount]) => ({
+            category,
+            amount
+          })),
+          accountBalances,
         },
       });
     } catch (error) {
@@ -7083,73 +8256,19 @@ function createApp() {
     }
   });
 
-  // Finance transactions
+  // Finance transactions - get from database
   app.get('/api/finance/transactions', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const allOrders = await pgDb.select().from(ordersTable);
-      const transactions = allOrders.slice(0, 10).map((o, i) => ({
-        id: `txn-${i + 1}`,
-        type: 'sale',
-        status: 'completed',
-        amount: parseFloat(String(o.total)),
-        currency: 'AED',
-        description: `Order #${o.orderNumber}`,
-        reference: o.orderNumber,
-        referenceType: 'order',
-        referenceId: o.id,
-        accountId: o.paymentMethod === 'card' ? 'acc-002' : 'acc-003',
-        accountName: o.paymentMethod === 'card' ? 'Card Payments' : 'COD Collections',
-        createdBy: 'system',
-        createdAt: o.createdAt.toISOString(),
-        updatedAt: o.createdAt.toISOString(),
-      }));
+      const transactions = await pgDb.select().from(financeTransactionsTable).orderBy(desc(financeTransactionsTable.createdAt)).limit(100);
       res.json({ success: true, data: transactions });
     } catch (error) {
       console.error('[Finance Transactions Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch transactions' });
     }
-  });
-
-  // Finance accounts
-  app.get('/api/finance/accounts', (req, res) => {
-    res.json({ success: true, data: [] }); // TODO: Implement finance accounts table
-  });
-
-  // Get finance account by ID
-  app.get('/api/finance/accounts/:id', (req, res) => {
-    return res.status(404).json({ success: false, error: 'Account not found' }); // TODO: Implement finance accounts table
-    res.json({ success: true, data: account });
-  });
-
-  app.post('/api/finance/accounts', (req, res) => {
-    const newAccount = { id: `acc-${Date.now()}`, ...req.body, balance: 0, createdAt: new Date().toISOString() };
-    res.status(201).json({ success: true, data: newAccount });
-  });
-
-  // Update finance account
-  app.put('/api/finance/accounts/:id', (req, res) => {
-    const accountIndex = financeAccounts.findIndex(a => a.id === req.params.id);
-    if (accountIndex === -1) {
-      return res.status(404).json({ success: false, error: 'Account not found' });
-    }
-    
-    Object.assign(financeAccounts[accountIndex], req.body, { updatedAt: new Date().toISOString() });
-    res.json({ success: true, data: financeAccounts[accountIndex] });
-  });
-
-  app.post('/api/finance/accounts/transfer', (req, res) => {
-    const { fromAccountId, toAccountId, amount } = req.body;
-    res.json({ success: true, data: { fromAccountId, toAccountId, amount, transferredAt: new Date().toISOString() } });
-  });
-
-  app.post('/api/finance/accounts/:id/reconcile', (req, res) => {
-    const account = financeAccounts.find(a => a.id === req.params.id);
-    if (!account) return res.status(404).json({ success: false, error: 'Account not found' });
-    res.json({ success: true, data: { ...account, lastReconciled: new Date().toISOString() } });
   });
 
   // Get transaction by ID
@@ -7159,25 +8278,7 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const allOrders = await pgDb.select().from(ordersTable);
-      const transactions = allOrders.map((o, i) => ({
-        id: `txn-${i + 1}`,
-        type: 'sale',
-        status: 'completed',
-        amount: parseFloat(String(o.total)),
-        currency: 'AED',
-        description: `Order #${o.orderNumber}`,
-        reference: o.orderNumber,
-        referenceType: 'order',
-        referenceId: o.id,
-        accountId: o.paymentMethod === 'card' ? 'acc-002' : 'acc-003',
-        accountName: o.paymentMethod === 'card' ? 'Card Payments' : 'COD Collections',
-        createdBy: 'system',
-        createdAt: o.createdAt.toISOString(),
-        updatedAt: o.createdAt.toISOString(),
-      }));
-      
-      const transaction = transactions.find(t => t.id === req.params.id);
+      const [transaction] = await pgDb.select().from(financeTransactionsTable).where(eq(financeTransactionsTable.id, req.params.id)).limit(1);
       if (!transaction) {
         return res.status(404).json({ success: false, error: 'Transaction not found' });
       }
@@ -7188,54 +8289,437 @@ function createApp() {
     }
   });
 
-  // Finance expenses
-  app.get('/api/finance/expenses', (req, res) => {
-    res.json({ success: true, data: financeExpenses });
+  // Finance accounts - DATABASE BACKED
+  app.get('/api/finance/accounts', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const accounts = await pgDb.select().from(financeAccountsTable).orderBy(financeAccountsTable.name);
+      res.json({ success: true, data: accounts });
+    } catch (error) {
+      console.error('[Finance Accounts Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch accounts' });
+    }
+  });
+
+  // Get finance account by ID
+  app.get('/api/finance/accounts/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [account] = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.id, req.params.id)).limit(1);
+      if (!account) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+      res.json({ success: true, data: account });
+    } catch (error) {
+      console.error('[Get Account Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch account' });
+    }
+  });
+
+  // Create finance account
+  app.post('/api/finance/accounts', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { name, nameAr, type, currency, bankName, accountNumber, iban, isActive } = req.body;
+      
+      if (!name || !type) {
+        return res.status(400).json({ success: false, error: 'Name and type are required' });
+      }
+
+      const [newAccount] = await pgDb.insert(financeAccountsTable).values({
+        id: generateAccountId(),
+        name,
+        nameAr,
+        type: type as any,
+        balance: '0',
+        currency: currency || 'AED',
+        isActive: isActive ?? true,
+        bankName,
+        accountNumber,
+        iban,
+      }).returning();
+
+      res.status(201).json({ success: true, data: newAccount, message: 'Account created successfully' });
+    } catch (error) {
+      console.error('[Create Account Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create account' });
+    }
+  });
+
+  // Update finance account
+  app.put('/api/finance/accounts/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [existing] = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.id, req.params.id)).limit(1);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+
+      const { name, nameAr, type, balance, currency, bankName, accountNumber, iban, isActive } = req.body;
+      const updateData: Record<string, unknown> = { updatedAt: new Date() };
+
+      if (name !== undefined) updateData.name = name;
+      if (nameAr !== undefined) updateData.nameAr = nameAr;
+      if (type !== undefined) updateData.type = type;
+      if (balance !== undefined) updateData.balance = String(balance);
+      if (currency !== undefined) updateData.currency = currency;
+      if (bankName !== undefined) updateData.bankName = bankName;
+      if (accountNumber !== undefined) updateData.accountNumber = accountNumber;
+      if (iban !== undefined) updateData.iban = iban;
+      if (isActive !== undefined) updateData.isActive = isActive;
+
+      const [updated] = await pgDb.update(financeAccountsTable)
+        .set(updateData)
+        .where(eq(financeAccountsTable.id, req.params.id))
+        .returning();
+
+      res.json({ success: true, data: updated, message: 'Account updated successfully' });
+    } catch (error) {
+      console.error('[Update Account Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update account' });
+    }
+  });
+
+  // Transfer between accounts
+  app.post('/api/finance/accounts/transfer', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { fromAccountId, toAccountId, amount, description } = req.body;
+      
+      if (!fromAccountId || !toAccountId || !amount) {
+        return res.status(400).json({ success: false, error: 'fromAccountId, toAccountId, and amount are required' });
+      }
+
+      const transferAmount = parseFloat(String(amount));
+
+      // Get both accounts
+      const [fromAccount] = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.id, fromAccountId)).limit(1);
+      const [toAccount] = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.id, toAccountId)).limit(1);
+
+      if (!fromAccount || !toAccount) {
+        return res.status(404).json({ success: false, error: 'One or both accounts not found' });
+      }
+
+      const fromBalance = parseFloat(String(fromAccount.balance));
+      const toBalance = parseFloat(String(toAccount.balance));
+
+      if (fromBalance < transferAmount) {
+        return res.status(400).json({ success: false, error: 'Insufficient balance in source account' });
+      }
+
+      // Update balances
+      await pgDb.update(financeAccountsTable)
+        .set({ balance: String(fromBalance - transferAmount), updatedAt: new Date() })
+        .where(eq(financeAccountsTable.id, fromAccountId));
+
+      await pgDb.update(financeAccountsTable)
+        .set({ balance: String(toBalance + transferAmount), updatedAt: new Date() })
+        .where(eq(financeAccountsTable.id, toAccountId));
+
+      // Record the transfer as a transaction
+      const txnId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await pgDb.insert(financeTransactionsTable).values({
+        id: txnId,
+        type: 'adjustment',
+        status: 'completed',
+        amount: String(transferAmount),
+        currency: 'AED',
+        description: description || `Transfer from ${fromAccount.name} to ${toAccount.name}`,
+        reference: txnId,
+        referenceType: 'transfer',
+        accountId: fromAccountId,
+        accountName: fromAccount.name,
+        createdBy: 'system',
+      });
+
+      res.json({ 
+        success: true, 
+        data: { 
+          fromAccountId, 
+          toAccountId, 
+          amount: transferAmount, 
+          transferredAt: new Date().toISOString() 
+        },
+        message: 'Transfer completed successfully'
+      });
+    } catch (error) {
+      console.error('[Transfer Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to transfer between accounts' });
+    }
+  });
+
+  // Reconcile account
+  app.post('/api/finance/accounts/:id/reconcile', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [existing] = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.id, req.params.id)).limit(1);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Account not found' });
+      }
+
+      const [updated] = await pgDb.update(financeAccountsTable)
+        .set({ lastReconciled: new Date(), updatedAt: new Date() })
+        .where(eq(financeAccountsTable.id, req.params.id))
+        .returning();
+
+      res.json({ success: true, data: updated, message: 'Account reconciled successfully' });
+    } catch (error) {
+      console.error('[Reconcile Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to reconcile account' });
+    }
+  });
+
+  // Finance expenses - DATABASE BACKED
+  app.get('/api/finance/expenses', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { status, category, vendorId, startDate, endDate } = req.query;
+      
+      let expenses = await pgDb.select().from(financeExpensesTable).orderBy(desc(financeExpensesTable.createdAt));
+      
+      // Apply filters
+      if (status && typeof status === 'string') {
+        expenses = expenses.filter(e => e.status === status);
+      }
+      if (category && typeof category === 'string') {
+        expenses = expenses.filter(e => e.category === category);
+      }
+      if (vendorId && typeof vendorId === 'string') {
+        expenses = expenses.filter(e => e.vendorId === vendorId);
+      }
+      if (startDate && typeof startDate === 'string') {
+        const start = new Date(startDate);
+        expenses = expenses.filter(e => e.createdAt >= start);
+      }
+      if (endDate && typeof endDate === 'string') {
+        const end = new Date(endDate);
+        expenses = expenses.filter(e => e.createdAt <= end);
+      }
+
+      res.json({ success: true, data: expenses });
+    } catch (error) {
+      console.error('[Finance Expenses Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch expenses' });
+    }
   });
 
   // Get expense by ID
-  app.get('/api/finance/expenses/:id', (req, res) => {
-    const expense = financeExpenses.find(e => e.id === req.params.id);
-    if (!expense) {
-      return res.status(404).json({ success: false, error: 'Expense not found' });
+  app.get('/api/finance/expenses/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [expense] = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.id, req.params.id)).limit(1);
+      if (!expense) {
+        return res.status(404).json({ success: false, error: 'Expense not found' });
+      }
+      res.json({ success: true, data: expense });
+    } catch (error) {
+      console.error('[Get Expense Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch expense' });
     }
-    res.json({ success: true, data: expense });
   });
 
-  app.post('/api/finance/expenses', (req, res) => {
-    const newExpense = { id: `exp-${Date.now()}`, ...req.body, status: 'pending', createdAt: new Date().toISOString() };
-    res.status(201).json({ success: true, data: newExpense });
+  // Create expense
+  app.post('/api/finance/expenses', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const {
+        category, description, descriptionAr, grossAmount, vatRate, isVatRecoverable,
+        vendor, vendorId, vendorTrn, invoiceNumber, invoiceDate, paymentTerms, dueDate,
+        costCenterId, costCenterName, departmentId, departmentName, accountId, notes, attachments, tags
+      } = req.body;
+
+      if (!category || !description || !grossAmount) {
+        return res.status(400).json({ success: false, error: 'Category, description, and grossAmount are required' });
+      }
+
+      const gross = parseFloat(String(grossAmount));
+      const vat = vatRate ? (gross * parseFloat(String(vatRate)) / 100) : (gross * 0.05);
+      const amount = gross + (isVatRecoverable ? 0 : vat);
+
+      const expenseNumber = await generateExpenseNumber();
+
+      const [newExpense] = await pgDb.insert(financeExpensesTable).values({
+        id: `exp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        expenseNumber,
+        category: category as any,
+        grossAmount: String(gross),
+        vatAmount: String(vat),
+        vatRate: String(vatRate || 5),
+        isVatRecoverable: isVatRecoverable ?? true,
+        amount: String(amount),
+        description,
+        descriptionAr,
+        vendor,
+        vendorId,
+        vendorTrn,
+        invoiceNumber,
+        invoiceDate: invoiceDate ? new Date(invoiceDate) : undefined,
+        paymentTerms: paymentTerms || 'net_30',
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        costCenterId,
+        costCenterName,
+        departmentId,
+        departmentName,
+        accountId,
+        notes,
+        attachments: attachments || [],
+        tags: tags || [],
+        status: 'pending',
+        approvalStatus: 'draft',
+        createdBy: 'admin',
+      }).returning();
+
+      res.status(201).json({ success: true, data: newExpense, message: 'Expense created successfully' });
+    } catch (error) {
+      console.error('[Create Expense Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create expense' });
+    }
   });
 
   // Update expense
-  app.put('/api/finance/expenses/:id', (req, res) => {
-    const expenseIndex = financeExpenses.findIndex(e => e.id === req.params.id);
-    if (expenseIndex === -1) {
-      return res.status(404).json({ success: false, error: 'Expense not found' });
+  app.put('/api/finance/expenses/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [existing] = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.id, req.params.id)).limit(1);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Expense not found' });
+      }
+
+      const updateData: Record<string, unknown> = { updatedAt: new Date() };
+      const allowedFields = [
+        'category', 'description', 'descriptionAr', 'grossAmount', 'vatAmount', 'vatRate',
+        'isVatRecoverable', 'amount', 'vendor', 'vendorId', 'vendorTrn', 'invoiceNumber',
+        'invoiceDate', 'paymentTerms', 'dueDate', 'costCenterId', 'costCenterName',
+        'departmentId', 'departmentName', 'accountId', 'notes', 'attachments', 'tags', 'status'
+      ];
+
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+          if (['invoiceDate', 'dueDate'].includes(field) && req.body[field]) {
+            updateData[field] = new Date(req.body[field]);
+          } else if (['grossAmount', 'vatAmount', 'amount'].includes(field)) {
+            updateData[field] = String(req.body[field]);
+          } else {
+            updateData[field] = req.body[field];
+          }
+        }
+      }
+
+      const [updated] = await pgDb.update(financeExpensesTable)
+        .set(updateData)
+        .where(eq(financeExpensesTable.id, req.params.id))
+        .returning();
+
+      res.json({ success: true, data: updated, message: 'Expense updated successfully' });
+    } catch (error) {
+      console.error('[Update Expense Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update expense' });
     }
-    
-    Object.assign(financeExpenses[expenseIndex], req.body, { updatedAt: new Date().toISOString() });
-    res.json({ success: true, data: financeExpenses[expenseIndex] });
   });
 
   // Delete expense
-  app.delete('/api/finance/expenses/:id', (req, res) => {
-    const expenseIndex = financeExpenses.findIndex(e => e.id === req.params.id);
-    if (expenseIndex === -1) {
-      return res.status(404).json({ success: false, error: 'Expense not found' });
+  app.delete('/api/finance/expenses/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [existing] = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.id, req.params.id)).limit(1);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Expense not found' });
+      }
+
+      await pgDb.delete(financeExpensesTable).where(eq(financeExpensesTable.id, req.params.id));
+      
+      res.json({ success: true, data: existing, message: 'Expense deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Expense Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete expense' });
     }
-    
-    const deleted = financeExpenses.splice(expenseIndex, 1)[0];
-    res.json({ success: true, data: deleted, message: 'Expense deleted successfully' });
   });
 
-  app.post('/api/finance/expenses/:id/pay', (req, res) => {
-    const expense = financeExpenses.find(e => e.id === req.params.id);
-    if (!expense) return res.status(404).json({ success: false, error: 'Expense not found' });
-    res.json({ success: true, data: { ...expense, status: 'paid', paidAt: new Date().toISOString() } });
+  // Pay expense
+  app.post('/api/finance/expenses/:id/pay', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [existing] = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.id, req.params.id)).limit(1);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Expense not found' });
+      }
+
+      const { paymentMethod, paymentReference, accountId } = req.body;
+
+      const [updated] = await pgDb.update(financeExpensesTable)
+        .set({
+          status: 'paid',
+          paidAt: new Date(),
+          paidAmount: existing.amount,
+          paymentMethod,
+          paymentReference,
+          accountId: accountId || existing.accountId,
+          updatedAt: new Date(),
+        })
+        .where(eq(financeExpensesTable.id, req.params.id))
+        .returning();
+
+      // Create finance transaction for the payment
+      await pgDb.insert(financeTransactionsTable).values({
+        id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: 'expense',
+        status: 'completed',
+        amount: existing.amount,
+        currency: 'AED',
+        description: `Expense payment: ${existing.description}`,
+        category: existing.category,
+        reference: existing.expenseNumber,
+        referenceType: 'expense',
+        referenceId: existing.id,
+        accountId: accountId || existing.accountId || 'default',
+        accountName: 'Operating Account',
+        createdBy: 'admin',
+      });
+
+      res.json({ success: true, data: updated, message: 'Expense paid successfully' });
+    } catch (error) {
+      console.error('[Pay Expense Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to pay expense' });
+    }
   });
 
-  // Finance reports
+  // Finance reports - Profit & Loss
   app.get('/api/finance/reports/profit-loss', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
@@ -7243,11 +8727,21 @@ function createApp() {
       }
 
       const allOrders = await pgDb.select().from(ordersTable);
+      const allExpenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.status, 'paid'));
+      
       const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
       const totalCOGS = totalRevenue * 0.65;
       const grossProfit = totalRevenue - totalCOGS;
-      const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
+      const totalExpenses = allExpenses.reduce((sum, e) => sum + parseFloat(String(e.amount)), 0);
       const netProfit = grossProfit - totalExpenses;
+
+      // Group expenses by category
+      const expensesByCategory = allExpenses.reduce((acc, e) => {
+        const cat = e.category || 'other';
+        if (!acc[cat]) acc[cat] = 0;
+        acc[cat] += parseFloat(String(e.amount));
+        return acc;
+      }, {} as Record<string, number>);
 
       res.json({
         success: true,
@@ -7259,11 +8753,10 @@ function createApp() {
           costOfGoodsSold: { inventoryCost: totalCOGS, supplierPurchases: 0, totalCOGS },
           grossProfit,
           grossProfitMargin: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,
-          operatingExpenses: [
-            { category: 'rent', amount: 15000 },
-            { category: 'salaries', amount: 35000 },
-            { category: 'utilities', amount: 1500 },
-          ],
+          operatingExpenses: Object.entries(expensesByCategory).map(([category, amount]) => ({
+            category,
+            amount
+          })),
           totalOperatingExpenses: totalExpenses,
           operatingProfit: grossProfit - totalExpenses,
           otherExpenses: { vatPaid: 0, refunds: 0, totalOther: 0 },
@@ -7277,6 +8770,7 @@ function createApp() {
     }
   });
 
+  // Cash Flow Report
   app.get('/api/finance/reports/cash-flow', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
@@ -7284,8 +8778,12 @@ function createApp() {
       }
 
       const allOrders = await pgDb.select().from(ordersTable);
+      const allExpenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.status, 'paid'));
+      const accounts = await pgDb.select().from(financeAccountsTable);
+      
       const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
-      const totalExpenses = financeExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
+      const totalExpenses = allExpenses.reduce((sum, e) => sum + parseFloat(String(e.amount)), 0);
+      const totalBalance = accounts.reduce((sum, a) => sum + parseFloat(String(a.balance)), 0);
 
       res.json({
         success: true,
@@ -7293,8 +8791,8 @@ function createApp() {
           period: req.query.period || 'month',
           startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
           endDate: new Date().toISOString(),
-          openingBalance: 100000,
-          closingBalance: 100000 + totalRevenue - totalExpenses,
+          openingBalance: totalBalance - totalRevenue + totalExpenses,
+          closingBalance: totalBalance,
           operatingActivities: {
             cashFromSales: totalRevenue * 0.6,
             cashFromCOD: totalRevenue * 0.35,
@@ -7407,26 +8905,15 @@ function createApp() {
     }
   });
 
-  // Chart of Accounts
+  // Chart of Accounts - DATABASE BACKED
   app.get('/api/finance/chart-of-accounts', async (req, res) => {
     try {
-      const defaultAccounts = [
-        { id: 1, code: '1000', name: 'Cash', nameAr: 'النقد', type: 'asset', class: 'current_asset', balance: 0, isActive: true },
-        { id: 2, code: '1010', name: 'Bank - Main', nameAr: 'البنك الرئيسي', type: 'asset', class: 'current_asset', balance: 0, isActive: true },
-        { id: 3, code: '1100', name: 'Accounts Receivable', nameAr: 'المدينون', type: 'asset', class: 'current_asset', balance: 0, isActive: true },
-        { id: 4, code: '1200', name: 'Inventory', nameAr: 'المخزون', type: 'asset', class: 'current_asset', balance: 0, isActive: true },
-        { id: 5, code: '1500', name: 'Equipment', nameAr: 'المعدات', type: 'asset', class: 'fixed_asset', balance: 0, isActive: true },
-        { id: 6, code: '2000', name: 'Accounts Payable', nameAr: 'الدائنون', type: 'liability', class: 'current_liability', balance: 0, isActive: true },
-        { id: 7, code: '2100', name: 'VAT Payable', nameAr: 'ضريبة القيمة المضافة المستحقة', type: 'liability', class: 'current_liability', balance: 0, isActive: true },
-        { id: 8, code: '3000', name: 'Capital', nameAr: 'رأس المال', type: 'equity', class: 'equity', balance: 0, isActive: true },
-        { id: 9, code: '3100', name: 'Retained Earnings', nameAr: 'الأرباح المحتجزة', type: 'equity', class: 'equity', balance: 0, isActive: true },
-        { id: 10, code: '4000', name: 'Sales Revenue', nameAr: 'إيرادات المبيعات', type: 'revenue', class: 'revenue', balance: 0, isActive: true },
-        { id: 11, code: '5000', name: 'Cost of Goods Sold', nameAr: 'تكلفة البضاعة المباعة', type: 'expense', class: 'expense', balance: 0, isActive: true },
-        { id: 12, code: '5100', name: 'Salaries Expense', nameAr: 'مصروفات الرواتب', type: 'expense', class: 'expense', balance: 0, isActive: true },
-        { id: 13, code: '5200', name: 'Rent Expense', nameAr: 'مصروفات الإيجار', type: 'expense', class: 'expense', balance: 0, isActive: true },
-        { id: 14, code: '5300', name: 'Utilities Expense', nameAr: 'مصروفات المرافق', type: 'expense', class: 'expense', balance: 0, isActive: true },
-      ];
-      res.json({ success: true, data: defaultAccounts });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const accounts = await pgDb.select().from(chartOfAccountsTable).orderBy(chartOfAccountsTable.code);
+      res.json({ success: true, data: accounts });
     } catch (error) {
       console.error('[Chart of Accounts Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch chart of accounts' });
@@ -7435,19 +8922,46 @@ function createApp() {
 
   app.post('/api/finance/chart-of-accounts', async (req, res) => {
     try {
-      const { code, name, nameAr, type, accountClass, parentId, description } = req.body;
-      const newAccount = { id: Date.now(), code, name, nameAr, type, class: accountClass, parentId, description, balance: 0, isActive: true, createdAt: new Date().toISOString() };
-      res.json({ success: true, data: newAccount });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { code, name, nameAr, accountClass, parentId, description, normalBalance } = req.body;
+      
+      if (!code || !name || !accountClass) {
+        return res.status(400).json({ success: false, error: 'Code, name, and accountClass are required' });
+      }
+
+      const [newAccount] = await pgDb.insert(chartOfAccountsTable).values({
+        id: `coa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        code,
+        name,
+        nameAr,
+        accountClass: accountClass as any,
+        parentId,
+        description,
+        normalBalance: normalBalance || 'debit',
+        balance: '0',
+        isActive: true,
+        isSystemAccount: false,
+      }).returning();
+
+      res.status(201).json({ success: true, data: newAccount, message: 'Account created successfully' });
     } catch (error) {
       console.error('[Create Account Error]', error);
       res.status(500).json({ success: false, error: 'Failed to create account' });
     }
   });
 
-  // Journal Entries
+  // Journal Entries - DATABASE BACKED
   app.get('/api/finance/journal-entries', async (req, res) => {
     try {
-      res.json({ success: true, data: [] });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const entries = await pgDb.select().from(journalEntriesTable).orderBy(desc(journalEntriesTable.createdAt)).limit(100);
+      res.json({ success: true, data: entries });
     } catch (error) {
       console.error('[Journal Entries Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch journal entries' });
@@ -7456,14 +8970,67 @@ function createApp() {
 
   app.post('/api/finance/journal-entries', async (req, res) => {
     try {
-      const { date, description, reference, lines, attachments } = req.body;
-      const totalDebits = lines?.reduce((sum: number, l: any) => sum + (parseFloat(l.debit) || 0), 0) || 0;
-      const totalCredits = lines?.reduce((sum: number, l: any) => sum + (parseFloat(l.credit) || 0), 0) || 0;
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { date, description, descriptionAr, reference, referenceType, referenceId, lines, notes, attachments } = req.body;
+      
+      if (!description || !lines || lines.length === 0) {
+        return res.status(400).json({ success: false, error: 'Description and at least one line are required' });
+      }
+
+      const totalDebits = lines.reduce((sum: number, l: any) => sum + (parseFloat(l.debit) || 0), 0);
+      const totalCredits = lines.reduce((sum: number, l: any) => sum + (parseFloat(l.credit) || 0), 0);
+      
       if (Math.abs(totalDebits - totalCredits) > 0.01) {
         return res.status(400).json({ success: false, error: 'Debits must equal credits' });
       }
-      const entry = { id: Date.now(), entryNumber: `JE-${Date.now()}`, date, description, reference, status: 'draft', totalDebits, totalCredits, lines, attachments, createdAt: new Date().toISOString() };
-      res.json({ success: true, data: entry });
+
+      // Generate entry number
+      const year = new Date().getFullYear();
+      const existingEntries = await pgDb.select().from(journalEntriesTable).orderBy(desc(journalEntriesTable.createdAt)).limit(1);
+      let seqNum = 1;
+      if (existingEntries.length > 0) {
+        const lastNum = existingEntries[0].entryNumber;
+        const match = lastNum.match(/JE-\d+-(\d+)/);
+        seqNum = match ? parseInt(match[1], 10) + 1 : 1;
+      }
+      const entryNumber = `JE-${year}-${String(seqNum).padStart(4, '0')}`;
+
+      const entryId = `je_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const [entry] = await pgDb.insert(journalEntriesTable).values({
+        id: entryId,
+        entryNumber,
+        entryDate: new Date(date || Date.now()),
+        description,
+        descriptionAr,
+        reference,
+        referenceType,
+        referenceId,
+        status: 'draft',
+        totalDebit: String(totalDebits),
+        totalCredit: String(totalCredits),
+        notes,
+        attachments: attachments || [],
+        createdBy: 'admin',
+      }).returning();
+
+      // Insert journal entry lines
+      for (const line of lines) {
+        await pgDb.insert(journalEntryLinesTable).values({
+          id: `jel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          journalEntryId: entryId,
+          accountId: line.accountId,
+          accountCode: line.accountCode || '',
+          accountName: line.accountName || '',
+          debit: String(line.debit || 0),
+          credit: String(line.credit || 0),
+          description: line.description,
+        });
+      }
+
+      res.status(201).json({ success: true, data: entry, message: 'Journal entry created successfully' });
     } catch (error) {
       console.error('[Create Journal Entry Error]', error);
       res.status(500).json({ success: false, error: 'Failed to create journal entry' });
@@ -7472,28 +9039,67 @@ function createApp() {
 
   app.post('/api/finance/journal-entries/:id/post', async (req, res) => {
     try {
-      const { id } = req.params;
-      res.json({ success: true, data: { id: parseInt(id), status: 'posted', postedAt: new Date().toISOString() } });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [existing] = await pgDb.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, req.params.id)).limit(1);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Journal entry not found' });
+      }
+
+      const [updated] = await pgDb.update(journalEntriesTable)
+        .set({ status: 'posted', postedAt: new Date(), updatedAt: new Date() })
+        .where(eq(journalEntriesTable.id, req.params.id))
+        .returning();
+
+      res.json({ success: true, data: updated, message: 'Journal entry posted successfully' });
     } catch (error) {
       console.error('[Post Journal Entry Error]', error);
       res.status(500).json({ success: false, error: 'Failed to post journal entry' });
     }
   });
 
-  // Audit Log
+  // Audit Log - DATABASE BACKED
   app.get('/api/finance/audit-log', async (req, res) => {
     try {
-      res.json({ success: true, data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 } });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const page = parseInt(String(req.query.page)) || 1;
+      const limit = parseInt(String(req.query.limit)) || 50;
+      const offset = (page - 1) * limit;
+
+      const logs = await pgDb.select().from(auditLogTable).orderBy(desc(auditLogTable.createdAt)).limit(limit).offset(offset);
+      const totalResult = await pgDb.select().from(auditLogTable);
+      const total = totalResult.length;
+
+      res.json({ 
+        success: true, 
+        data: logs, 
+        pagination: { 
+          page, 
+          limit, 
+          total, 
+          totalPages: Math.ceil(total / limit) 
+        } 
+      });
     } catch (error) {
       console.error('[Audit Log Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch audit log' });
     }
   });
 
-  // VAT Returns (FTA Form 201)
+  // VAT Returns (FTA Form 201) - DATABASE BACKED
   app.get('/api/finance/vat-returns', async (req, res) => {
     try {
-      res.json({ success: true, data: [] });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const returns = await pgDb.select().from(vatReturnsTable).orderBy(desc(vatReturnsTable.createdAt));
+      res.json({ success: true, data: returns });
     } catch (error) {
       console.error('[VAT Returns Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch VAT returns' });
@@ -7519,25 +9125,42 @@ function createApp() {
       const standardRatedSales = orders.reduce((sum, o) => sum + parseFloat(String(o.total)) - parseFloat(String(o.vat)), 0);
       const vatOnSales = orders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
 
-      const vatReturn = {
-        id: Date.now(),
-        returnNumber: `VAT-${new Date().getFullYear()}-Q${Math.ceil((new Date().getMonth() + 1) / 3)}`,
-        periodStart: start.toISOString(),
-        periodEnd: end.toISOString(),
+      // Get expenses for recoverable VAT
+      const expenses = await pgDb.select().from(financeExpensesTable).where(and(
+        gte(financeExpensesTable.createdAt, start),
+        lte(financeExpensesTable.createdAt, end),
+        eq(financeExpensesTable.status, 'paid')
+      ));
+
+      const standardRatedExpenses = expenses.reduce((sum, e) => sum + parseFloat(String(e.grossAmount)), 0);
+      const recoverableVat = expenses.filter(e => e.isVatRecoverable).reduce((sum, e) => sum + parseFloat(String(e.vatAmount)), 0);
+
+      const quarter = Math.ceil((start.getMonth() + 1) / 3);
+      const returnNumber = `VAT-${start.getFullYear()}-Q${quarter}`;
+
+      const [vatReturn] = await pgDb.insert(vatReturnsTable).values({
+        id: `vat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        returnNumber,
+        periodStart: start,
+        periodEnd: end,
+        box1StandardRatedSupplies: String(standardRatedSales),
+        box1VatOnSupplies: String(vatOnSales),
+        box2TaxRefundsForTourists: '0',
+        box3ZeroRatedSupplies: '0',
+        box4ExemptSupplies: '0',
+        box5GoodsImportedFromGcc: '0',
+        box5VatOnImports: '0',
+        box6Adjustments: '0',
+        box7TotalVatDue: String(vatOnSales),
+        box8StandardRatedExpenses: String(standardRatedExpenses),
+        box8RecoverableVat: String(recoverableVat),
+        box9Adjustments: '0',
+        box10NetVatDue: String(vatOnSales - recoverableVat),
         status: 'draft',
-        box1: { standardRatedSupplies: standardRatedSales, vatOnSupplies: vatOnSales },
-        box2: { taxRefundsForTourists: 0, vatOnRefunds: 0 },
-        box3: { zeroRatedSupplies: 0 },
-        box4: { exemptSupplies: 0 },
-        box5: { goodsImportedFromGCC: 0, vatOnImports: 0 },
-        box6: { adjustments: 0 },
-        box7: { totalVATDue: vatOnSales },
-        box8: { standardRatedExpenses: 0, recoverableVAT: 0 },
-        box9: { adjustments: 0 },
-        box10: { netVATDue: vatOnSales },
-        createdAt: new Date().toISOString(),
-      };
-      res.json({ success: true, data: vatReturn });
+        createdBy: 'admin',
+      }).returning();
+
+      res.status(201).json({ success: true, data: vatReturn, message: 'VAT return created successfully' });
     } catch (error) {
       console.error('[Create VAT Return Error]', error);
       res.status(500).json({ success: false, error: 'Failed to create VAT return' });
@@ -7548,9 +9171,10 @@ function createApp() {
   // EXPENSE MANAGEMENT ENDPOINTS (IFRS/GAAP Compliant)
   // =====================================================
 
-  // Expense Categories (IFRS mapping)
+  // Expense Categories (IFRS mapping) - Static reference data
   app.get('/api/finance/expenses/categories', async (req, res) => {
     try {
+      // These are IFRS-compliant expense categories - static reference data
       const categories = [
         { code: "inventory", name: "Inventory / Raw Materials", nameAr: "المخزون", function: "cost_of_sales", glCode: "5100" },
         { code: "direct_labor", name: "Direct Labor", nameAr: "العمالة المباشرة", function: "cost_of_sales", glCode: "5110" },
@@ -7579,129 +9203,330 @@ function createApp() {
     }
   });
 
-  // Vendors
+  // Vendors - DATABASE BACKED
   app.get('/api/finance/vendors', async (req, res) => {
     try {
-      const sampleVendors = [
-        { id: "v-001", code: "V-001", name: "Al Ain Farms", nameAr: "مزارع العين", trn: "100123456789003", defaultPaymentTerms: "net_30", currentBalance: 15000, isActive: true },
-        { id: "v-002", code: "V-002", name: "Emirates Spices", nameAr: "توابل الإمارات", trn: "100987654321003", defaultPaymentTerms: "net_15", currentBalance: 5200, isActive: true },
-      ];
-      res.json({ success: true, data: sampleVendors });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const vendors = await pgDb.select().from(vendorsTable).where(eq(vendorsTable.isActive, true)).orderBy(vendorsTable.name);
+      res.json({ success: true, data: vendors });
     } catch (error) {
+      console.error('[Vendors Error]', error);
       res.status(500).json({ success: false, error: 'Failed to get vendors' });
     }
   });
 
   app.post('/api/finance/vendors', async (req, res) => {
     try {
-      const newVendor = { id: `v-${Date.now()}`, code: `V-${String(Date.now()).slice(-4)}`, ...req.body, isActive: true, createdAt: new Date().toISOString() };
-      res.status(201).json({ success: true, data: newVendor });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { name, nameAr, email, phone, mobile, website, address, city, emirate, country, trn, defaultPaymentTerms } = req.body;
+
+      if (!name) {
+        return res.status(400).json({ success: false, error: 'Name is required' });
+      }
+
+      // Generate vendor code
+      const existingVendors = await pgDb.select().from(vendorsTable).orderBy(desc(vendorsTable.createdAt)).limit(1);
+      let seqNum = 1;
+      if (existingVendors.length > 0) {
+        const lastCode = existingVendors[0].code;
+        const match = lastCode.match(/V-(\d+)/);
+        seqNum = match ? parseInt(match[1], 10) + 1 : 1;
+      }
+      const code = `V-${String(seqNum).padStart(3, '0')}`;
+
+      const [newVendor] = await pgDb.insert(vendorsTable).values({
+        id: `vendor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        code,
+        name,
+        nameAr,
+        email,
+        phone,
+        mobile,
+        website,
+        address,
+        city,
+        emirate,
+        country: country || 'UAE',
+        trn,
+        defaultPaymentTerms: defaultPaymentTerms || 'net_30',
+        currentBalance: '0',
+        isActive: true,
+      }).returning();
+
+      res.status(201).json({ success: true, data: newVendor, message: 'Vendor created successfully' });
     } catch (error) {
+      console.error('[Create Vendor Error]', error);
       res.status(500).json({ success: false, error: 'Failed to create vendor' });
     }
   });
 
-  // Cost Centers
+  // Cost Centers - DATABASE BACKED
   app.get('/api/finance/cost-centers', async (req, res) => {
     try {
-      const costCenters = [
-        { id: "cc-001", code: "CC-OPS", name: "Operations", nameAr: "العمليات", isActive: true },
-        { id: "cc-002", code: "CC-ADMIN", name: "Administration", nameAr: "الإدارة", isActive: true },
-        { id: "cc-003", code: "CC-SALES", name: "Sales & Marketing", nameAr: "المبيعات والتسويق", isActive: true },
-        { id: "cc-004", code: "CC-DELIVERY", name: "Delivery", nameAr: "التوصيل", isActive: true },
-        { id: "cc-005", code: "CC-WAREHOUSE", name: "Warehouse", nameAr: "المستودع", isActive: true },
-      ];
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const costCenters = await pgDb.select().from(costCentersTable).where(eq(costCentersTable.isActive, true)).orderBy(costCentersTable.code);
       res.json({ success: true, data: costCenters });
     } catch (error) {
+      console.error('[Cost Centers Error]', error);
       res.status(500).json({ success: false, error: 'Failed to get cost centers' });
     }
   });
 
   app.post('/api/finance/cost-centers', async (req, res) => {
     try {
-      const newCostCenter = { id: `cc-${Date.now()}`, ...req.body, isActive: true, createdAt: new Date().toISOString() };
-      res.status(201).json({ success: true, data: newCostCenter });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { code, name, nameAr, description, parentId, managerId } = req.body;
+
+      if (!code || !name) {
+        return res.status(400).json({ success: false, error: 'Code and name are required' });
+      }
+
+      const [newCostCenter] = await pgDb.insert(costCentersTable).values({
+        id: `cc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        code,
+        name,
+        nameAr,
+        description,
+        parentId,
+        managerId,
+        isActive: true,
+      }).returning();
+
+      res.status(201).json({ success: true, data: newCostCenter, message: 'Cost center created successfully' });
     } catch (error) {
+      console.error('[Create Cost Center Error]', error);
       res.status(500).json({ success: false, error: 'Failed to create cost center' });
     }
   });
 
-  // Budgets
+  // Budgets - DATABASE BACKED
   app.get('/api/finance/budgets', async (req, res) => {
     try {
-      const budgets = [
-        { id: "bud-001", name: "Operations Q1 2026", periodType: "quarterly", budgetAmount: 50000, spentAmount: 22500, remainingAmount: 27500, percentUsed: 45, isActive: true },
-        { id: "bud-002", name: "Marketing Monthly", periodType: "monthly", category: "marketing", budgetAmount: 10000, spentAmount: 7800, remainingAmount: 2200, percentUsed: 78, isActive: true },
-        { id: "bud-003", name: "Delivery Expenses 2026", periodType: "yearly", category: "delivery", budgetAmount: 120000, spentAmount: 8500, remainingAmount: 111500, percentUsed: 7, isActive: true },
-      ];
-      res.json({ success: true, data: budgets });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const budgets = await pgDb.select().from(expenseBudgetsTable).where(eq(expenseBudgetsTable.isActive, true)).orderBy(desc(expenseBudgetsTable.createdAt));
+      
+      // Calculate percentUsed for each budget
+      const budgetsWithPercent = budgets.map(b => ({
+        ...b,
+        percentUsed: parseFloat(String(b.budgetAmount)) > 0 
+          ? (parseFloat(String(b.spentAmount)) / parseFloat(String(b.budgetAmount))) * 100 
+          : 0
+      }));
+
+      res.json({ success: true, data: budgetsWithPercent });
     } catch (error) {
+      console.error('[Budgets Error]', error);
       res.status(500).json({ success: false, error: 'Failed to get budgets' });
     }
   });
 
   app.post('/api/finance/budgets', async (req, res) => {
     try {
-      const newBudget = { id: `bud-${Date.now()}`, ...req.body, spentAmount: 0, remainingAmount: req.body.budgetAmount, percentUsed: 0, isActive: true, createdAt: new Date().toISOString() };
-      res.status(201).json({ success: true, data: newBudget });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { name, periodType, startDate, endDate, category, costCenterId, departmentId, budgetAmount, alertThreshold } = req.body;
+
+      if (!name || !periodType || !startDate || !endDate || !budgetAmount) {
+        return res.status(400).json({ success: false, error: 'Name, periodType, startDate, endDate, and budgetAmount are required' });
+      }
+
+      const [newBudget] = await pgDb.insert(expenseBudgetsTable).values({
+        id: `bud_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name,
+        periodType,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        category,
+        costCenterId,
+        departmentId,
+        budgetAmount: String(budgetAmount),
+        spentAmount: '0',
+        remainingAmount: String(budgetAmount),
+        alertThreshold: alertThreshold || 80,
+        isAlertSent: false,
+        isActive: true,
+        createdBy: 'admin',
+      }).returning();
+
+      res.status(201).json({ success: true, data: newBudget, message: 'Budget created successfully' });
     } catch (error) {
+      console.error('[Create Budget Error]', error);
       res.status(500).json({ success: false, error: 'Failed to create budget' });
     }
   });
 
   app.get('/api/finance/budgets/vs-actual', async (req, res) => {
     try {
-      const report = {
-        summary: { totalBudget: 180000, totalSpent: 38800, totalRemaining: 141200, overallVariancePercent: 78.4 },
-        byCategory: [
-          { category: "marketing", budget: 10000, actual: 7800, variance: 2200, variancePercent: 22 },
-          { category: "delivery", budget: 10000, actual: 8500, variance: 1500, variancePercent: 15 },
-          { category: "salaries", budget: 80000, actual: 18000, variance: 62000, variancePercent: 77.5 },
-        ],
-      };
-      res.json({ success: true, data: report });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const budgets = await pgDb.select().from(expenseBudgetsTable).where(eq(expenseBudgetsTable.isActive, true));
+      const expenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.status, 'paid'));
+
+      // Calculate totals
+      const totalBudget = budgets.reduce((sum, b) => sum + parseFloat(String(b.budgetAmount)), 0);
+      const totalSpent = budgets.reduce((sum, b) => sum + parseFloat(String(b.spentAmount)), 0);
+      const totalRemaining = totalBudget - totalSpent;
+
+      // Group expenses by category
+      const expensesByCategory = expenses.reduce((acc, e) => {
+        const cat = e.category || 'other';
+        if (!acc[cat]) acc[cat] = 0;
+        acc[cat] += parseFloat(String(e.amount));
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Get budgets by category
+      const budgetsByCategory = budgets.reduce((acc, b) => {
+        if (b.category) {
+          if (!acc[b.category]) acc[b.category] = 0;
+          acc[b.category] += parseFloat(String(b.budgetAmount));
+        }
+        return acc;
+      }, {} as Record<string, number>);
+
+      const byCategory = Object.keys({ ...expensesByCategory, ...budgetsByCategory }).map(category => {
+        const budget = budgetsByCategory[category] || 0;
+        const actual = expensesByCategory[category] || 0;
+        const variance = budget - actual;
+        return {
+          category,
+          budget,
+          actual,
+          variance,
+          variancePercent: budget > 0 ? (variance / budget) * 100 : 0
+        };
+      });
+
+      res.json({ 
+        success: true, 
+        data: {
+          summary: { 
+            totalBudget, 
+            totalSpent, 
+            totalRemaining, 
+            overallVariancePercent: totalBudget > 0 ? ((totalBudget - totalSpent) / totalBudget) * 100 : 0 
+          },
+          byCategory
+        }
+      });
     } catch (error) {
+      console.error('[Budget vs Actual Error]', error);
       res.status(500).json({ success: false, error: 'Failed to get budget vs actual report' });
     }
   });
 
-  // Aging Report
+  // Aging Report - DATABASE BACKED
   app.get('/api/finance/expenses/aging', async (req, res) => {
     try {
-      const report = {
-        asOfDate: new Date().toISOString(),
-        summary: { current: 15000, days1to30: 8500, days31to60: 3200, days61to90: 1500, over90Days: 800, total: 29000 },
-        byVendor: [
-          { vendorName: "Al Ain Farms", current: 10000, days1to30: 5000, days31to60: 0, days61to90: 0, over90Days: 0, total: 15000 },
-          { vendorName: "Emirates Spices", current: 3200, days1to30: 2000, days31to60: 0, days61to90: 0, over90Days: 0, total: 5200 },
-        ],
-        details: [],
-      };
-      res.json({ success: true, data: report });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const now = new Date();
+      const expenses = await pgDb.select().from(financeExpensesTable).where(ne(financeExpensesTable.status, 'paid'));
+
+      // Calculate aging buckets
+      let current = 0, days1to30 = 0, days31to60 = 0, days61to90 = 0, over90Days = 0;
+      const byVendor: Record<string, { current: number; days1to30: number; days31to60: number; days61to90: number; over90Days: number; total: number }> = {};
+
+      for (const expense of expenses) {
+        const dueDate = expense.dueDate ? new Date(expense.dueDate) : expense.createdAt;
+        const daysPastDue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+        const amount = parseFloat(String(expense.amount));
+        const vendorName = expense.vendor || 'Unknown';
+
+        if (!byVendor[vendorName]) {
+          byVendor[vendorName] = { current: 0, days1to30: 0, days31to60: 0, days61to90: 0, over90Days: 0, total: 0 };
+        }
+
+        if (daysPastDue <= 0) {
+          current += amount;
+          byVendor[vendorName].current += amount;
+        } else if (daysPastDue <= 30) {
+          days1to30 += amount;
+          byVendor[vendorName].days1to30 += amount;
+        } else if (daysPastDue <= 60) {
+          days31to60 += amount;
+          byVendor[vendorName].days31to60 += amount;
+        } else if (daysPastDue <= 90) {
+          days61to90 += amount;
+          byVendor[vendorName].days61to90 += amount;
+        } else {
+          over90Days += amount;
+          byVendor[vendorName].over90Days += amount;
+        }
+
+        byVendor[vendorName].total += amount;
+      }
+
+      const total = current + days1to30 + days31to60 + days61to90 + over90Days;
+
+      res.json({
+        success: true,
+        data: {
+          asOfDate: now.toISOString(),
+          summary: { current, days1to30, days31to60, days61to90, over90Days, total },
+          byVendor: Object.entries(byVendor).map(([vendorName, data]) => ({ vendorName, ...data })),
+          details: expenses.slice(0, 50).map(e => ({
+            id: e.id,
+            vendor: e.vendor,
+            description: e.description,
+            amount: parseFloat(String(e.amount)),
+            dueDate: e.dueDate?.toISOString(),
+            status: e.status
+          }))
+        }
+      });
     } catch (error) {
+      console.error('[Aging Report Error]', error);
       res.status(500).json({ success: false, error: 'Failed to get aging report' });
     }
   });
 
-  // Approval Workflow
+  // Approval Workflow - DATABASE BACKED
   app.get('/api/finance/approval-rules', async (req, res) => {
     try {
-      const rules = [
-        { id: "rule-001", name: "Auto-approve small expenses", minAmount: 0, maxAmount: 500, autoApproveBelow: 500, isActive: true },
-        { id: "rule-002", name: "Manager approval (500-5000)", minAmount: 500, maxAmount: 5000, approverRole: "manager", isActive: true },
-        { id: "rule-003", name: "Finance approval (5000-20000)", minAmount: 5000, maxAmount: 20000, approverRole: "finance", isActive: true },
-        { id: "rule-004", name: "CFO approval (20000+)", minAmount: 20000, maxAmount: null, approverRole: "cfo", isActive: true },
-      ];
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rules = await pgDb.select().from(expenseApprovalRulesTable).where(eq(expenseApprovalRulesTable.isActive, true)).orderBy(expenseApprovalRulesTable.priority);
       res.json({ success: true, data: rules });
     } catch (error) {
+      console.error('[Approval Rules Error]', error);
       res.status(500).json({ success: false, error: 'Failed to get approval rules' });
     }
   });
 
   app.get('/api/finance/expenses/pending-approvals', async (req, res) => {
     try {
-      res.json({ success: true, data: [] });
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const pendingExpenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.approvalStatus, 'pending_approval')).orderBy(desc(financeExpensesTable.createdAt));
+      res.json({ success: true, data: pendingExpenses });
     } catch (error) {
+      console.error('[Pending Approvals Error]', error);
       res.status(500).json({ success: false, error: 'Failed to get pending approvals' });
     }
   });
