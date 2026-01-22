@@ -1503,40 +1503,49 @@ export interface CreateAddressInput {
   isDefault?: boolean;
 }
 
+// Helper to determine if ID is a customer ID (starts with 'cust_') or user ID
+const getOwnerHeader = (id: string): Record<string, string> => {
+  // Customer IDs start with 'cust_', staff user IDs start with 'user_'
+  if (id.startsWith('cust_')) {
+    return { "x-customer-id": id };
+  }
+  return { "x-user-id": id };
+};
+
 export const addressesApi = {
-  // Get all addresses for user
-  getAll: (userId: string) =>
+  // Get all addresses for user/customer
+  getAll: (ownerId: string) =>
     fetchApi<UserAddress[]>("/addresses", {
-      headers: { "x-user-id": userId },
+      headers: getOwnerHeader(ownerId),
     }),
 
   // Create new address
-  create: (userId: string, address: CreateAddressInput) =>
+  create: (ownerId: string, address: CreateAddressInput) =>
     fetchApi<UserAddress>("/addresses", {
       method: "POST",
-      headers: { "x-user-id": userId },
+      headers: getOwnerHeader(ownerId),
       body: JSON.stringify(address),
     }),
 
   // Update address
-  update: (userId: string, id: string, address: Partial<CreateAddressInput>) =>
+  update: (ownerId: string, id: string, address: Partial<CreateAddressInput>) =>
     fetchApi<UserAddress>(`/addresses/${id}`, {
       method: "PUT",
-      headers: { "x-user-id": userId },
+      headers: getOwnerHeader(ownerId),
       body: JSON.stringify(address),
     }),
 
   // Delete address
-  delete: (userId: string, id: string) =>
+  delete: (ownerId: string, id: string) =>
     fetchApi<null>(`/addresses/${id}`, {
       method: "DELETE",
-      headers: { "x-user-id": userId },
+      headers: getOwnerHeader(ownerId),
     }),
 
   // Set address as default
-  setDefault: (userId: string, id: string) =>
+  setDefault: (ownerId: string, id: string) =>
     fetchApi<UserAddress>(`/addresses/${id}/default`, {
       method: "PUT",
-      headers: { "x-user-id": userId },
+      headers: getOwnerHeader(ownerId),
     }),
 };

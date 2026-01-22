@@ -107,18 +107,18 @@ function getOrderStatusNotification(orderNumber: string, status: string): OrderN
   return notifications[status] || null;
 }
 
-// Helper to create notification for a user (server-side)
-async function createOrderNotification(userId: string, orderNumber: string, status: string): Promise<void> {
+// Helper to create notification for a customer (server-side)
+async function createCustomerOrderNotification(customerId: string, orderNumber: string, status: string): Promise<void> {
   const content = getOrderStatusNotification(orderNumber, status);
-  if (!content || !userId) {
-    console.log(`[Notification] Skipped - no content or userId. userId=${userId}, status=${status}`);
+  if (!content || !customerId) {
+    console.log(`[Notification] Skipped - no content or customerId. customerId=${customerId}, status=${status}`);
     return;
   }
 
   try {
     const newNotification = {
       id: generateId("notif"),
-      userId,
+      customerId,
       type: "order",
       title: content.title,
       titleAr: content.titleAr,
@@ -132,9 +132,9 @@ async function createOrderNotification(userId: string, orderNumber: string, stat
     };
 
     await db.insert(inAppNotifications).values(newNotification);
-    console.log(`[Notification] ✅ Created order notification for user ${userId}: ${status} (Order: ${orderNumber})`);
+    console.log(`[Notification] ✅ Created order notification for customer ${customerId}: ${status} (Order: ${orderNumber})`);
   } catch (error) {
-    console.error(`[Notification] ❌ Failed to create notification for user ${userId}:`, error);
+    console.error(`[Notification] ❌ Failed to create notification for customer ${customerId}:`, error);
   }
 }
 
@@ -763,8 +763,12 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     }));
 
     // Create notification for customer (server-side to ensure it's always created)
-    if (order.userId) {
-      await createOrderNotification(order.userId, order.orderNumber, status);
+    // Orders can be for customers (customerId) or staff (userId) - check both
+    if (order.customerId) {
+      await createCustomerOrderNotification(order.customerId, order.orderNumber, status);
+    } else if (order.userId) {
+      // For staff orders, create notification with userId
+      await createCustomerOrderNotification(order.userId, order.orderNumber, status);
     }
 
     const response: ApiResponse<Order> = {
