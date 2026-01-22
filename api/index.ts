@@ -5442,6 +5442,35 @@ function createApp() {
     }
   });
 
+  // Admin reset/set user password
+  app.post('/api/users/:id/admin-reset-password', async (req, res) => {
+    try {
+      const { newPassword } = req.body;
+      
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+      }
+
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, req.params.id));
+      if (userResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+      
+      await pgDb.update(usersTable)
+        .set({ password: newPassword, updatedAt: new Date() })
+        .where(eq(usersTable.id, req.params.id));
+      
+      res.json({ success: true, data: null, message: 'Password reset successfully' });
+    } catch (error) {
+      console.error('[Admin Reset Password Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to reset password' });
+    }
+  });
+
   // =====================================================
   // DELIVERY API
   // =====================================================

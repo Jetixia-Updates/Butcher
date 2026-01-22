@@ -71,6 +71,11 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(6),
 });
 
+// Admin reset password schema (no current password required)
+const adminResetPasswordSchema = z.object({
+  newPassword: z.string().min(6, "Password must be at least 6 characters"),
+});
+
 // Helper to convert DB user to API user (excludes password)
 function toApiUser(dbUser: typeof users.$inferSelect): User {
   return {
@@ -756,6 +761,54 @@ const verifyUser: RequestHandler = async (req, res) => {
   }
 };
 
+// POST /api/users/:id/admin-reset-password - Admin reset/set user password
+const adminResetPassword: RequestHandler = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const validation = adminResetPasswordSchema.safeParse(req.body);
+    if (!validation.success) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: validation.error.errors.map((e) => e.message).join(", "),
+      };
+      return res.status(400).json(response);
+    }
+
+    const { newPassword } = validation.data;
+
+    const userResult = await db.select().from(users).where(eq(users.id, id));
+    
+    if (userResult.length === 0) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: "User not found",
+      };
+      return res.status(404).json(response);
+    }
+
+    // Update password
+    await db.update(users).set({ 
+      password: newPassword,
+      updatedAt: new Date(),
+    }).where(eq(users.id, id));
+
+    const response: ApiResponse<null> = {
+      success: true,
+      data: null,
+      message: "Password reset successfully",
+    };
+    res.json(response);
+  } catch (error) {
+    console.error("Error resetting password:", error);
+    const response: ApiResponse<null> = {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to reset password",
+    };
+    res.status(500).json(response);
+  }
+};
+
 // GET /api/users/stats - Get user statistics
 const getUserStats: RequestHandler = async (req, res) => {
   try {
@@ -814,5 +867,6 @@ router.put("/:id", updateUser);
 router.delete("/:id", deleteUser);
 router.post("/:id/change-password", changePassword);
 router.post("/:id/verify", verifyUser);
+router.post("/:id/admin-reset-password", adminResetPassword);
 
 export default router;
