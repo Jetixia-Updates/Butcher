@@ -66,7 +66,7 @@ interface SupplierFormState extends Omit<CreateSupplierRequest, "contacts" | "ad
   address: {
     street: string;
     city: string;
-    state: string;
+    emirate: string;
     country: string;
     postalCode: string;
   };
@@ -205,7 +205,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     address: isRTL ? "العنوان" : "Address",
     street: isRTL ? "الشارع" : "Street",
     city: isRTL ? "المدينة" : "City",
-    state: isRTL ? "الولاية" : "State",
+    emirate: isRTL ? "الإمارة" : "Emirate",
     country: isRTL ? "الدولة" : "Country",
     postalCode: isRTL ? "الرمز البريدي" : "Postal Code",
     primaryContact: isRTL ? "جهة الاتصال الأساسية" : "Primary Contact",
@@ -302,7 +302,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     creditLimit: 0,
     categories: [],
     notes: "",
-    address: { street: "", city: "", state: "", country: "UAE", postalCode: "" },
+    address: { street: "", city: "", emirate: "", country: "UAE", postalCode: "" },
     contacts: [
       { name: "", position: "", email: "", phone: "", isPrimary: true },
     ],
@@ -398,7 +398,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
       creditLimit: 0,
       categories: [],
       notes: "",
-      address: { street: "", city: "", state: "", country: "UAE", postalCode: "" },
+      address: { street: "", city: "", emirate: "", country: "UAE", postalCode: "" },
       contacts: [{ name: "", position: "", email: "", phone: "", isPrimary: true }],
     });
     setPoItems([{ productId: "", quantity: 0, unitCost: 0 }]);
@@ -1043,7 +1043,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
                   <Input label={t.street} value={form.address.street} onChange={(v) => setForm((f) => ({ ...f, address: { ...f.address, street: v } }))} />
                   <Input label={t.city} value={form.address.city} onChange={(v) => setForm((f) => ({ ...f, address: { ...f.address, city: v } }))} />
-                  <Input label={t.state} value={form.address.state} onChange={(v) => setForm((f) => ({ ...f, address: { ...f.address, state: v } }))} />
+                  <Input label={t.emirate} value={form.address.emirate} onChange={(v) => setForm((f) => ({ ...f, address: { ...f.address, emirate: v } }))} />
                   <Input label={t.country} value={form.address.country} onChange={(v) => setForm((f) => ({ ...f, address: { ...f.address, country: v } }))} />
                   <Input label={t.postalCode} value={form.address.postalCode} onChange={(v) => setForm((f) => ({ ...f, address: { ...f.address, postalCode: v } }))} />
                   <Input label={t.notes} value={form.notes || ""} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} />
