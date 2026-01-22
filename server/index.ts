@@ -9,6 +9,7 @@ import stockRouter from "./routes/stock";
 import deliveryRouter from "./routes/delivery";
 import paymentsRouter from "./routes/payments";
 import usersRouter from "./routes/users";
+import customersRouter from "./routes/customers";
 import reportsRouter from "./routes/reports";
 import analyticsRouter from "./routes/analytics";
 import productsRouter from "./routes/products";
@@ -94,13 +95,13 @@ export function createServer() {
   // POST /api/payments/:id/capture - Capture authorized payment
   app.use("/api/payments", paymentsRouter);
 
-  // User Management & Authentication
+  // User Management & Authentication (Staff only: admin, staff, delivery)
   // GET /api/users - List all users (admin only)
   // GET /api/users/stats - Get user statistics
   // GET /api/users/me - Get current user
   // GET /api/users/:id - Get user by ID
-  // POST /api/users - Create new user (register)
-  // POST /api/users/login - User login
+  // POST /api/users - Create new user (staff only)
+  // POST /api/users/login - Staff login
   // POST /api/users/admin-login - Admin login
   // POST /api/users/logout - User logout
   // PUT /api/users/:id - Update user
@@ -108,6 +109,18 @@ export function createServer() {
   // POST /api/users/:id/change-password - Change password
   // POST /api/users/:id/verify - Verify user email/phone
   app.use("/api/users", usersRouter);
+
+  // Customer Management & Authentication (Customers only)
+  // POST /api/customers/register - Customer registration
+  // POST /api/customers/login - Customer login
+  // POST /api/customers/logout - Customer logout
+  // GET /api/customers/me - Get current customer
+  // GET /api/customers - List all customers (admin only)
+  // GET /api/customers/:id - Get customer by ID
+  // PUT /api/customers/:id - Update customer
+  // DELETE /api/customers/:id - Deactivate customer
+  // POST /api/customers/:id/change-password - Change password
+  app.use("/api/customers", customersRouter);
 
   // Sales Reports
   // GET /api/reports/sales - Get sales report

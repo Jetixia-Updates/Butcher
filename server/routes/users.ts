@@ -5,9 +5,9 @@
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
-import { eq, and, or, ilike, desc } from "drizzle-orm";
+import { eq, and, or, ilike, desc, sql } from "drizzle-orm";
 import type { User, LoginResponse, ApiResponse, PaginatedResponse } from "../../shared/api";
-import { db, users, sessions, addresses } from "../db/connection";
+import { db, users, sessions, addresses, customers } from "../db/connection";
 
 const router = Router();
 
@@ -185,7 +185,7 @@ const getUserById: RequestHandler = async (req, res) => {
   }
 };
 
-// POST /api/users - Create new user (register)
+// POST /api/users - Create new staff user (admin only)
 const createUser: RequestHandler = async (req, res) => {
   try {
     const validation = createUserSchema.safeParse(req.body);
@@ -198,6 +198,17 @@ const createUser: RequestHandler = async (req, res) => {
     }
 
     const data = validation.data;
+
+    // Only allow staff roles (admin, staff, delivery)
+    const allowedRoles = ["admin", "staff", "delivery"];
+    const role = data.role || "staff";
+    if (!allowedRoles.includes(role)) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: "Invalid role. Staff users can only have roles: admin, staff, or delivery. Use /api/customers/register for customer registration.",
+      };
+      return res.status(400).json(response);
+    }
 
     // Check if username already exists
     const existingByUsername = await db.select().from(users).where(eq(users.username, data.username.toLowerCase()));
@@ -238,7 +249,7 @@ const createUser: RequestHandler = async (req, res) => {
       password: data.password, // In production, hash the password!
       firstName: data.firstName,
       familyName: data.familyName,
-      role: data.role || "customer" as const,
+      role: role as "admin" | "staff" | "delivery",
       isActive: true,
       isVerified: false,
       emirate: data.emirate,
@@ -259,7 +270,7 @@ const createUser: RequestHandler = async (req, res) => {
     const response: ApiResponse<User> = {
       success: true,
       data: toApiUser(result[0]),
-      message: "User registered successfully",
+      message: "Staff user created successfully",
     };
     res.status(201).json(response);
   } catch (error) {

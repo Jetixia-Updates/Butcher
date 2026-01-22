@@ -1,13 +1,14 @@
 /**
  * In-App Notifications Routes
- * CRUD operations for user notifications stored in PostgreSQL
+ * CRUD operations for notifications stored in PostgreSQL
+ * Supports both customers and staff (admin) users
  */
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or } from "drizzle-orm";
 import type { ApiResponse } from "../../shared/api";
-import { db, sessions, inAppNotifications, users } from "../db/connection";
+import { db, sessions, customerSessions, inAppNotifications, users } from "../db/connection";
 
 const router = Router();
 
@@ -27,9 +28,11 @@ const createNotificationSchema = z.object({
   link: z.string().optional(),
   linkTab: z.string().optional(),
   linkId: z.string().optional(),
+  userId: z.string().optional(),
+  customerId: z.string().optional(),
 });
 
-// Helper to get user ID from token
+// Helper to get staff user ID from token
 async function getUserIdFromToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
   
@@ -44,36 +47,65 @@ async function getUserIdFromToken(token: string | undefined): Promise<string | n
   }
 }
 
-// Helper to get the notification userId (returns "admin" for admin users)
-async function getNotificationUserId(token: string | undefined): Promise<string | null> {
-  const userId = await getUserIdFromToken(token);
-  if (!userId) return null;
+// Helper to get customer ID from token
+async function getCustomerIdFromToken(token: string | undefined): Promise<string | null> {
+  if (!token) return null;
   
   try {
-    // Check if user is admin
-    const userResult = await db.select({ role: users.role }).from(users).where(eq(users.id, userId));
-    if (userResult.length > 0 && userResult[0].role === "admin") {
-      return ADMIN_USER_ID;
+    const sessionResult = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
+    if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
+      return null;
     }
-    return userId;
+    return sessionResult[0].customerId;
   } catch {
-    return userId;
+    return null;
   }
 }
 
-// GET /api/notifications - Get notifications for current user
+// Helper to get the notification target (staff user ID or customer ID)
+async function getNotificationTarget(token: string | undefined): Promise<{ userId?: string; customerId?: string } | null> {
+  // Try staff session first
+  const userId = await getUserIdFromToken(token);
+  if (userId) {
+    // Check if user is admin - use special admin ID for notifications
+    try {
+      const userResult = await db.select({ role: users.role }).from(users).where(eq(users.id, userId));
+      if (userResult.length > 0 && userResult[0].role === "admin") {
+        return { userId: ADMIN_USER_ID };
+      }
+      return { userId };
+    } catch {
+      return { userId };
+    }
+  }
+  
+  // Try customer session
+  const customerId = await getCustomerIdFromToken(token);
+  if (customerId) {
+    return { customerId };
+  }
+  
+  return null;
+}
+
+// GET /api/notifications - Get notifications for current user/customer
 const getNotifications: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const target = await getNotificationTarget(token);
     
-    // Also support query param for userId (for admin fetching user notifications)
-    const targetUserId = (req.query.userId as string) || userId;
+    // Also support query params for fetching specific user/customer notifications
+    const queryUserId = req.query.userId as string;
+    const queryCustomerId = req.query.customerId as string;
     
-    console.log(`[Notifications] Fetching notifications for userId=${targetUserId} (tokenUserId=${userId})`);
+    // Determine which ID to use
+    let targetUserId = queryUserId || target?.userId;
+    let targetCustomerId = queryCustomerId || target?.customerId;
     
-    if (!targetUserId) {
-      console.log(`[Notifications] ❌ Not authenticated - no userId found`);
+    console.log(`[Notifications] Fetching notifications for userId=${targetUserId}, customerId=${targetCustomerId}`);
+    
+    if (!targetUserId && !targetCustomerId) {
+      console.log(`[Notifications] ❌ Not authenticated - no ID found`);
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -81,14 +113,24 @@ const getNotifications: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    const result = await db
-      .select()
-      .from(inAppNotifications)
-      .where(eq(inAppNotifications.userId, targetUserId))
-      .orderBy(desc(inAppNotifications.createdAt))
-      .limit(50);
+    let result;
+    if (targetCustomerId) {
+      result = await db
+        .select()
+        .from(inAppNotifications)
+        .where(eq(inAppNotifications.customerId, targetCustomerId))
+        .orderBy(desc(inAppNotifications.createdAt))
+        .limit(50);
+    } else {
+      result = await db
+        .select()
+        .from(inAppNotifications)
+        .where(eq(inAppNotifications.userId, targetUserId!))
+        .orderBy(desc(inAppNotifications.createdAt))
+        .limit(50);
+    }
 
-    console.log(`[Notifications] ✅ Found ${result.length} notifications for userId=${targetUserId}`);
+    console.log(`[Notifications] ✅ Found ${result.length} notifications`);
 
     const response: ApiResponse<typeof result> = {
       success: true,
@@ -105,15 +147,15 @@ const getNotifications: RequestHandler = async (req, res) => {
   }
 };
 
-// POST /api/notifications - Create notification for a user
+// POST /api/notifications - Create notification for a user or customer
 const createNotification: RequestHandler = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, customerId } = req.body;
     
-    if (!userId) {
+    if (!userId && !customerId) {
       const response: ApiResponse<null> = {
         success: false,
-        error: "userId is required",
+        error: "userId or customerId is required",
       };
       return res.status(400).json(response);
     }
@@ -131,7 +173,8 @@ const createNotification: RequestHandler = async (req, res) => {
 
     const newNotification = {
       id: generateId(),
-      userId,
+      userId: userId || null,
+      customerId: customerId || null,
       type: data.type,
       title: data.title,
       titleAr: data.titleAr,
@@ -167,9 +210,9 @@ const markAsRead: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const notificationUserId = await getNotificationUserId(token);
+    const target = await getNotificationTarget(token);
 
-    if (!notificationUserId) {
+    if (!target) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -177,10 +220,17 @@ const markAsRead: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    await db
-      .update(inAppNotifications)
-      .set({ unread: false })
-      .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, notificationUserId)));
+    if (target.customerId) {
+      await db
+        .update(inAppNotifications)
+        .set({ unread: false })
+        .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.customerId, target.customerId)));
+    } else {
+      await db
+        .update(inAppNotifications)
+        .set({ unread: false })
+        .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, target.userId!)));
+    }
 
     const response: ApiResponse<null> = {
       success: true,
@@ -201,9 +251,9 @@ const markAsRead: RequestHandler = async (req, res) => {
 const markAllAsRead: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const notificationUserId = await getNotificationUserId(token);
+    const target = await getNotificationTarget(token);
 
-    if (!notificationUserId) {
+    if (!target) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -211,10 +261,17 @@ const markAllAsRead: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    await db
-      .update(inAppNotifications)
-      .set({ unread: false })
-      .where(eq(inAppNotifications.userId, notificationUserId));
+    if (target.customerId) {
+      await db
+        .update(inAppNotifications)
+        .set({ unread: false })
+        .where(eq(inAppNotifications.customerId, target.customerId));
+    } else {
+      await db
+        .update(inAppNotifications)
+        .set({ unread: false })
+        .where(eq(inAppNotifications.userId, target.userId!));
+    }
 
     const response: ApiResponse<null> = {
       success: true,
@@ -236,9 +293,9 @@ const deleteNotification: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const notificationUserId = await getNotificationUserId(token);
+    const target = await getNotificationTarget(token);
 
-    if (!notificationUserId) {
+    if (!target) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -246,9 +303,15 @@ const deleteNotification: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    await db
-      .delete(inAppNotifications)
-      .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, notificationUserId)));
+    if (target.customerId) {
+      await db
+        .delete(inAppNotifications)
+        .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.customerId, target.customerId)));
+    } else {
+      await db
+        .delete(inAppNotifications)
+        .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, target.userId!)));
+    }
 
     const response: ApiResponse<null> = {
       success: true,
@@ -269,9 +332,9 @@ const deleteNotification: RequestHandler = async (req, res) => {
 const clearAllNotifications: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const notificationUserId = await getNotificationUserId(token);
+    const target = await getNotificationTarget(token);
 
-    if (!notificationUserId) {
+    if (!target) {
       const response: ApiResponse<null> = {
         success: false,
         error: "Not authenticated",
@@ -279,7 +342,11 @@ const clearAllNotifications: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    await db.delete(inAppNotifications).where(eq(inAppNotifications.userId, notificationUserId));
+    if (target.customerId) {
+      await db.delete(inAppNotifications).where(eq(inAppNotifications.customerId, target.customerId));
+    } else {
+      await db.delete(inAppNotifications).where(eq(inAppNotifications.userId, target.userId!));
+    }
 
     const response: ApiResponse<null> = {
       success: true,

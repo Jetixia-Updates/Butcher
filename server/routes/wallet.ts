@@ -1,29 +1,29 @@
 /**
  * Wallet API Routes
- * User wallet balance and transactions management
+ * Customer wallet balance and transactions management
  */
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, desc } from "drizzle-orm";
 import type { ApiResponse } from "../../shared/api";
-import { db, sessions, wallets, walletTransactions } from "../db/connection";
+import { db, customerSessions, wallets, walletTransactions } from "../db/connection";
 
 const router = Router();
 
 // Helper to generate unique IDs
 const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-// Helper to get user ID from token
-async function getUserIdFromToken(token: string | undefined): Promise<string | null> {
+// Helper to get customer ID from token
+async function getCustomerIdFromToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
   
   try {
-    const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
+    const sessionResult = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
     if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
       return null;
     }
-    return sessionResult[0].userId;
+    return sessionResult[0].customerId;
   } catch {
     return null;
   }
@@ -54,22 +54,22 @@ const addCreditSchema = z.object({
 const getWallet: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
 
     // Get or create wallet
-    let walletResult = await db.select().from(wallets).where(eq(wallets.userId, userId));
+    let walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
     
     if (walletResult.length === 0) {
       // Create wallet with welcome bonus
       const welcomeBonus = 50; // Default welcome bonus
       const newWallet = {
         id: generateId("wallet"),
-        userId,
+        customerId,
         balance: welcomeBonus.toString(),
       };
       await db.insert(wallets).values(newWallet);
@@ -77,7 +77,7 @@ const getWallet: RequestHandler = async (req, res) => {
       // Add welcome bonus transaction
       const welcomeTransaction = {
         id: generateId("wtxn"),
-        userId,
+        customerId,
         type: "credit" as const,
         amount: welcomeBonus.toString(),
         description: "Welcome bonus! Start shopping with us",
@@ -85,14 +85,14 @@ const getWallet: RequestHandler = async (req, res) => {
       };
       await db.insert(walletTransactions).values(welcomeTransaction);
       
-      walletResult = await db.select().from(wallets).where(eq(wallets.userId, userId));
+      walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
     }
 
     // Get transactions
     const transactions = await db
       .select()
       .from(walletTransactions)
-      .where(eq(walletTransactions.userId, userId))
+      .where(eq(walletTransactions.customerId, customerId))
       .orderBy(desc(walletTransactions.createdAt))
       .limit(50);
 
@@ -121,9 +121,9 @@ const getWallet: RequestHandler = async (req, res) => {
 const topUp: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
@@ -140,17 +140,17 @@ const topUp: RequestHandler = async (req, res) => {
     const { amount, paymentMethod } = validation.data;
 
     // Get current wallet
-    let walletResult = await db.select().from(wallets).where(eq(wallets.userId, userId));
+    let walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
     
     if (walletResult.length === 0) {
       // Create wallet
       const newWallet = {
         id: generateId("wallet"),
-        userId,
+        customerId,
         balance: "0",
       };
       await db.insert(wallets).values(newWallet);
-      walletResult = await db.select().from(wallets).where(eq(wallets.userId, userId));
+      walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
     }
 
     const currentBalance = parseFloat(walletResult[0].balance);
@@ -160,12 +160,12 @@ const topUp: RequestHandler = async (req, res) => {
     await db.update(wallets).set({ 
       balance: newBalance.toString(),
       updatedAt: new Date(),
-    }).where(eq(wallets.userId, userId));
+    }).where(eq(wallets.customerId, customerId));
 
     // Add transaction
     const transaction = {
       id: generateId("wtxn"),
-      userId,
+      customerId,
       type: "topup" as const,
       amount: amount.toString(),
       description: `Top up via ${paymentMethod}`,
@@ -193,9 +193,9 @@ const topUp: RequestHandler = async (req, res) => {
 const deduct: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
@@ -212,7 +212,7 @@ const deduct: RequestHandler = async (req, res) => {
     const { amount, description, descriptionAr, reference } = validation.data;
 
     // Get current wallet
-    const walletResult = await db.select().from(wallets).where(eq(wallets.userId, userId));
+    const walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
     
     if (walletResult.length === 0) {
       const response: ApiResponse<null> = { success: false, error: "Wallet not found" };
@@ -231,12 +231,12 @@ const deduct: RequestHandler = async (req, res) => {
     await db.update(wallets).set({ 
       balance: newBalance.toString(),
       updatedAt: new Date(),
-    }).where(eq(wallets.userId, userId));
+    }).where(eq(wallets.customerId, customerId));
 
     // Add transaction
     const transaction = {
       id: generateId("wtxn"),
-      userId,
+      customerId,
       type: "debit" as const,
       amount: amount.toString(),
       description,
@@ -265,10 +265,10 @@ const deduct: RequestHandler = async (req, res) => {
 const addCredit: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = req.body.userId || await getUserIdFromToken(token);
+    const customerId = req.body.customerId || await getCustomerIdFromToken(token);
 
-    if (!userId) {
-      const response: ApiResponse<null> = { success: false, error: "User ID required" };
+    if (!customerId) {
+      const response: ApiResponse<null> = { success: false, error: "Customer ID required" };
       return res.status(400).json(response);
     }
 
@@ -284,16 +284,16 @@ const addCredit: RequestHandler = async (req, res) => {
     const { amount, type, description, descriptionAr, reference } = validation.data;
 
     // Get or create wallet
-    let walletResult = await db.select().from(wallets).where(eq(wallets.userId, userId));
+    let walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
     
     if (walletResult.length === 0) {
       const newWallet = {
         id: generateId("wallet"),
-        userId,
+        customerId,
         balance: "0",
       };
       await db.insert(wallets).values(newWallet);
-      walletResult = await db.select().from(wallets).where(eq(wallets.userId, userId));
+      walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
     }
 
     const currentBalance = parseFloat(walletResult[0].balance);
@@ -303,12 +303,12 @@ const addCredit: RequestHandler = async (req, res) => {
     await db.update(wallets).set({ 
       balance: newBalance.toString(),
       updatedAt: new Date(),
-    }).where(eq(wallets.userId, userId));
+    }).where(eq(wallets.customerId, customerId));
 
     // Add transaction
     const transaction = {
       id: generateId("wtxn"),
-      userId,
+      customerId,
       type: type as "credit" | "refund" | "cashback" | "topup",
       amount: amount.toString(),
       description,

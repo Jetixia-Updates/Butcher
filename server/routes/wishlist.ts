@@ -1,40 +1,40 @@
 /**
  * Wishlist API Routes
- * User wishlist management
+ * Customer wishlist management
  */
 
 import { Router, RequestHandler } from "express";
 import { eq, and } from "drizzle-orm";
 import type { ApiResponse } from "../../shared/api";
-import { db, sessions, wishlists, products } from "../db/connection";
+import { db, customerSessions, wishlists, products } from "../db/connection";
 
 const router = Router();
 
 // Helper to generate unique IDs
 const generateId = () => `wishlist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-// Helper to get user ID from token
-async function getUserIdFromToken(token: string | undefined): Promise<string | null> {
+// Helper to get customer ID from token
+async function getCustomerIdFromToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
   
   try {
-    const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
+    const sessionResult = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
     if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
       return null;
     }
-    return sessionResult[0].userId;
+    return sessionResult[0].customerId;
   } catch {
     return null;
   }
 }
 
-// GET /api/wishlist - Get user's wishlist
+// GET /api/wishlist - Get customer's wishlist
 const getWishlist: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
@@ -57,7 +57,7 @@ const getWishlist: RequestHandler = async (req, res) => {
       })
       .from(wishlists)
       .leftJoin(products, eq(wishlists.productId, products.id))
-      .where(eq(wishlists.userId, userId));
+      .where(eq(wishlists.customerId, customerId));
 
     const response: ApiResponse<typeof wishlistItems> = {
       success: true,
@@ -78,9 +78,9 @@ const getWishlist: RequestHandler = async (req, res) => {
 const addToWishlist: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
@@ -95,7 +95,7 @@ const addToWishlist: RequestHandler = async (req, res) => {
     const existing = await db
       .select()
       .from(wishlists)
-      .where(and(eq(wishlists.userId, userId), eq(wishlists.productId, productId)));
+      .where(and(eq(wishlists.customerId, customerId), eq(wishlists.productId, productId)));
 
     if (existing.length > 0) {
       const response: ApiResponse<null> = { success: true, message: "Already in wishlist" };
@@ -105,7 +105,7 @@ const addToWishlist: RequestHandler = async (req, res) => {
     // Add to wishlist
     const newItem = {
       id: generateId(),
-      userId,
+      customerId,
       productId,
     };
     await db.insert(wishlists).values(newItem);
@@ -130,9 +130,9 @@ const addToWishlist: RequestHandler = async (req, res) => {
 const removeFromWishlist: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
@@ -141,7 +141,7 @@ const removeFromWishlist: RequestHandler = async (req, res) => {
 
     await db
       .delete(wishlists)
-      .where(and(eq(wishlists.userId, userId), eq(wishlists.productId, productId)));
+      .where(and(eq(wishlists.customerId, customerId), eq(wishlists.productId, productId)));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -162,14 +162,14 @@ const removeFromWishlist: RequestHandler = async (req, res) => {
 const clearWishlist: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
 
-    await db.delete(wishlists).where(eq(wishlists.userId, userId));
+    await db.delete(wishlists).where(eq(wishlists.customerId, customerId));
 
     const response: ApiResponse<null> = {
       success: true,

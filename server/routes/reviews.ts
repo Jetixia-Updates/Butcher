@@ -7,23 +7,23 @@ import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, and, desc, sql } from "drizzle-orm";
 import type { ApiResponse } from "../../shared/api";
-import { db, sessions, productReviews, products } from "../db/connection";
+import { db, customerSessions, productReviews, products } from "../db/connection";
 
 const router = Router();
 
 // Helper to generate unique IDs
 const generateId = () => `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-// Helper to get user ID from token
-async function getUserIdFromToken(token: string | undefined): Promise<string | null> {
+// Helper to get customer ID from token
+async function getCustomerIdFromToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
   
   try {
-    const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
+    const sessionResult = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
     if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
       return null;
     }
-    return sessionResult[0].userId;
+    return sessionResult[0].customerId;
   } catch {
     return null;
   }
@@ -136,9 +136,9 @@ const getProductReviews: RequestHandler = async (req, res) => {
 const createReview: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
@@ -153,13 +153,13 @@ const createReview: RequestHandler = async (req, res) => {
     }
 
     const { productId, rating, title, comment, images, isVerifiedPurchase } = validation.data;
-    const { userName } = req.body;
+    const { customerName } = req.body;
 
-    // Check if user already reviewed this product
+    // Check if customer already reviewed this product
     const existing = await db
       .select()
       .from(productReviews)
-      .where(and(eq(productReviews.userId, userId), eq(productReviews.productId, productId)));
+      .where(and(eq(productReviews.customerId, customerId), eq(productReviews.productId, productId)));
 
     if (existing.length > 0) {
       const response: ApiResponse<null> = {
@@ -172,8 +172,8 @@ const createReview: RequestHandler = async (req, res) => {
     const newReview = {
       id: generateId(),
       productId,
-      userId,
-      userName: userName || "Anonymous",
+      customerId,
+      userName: customerName || "Anonymous",
       rating,
       title,
       comment,
@@ -208,7 +208,7 @@ const createReview: RequestHandler = async (req, res) => {
 const updateReview: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
     const { id } = req.params;
 
     const existing = await db.select().from(productReviews).where(eq(productReviews.id, id));
@@ -217,17 +217,17 @@ const updateReview: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    // Check if this is a status update (admin operation) or user update
+    // Check if this is a status update (admin operation) or customer update
     const isStatusUpdate = req.body.status !== undefined;
     
     // For non-status updates, require authentication and ownership
     if (!isStatusUpdate) {
-      if (!userId) {
+      if (!customerId) {
         const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
         return res.status(401).json(response);
       }
       
-      if (existing[0].userId !== userId) {
+      if (existing[0].customerId !== customerId) {
         const response: ApiResponse<null> = { success: false, error: "Not authorized" };
         return res.status(403).json(response);
       }
@@ -281,10 +281,10 @@ const updateReview: RequestHandler = async (req, res) => {
 const deleteReview: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
     const { id } = req.params;
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
@@ -295,9 +295,9 @@ const deleteReview: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    // Allow user to delete own review or admin to delete any
-    // For now, just check if it's the user's review
-    if (existing[0].userId !== userId) {
+    // Allow customer to delete own review or admin to delete any
+    // For now, just check if it's the customer's review
+    if (existing[0].customerId !== customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authorized" };
       return res.status(403).json(response);
     }

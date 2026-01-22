@@ -1,13 +1,13 @@
 /**
  * Loyalty Points API Routes
- * User loyalty points and rewards management
+ * Customer loyalty points and rewards management
  */
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, desc } from "drizzle-orm";
 import type { ApiResponse } from "../../shared/api";
-import { db, sessions, loyaltyPoints, loyaltyTransactions, loyaltyTiers } from "../db/connection";
+import { db, customerSessions, loyaltyPoints, loyaltyTransactions, loyaltyTiers } from "../db/connection";
 
 const router = Router();
 
@@ -24,16 +24,16 @@ const generateReferralCode = () => {
   return code;
 };
 
-// Helper to get user ID from token
-async function getUserIdFromToken(token: string | undefined): Promise<string | null> {
+// Helper to get customer ID from token
+async function getCustomerIdFromToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
   
   try {
-    const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
+    const sessionResult = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
     if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
       return null;
     }
-    return sessionResult[0].userId;
+    return sessionResult[0].customerId;
   } catch {
     return null;
   }
@@ -63,38 +63,38 @@ const DEFAULT_TIERS = [
   { id: "platinum", name: "Platinum", nameAr: "بلاتيني", minPoints: 5000, multiplier: "3", benefits: ["3 points per AED spent", "Birthday bonus", "Early access to sales", "Free delivery", "VIP support"], benefitsAr: ["3 نقطة لكل درهم", "مكافأة عيد ميلاد", "وصول مبكر للتخفيضات", "توصيل مجاني", "دعم VIP"], icon: "💎", sortOrder: 3 },
 ];
 
-// GET /api/loyalty - Get user's loyalty points and tier
+// GET /api/loyalty - Get customer's loyalty points and tier
 const getLoyalty: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
 
     // Get or create loyalty record
-    let pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.userId, userId));
+    let pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.customerId, customerId));
     
     if (pointsResult.length === 0) {
       // Create loyalty record
       const newRecord = {
         id: generateId("loyalty"),
-        userId,
+        customerId,
         points: 0,
         totalEarned: 0,
         referralCode: generateReferralCode(),
       };
       await db.insert(loyaltyPoints).values(newRecord);
-      pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.userId, userId));
+      pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.customerId, customerId));
     }
 
     // Get transactions
     const transactions = await db
       .select()
       .from(loyaltyTransactions)
-      .where(eq(loyaltyTransactions.userId, userId))
+      .where(eq(loyaltyTransactions.customerId, customerId))
       .orderBy(desc(loyaltyTransactions.createdAt))
       .limit(50);
 
@@ -106,12 +106,12 @@ const getLoyalty: RequestHandler = async (req, res) => {
     }
 
     // Determine current tier
-    const userPoints = pointsResult[0].totalEarned;
+    const customerPoints = pointsResult[0].totalEarned;
     let currentTier = tiers[0];
     let nextTier = tiers[1] || null;
 
     for (let i = 0; i < tiers.length; i++) {
-      if (userPoints >= tiers[i].minPoints) {
+      if (customerPoints >= tiers[i].minPoints) {
         currentTier = tiers[i];
         nextTier = tiers[i + 1] || null;
       }
@@ -133,7 +133,7 @@ const getLoyalty: RequestHandler = async (req, res) => {
         referralCode: pointsResult[0].referralCode || generateReferralCode(),
         currentTier,
         nextTier,
-        pointsToNextTier: nextTier ? nextTier.minPoints - userPoints : 0,
+        pointsToNextTier: nextTier ? nextTier.minPoints - customerPoints : 0,
         transactions,
       },
     };
@@ -152,10 +152,10 @@ const getLoyalty: RequestHandler = async (req, res) => {
 const earnPoints: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = req.body.userId || await getUserIdFromToken(token);
+    const customerId = req.body.customerId || await getCustomerIdFromToken(token);
 
-    if (!userId) {
-      const response: ApiResponse<null> = { success: false, error: "User ID required" };
+    if (!customerId) {
+      const response: ApiResponse<null> = { success: false, error: "Customer ID required" };
       return res.status(400).json(response);
     }
 
@@ -171,18 +171,18 @@ const earnPoints: RequestHandler = async (req, res) => {
     const { points, orderId, description } = validation.data;
 
     // Get or create loyalty record
-    let pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.userId, userId));
+    let pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.customerId, customerId));
     
     if (pointsResult.length === 0) {
       const newRecord = {
         id: generateId("loyalty"),
-        userId,
+        customerId,
         points: 0,
         totalEarned: 0,
         referralCode: generateReferralCode(),
       };
       await db.insert(loyaltyPoints).values(newRecord);
-      pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.userId, userId));
+      pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.customerId, customerId));
     }
 
     const newPoints = pointsResult[0].points + points;
@@ -193,12 +193,12 @@ const earnPoints: RequestHandler = async (req, res) => {
       points: newPoints,
       totalEarned: newTotalEarned,
       updatedAt: new Date(),
-    }).where(eq(loyaltyPoints.userId, userId));
+    }).where(eq(loyaltyPoints.customerId, customerId));
 
     // Add transaction
     await db.insert(loyaltyTransactions).values({
       id: generateId("ltxn"),
-      userId,
+      customerId,
       type: "earn",
       points,
       description,
@@ -225,9 +225,9 @@ const earnPoints: RequestHandler = async (req, res) => {
 const redeemPoints: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
@@ -244,7 +244,7 @@ const redeemPoints: RequestHandler = async (req, res) => {
     const { points, description } = validation.data;
 
     // Get current points
-    const pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.userId, userId));
+    const pointsResult = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.customerId, customerId));
     
     if (pointsResult.length === 0 || pointsResult[0].points < points) {
       const response: ApiResponse<null> = { success: false, error: "Insufficient points" };
@@ -257,12 +257,12 @@ const redeemPoints: RequestHandler = async (req, res) => {
     await db.update(loyaltyPoints).set({
       points: newPoints,
       updatedAt: new Date(),
-    }).where(eq(loyaltyPoints.userId, userId));
+    }).where(eq(loyaltyPoints.customerId, customerId));
 
     // Add transaction
     await db.insert(loyaltyTransactions).values({
       id: generateId("ltxn"),
-      userId,
+      customerId,
       type: "redeem",
       points: -points,
       description,
@@ -288,9 +288,9 @@ const redeemPoints: RequestHandler = async (req, res) => {
 const applyReferral: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const userId = await getUserIdFromToken(token);
+    const customerId = await getCustomerIdFromToken(token);
 
-    if (!userId) {
+    if (!customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
@@ -306,9 +306,9 @@ const applyReferral: RequestHandler = async (req, res) => {
 
     const { code } = validation.data;
 
-    // Check if user already used a referral
-    const userPoints = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.userId, userId));
-    if (userPoints.length > 0 && userPoints[0].referredBy) {
+    // Check if customer already used a referral
+    const customerPoints = await db.select().from(loyaltyPoints).where(eq(loyaltyPoints.customerId, customerId));
+    if (customerPoints.length > 0 && customerPoints[0].referredBy) {
       const response: ApiResponse<null> = { success: false, error: "You have already used a referral code" };
       return res.status(400).json(response);
     }
@@ -320,36 +320,36 @@ const applyReferral: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    if (referrer[0].userId === userId) {
+    if (referrer[0].customerId === customerId) {
       const response: ApiResponse<null> = { success: false, error: "Cannot use your own referral code" };
       return res.status(400).json(response);
     }
 
     const bonusPoints = 100; // Referral bonus
 
-    // Update user's record
-    if (userPoints.length === 0) {
+    // Update customer's record
+    if (customerPoints.length === 0) {
       await db.insert(loyaltyPoints).values({
         id: generateId("loyalty"),
-        userId,
+        customerId,
         points: bonusPoints,
         totalEarned: bonusPoints,
         referralCode: generateReferralCode(),
-        referredBy: referrer[0].userId,
+        referredBy: referrer[0].customerId,
       });
     } else {
       await db.update(loyaltyPoints).set({
-        points: userPoints[0].points + bonusPoints,
-        totalEarned: userPoints[0].totalEarned + bonusPoints,
-        referredBy: referrer[0].userId,
+        points: customerPoints[0].points + bonusPoints,
+        totalEarned: customerPoints[0].totalEarned + bonusPoints,
+        referredBy: referrer[0].customerId,
         updatedAt: new Date(),
-      }).where(eq(loyaltyPoints.userId, userId));
+      }).where(eq(loyaltyPoints.customerId, customerId));
     }
 
-    // Add transaction for user
+    // Add transaction for customer
     await db.insert(loyaltyTransactions).values({
       id: generateId("ltxn"),
-      userId,
+      customerId,
       type: "bonus",
       points: bonusPoints,
       description: "Referral bonus",
@@ -360,11 +360,11 @@ const applyReferral: RequestHandler = async (req, res) => {
       points: referrer[0].points + bonusPoints,
       totalEarned: referrer[0].totalEarned + bonusPoints,
       updatedAt: new Date(),
-    }).where(eq(loyaltyPoints.userId, referrer[0].userId));
+    }).where(eq(loyaltyPoints.customerId, referrer[0].customerId));
 
     await db.insert(loyaltyTransactions).values({
       id: generateId("ltxn"),
-      userId: referrer[0].userId,
+      customerId: referrer[0].customerId,
       type: "bonus",
       points: bonusPoints,
       description: "Referral reward",

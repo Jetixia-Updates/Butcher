@@ -225,12 +225,25 @@ export const sessions = pgTable("sessions", {
 });
 
 // =====================================================
+// CUSTOMER SESSIONS TABLE
+// =====================================================
+
+export const customerSessions = pgTable("customer_sessions", {
+  id: text("id").primaryKey(),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// =====================================================
 // ADDRESSES TABLE
 // =====================================================
 
 export const addresses = pgTable("addresses", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+  customerId: text("customer_id").references(() => customers.id, { onDelete: "cascade" }),
   label: varchar("label", { length: 50 }).notNull(),
   fullName: varchar("full_name", { length: 200 }).notNull(),
   mobile: varchar("mobile", { length: 20 }).notNull(),
@@ -322,7 +335,8 @@ export const stockMovements = pgTable("stock_movements", {
 export const orders = pgTable("orders", {
   id: text("id").primaryKey(),
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
-  userId: text("user_id").notNull().references(() => users.id),
+  userId: text("user_id").references(() => users.id), // For staff orders (optional)
+  customerId: text("customer_id").references(() => customers.id), // For customer orders
   customerName: varchar("customer_name", { length: 200 }).notNull(),
   customerEmail: varchar("customer_email", { length: 255 }).notNull(),
   customerMobile: varchar("customer_mobile", { length: 20 }).notNull(),
@@ -345,7 +359,8 @@ export const orders = pgTable("orders", {
   addressId: text("address_id").notNull(),
   deliveryAddress: jsonb("delivery_address").$type<{
     id: string;
-    userId: string;
+    userId?: string;
+    customerId?: string;
     label: string;
     fullName: string;
     mobile: string;
@@ -522,7 +537,8 @@ export const discountCodes = pgTable("discount_codes", {
 
 export const notifications = pgTable("notifications", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }), // For staff
+  customerId: text("customer_id").references(() => customers.id, { onDelete: "cascade" }), // For customers
   type: notificationTypeEnum("type").notNull(),
   channel: notificationChannelEnum("channel").notNull(),
   title: varchar("title", { length: 200 }).notNull(),
@@ -542,7 +558,8 @@ export const notifications = pgTable("notifications", {
 
 export const inAppNotifications = pgTable("in_app_notifications", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull(), // Can be a user ID or "admin" for admin notifications
+  userId: text("user_id"), // For staff notifications or "admin"
+  customerId: text("customer_id"), // For customer notifications
   type: varchar("type", { length: 50 }).notNull(),
   title: varchar("title", { length: 200 }).notNull(),
   titleAr: varchar("title_ar", { length: 200 }).notNull(),
@@ -562,14 +579,14 @@ export const inAppNotifications = pgTable("in_app_notifications", {
 export const chatMessages = pgTable("chat_messages", {
   id: text("id").primaryKey(),
   
-  // User info (for both user and admin to see)
-  userId: text("user_id").notNull(),
-  userName: varchar("user_name", { length: 200 }).notNull(),
-  userEmail: varchar("user_email", { length: 255 }).notNull(),
+  // Customer info (for both customer and admin to see)
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  customerName: varchar("customer_name", { length: 200 }).notNull(),
+  customerEmail: varchar("customer_email", { length: 255 }).notNull(),
   
   // Message content
   text: text("text").notNull(),
-  sender: varchar("sender", { length: 10 }).notNull(), // "user" or "admin"
+  sender: varchar("sender", { length: 10 }).notNull(), // "customer" or "admin"
   attachments: jsonb("attachments").$type<{
     id: string;
     name: string;
@@ -580,7 +597,7 @@ export const chatMessages = pgTable("chat_messages", {
   
   // Read status
   readByAdmin: boolean("read_by_admin").notNull().default(false),
-  readByUser: boolean("read_by_user").notNull().default(false),
+  readByCustomer: boolean("read_by_customer").notNull().default(false),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -999,7 +1016,7 @@ export const vendors = pgTable("vendors", {
 
 export const savedCards = pgTable("saved_cards", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
   brand: varchar("brand", { length: 50 }).notNull(),
   last4: varchar("last4", { length: 4 }).notNull(),
   expiryMonth: integer("expiry_month").notNull(),
@@ -1023,7 +1040,7 @@ export const walletTransactionTypeEnum = pgEnum("wallet_transaction_type", [
 
 export const wallets = pgTable("wallets", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }).unique(),
   balance: decimal("balance", { precision: 12, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -1031,7 +1048,7 @@ export const wallets = pgTable("wallets", {
 
 export const walletTransactions = pgTable("wallet_transactions", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
   type: walletTransactionTypeEnum("type").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   description: text("description").notNull(),
@@ -1046,7 +1063,7 @@ export const walletTransactions = pgTable("wallet_transactions", {
 
 export const wishlists = pgTable("wishlists", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
   productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -1058,7 +1075,7 @@ export const wishlists = pgTable("wishlists", {
 export const productReviews = pgTable("product_reviews", {
   id: text("id").primaryKey(),
   productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
   userName: varchar("user_name", { length: 200 }).notNull(),
   rating: integer("rating").notNull(), // 1-5
   title: varchar("title", { length: 200 }).notNull(),
@@ -1084,7 +1101,7 @@ export const loyaltyTransactionTypeEnum = pgEnum("loyalty_transaction_type", [
 
 export const loyaltyPoints = pgTable("loyalty_points", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }).unique(),
   points: integer("points").notNull().default(0),
   totalEarned: integer("total_earned").notNull().default(0),
   referralCode: varchar("referral_code", { length: 20 }).unique(),
@@ -1095,7 +1112,7 @@ export const loyaltyPoints = pgTable("loyalty_points", {
 
 export const loyaltyTransactions = pgTable("loyalty_transactions", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
   type: loyaltyTransactionTypeEnum("type").notNull(),
   points: integer("points").notNull(),
   description: text("description").notNull(),
@@ -1429,7 +1446,7 @@ export const vatReturns = pgTable("vat_returns", {
 });
 
 // =====================================================
-// CUSTOMERS TABLE (Extended Customer Profile)
+// CUSTOMERS TABLE (Standalone - for customer registration)
 // =====================================================
 
 export const customerSegmentEnum = pgEnum("customer_segment", [
@@ -1442,7 +1459,24 @@ export const customerSegmentEnum = pgEnum("customer_segment", [
 
 export const customers = pgTable("customers", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  
+  // Authentication (same as users but for customers)
+  username: varchar("username", { length: 100 }).notNull().unique(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  mobile: varchar("mobile", { length: 20 }).notNull(),
+  password: text("password").notNull(),
+  
+  // Personal Info
+  firstName: varchar("first_name", { length: 100 }).notNull(),
+  familyName: varchar("family_name", { length: 100 }).notNull(),
+  
+  // Account Status
+  isActive: boolean("is_active").notNull().default(true),
+  isVerified: boolean("is_verified").notNull().default(false),
+  
+  // Location
+  emirate: varchar("emirate", { length: 100 }),
+  address: text("address"),
   
   // Customer Classification
   customerNumber: varchar("customer_number", { length: 20 }).notNull().unique(), // CUST-0001
@@ -1465,6 +1499,13 @@ export const customers = pgTable("customers", {
   preferredDeliveryTime: varchar("preferred_delivery_time", { length: 50 }),
   dietaryPreferences: jsonb("dietary_preferences").$type<string[]>(),
   allergies: jsonb("allergies").$type<string[]>(),
+  preferences: jsonb("preferences").$type<{
+    language: "en" | "ar";
+    currency: "AED" | "USD" | "EUR";
+    emailNotifications: boolean;
+    smsNotifications: boolean;
+    marketingEmails: boolean;
+  }>(),
   
   // Communication
   preferredLanguage: languageEnum("preferred_language").default("en"),
@@ -1484,6 +1525,7 @@ export const customers = pgTable("customers", {
   firstPurchaseDate: timestamp("first_purchase_date"),
   birthDate: timestamp("birth_date"),
   anniversary: timestamp("anniversary"),
+  lastLoginAt: timestamp("last_login_at"),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -1605,10 +1647,8 @@ export const journalEntryLinesRelations = relations(journalEntryLines, ({ one })
   }),
 }));
 
-// Customer relations
-export const customersRelations = relations(customers, ({ one }) => ({
-  user: one(users, {
-    fields: [customers.userId],
-    references: [users.id],
-  }),
+// Customer relations (standalone - customers have their own addresses, orders, etc.)
+export const customersRelations = relations(customers, ({ many }) => ({
+  addresses: many(addresses),
+  orders: many(orders),
 }));

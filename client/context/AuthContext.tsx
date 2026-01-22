@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { authApi, setAuthToken, getAuthToken } from "@/lib/api";
+import { authApi, customerAuthApi, setAuthToken, getAuthToken } from "@/lib/api";
 
 export interface User {
   id: string;
@@ -12,7 +12,12 @@ export interface User {
   address?: string;
   isVisitor: boolean;
   isAdmin?: boolean;
+  isStaff?: boolean;
+  isCustomer?: boolean;
   role?: string;
+  // Customer-specific fields
+  customerNumber?: string;
+  segment?: string;
 }
 
 export interface RegisteredUser extends User {
@@ -30,6 +35,8 @@ interface AuthContextType {
   user: User | null;
   isLoggedIn: boolean;
   isAdmin: boolean;
+  isStaff: boolean;
+  isCustomer: boolean;
   isLoading: boolean;
   login: (user: User) => void;
   loginWithCredentials: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -69,31 +76,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const initAuth = async () => {
       const savedUser = localStorage.getItem("user");
       const token = getAuthToken();
+      const userType = localStorage.getItem("user_type"); // "customer" or "staff"
 
       if (savedUser && token) {
         try {
-          // Validate token with backend
-          const response = await authApi.getCurrentUser();
-          if (response.success && response.data) {
-            const userData: User = {
-              id: response.data.id,
-              username: response.data.username,
-              firstName: response.data.firstName,
-              familyName: response.data.familyName,
-              email: response.data.email,
-              mobile: response.data.mobile,
-              emirate: response.data.emirate,
-              address: response.data.address,
-              isVisitor: false,
-              isAdmin: response.data.role === "admin",
-              role: response.data.role,
-            };
-            setUser(userData);
-            localStorage.setItem("user", JSON.stringify(userData));
+          // Validate token with appropriate backend endpoint
+          if (userType === "customer") {
+            // Validate customer session
+            const response = await customerAuthApi.getCurrentCustomer();
+            if (response.success && response.data) {
+              const userData: User = {
+                id: response.data.id,
+                username: response.data.username,
+                firstName: response.data.firstName,
+                familyName: response.data.familyName,
+                email: response.data.email,
+                mobile: response.data.mobile,
+                emirate: response.data.emirate,
+                address: response.data.address,
+                isVisitor: false,
+                isAdmin: false,
+                isStaff: false,
+                isCustomer: true,
+                role: "customer",
+                customerNumber: response.data.customerNumber,
+                segment: response.data.segment,
+              };
+              setUser(userData);
+              localStorage.setItem("user", JSON.stringify(userData));
+            } else {
+              // Token invalid, clear auth
+              setAuthToken(null);
+              localStorage.removeItem("user");
+              localStorage.removeItem("user_type");
+            }
           } else {
-            // Token invalid, clear auth
-            setAuthToken(null);
-            localStorage.removeItem("user");
+            // Validate staff session
+            const response = await authApi.getCurrentUser();
+            if (response.success && response.data) {
+              const userData: User = {
+                id: response.data.id,
+                username: response.data.username,
+                firstName: response.data.firstName,
+                familyName: response.data.familyName,
+                email: response.data.email,
+                mobile: response.data.mobile,
+                emirate: response.data.emirate,
+                address: response.data.address,
+                isVisitor: false,
+                isAdmin: response.data.role === "admin",
+                isStaff: ["admin", "staff", "delivery"].includes(response.data.role || ""),
+                isCustomer: false,
+                role: response.data.role,
+              };
+              setUser(userData);
+              localStorage.setItem("user", JSON.stringify(userData));
+            } else {
+              // Token invalid, clear auth
+              setAuthToken(null);
+              localStorage.removeItem("user");
+              localStorage.removeItem("user_type");
+            }
           }
         } catch (error) {
           // Fallback to local user if API fails
@@ -135,25 +178,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const loginWithCredentials = async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await authApi.login(username, password);
+      // Use customer auth API for customer login
+      const response = await customerAuthApi.login(username, password);
 
       if (response.success && response.data) {
         // Set auth token
         setAuthToken(response.data.token);
 
-        // Create user object
+        // Mark as customer user type
+        localStorage.setItem("user_type", "customer");
+
+        // Create user object from customer data
         const userData: User = {
-          id: response.data.user.id,
-          username: response.data.user.username,
-          firstName: response.data.user.firstName,
-          familyName: response.data.user.familyName,
-          email: response.data.user.email,
-          mobile: response.data.user.mobile,
-          emirate: response.data.user.emirate,
-          address: response.data.user.address,
+          id: response.data.customer.id,
+          username: response.data.customer.username,
+          firstName: response.data.customer.firstName,
+          familyName: response.data.customer.familyName,
+          email: response.data.customer.email,
+          mobile: response.data.customer.mobile,
+          emirate: response.data.customer.emirate,
+          address: response.data.customer.address,
           isVisitor: false,
-          isAdmin: response.data.user.role === "admin",
-          role: response.data.user.role,
+          isAdmin: false,
+          isStaff: false,
+          isCustomer: true,
+          role: "customer",
+          customerNumber: response.data.customer.customerNumber,
+          segment: response.data.customer.segment,
         };
 
         login(userData);
@@ -168,13 +219,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const loginAdmin = async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
+      // Use staff auth API for admin/staff login
       const response = await authApi.adminLogin(username, password);
 
       if (response.success && response.data) {
         // Set auth token
         setAuthToken(response.data.token);
 
-        // Create admin user object
+        // Mark as staff user type
+        localStorage.setItem("user_type", "staff");
+
+        // Create admin/staff user object
         const adminUser: User = {
           id: response.data.user.id,
           username: response.data.user.username || response.data.user.email,
@@ -185,8 +240,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           emirate: response.data.user.emirate,
           address: response.data.user.address,
           isVisitor: false,
-          isAdmin: true,
-          role: "admin",
+          isAdmin: response.data.user.role === "admin",
+          isStaff: true,
+          isCustomer: false,
+          role: response.data.user.role,
         };
 
         setUser(adminUser);
@@ -201,12 +258,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const logout = () => {
-    // Call backend logout (fire and forget)
-    authApi.logout().catch(() => {});
+    // Call appropriate backend logout based on user type
+    const userType = localStorage.getItem("user_type");
+    if (userType === "customer") {
+      customerAuthApi.logout().catch(() => {});
+    } else {
+      authApi.logout().catch(() => {});
+    }
     
     setAuthToken(null);
     setUser(null);
     localStorage.removeItem("user");
+    localStorage.removeItem("user_type");
     localStorage.removeItem("basket");
   };
 
@@ -225,7 +288,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     isDefault: boolean;
   } }): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await authApi.register({
+      // Use customer auth API for customer registration
+      const response = await customerAuthApi.register({
         username: newUser.username,
         email: newUser.email,
         mobile: newUser.mobile,
@@ -242,7 +306,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (newUser.deliveryAddress && response.data.id) {
           const addressToSave = {
             id: `addr_${Date.now()}`,
-            userId: response.data.id,
+            customerId: response.data.id,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             ...newUser.deliveryAddress,
@@ -363,6 +427,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         user,
         isLoggedIn: !!user && !user.isVisitor,
         isAdmin: !!user?.isAdmin,
+        isStaff: !!user?.isStaff,
+        isCustomer: !!user?.isCustomer,
         isLoading,
         login,
         loginWithCredentials,

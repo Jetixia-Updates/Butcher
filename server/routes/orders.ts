@@ -5,9 +5,9 @@
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import type { Order, OrderItem, ApiResponse, PaginatedResponse } from "../../shared/api";
-import { db, orders, orderItems, products, users, addresses, discountCodes, deliveryZones, stock, payments, inAppNotifications } from "../db/connection";
+import { db, orders, orderItems, products, users, addresses, discountCodes, deliveryZones, stock, payments, inAppNotifications, customers } from "../db/connection";
 
 const router = Router();
 
@@ -349,41 +349,56 @@ const createOrder: RequestHandler = async (req, res) => {
 
     const { userId, items, addressId, paymentMethod, deliveryNotes, discountCode: discountCodeStr, deliveryAddress, expressDeliveryFee, driverTip } = validation.data;
 
-    // Get user
-    let userResult = await db.select().from(users).where(eq(users.id, userId));
-    let user = userResult[0];
+    // Get customer (orders are for customers, not staff users)
+    let customerResult = await db.select().from(customers).where(eq(customers.id, userId));
+    let customer = customerResult[0];
     
-    if (!user && deliveryAddress) {
-      // Create a minimal user
-      const newUser = {
+    if (!customer && deliveryAddress) {
+      // Create a minimal customer for guest checkout
+      const countResult = await db.select({ count: sql<number>`count(*)` }).from(customers);
+      const customerNumber = `CUST-${String(Number(countResult[0]?.count || 0) + 1).padStart(4, '0')}`;
+      
+      const newCustomer = {
         id: userId,
-        email: `user-${userId}@temp.local`,
-        username: deliveryAddress.label || 'Customer',
+        email: `guest-${userId}@temp.local`,
+        username: `guest_${Date.now()}`,
         password: '',
         mobile: deliveryAddress.phone || '',
-        firstName: deliveryAddress.label?.split(' ')[0] || 'Customer',
-        familyName: deliveryAddress.label?.split(' ').slice(1).join(' ') || '',
+        firstName: deliveryAddress.label?.split(' ')[0] || 'Guest',
+        familyName: deliveryAddress.label?.split(' ').slice(1).join(' ') || 'Customer',
         emirate: deliveryAddress.emirate || 'Dubai',
-        role: 'customer' as const,
         isActive: true,
         isVerified: false,
+        customerNumber,
+        segment: 'regular' as const,
+        creditLimit: '0',
+        currentBalance: '0',
+        lifetimeValue: '0',
+        totalOrders: 0,
+        totalSpent: '0',
+        averageOrderValue: '0',
+        preferredLanguage: 'en' as const,
+        marketingOptIn: false,
+        smsOptIn: false,
+        emailOptIn: false,
+        referralCount: 0,
         preferences: {
           language: 'en' as const,
           currency: 'AED' as const,
-          emailNotifications: true,
-          smsNotifications: true,
+          emailNotifications: false,
+          smsNotifications: false,
           marketingEmails: false,
         },
       };
-      await db.insert(users).values(newUser);
-      userResult = await db.select().from(users).where(eq(users.id, userId));
-      user = userResult[0];
+      await db.insert(customers).values(newCustomer);
+      customerResult = await db.select().from(customers).where(eq(customers.id, userId));
+      customer = customerResult[0];
     }
 
-    if (!user) {
+    if (!customer) {
       const response: ApiResponse<null> = {
         success: false,
-        error: "User not found",
+        error: "Customer not found",
       };
       return res.status(404).json(response);
     }
@@ -396,7 +411,7 @@ const createOrder: RequestHandler = async (req, res) => {
       // Create address from the provided delivery address data
       const newAddress = {
         id: addressId || generateId("addr"),
-        userId: userId,
+        customerId: userId,
         label: deliveryAddress.label || 'Delivery Address',
         fullName: deliveryAddress.label || 'Customer',
         mobile: deliveryAddress.phone || '',
@@ -507,7 +522,8 @@ const createOrder: RequestHandler = async (req, res) => {
     
     const deliveryAddressData = {
       id: address.id,
-      userId: address.userId,
+      customerId: address.customerId || undefined,
+      userId: address.userId || undefined,
       label: address.label,
       fullName: address.fullName,
       mobile: address.mobile,
@@ -528,10 +544,10 @@ const createOrder: RequestHandler = async (req, res) => {
     const newOrder = {
       id: orderId,
       orderNumber,
-      userId,
-      customerName: `${user.firstName} ${user.familyName}`,
-      customerEmail: user.email,
-      customerMobile: user.mobile,
+      customerId: userId,
+      customerName: `${customer.firstName} ${customer.familyName}`,
+      customerEmail: customer.email,
+      customerMobile: customer.mobile,
       subtotal: String(Math.round(subtotal * 100) / 100),
       discount: String(Math.round(discount * 100) / 100),
       discountCode: discountCodeStr || null,
@@ -588,7 +604,7 @@ const createOrder: RequestHandler = async (req, res) => {
     try {
       const customerNotification = {
         id: generateId("notif"),
-        userId: userId,
+        customerId: userId,
         type: "order",
         title: "Order Placed Successfully",
         titleAr: "تم تقديم الطلب بنجاح",
@@ -601,10 +617,46 @@ const createOrder: RequestHandler = async (req, res) => {
         createdAt: new Date(),
       };
       await db.insert(inAppNotifications).values(customerNotification);
-      console.log(`[Order Notification] ✅ Customer notification created for order ${orderNumber} (userId: ${userId})`);
+      console.log(`[Order Notification] ✅ Customer notification created for order ${orderNumber} (customerId: ${userId})`);
     } catch (notifError) {
       console.error(`[Order Notification] ❌ Failed to create customer notification:`, notifError);
     }
+
+    // === UPDATE CUSTOMER STATS ===
+    try {
+      const newTotalOrders = customer.totalOrders + 1;
+      const newTotalSpent = parseFloat(customer.totalSpent) + total;
+      const newLifetimeValue = parseFloat(customer.lifetimeValue) + total;
+      const newAvgOrderValue = newTotalSpent / newTotalOrders;
+
+      // Determine new segment based on total spent
+      let newSegment: "regular" | "premium" | "vip" | "wholesale" | "inactive" = customer.segment;
+      if (newTotalSpent >= 10000) {
+        newSegment = "vip";
+      } else if (newTotalSpent >= 5000) {
+        newSegment = "premium";
+      } else {
+        newSegment = "regular";
+      }
+
+      await db.update(customers)
+        .set({
+          totalOrders: newTotalOrders,
+          totalSpent: String(Math.round(newTotalSpent * 100) / 100),
+          lifetimeValue: String(Math.round(newLifetimeValue * 100) / 100),
+          averageOrderValue: String(Math.round(newAvgOrderValue * 100) / 100),
+          lastOrderDate: new Date(),
+          lastOrderAmount: String(total),
+          segment: newSegment,
+          firstPurchaseDate: customer.firstPurchaseDate || new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(customers.id, userId));
+      console.log(`[Customer Stats] ✅ Updated stats for customer ${customer.customerNumber}`);
+    } catch (customerError) {
+      console.error(`[Customer Stats] ❌ Failed to update customer stats:`, customerError);
+    }
+    // === END CUSTOMER STATS ===
 
     // Create notification for admin (new order received)
     try {
@@ -614,8 +666,8 @@ const createOrder: RequestHandler = async (req, res) => {
         type: "order",
         title: "New Order Received",
         titleAr: "تم استلام طلب جديد",
-        message: `New order ${orderNumber} from ${user.firstName} ${user.familyName} - Total: ${total.toFixed(2)} AED`,
-        messageAr: `طلب جديد ${orderNumber} من ${user.firstName} ${user.familyName} - المجموع: ${total.toFixed(2)} درهم`,
+        message: `New order ${orderNumber} from ${customer.firstName} ${customer.familyName} - Total: ${total.toFixed(2)} AED`,
+        messageAr: `طلب جديد ${orderNumber} من ${customer.firstName} ${customer.familyName} - المجموع: ${total.toFixed(2)} درهم`,
         link: `/admin/dashboard`,
         linkTab: "orders",
         linkId: orderId,
