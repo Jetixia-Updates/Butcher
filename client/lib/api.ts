@@ -593,6 +593,71 @@ export const usersApi = {
 };
 
 // =====================================================
+// CUSTOMERS ADMIN API (for admin to manage customers)
+// =====================================================
+
+export interface CustomerAdmin {
+  id: string;
+  username: string;
+  email: string;
+  mobile: string;
+  firstName: string;
+  familyName: string;
+  isActive: boolean;
+  isVerified: boolean;
+  emirate: string;
+  address?: string;
+  customerNumber: string;
+  segment: string;
+  creditLimit: string;
+  currentBalance: string;
+  lifetimeValue: string;
+  totalOrders: number;
+  totalSpent: string;
+  averageOrderValue: string;
+  lastOrderDate?: string;
+  preferences?: {
+    language: "en" | "ar";
+    currency: "AED" | "USD" | "EUR";
+    emailNotifications: boolean;
+    smsNotifications: boolean;
+    marketingEmails: boolean;
+  };
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string;
+}
+
+export const customersAdminApi = {
+  getAll: (params?: { page?: number; limit?: number; search?: string; segment?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.search) searchParams.set("search", params.search);
+    if (params?.segment) searchParams.set("segment", params.segment);
+
+    return fetchApi<CustomerAdmin[]>(`/customers?${searchParams.toString()}`);
+  },
+
+  getById: (id: string) => fetchApi<CustomerAdmin>(`/customers/${id}`),
+
+  update: (id: string, data: Partial<CustomerAdmin>) =>
+    fetchApi<CustomerAdmin>(`/customers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    fetchApi<null>(`/customers/${id}`, { method: "DELETE" }),
+
+  toggleActive: (id: string, isActive: boolean) =>
+    fetchApi<CustomerAdmin>(`/customers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ isActive }),
+    }),
+};
+
+// =====================================================
 // DELIVERY API
 // =====================================================
 

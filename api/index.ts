@@ -2190,6 +2190,165 @@ function createApp() {
     }
   });
 
+  // GET /api/customers - Get all customers (admin only)
+  app.get('/api/customers', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { page = '1', limit = '50', search, segment } = req.query;
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+
+      try {
+        let allCustomers = await pgDb.select().from(customersTable);
+
+        // Filter by search
+        if (search) {
+          const searchLower = (search as string).toLowerCase();
+          allCustomers = allCustomers.filter(c => 
+            c.firstName.toLowerCase().includes(searchLower) ||
+            c.familyName.toLowerCase().includes(searchLower) ||
+            c.email.toLowerCase().includes(searchLower) ||
+            c.customerNumber.toLowerCase().includes(searchLower)
+          );
+        }
+
+        // Filter by segment
+        if (segment && segment !== 'all') {
+          allCustomers = allCustomers.filter(c => c.segment === segment);
+        }
+
+        // Sort by createdAt descending
+        allCustomers.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+        const total = allCustomers.length;
+        const paginatedCustomers = allCustomers.slice(offset, offset + limitNum);
+
+        res.json({
+          success: true,
+          data: paginatedCustomers.map(toApiCustomer),
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            totalPages: Math.ceil(total / limitNum),
+          },
+        });
+      } catch (dbError) {
+        console.error('[Get Customers DB Error]', dbError);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+    } catch (error) {
+      console.error('[Get Customers Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch customers' });
+    }
+  });
+
+  // GET /api/customers/:id - Get customer by ID
+  app.get('/api/customers/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const customerResult = await pgDb.select().from(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+      
+      if (customerResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+
+      res.json({
+        success: true,
+        data: toApiCustomer(customerResult[0]),
+      });
+    } catch (error) {
+      console.error('[Get Customer Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch customer' });
+    }
+  });
+
+  // PUT /api/customers/:id - Update customer (admin)
+  app.put('/api/customers/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const customerResult = await pgDb.select().from(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+      
+      if (customerResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+
+      const updateData: Record<string, any> = { updatedAt: new Date() };
+      const { firstName, familyName, email, mobile, emirate, address, isActive, isVerified, segment } = req.body;
+
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (familyName !== undefined) updateData.familyName = familyName;
+      if (email !== undefined) updateData.email = email;
+      if (mobile !== undefined) updateData.mobile = mobile;
+      if (emirate !== undefined) updateData.emirate = emirate;
+      if (address !== undefined) updateData.address = address;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      if (isVerified !== undefined) updateData.isVerified = isVerified;
+      if (segment !== undefined) updateData.segment = segment;
+
+      await pgDb.update(customersTable)
+        .set(updateData)
+        .where(eq(customersTable.id, req.params.id));
+
+      const updatedResult = await pgDb.select().from(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+
+      res.json({
+        success: true,
+        data: toApiCustomer(updatedResult[0]),
+        message: 'Customer updated successfully',
+      });
+    } catch (error) {
+      console.error('[Update Customer Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update customer' });
+    }
+  });
+
+  // DELETE /api/customers/:id - Delete customer (admin)
+  app.delete('/api/customers/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const customerResult = await pgDb.select().from(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+      
+      if (customerResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+
+      // Delete customer sessions first
+      await pgDb.delete(customerSessionsTable)
+        .where(eq(customerSessionsTable.customerId, req.params.id));
+
+      // Delete customer
+      await pgDb.delete(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+
+      res.json({
+        success: true,
+        data: null,
+        message: 'Customer deleted successfully',
+      });
+    } catch (error) {
+      console.error('[Delete Customer Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete customer' });
+    }
+  });
+
   // =====================================================
   // END CUSTOMER AUTHENTICATION ROUTES
   // =====================================================
