@@ -515,208 +515,36 @@ interface Address {
   updatedAt: string;
 }
 
-// In-memory storage (note: resets on cold starts)
-const users = new Map<string, User>();
+// In-memory caches only - NO SEEDING
+// These are used for temporary caching only, primary storage is in database
 const sessions = new Map<string, Session>();
+
+// Legacy empty maps - kept for backward compatibility but NOT seeded
+// All CRUD operations should use database, these are fallback only
+const users = new Map<string, User>();
 const orders = new Map<string, Order>();
-const stockItems = new Map<string, StockItem>();
-const stockMovements: StockMovement[] = [];
-const payments = new Map<string, Payment>();
 const addresses = new Map<string, Address>();
 
-// Demo products data
-const demoProducts = [
-  { id: 'prod_1', name: 'Premium Beef Steak', nameAr: 'ستيك لحم بقري ممتاز', price: 89.99, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium quality beef steak', descriptionAr: 'ستيك لحم بقري عالي الجودة', available: true },
-  { id: 'prod_2', name: 'Lamb Chops', nameAr: 'ريش لحم ضأن', price: 74.50, category: 'Lamb', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Fresh lamb chops', descriptionAr: 'ريش لحم ضأن طازجة', available: true },
-  { id: 'prod_3', name: 'Chicken Breast', nameAr: 'صدر دجاج', price: 34.99, category: 'Chicken', unit: 'kg', isActive: true, isFeatured: false, isPremium: false, description: 'Boneless chicken breast', descriptionAr: 'صدر دجاج بدون عظم', available: true },
-  { id: 'prod_4', name: 'Ground Beef', nameAr: 'لحم بقري مفروم', price: 45.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: false, isPremium: false, description: 'Fresh ground beef', descriptionAr: 'لحم بقري مفروم طازج', available: true },
-  { id: 'prod_5', name: 'Beef Brisket', nameAr: 'صدر لحم بقري', price: 95.00, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium beef brisket', descriptionAr: 'صدر لحم بقري ممتاز', available: true },
-  { id: 'prod_6', name: 'Goat Leg', nameAr: 'فخذ ماعز', price: 125.00, category: 'Goat', unit: 'piece', isActive: true, isFeatured: true, isPremium: true, description: 'Whole goat leg', descriptionAr: 'فخذ ماعز كامل', available: true },
-  { id: 'prod_7', name: 'Lamb Leg', nameAr: 'فخذ ضأن', price: 125.00, category: 'Lamb', unit: 'piece', isActive: true, isFeatured: false, isPremium: true, description: 'Whole lamb leg, perfect for family dinners', descriptionAr: 'فخذ ضأن كامل، مثالي لعشاء العائلة', available: false },
-  { id: 'prod_8', name: 'Goat Ribs', nameAr: 'ريش ماعز', price: 95.00, category: 'Goat', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium goat ribs, perfect for grilling', descriptionAr: 'ريش ماعز ممتازة، مثالية للشوي', available: true },
-  { id: 'prod_9', name: 'Wagyu Ribeye', nameAr: 'واغيو ريب آي', price: 249.99, category: 'Beef', unit: 'kg', isActive: true, isFeatured: true, isPremium: true, description: 'Premium Australian Wagyu A5, melt-in-your-mouth texture', descriptionAr: 'واغيو أسترالي ممتاز A5، قوام يذوب في الفم', available: true },
-  { id: 'prod_10', name: 'Organic Chicken Thighs', nameAr: 'أفخاذ دجاج عضوي', price: 42.99, category: 'Chicken', unit: 'kg', isActive: true, isFeatured: false, isPremium: false, description: 'Free-range organic chicken thighs, extra juicy', descriptionAr: 'أفخاذ دجاج عضوي حر، طرية وغنية بالعصارة', available: true },
-];
-
-// Seed initial data
-function seedData() {
-  if (users.size > 0) return; // Already seeded
-  
-  // Admin user
-  users.set("admin_1", {
-    id: "admin_1",
-    username: "admin",
-    email: "admin@butcher.ae",
-    mobile: "+971501234567",
-    password: "admin123",
-    firstName: "Admin",
-    familyName: "User",
-    role: "admin",
-    isActive: true,
-    isVerified: true,
-    emirate: "Dubai",
-    createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-    preferences: {
-      language: "en",
-      currency: "AED",
-      emailNotifications: true,
-      smsNotifications: true,
-      marketingEmails: false,
-    },
-  });
-
-  // Demo customers
-  const customerData = [
-    { id: "user_1", username: "Mohamed", email: "ahmed@example.com", mobile: "+971501111111", firstName: "Ahmed", familyName: "Al Maktoum", emirate: "Dubai" },
-    { id: "user_2", username: "fatima", email: "fatima@example.com", mobile: "+971502222222", firstName: "Fatima", familyName: "Al Nahyan", emirate: "Abu Dhabi" },
-    { id: "user_3", username: "omar", email: "omar@example.com", mobile: "+971503333333", firstName: "Omar", familyName: "Al Qasimi", emirate: "Sharjah" },
-    { id: "user_4", username: "sara", email: "sara@example.com", mobile: "+971504444444", firstName: "Sara", familyName: "Al Falasi", emirate: "Dubai" },
-    { id: "user_5", username: "khalid", email: "khalid@example.com", mobile: "+971505555555", firstName: "Khalid", familyName: "Al Rashid", emirate: "Ajman" },
-  ];
-
-  customerData.forEach((c, i) => {
-    users.set(c.id, {
-      ...c,
-      password: "password123",
-      role: "customer",
-      isActive: true,
-      isVerified: true,
-      createdAt: new Date(Date.now() - (60 - i * 10) * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString(),
-      preferences: { language: "en", currency: "AED", emailNotifications: true, smsNotifications: true, marketingEmails: true },
-    });
-  });
-
-  // Delivery staff
-  users.set("driver_1", {
-    id: "driver_1",
-    username: "driver1",
-    email: "driver1@butcher.ae",
-    mobile: "+971509999999",
-    password: "driver123",
-    firstName: "Mohammed",
-    familyName: "Driver",
-    role: "delivery",
-    isActive: true,
-    isVerified: true,
-    emirate: "Dubai",
-    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-    preferences: { language: "en", currency: "AED", emailNotifications: true, smsNotifications: true, marketingEmails: false },
-  });
-
-  // Demo orders
-  const orderStatuses = ['pending', 'confirmed', 'processing', 'out_for_delivery', 'delivered'];
-  const paymentStatuses = ['pending', 'authorized', 'captured'];
-  const paymentMethods = ['card', 'cod', 'bank_transfer'];
-
-  for (let i = 1; i <= 15; i++) {
-    const customer = customerData[(i - 1) % customerData.length];
-    const status = orderStatuses[i % orderStatuses.length];
-    const paymentStatus = status === 'delivered' ? 'captured' : paymentStatuses[i % paymentStatuses.length];
-    const orderDate = new Date(Date.now() - i * 2 * 60 * 60 * 1000);
-    
-    const items = [
-      { id: `item_${i}_1`, productId: demoProducts[i % 6].id, productName: demoProducts[i % 6].name, quantity: 1 + (i % 3), unitPrice: demoProducts[i % 6].price, totalPrice: (1 + (i % 3)) * demoProducts[i % 6].price },
-      { id: `item_${i}_2`, productId: demoProducts[(i + 1) % 6].id, productName: demoProducts[(i + 1) % 6].name, quantity: 1, unitPrice: demoProducts[(i + 1) % 6].price, totalPrice: demoProducts[(i + 1) % 6].price },
-    ];
-    const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
-    const deliveryFee = 15;
-    const vatRate = 0.05;
-    const vatAmount = subtotal * vatRate;
-    const total = subtotal + deliveryFee + vatAmount;
-
-    const order: Order = {
-      id: `order_${i}`,
-      orderNumber: `ORD-2026-${String(i).padStart(4, '0')}`,
-      userId: customer.id,
-      customerName: `${customer.firstName} ${customer.familyName}`,
-      customerEmail: customer.email,
-      customerMobile: customer.mobile,
-      items,
-      subtotal,
-      discount: 0,
-      deliveryFee,
-      vatRate,
-      vatAmount,
-      total,
-      status,
-      paymentStatus,
-      paymentMethod: paymentMethods[i % 3],
-      deliveryAddress: { building: `Building ${i}`, street: `Street ${i}`, area: 'Downtown', emirate: customer.emirate },
-      statusHistory: [{ status, changedAt: orderDate.toISOString(), changedBy: 'system' }],
-      createdAt: orderDate.toISOString(),
-      updatedAt: orderDate.toISOString(),
-    };
-    orders.set(order.id, order);
-
-    // Create payment for the order
-    payments.set(`pay_${i}`, {
-      id: `pay_${i}`,
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      amount: total,
-      currency: 'AED',
-      method: order.paymentMethod,
-      status: paymentStatus,
-      customerName: order.customerName,
-      gatewayTransactionId: `txn_${Date.now()}_${i}`,
-      cardBrand: order.paymentMethod === 'card' ? 'Visa' : undefined,
-      cardLast4: order.paymentMethod === 'card' ? '4242' : undefined,
-      refundedAmount: 0,
-      refunds: [],
-      createdAt: orderDate.toISOString(),
-      updatedAt: orderDate.toISOString(),
-    });
-  }
-
-  // Demo stock items (quantities in grams)
-  demoProducts.forEach((product, i) => {
-    const qty = 5000.000 + i * 1000.500; // Base 5kg + increments
-    const reserved = (i * 200.250);
-    stockItems.set(product.id, {
-      id: `stock_${product.id}`,
-      productId: product.id,
-      quantity: qty,
-      reservedQuantity: reserved,
-      availableQuantity: qty - reserved,
-      lowStockThreshold: 1000.000, // 1kg threshold
-      reorderPoint: 2000.000, // 2kg reorder point
-      reorderQuantity: 5000.000, // 5kg reorder quantity
-      lastRestockedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-  });
-
-  // Add a low stock item for demo (quantities in grams)
-  stockItems.set('prod_low', {
-    id: 'stock_prod_low',
-    productId: 'prod_low',
-    quantity: 500.500, // 500g
-    reservedQuantity: 200.250,
-    availableQuantity: 300.250, // Below 1kg threshold
-    lowStockThreshold: 1000.000, // 1kg
-    reorderPoint: 2000.000, // 2kg
-    reorderQuantity: 5000.000, // 5kg
-    lastRestockedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Demo stock movements (quantities in grams)
-  for (let i = 1; i <= 10; i++) {
-    stockMovements.push({
-      id: `mov_${i}`,
-      productId: demoProducts[i % 6].id,
-      type: i % 3 === 0 ? 'out' : 'in',
-      quantity: 500.000 + (i * 100.500), // grams
-      reason: i % 3 === 0 ? 'Customer order' : 'Restocked',
-      createdAt: new Date(Date.now() - i * 6 * 60 * 60 * 1000).toISOString(),
-    });
-  }
-
-  console.log('[Vercel] Database seeded with', users.size, 'users,', orders.size, 'orders');
-}
+// Delivery tracking cache for quick access (primary storage is in database)
+const deliveryTrackingCache = new Map<string, {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  driverId: string;
+  driverName: string;
+  driverMobile: string;
+  status: string;
+  customerName?: string;
+  customerMobile?: string;
+  deliveryAddress?: any;
+  deliveryNotes?: string;
+  items?: { name: string; quantity: number }[];
+  total?: number;
+  estimatedArrival: string;
+  timeline: { status: string; timestamp: string; notes?: string }[];
+  createdAt: string;
+  updatedAt: string;
+}>();
 
 // Generate token
 const generateToken = () => `tok_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
@@ -736,7 +564,7 @@ let app: express.Express | null = null;
 function createApp() {
   if (app) return app;
   
-  seedData();
+  // No seedData() - all data comes from real database
   
   app = express();
   app.use(cors());
@@ -1695,15 +1523,41 @@ function createApp() {
     }
   });
 
-  // Hourly orders chart
-  app.get('/api/analytics/charts/hourly-orders', (req, res) => {
-    const data = Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      orders: Math.floor(Math.random() * 10) + (hour >= 10 && hour <= 20 ? 5 : 1),
-      revenue: (Math.floor(Math.random() * 10) + (hour >= 10 && hour <= 20 ? 5 : 1)) * 150,
-    }));
-    
-    res.json({ success: true, data });
+  // Hourly orders chart - DATABASE BACKED
+  app.get('/api/analytics/charts/hourly-orders', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      // Get today's orders
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      
+      const allOrders = await pgDb.select().from(ordersTable);
+      const todayOrders = allOrders.filter(o => new Date(o.createdAt) >= todayStart);
+
+      // Group orders by hour
+      const hourlyData = Array.from({ length: 24 }, (_, hour) => ({ hour, orders: 0, revenue: 0 }));
+      
+      todayOrders.forEach(order => {
+        const orderHour = new Date(order.createdAt).getHours();
+        hourlyData[orderHour].orders += 1;
+        hourlyData[orderHour].revenue += parseFloat(String(order.total));
+      });
+
+      // Round revenue to 2 decimal places
+      const data = hourlyData.map(h => ({
+        hour: h.hour,
+        orders: h.orders,
+        revenue: Math.round(h.revenue * 100) / 100,
+      }));
+      
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('[Hourly Orders Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch hourly orders' });
+    }
   });
 
   // Real-time stats
@@ -3638,26 +3492,60 @@ function createApp() {
     }
   });
 
-  app.get('/api/delivery/addresses', (req, res) => {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.json({ success: true, data: [] });
+  // Get user addresses - DATABASE BACKED
+  app.get('/api/delivery/addresses', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) {
+        return res.json({ success: true, data: [] });
+      }
+
+      // Try to find session in database
+      const sessionResult = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token)).limit(1);
+      if (sessionResult.length === 0) {
+        // Also check in-memory cache
+        const memSession = sessions.get(token);
+        if (!memSession) {
+          return res.json({ success: true, data: [] });
+        }
+        // Get addresses for user from cache session
+        const userAddresses = await pgDb.select().from(addressesTable).where(eq(addressesTable.userId, memSession.userId));
+        return res.json({ success: true, data: userAddresses });
+      }
+
+      const session = sessionResult[0];
+      const userAddresses = await pgDb.select().from(addressesTable).where(eq(addressesTable.userId, session.userId));
+      res.json({ success: true, data: userAddresses });
+    } catch (error) {
+      console.error('[Get Addresses Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch addresses' });
     }
-    const session = sessions.get(token);
-    if (!session) {
-      return res.json({ success: true, data: [] });
-    }
-    const userAddresses = Array.from(addresses.values()).filter(a => a.userId === session.userId);
-    res.json({ success: true, data: userAddresses });
   });
 
-  app.post('/api/delivery/addresses', (req, res) => {
+  // Create address - DATABASE BACKED
+  app.post('/api/delivery/addresses', async (req, res) => {
     try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
       const token = req.headers.authorization?.replace('Bearer ', '');
       let userId = 'guest';
+      
       if (token) {
-        const session = sessions.get(token);
-        if (session) userId = session.userId;
+        // Try database first
+        const sessionResult = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token)).limit(1);
+        if (sessionResult.length > 0) {
+          userId = sessionResult[0].userId;
+        } else {
+          // Fallback to in-memory cache
+          const session = sessions.get(token);
+          if (session) userId = session.userId;
+        }
       }
 
       const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, isDefault } = req.body;
@@ -3667,7 +3555,17 @@ function createApp() {
       }
 
       const addressId = `addr_${Date.now()}`;
-      const newAddress: Address = {
+      const now = new Date();
+
+      // If this is default, unset other defaults for this user
+      if (isDefault) {
+        await pgDb.update(addressesTable)
+          .set({ isDefault: false })
+          .where(eq(addressesTable.userId, userId));
+      }
+
+      // Insert new address
+      const [newAddress] = await pgDb.insert(addressesTable).values({
         id: addressId,
         userId,
         label: label || 'Home',
@@ -3677,24 +3575,16 @@ function createApp() {
         area,
         street,
         building,
-        floor,
-        apartment,
-        landmark,
-        latitude,
-        longitude,
+        floor: floor || null,
+        apartment: apartment || null,
+        landmark: landmark || null,
+        latitude: latitude || null,
+        longitude: longitude || null,
         isDefault: isDefault || false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+        createdAt: now,
+        updatedAt: now,
+      }).returning();
 
-      // If this is default, unset other defaults for this user
-      if (newAddress.isDefault) {
-        addresses.forEach(addr => {
-          if (addr.userId === userId) addr.isDefault = false;
-        });
-      }
-
-      addresses.set(addressId, newAddress);
       res.status(201).json({ success: true, data: newAddress });
     } catch (error) {
       console.error('[Create Address Error]', error);
@@ -3702,34 +3592,78 @@ function createApp() {
     }
   });
 
-  app.put('/api/delivery/addresses/:id', (req, res) => {
-    const address = addresses.get(req.params.id);
-    if (!address) {
-      return res.status(404).json({ success: false, error: 'Address not found' });
+  // Update address - DATABASE BACKED
+  app.put('/api/delivery/addresses/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const addressResult = await pgDb.select().from(addressesTable).where(eq(addressesTable.id, req.params.id));
+      if (addressResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+      
+      const existingAddress = addressResult[0];
+      const updates = req.body;
+      const now = new Date();
+
+      // If setting as default, unset others for this user
+      if (updates.isDefault) {
+        await pgDb.update(addressesTable)
+          .set({ isDefault: false })
+          .where(and(
+            eq(addressesTable.userId, existingAddress.userId),
+            ne(addressesTable.id, req.params.id)
+          ));
+      }
+
+      // Update the address
+      const updateData: Record<string, unknown> = { updatedAt: now };
+      if (updates.label !== undefined) updateData.label = updates.label;
+      if (updates.fullName !== undefined) updateData.fullName = updates.fullName;
+      if (updates.mobile !== undefined) updateData.mobile = updates.mobile;
+      if (updates.emirate !== undefined) updateData.emirate = updates.emirate;
+      if (updates.area !== undefined) updateData.area = updates.area;
+      if (updates.street !== undefined) updateData.street = updates.street;
+      if (updates.building !== undefined) updateData.building = updates.building;
+      if (updates.floor !== undefined) updateData.floor = updates.floor;
+      if (updates.apartment !== undefined) updateData.apartment = updates.apartment;
+      if (updates.landmark !== undefined) updateData.landmark = updates.landmark;
+      if (updates.latitude !== undefined) updateData.latitude = updates.latitude;
+      if (updates.longitude !== undefined) updateData.longitude = updates.longitude;
+      if (updates.isDefault !== undefined) updateData.isDefault = updates.isDefault;
+
+      const [updated] = await pgDb.update(addressesTable)
+        .set(updateData)
+        .where(eq(addressesTable.id, req.params.id))
+        .returning();
+      
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('[Update Address Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update address' });
     }
-    
-    const updates = req.body;
-    Object.assign(address, updates, { updatedAt: new Date().toISOString() });
-    
-    // If setting as default, unset others
-    if (updates.isDefault) {
-      addresses.forEach(addr => {
-        if (addr.id !== address.id && addr.userId === address.userId) {
-          addr.isDefault = false;
-        }
-      });
-    }
-    
-    res.json({ success: true, data: address });
   });
 
-  app.delete('/api/delivery/addresses/:id', (req, res) => {
-    const address = addresses.get(req.params.id);
-    if (!address) {
-      return res.status(404).json({ success: false, error: 'Address not found' });
+  // Delete address - DATABASE BACKED
+  app.delete('/api/delivery/addresses/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const addressResult = await pgDb.select().from(addressesTable).where(eq(addressesTable.id, req.params.id));
+      if (addressResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+
+      await pgDb.delete(addressesTable).where(eq(addressesTable.id, req.params.id));
+      res.json({ success: true, message: 'Address deleted' });
+    } catch (error) {
+      console.error('[Delete Address Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete address' });
     }
-    addresses.delete(req.params.id);
-    res.json({ success: true, message: 'Address deleted' });
   });
 
   // In-memory tracking storage for assigned deliveries
@@ -3756,48 +3690,60 @@ function createApp() {
   // Note: Delivery tracking is now database-backed via deliveryTrackingTable
   // Demo tracking pre-population removed - all tracking created via /api/delivery/tracking/assign
 
-  // Get tracking by order ID
-  app.get('/api/delivery/tracking/by-order/:orderId', (req, res) => {
-    const { orderId } = req.params;
-    
-    // First check the in-memory tracking map
-    let tracking = deliveryTracking.get(orderId);
-    
-    // If not found in map, try to get from order's trackingInfo
-    if (!tracking) {
-      const order = orders.get(orderId);
-      if (order?.trackingInfo) {
-        // Reconstruct full tracking response from order
-        tracking = {
-          id: order.trackingInfo.id,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          driverId: order.trackingInfo.driverId,
-          driverName: order.trackingInfo.driverName,
-          driverMobile: order.trackingInfo.driverMobile,
-          status: order.trackingInfo.status,
-          customerName: order.customerName,
-          customerMobile: order.customerMobile,
-          deliveryAddress: order.deliveryAddress,
-          deliveryNotes: order.deliveryNotes,
-          items: order.items.map(i => ({ name: i.productName, quantity: i.quantity })),
-          total: order.total,
-          estimatedArrival: order.trackingInfo.estimatedArrival,
-          timeline: order.trackingInfo.timeline,
-          createdAt: order.trackingInfo.createdAt,
-          updatedAt: order.trackingInfo.updatedAt,
-        };
-        // Cache it in the map for faster future access
-        deliveryTracking.set(orderId, tracking);
+  // Get tracking by order ID - DATABASE BACKED
+  app.get('/api/delivery/tracking/by-order/:orderId', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
       }
+
+      const { orderId } = req.params;
+      
+      // Query database for tracking
+      const trackingResult = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.orderId, orderId));
+      
+      if (trackingResult.length === 0) {
+        // Return null data if no tracking exists yet (order not assigned)
+        return res.json({ success: true, data: null });
+      }
+      
+      const dbTracking = trackingResult[0];
+      
+      // Get order details for enrichment
+      const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+      const order = orderResult[0];
+      
+      // Get order items
+      const orderItems = order ? await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId)) : [];
+      
+      const tracking = {
+        id: dbTracking.id,
+        orderId: dbTracking.orderId,
+        orderNumber: dbTracking.orderNumber,
+        driverId: dbTracking.driverId,
+        driverName: dbTracking.driverName,
+        driverMobile: dbTracking.driverMobile,
+        status: dbTracking.status,
+        customerName: order?.customerName || '',
+        customerMobile: order?.customerMobile || '',
+        deliveryAddress: order?.deliveryAddress || {},
+        deliveryNotes: order?.deliveryNotes || null,
+        items: orderItems.map(i => ({ name: i.productName, quantity: Number(i.quantity) })),
+        total: order ? Number(order.total) : 0,
+        estimatedArrival: dbTracking.estimatedArrival?.toISOString() || null,
+        actualArrival: dbTracking.actualArrival?.toISOString() || null,
+        timeline: dbTracking.timeline || [],
+        currentLocation: dbTracking.currentLocation || null,
+        deliveryProof: dbTracking.deliveryProof || null,
+        createdAt: dbTracking.createdAt.toISOString(),
+        updatedAt: dbTracking.updatedAt.toISOString(),
+      };
+      
+      res.json({ success: true, data: tracking });
+    } catch (error) {
+      console.error('[Get Tracking Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch tracking' });
     }
-    
-    if (!tracking) {
-      // Return null data if no tracking exists yet (order not assigned)
-      return res.json({ success: true, data: null });
-    }
-    
-    res.json({ success: true, data: tracking });
   });
 
   // Get delivery drivers
@@ -4824,76 +4770,92 @@ function createApp() {
     });
   });
 
-  // Get address by ID
-  app.get('/api/delivery/addresses/:id', (req, res) => {
-    const address = addresses.get(req.params.id);
-    if (!address) {
-      return res.status(404).json({ success: false, error: 'Address not found' });
+  // Get address by ID - DATABASE BACKED
+  app.get('/api/delivery/addresses/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const addressResult = await pgDb.select().from(addressesTable).where(eq(addressesTable.id, req.params.id));
+      if (addressResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+      res.json({ success: true, data: addressResult[0] });
+    } catch (error) {
+      console.error('[Get Address Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch address' });
     }
-    res.json({ success: true, data: address });
   });
 
-  // Set address as default
-  app.post('/api/delivery/addresses/:id/set-default', (req, res) => {
-    const address = addresses.get(req.params.id);
-    if (!address) {
-      return res.status(404).json({ success: false, error: 'Address not found' });
-    }
-    
-    // Unset other defaults for this user
-    addresses.forEach(addr => {
-      if (addr.userId === address.userId) {
-        addr.isDefault = addr.id === address.id;
+  // Set address as default - DATABASE BACKED
+  app.post('/api/delivery/addresses/:id/set-default', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
       }
-    });
-    
-    res.json({ success: true, data: address, message: 'Default address updated' });
+
+      const addressResult = await pgDb.select().from(addressesTable).where(eq(addressesTable.id, req.params.id));
+      if (addressResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+      
+      const address = addressResult[0];
+      
+      // Unset other defaults for this user, set this one as default
+      await pgDb.update(addressesTable)
+        .set({ isDefault: false })
+        .where(eq(addressesTable.userId, address.userId));
+      
+      const [updated] = await pgDb.update(addressesTable)
+        .set({ isDefault: true, updatedAt: new Date() })
+        .where(eq(addressesTable.id, req.params.id))
+        .returning();
+      
+      res.json({ success: true, data: updated, message: 'Default address updated' });
+    } catch (error) {
+      console.error('[Set Default Address Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to set default address' });
+    }
   });
 
   // =====================================================
   // USER ADDRESSES API (separate from delivery)
   // =====================================================
 
-  // GET /api/addresses - Get all addresses for user
+  // GET /api/addresses - Get all addresses for user - DATABASE BACKED
   app.get('/api/addresses', async (req, res) => {
     try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
       const userId = req.headers['x-user-id'] as string;
       if (!userId) {
         return res.status(401).json({ success: false, error: 'User ID required' });
       }
 
-      // Try database first if available
-      if (isDatabaseAvailable() && pgDb) {
-        try {
-          const dbAddresses = await pgDb.select().from(addressesTable).where(eq(addressesTable.userId, userId));
-          const formattedAddresses = dbAddresses.map(a => ({
-            id: a.id,
-            userId: a.userId,
-            label: a.label,
-            fullName: a.fullName,
-            mobile: a.mobile,
-            emirate: a.emirate,
-            area: a.area,
-            street: a.street,
-            building: a.building,
-            floor: a.floor,
-            apartment: a.apartment,
-            landmark: a.landmark,
-            latitude: a.latitude,
-            longitude: a.longitude,
-            isDefault: a.isDefault,
-            createdAt: a.createdAt.toISOString(),
-            updatedAt: a.updatedAt.toISOString(),
-          }));
-          return res.json({ success: true, data: formattedAddresses });
-        } catch (dbError) {
-          console.error('[Addresses GET DB Error]', dbError);
-        }
-      }
-
-      // Fallback to in-memory
-      const userAddresses = Array.from(addresses.values()).filter(a => a.userId === userId);
-      res.json({ success: true, data: userAddresses });
+      const dbAddresses = await pgDb.select().from(addressesTable).where(eq(addressesTable.userId, userId));
+      const formattedAddresses = dbAddresses.map(a => ({
+        id: a.id,
+        userId: a.userId,
+        label: a.label,
+        fullName: a.fullName,
+        mobile: a.mobile,
+        emirate: a.emirate,
+        area: a.area,
+        street: a.street,
+        building: a.building,
+        floor: a.floor,
+        apartment: a.apartment,
+        landmark: a.landmark,
+        latitude: a.latitude,
+        longitude: a.longitude,
+        isDefault: a.isDefault,
+        createdAt: a.createdAt.toISOString(),
+        updatedAt: a.updatedAt.toISOString(),
+      }));
+      res.json({ success: true, data: formattedAddresses });
     } catch (error) {
       console.error('[Addresses GET Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch addresses' });
