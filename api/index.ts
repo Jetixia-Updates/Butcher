@@ -556,6 +556,228 @@ function sanitizeUser(user: User): Omit<User, 'password'> {
 }
 
 // =====================================================
+// INVENTORY MANAGEMENT HELPERS (IAS 2 / GAAP Compliant)
+// =====================================================
+
+/**
+ * Validate stock availability for order items
+ * Returns error message if any item has insufficient stock
+ */
+async function validateStockAvailability(
+  items: Array<{ productId: string; quantity: number; productName?: string }>,
+  db: typeof pgDb
+): Promise<{ valid: boolean; error?: string; insufficientItems?: Array<{ productId: string; productName: string; available: number; requested: number }> }> {
+  if (!db) return { valid: false, error: 'Database not available' };
+  
+  const insufficientItems: Array<{ productId: string; productName: string; available: number; requested: number }> = [];
+  
+  for (const item of items) {
+    const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
+    if (stockResult.length === 0) {
+      // If no stock record exists, treat as out of stock
+      insufficientItems.push({
+        productId: item.productId,
+        productName: item.productName || item.productId,
+        available: 0,
+        requested: item.quantity,
+      });
+      continue;
+    }
+    
+    const stockItem = stockResult[0];
+    const available = parseFloat(stockItem.availableQuantity);
+    
+    if (available < item.quantity) {
+      insufficientItems.push({
+        productId: item.productId,
+        productName: item.productName || item.productId,
+        available,
+        requested: item.quantity,
+      });
+    }
+  }
+  
+  if (insufficientItems.length > 0) {
+    const errorItems = insufficientItems.map(i => `${i.productName}: ${i.available} available, ${i.requested} requested`).join('; ');
+    return { valid: false, error: `Insufficient stock: ${errorItems}`, insufficientItems };
+  }
+  
+  return { valid: true };
+}
+
+/**
+ * Reserve stock for an order (reduces available quantity, increases reserved)
+ * Called when order is placed
+ */
+async function reserveStockForOrder(
+  orderId: string,
+  orderNumber: string,
+  items: Array<{ productId: string; quantity: number; productName?: string }>,
+  db: typeof pgDb
+): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: 'Database not available' };
+  
+  const now = new Date();
+  
+  for (const item of items) {
+    const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
+    if (stockResult.length === 0) continue; // Skip if no stock record
+    
+    const stockItem = stockResult[0];
+    const currentQuantity = parseFloat(stockItem.quantity);
+    const currentReserved = parseFloat(stockItem.reservedQuantity);
+    const currentAvailable = parseFloat(stockItem.availableQuantity);
+    
+    const newReserved = currentReserved + item.quantity;
+    const newAvailable = currentAvailable - item.quantity;
+    
+    // Update stock
+    await db.update(stockTable)
+      .set({
+        reservedQuantity: String(newReserved),
+        availableQuantity: String(newAvailable),
+        updatedAt: now,
+      })
+      .where(eq(stockTable.productId, item.productId));
+    
+    // Record movement
+    await db.insert(stockMovementsTable).values({
+      id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      productId: item.productId,
+      type: 'reserved',
+      quantity: String(item.quantity),
+      previousQuantity: String(currentQuantity),
+      newQuantity: String(currentQuantity), // Total quantity unchanged, only reserved increased
+      reason: `Reserved for order ${orderNumber}`,
+      referenceType: 'order',
+      referenceId: orderId,
+      performedBy: 'system',
+      createdAt: now,
+    });
+  }
+  
+  return { success: true };
+}
+
+/**
+ * Confirm stock reduction when order is delivered
+ * Moves items from reserved to actually sold (reduces total quantity)
+ */
+async function confirmStockForDeliveredOrder(
+  orderId: string,
+  orderNumber: string,
+  db: typeof pgDb
+): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: 'Database not available' };
+  
+  const now = new Date();
+  
+  // Get order items
+  const orderItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  
+  for (const item of orderItems) {
+    const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
+    if (stockResult.length === 0) continue;
+    
+    const stockItem = stockResult[0];
+    const currentQuantity = parseFloat(stockItem.quantity);
+    const currentReserved = parseFloat(stockItem.reservedQuantity);
+    const itemQty = parseFloat(item.quantity);
+    
+    const newQuantity = currentQuantity - itemQty;
+    const newReserved = Math.max(0, currentReserved - itemQty);
+    const newAvailable = newQuantity - newReserved;
+    
+    // Update stock - reduce total quantity
+    await db.update(stockTable)
+      .set({
+        quantity: String(newQuantity),
+        reservedQuantity: String(newReserved),
+        availableQuantity: String(newAvailable),
+        updatedAt: now,
+      })
+      .where(eq(stockTable.productId, item.productId));
+    
+    // Record movement as "out" (sold)
+    await db.insert(stockMovementsTable).values({
+      id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      productId: item.productId,
+      type: 'out',
+      quantity: String(itemQty),
+      previousQuantity: String(currentQuantity),
+      newQuantity: String(newQuantity),
+      reason: `Sold via order ${orderNumber}`,
+      referenceType: 'order',
+      referenceId: orderId,
+      performedBy: 'system',
+      createdAt: now,
+    });
+    
+    // Check for low stock alert
+    if (newAvailable <= stockItem.lowStockThreshold) {
+      console.log(`[Low Stock Alert] Product ${item.productId} is low on stock: ${newAvailable} remaining`);
+    }
+  }
+  
+  return { success: true };
+}
+
+/**
+ * Release reserved stock when order is cancelled
+ */
+async function releaseStockForCancelledOrder(
+  orderId: string,
+  orderNumber: string,
+  db: typeof pgDb
+): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: 'Database not available' };
+  
+  const now = new Date();
+  
+  // Get order items
+  const orderItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+  
+  for (const item of orderItems) {
+    const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
+    if (stockResult.length === 0) continue;
+    
+    const stockItem = stockResult[0];
+    const currentQuantity = parseFloat(stockItem.quantity);
+    const currentReserved = parseFloat(stockItem.reservedQuantity);
+    const itemQty = parseFloat(item.quantity);
+    
+    const newReserved = Math.max(0, currentReserved - itemQty);
+    const newAvailable = currentQuantity - newReserved;
+    
+    // Update stock - release reserved, restore available
+    await db.update(stockTable)
+      .set({
+        reservedQuantity: String(newReserved),
+        availableQuantity: String(newAvailable),
+        updatedAt: now,
+      })
+      .where(eq(stockTable.productId, item.productId));
+    
+    // Record movement as "released"
+    await db.insert(stockMovementsTable).values({
+      id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      productId: item.productId,
+      type: 'released',
+      quantity: String(itemQty),
+      previousQuantity: String(currentQuantity),
+      newQuantity: String(currentQuantity), // Total unchanged, only reserved decreased
+      reason: `Released from cancelled order ${orderNumber}`,
+      referenceType: 'order',
+      referenceId: orderId,
+      performedBy: 'system',
+      createdAt: now,
+    });
+  }
+  
+  return { success: true };
+}
+
+// =====================================================
 // EXPRESS APP
 // =====================================================
 
@@ -1826,6 +2048,26 @@ function createApp() {
         calculatedSubtotal += totalPrice;
       }
 
+      // INVENTORY CYCLE: Validate stock availability before creating order (IAS 2 compliance)
+      const stockValidation = await validateStockAvailability(
+        pgDb,
+        items.map((item: { productId: string; quantity: number }) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        }))
+      );
+
+      if (!stockValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: 'Insufficient stock',
+          insufficientItems: stockValidation.insufficientItems,
+          message: `The following items have insufficient stock: ${stockValidation.insufficientItems
+            .map(i => `${i.productName} (requested: ${i.requestedQuantity}, available: ${i.availableQuantity})`)
+            .join(', ')}`,
+        });
+      }
+
       // Use provided values from checkout or calculate
       const discount = Number(providedDiscountAmount) || 0;
       const driverTip = Number(providedDriverTip) || 0;
@@ -1912,6 +2154,17 @@ function createApp() {
           totalPrice: String(item.totalPrice),
         });
       }
+
+      // INVENTORY CYCLE: Reserve stock for order (IAS 2 compliance)
+      await reserveStockForOrder(
+        pgDb,
+        orderId,
+        items.map((item: { productId: string; quantity: number }) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
+        'system'
+      );
 
       // Create payment record
       const paymentId = `pay_${Date.now()}`;
@@ -2029,6 +2282,7 @@ function createApp() {
       const { status } = req.body;
       const now = new Date();
       const order = result[0];
+      const previousStatus = order.status;
       
       const newHistory = [...(order.statusHistory || []), {
         status,
@@ -2043,6 +2297,21 @@ function createApp() {
           updatedAt: now 
         })
         .where(eq(ordersTable.id, req.params.id));
+      
+      // INVENTORY CYCLE: Handle stock movements based on status change (IAS 2 compliance)
+      if (status === 'delivered' && previousStatus !== 'delivered') {
+        // When order is delivered, confirm stock reduction (move from reserved to sold)
+        await confirmStockForDeliveredOrder(pgDb, req.params.id, 'admin');
+        console.log(`[Inventory Cycle] Confirmed stock reduction for delivered order ${req.params.id}`);
+      } else if (status === 'cancelled' && previousStatus !== 'cancelled') {
+        // When order is cancelled, release reserved stock back to available
+        await releaseStockForCancelledOrder(pgDb, req.params.id, 'admin');
+        console.log(`[Inventory Cycle] Released reserved stock for cancelled order ${req.params.id}`);
+      } else if (status === 'refunded' && previousStatus !== 'refunded' && previousStatus !== 'delivered') {
+        // If refunded before delivery, release the reserved stock
+        await releaseStockForCancelledOrder(pgDb, req.params.id, 'admin');
+        console.log(`[Inventory Cycle] Released reserved stock for refunded order ${req.params.id}`);
+      }
       
       // Fetch updated order
       const updated = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
@@ -2432,6 +2701,188 @@ function createApp() {
     } catch (error) {
       console.error('[Stock Movements Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch stock movements' });
+    }
+  });
+
+  // INVENTORY VALUATION: Get inventory valuation report using Weighted Average Cost (IAS 2 compliance)
+  app.get('/api/stock/valuation', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      // Get all stock items with product information
+      const stockItems = await pgDb.select().from(stockTable);
+      const products = await pgDb.select().from(productsTable);
+      const productMap = new Map(products.map(p => [p.id, p]));
+      
+      // Get stock movements for weighted average calculation
+      const movements = await pgDb
+        .select()
+        .from(stockMovementsTable)
+        .orderBy(stockMovementsTable.createdAt);
+      
+      // Calculate Weighted Average Cost for each product
+      const valuationData: Array<{
+        productId: string;
+        productName: string;
+        sku: string;
+        category: string;
+        currentQuantity: number;
+        availableQuantity: number;
+        reservedQuantity: number;
+        unitCost: number;
+        totalValue: number;
+        lastMovementDate: string | null;
+        movementsSummary: {
+          totalIn: number;
+          totalOut: number;
+          totalAdjustments: number;
+        };
+      }> = [];
+      
+      let totalInventoryValue = 0;
+      let totalItems = 0;
+      
+      for (const stock of stockItems) {
+        const product = productMap.get(stock.productId);
+        if (!product) continue;
+        
+        const currentQty = parseFloat(stock.quantity);
+        const availableQty = parseFloat(stock.availableQuantity);
+        const reservedQty = parseFloat(stock.reservedQuantity);
+        
+        // Use product price as unit cost (in real implementation, this would track purchase costs)
+        const unitCost = parseFloat(product.price);
+        const totalValue = currentQty * unitCost;
+        
+        // Get movement summary for this product
+        const productMovements = movements.filter(m => m.productId === stock.productId);
+        const lastMovement = productMovements[productMovements.length - 1];
+        
+        const movementsSummary = {
+          totalIn: productMovements
+            .filter(m => m.type === 'in')
+            .reduce((sum, m) => sum + parseFloat(m.quantity), 0),
+          totalOut: productMovements
+            .filter(m => m.type === 'out')
+            .reduce((sum, m) => sum + parseFloat(m.quantity), 0),
+          totalAdjustments: productMovements
+            .filter(m => m.type === 'adjustment')
+            .reduce((sum, m) => sum + parseFloat(m.quantity), 0),
+        };
+        
+        valuationData.push({
+          productId: stock.productId,
+          productName: product.name,
+          sku: product.sku || 'N/A',
+          category: product.category || 'Uncategorized',
+          currentQuantity: currentQty,
+          availableQuantity: availableQty,
+          reservedQuantity: reservedQty,
+          unitCost,
+          totalValue,
+          lastMovementDate: lastMovement?.createdAt?.toISOString() || null,
+          movementsSummary,
+        });
+        
+        totalInventoryValue += totalValue;
+        totalItems += currentQty;
+      }
+      
+      // Group by category for summary
+      const categoryBreakdown: Record<string, { items: number; value: number }> = {};
+      for (const item of valuationData) {
+        if (!categoryBreakdown[item.category]) {
+          categoryBreakdown[item.category] = { items: 0, value: 0 };
+        }
+        categoryBreakdown[item.category].items += item.currentQuantity;
+        categoryBreakdown[item.category].value += item.totalValue;
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          summary: {
+            totalInventoryValue,
+            totalItems,
+            totalProducts: valuationData.length,
+            valuationMethod: 'Weighted Average Cost',
+            reportDate: new Date().toISOString(),
+            currency: 'AED',
+          },
+          categoryBreakdown,
+          items: valuationData,
+        },
+      });
+    } catch (error) {
+      console.error('[Inventory Valuation Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to generate inventory valuation' });
+    }
+  });
+
+  // INVENTORY CYCLE: Get stock audit trail for a product (IAS 2 compliance)
+  app.get('/api/stock/:productId/audit', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+      
+      const { productId } = req.params;
+      
+      // Get current stock status
+      const stockResult = await pgDb.select().from(stockTable).where(eq(stockTable.productId, productId));
+      if (stockResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Stock item not found' });
+      }
+      
+      const stock = stockResult[0];
+      const product = await pgDb.select().from(productsTable).where(eq(productsTable.id, productId));
+      
+      // Get all movements for this product
+      const movements = await pgDb
+        .select()
+        .from(stockMovementsTable)
+        .where(eq(stockMovementsTable.productId, productId))
+        .orderBy(desc(stockMovementsTable.createdAt));
+      
+      // Calculate running balances for audit trail
+      const auditTrail = movements.map((m, index) => ({
+        id: m.id,
+        date: m.createdAt?.toISOString(),
+        type: m.type,
+        quantity: parseFloat(m.quantity),
+        previousQuantity: m.previousQuantity ? parseFloat(m.previousQuantity) : null,
+        newQuantity: m.newQuantity ? parseFloat(m.newQuantity) : null,
+        reason: m.reason,
+        referenceType: m.referenceType,
+        referenceId: m.referenceId,
+        performedBy: m.performedBy,
+      }));
+      
+      res.json({
+        success: true,
+        data: {
+          product: product[0] ? {
+            id: product[0].id,
+            name: product[0].name,
+            sku: product[0].sku,
+          } : null,
+          currentStock: {
+            quantity: parseFloat(stock.quantity),
+            availableQuantity: parseFloat(stock.availableQuantity),
+            reservedQuantity: parseFloat(stock.reservedQuantity),
+            lowStockThreshold: stock.lowStockThreshold ? parseFloat(stock.lowStockThreshold) : null,
+            reorderPoint: stock.reorderPoint ? parseFloat(stock.reorderPoint) : null,
+            lastUpdated: stock.updatedAt?.toISOString(),
+          },
+          auditTrail,
+          totalMovements: auditTrail.length,
+        },
+      });
+    } catch (error) {
+      console.error('[Stock Audit Trail Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch stock audit trail' });
     }
   });
 
