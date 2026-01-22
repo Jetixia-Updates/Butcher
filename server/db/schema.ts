@@ -1428,6 +1428,167 @@ export const vatReturns = pgTable("vat_returns", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// =====================================================
+// CUSTOMERS TABLE (Extended Customer Profile)
+// =====================================================
+
+export const customerSegmentEnum = pgEnum("customer_segment", [
+  "regular",
+  "premium",
+  "vip",
+  "wholesale",
+  "inactive",
+]);
+
+export const customers = pgTable("customers", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  
+  // Customer Classification
+  customerNumber: varchar("customer_number", { length: 20 }).notNull().unique(), // CUST-0001
+  segment: customerSegmentEnum("segment").notNull().default("regular"),
+  
+  // Financial Info
+  creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }).notNull().default("0"),
+  currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).notNull().default("0"),
+  lifetimeValue: decimal("lifetime_value", { precision: 14, scale: 2 }).notNull().default("0"),
+  
+  // Statistics
+  totalOrders: integer("total_orders").notNull().default(0),
+  totalSpent: decimal("total_spent", { precision: 14, scale: 2 }).notNull().default("0"),
+  averageOrderValue: decimal("average_order_value", { precision: 10, scale: 2 }).notNull().default("0"),
+  lastOrderDate: timestamp("last_order_date"),
+  lastOrderAmount: decimal("last_order_amount", { precision: 10, scale: 2 }),
+  
+  // Preferences
+  preferredPaymentMethod: paymentMethodEnum("preferred_payment_method"),
+  preferredDeliveryTime: varchar("preferred_delivery_time", { length: 50 }),
+  dietaryPreferences: jsonb("dietary_preferences").$type<string[]>(),
+  allergies: jsonb("allergies").$type<string[]>(),
+  
+  // Communication
+  preferredLanguage: languageEnum("preferred_language").default("en"),
+  marketingOptIn: boolean("marketing_opt_in").notNull().default(true),
+  smsOptIn: boolean("sms_opt_in").notNull().default(true),
+  emailOptIn: boolean("email_opt_in").notNull().default(true),
+  
+  // Internal Notes
+  internalNotes: text("internal_notes"),
+  tags: jsonb("tags").$type<string[]>(),
+  
+  // Referrals
+  referredBy: text("referred_by"), // Customer ID who referred this customer
+  referralCount: integer("referral_count").notNull().default(0),
+  
+  // Dates
+  firstPurchaseDate: timestamp("first_purchase_date"),
+  birthDate: timestamp("birth_date"),
+  anniversary: timestamp("anniversary"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// REPORTS TABLE (Saved/Generated Reports)
+// =====================================================
+
+export const reportTypeEnum = pgEnum("report_type", [
+  "sales",
+  "revenue",
+  "orders",
+  "products",
+  "customers",
+  "inventory",
+  "expenses",
+  "profit_loss",
+  "vat",
+  "delivery",
+  "staff_performance",
+  "custom",
+]);
+
+export const reportFormatEnum = pgEnum("report_format", [
+  "pdf",
+  "excel",
+  "csv",
+  "json",
+]);
+
+export const reportStatusEnum = pgEnum("report_status", [
+  "pending",
+  "generating",
+  "completed",
+  "failed",
+]);
+
+export const reports = pgTable("reports", {
+  id: text("id").primaryKey(),
+  reportNumber: varchar("report_number", { length: 20 }).notNull().unique(), // RPT-2026-0001
+  
+  // Report Definition
+  name: varchar("name", { length: 200 }).notNull(),
+  nameAr: varchar("name_ar", { length: 200 }),
+  type: reportTypeEnum("type").notNull(),
+  description: text("description"),
+  
+  // Date Range
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  
+  // Filters & Parameters
+  filters: jsonb("filters").$type<{
+    categories?: string[];
+    products?: string[];
+    customers?: string[];
+    emirates?: string[];
+    paymentMethods?: string[];
+    orderStatuses?: string[];
+    customFilters?: Record<string, unknown>;
+  }>(),
+  
+  // Output
+  format: reportFormatEnum("format").notNull().default("pdf"),
+  status: reportStatusEnum("status").notNull().default("pending"),
+  fileUrl: text("file_url"), // URL to generated report file
+  fileSize: integer("file_size"), // Size in bytes
+  
+  // Summary Data (stored for quick access)
+  summary: jsonb("summary").$type<{
+    totalRevenue?: number;
+    totalOrders?: number;
+    totalCustomers?: number;
+    totalProducts?: number;
+    averageOrderValue?: number;
+    topProducts?: { id: string; name: string; quantity: number; revenue: number }[];
+    topCustomers?: { id: string; name: string; orders: number; spent: number }[];
+    revenueByCategory?: { category: string; revenue: number }[];
+    revenueByEmirate?: { emirate: string; revenue: number }[];
+    dailyTrends?: { date: string; revenue: number; orders: number }[];
+    [key: string]: unknown;
+  }>(),
+  
+  // Scheduling (for recurring reports)
+  isScheduled: boolean("is_scheduled").notNull().default(false),
+  scheduleFrequency: varchar("schedule_frequency", { length: 20 }), // daily, weekly, monthly
+  nextRunAt: timestamp("next_run_at"),
+  lastRunAt: timestamp("last_run_at"),
+  recipients: jsonb("recipients").$type<string[]>(), // Email addresses to send report to
+  
+  // Metadata
+  generatedAt: timestamp("generated_at"),
+  generatedBy: text("generated_by").notNull(),
+  generatedByName: varchar("generated_by_name", { length: 100 }),
+  errorMessage: text("error_message"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// =====================================================
+// RELATIONS (continued)
+// =====================================================
+
 // Journal entry relations
 export const journalEntriesRelations = relations(journalEntries, ({ many }) => ({
   lines: many(journalEntryLines),
@@ -1441,5 +1602,13 @@ export const journalEntryLinesRelations = relations(journalEntryLines, ({ one })
   account: one(chartOfAccounts, {
     fields: [journalEntryLines.accountId],
     references: [chartOfAccounts.id],
+  }),
+}));
+
+// Customer relations
+export const customersRelations = relations(customers, ({ one }) => ({
+  user: one(users, {
+    fields: [customers.userId],
+    references: [users.id],
   }),
 }));
