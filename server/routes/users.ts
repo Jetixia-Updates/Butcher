@@ -507,15 +507,15 @@ const login: RequestHandler = async (req, res) => {
   }
 };
 
-// POST /api/users/admin-login - Admin login
+// POST /api/users/admin-login - Staff login (admin, staff, delivery)
 const adminLogin: RequestHandler = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    console.log("[Admin Login] Attempt with username:", username);
+    console.log("[Staff Login] Attempt with username:", username);
 
     if (!username || !password) {
-      console.log("[Admin Login] Missing username or password");
+      console.log("[Staff Login] Missing username or password");
       const response: ApiResponse<null> = {
         success: false,
         error: "Username and password are required",
@@ -523,36 +523,36 @@ const adminLogin: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    // Find admin user by username
+    // Find staff user by username (admin, staff, or delivery roles)
     const allUsers = await db.select().from(users);
-    console.log("[Admin Login] Total users in DB:", allUsers.length);
-    console.log("[Admin Login] Admin users:", allUsers.filter(u => u.role === "admin").map(u => ({ username: u.username, role: u.role })));
+    console.log("[Staff Login] Total users in DB:", allUsers.length);
+    console.log("[Staff Login] Staff users:", allUsers.filter(u => ["admin", "staff", "delivery"].includes(u.role)).map(u => ({ username: u.username, role: u.role })));
     
     const user = allUsers.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase() && u.role === "admin"
+      (u) => u.username.toLowerCase() === username.toLowerCase() && ["admin", "staff", "delivery"].includes(u.role)
     );
 
     if (!user) {
-      console.log("[Admin Login] No admin user found with username:", username);
+      console.log("[Staff Login] No staff user found with username:", username);
       const response: ApiResponse<null> = {
         success: false,
-        error: "Invalid admin credentials",
+        error: "Invalid staff credentials",
       };
       return res.status(401).json(response);
     }
 
-    console.log("[Admin Login] Found user:", user.username, "checking password...");
+    console.log("[Staff Login] Found user:", user.username, "role:", user.role, "checking password...");
     
     if (user.password !== password) {
-      console.log("[Admin Login] Password mismatch");
+      console.log("[Staff Login] Password mismatch");
       const response: ApiResponse<null> = {
         success: false,
-        error: "Invalid admin credentials",
+        error: "Invalid staff credentials",
       };
       return res.status(401).json(response);
     }
 
-    console.log("[Admin Login] Login successful for:", user.username);
+    console.log("[Staff Login] Login successful for:", user.username);
 
     // Generate token
     const token = generateToken();

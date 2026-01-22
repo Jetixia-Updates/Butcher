@@ -562,6 +562,7 @@ export const usersApi = {
     }>("/users/stats"),
 
   create: (userData: {
+    username: string;
     email: string;
     mobile: string;
     password: string;

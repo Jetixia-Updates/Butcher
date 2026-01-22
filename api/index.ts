@@ -1738,7 +1738,8 @@ function createApp() {
             ilike(usersTable.username, username)
           ).limit(1);
           
-          if (dbUsers.length > 0 && dbUsers[0].role === 'admin') {
+          // Allow admin, staff, and delivery roles to login via this endpoint
+          if (dbUsers.length > 0 && ['admin', 'staff', 'delivery'].includes(dbUsers[0].role)) {
             const dbUser = dbUsers[0];
             user = {
               id: dbUser.id,
@@ -1772,7 +1773,7 @@ function createApp() {
       }
 
       if (!user || user.password !== password) {
-        return res.status(401).json({ success: false, error: 'Invalid admin credentials' });
+        return res.status(401).json({ success: false, error: 'Invalid staff credentials' });
       }
 
       const token = generateToken();

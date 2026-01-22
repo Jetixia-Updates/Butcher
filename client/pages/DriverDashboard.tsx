@@ -159,7 +159,7 @@ const STATUS_FLOW = ["assigned", "picked_up", "in_transit", "nearby", "delivered
 
 export default function DriverDashboardPage() {
   const navigate = useNavigate();
-  const { user, loginWithCredentials, logout, isLoggedIn } = useAuth();
+  const { user, loginAdmin, logout, isLoggedIn } = useAuth();
   const { language } = useLanguage();
   const { notifications, unreadCount, addUserNotification, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const isRTL = language === "ar";
@@ -240,7 +240,8 @@ export default function DriverDashboardPage() {
     setLoggingIn(true);
 
     try {
-      const result = await loginWithCredentials(loginForm.username, loginForm.password);
+      // Drivers are staff, so use admin/staff login endpoint
+      const result = await loginAdmin(loginForm.username, loginForm.password);
       if (!result.success) {
         setLoginError(result.error || t.loginError);
       }
