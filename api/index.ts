@@ -7867,27 +7867,87 @@ function createApp() {
   // NOTIFICATIONS API
   // =====================================================
 
-  // Get all notifications for a user
+  // Get all notifications for a user/customer (using Bearer token or query params)
   app.get('/api/notifications', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { userId } = req.query;
-      if (!userId) {
-        return res.status(400).json({ success: false, error: 'userId is required' });
+      // Extract Bearer token from Authorization header
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      
+      // Support query params for backward compatibility
+      const { userId, customerId } = req.query;
+      let finalUserId = userId as string;
+      let finalCustomerId = customerId as string;
+
+      // If no query params, try to extract from Bearer token
+      if (!finalUserId && !finalCustomerId && token) {
+        try {
+          // Look up session in database
+          const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+          
+          if (sessionResults.length > 0) {
+            const session = sessionResults[0];
+            
+            // Check if session is expired
+            if (new Date(session.expiresAt) < new Date()) {
+              // Delete expired session
+              await pgDb.delete(sessionsTable).where(eq(sessionsTable.id, session.id));
+              console.log(`[Notifications] ❌ Session expired`);
+              return res.status(401).json({ success: false, error: 'Session expired' });
+            }
+            
+            // Use userId from session
+            finalUserId = session.userId;
+            console.log(`[Notifications] ✅ Extracted userId from Bearer token: ${finalUserId}`);
+          } else {
+            // Try in-memory session (for local dev)
+            const memSession = sessions.get(token);
+            if (memSession && new Date(memSession.expiresAt) >= new Date()) {
+              finalUserId = memSession.userId;
+              console.log(`[Notifications] ✅ Extracted userId from in-memory session: ${finalUserId}`);
+            } else {
+              console.log(`[Notifications] ❌ Invalid or expired Bearer token`);
+              return res.status(401).json({ success: false, error: 'Invalid or expired token' });
+            }
+          }
+        } catch (tokenError) {
+          console.error('[Notifications] Token extraction error:', tokenError);
+          return res.status(401).json({ success: false, error: 'Failed to extract user from token' });
+        }
       }
 
-      const notifications = await pgDb
-        .select()
-        .from(inAppNotificationsTable)
-        .where(eq(inAppNotificationsTable.userId, String(userId)))
-        .orderBy(desc(inAppNotificationsTable.createdAt));
+      // Require either userId or customerId
+      if (!finalUserId && !finalCustomerId) {
+        console.log(`[Notifications] ❌ Not authenticated - no userId, customerId, or Bearer token provided`);
+        return res.status(401).json({ success: false, error: 'Not authenticated' });
+      }
+
+      let notifications;
+      if (finalCustomerId) {
+        console.log(`[Notifications] Fetching notifications for customerId=${finalCustomerId}`);
+        notifications = await pgDb
+          .select()
+          .from(inAppNotificationsTable)
+          .where(eq(inAppNotificationsTable.customerId, finalCustomerId))
+          .orderBy(desc(inAppNotificationsTable.createdAt));
+      } else {
+        console.log(`[Notifications] Fetching notifications for userId=${finalUserId}`);
+        notifications = await pgDb
+          .select()
+          .from(inAppNotificationsTable)
+          .where(eq(inAppNotificationsTable.userId, finalUserId))
+          .orderBy(desc(inAppNotificationsTable.createdAt));
+      }
+
+      console.log(`[Notifications] ✅ Found ${notifications.length} notifications`);
 
       const formattedNotifications = notifications.map(n => ({
         id: n.id,
         userId: n.userId,
+        customerId: n.customerId,
         type: n.type,
         title: n.title,
         titleAr: n.titleAr,
@@ -7914,23 +7974,25 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { userId, type, title, titleAr, message, messageAr, link, linkTab, linkId } = req.body;
+      const { userId, customerId, type, title, titleAr, message, messageAr, link, linkTab, linkId } = req.body;
       
-      if (!userId || !type || !title || !message) {
-        return res.status(400).json({ success: false, error: 'userId, type, title, and message are required' });
+      // Require either userId or customerId
+      if ((!userId && !customerId) || !type || !title || !message) {
+        return res.status(400).json({ success: false, error: 'userId/customerId, type, title, and message are required' });
       }
 
       const newNotification = {
         id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        userId: String(userId),
+        userId: userId ? String(userId) : undefined,
+        customerId: customerId ? String(customerId) : undefined,
         type: type || 'general',
         title: title || '',
         titleAr: titleAr || title || '',
         message: message || '',
         messageAr: messageAr || message || '',
-        link: link || null,
-        linkTab: linkTab || null,
-        linkId: linkId || null,
+        link: link || undefined,
+        linkTab: linkTab || undefined,
+        linkId: linkId || undefined,
         unread: true,
       };
 
@@ -7956,15 +8018,61 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { userId } = req.body;
-      if (!userId) {
-        return res.status(400).json({ success: false, error: 'userId is required' });
+      // Extract Bearer token from Authorization header
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      
+      // Support both body params and Bearer token
+      const { userId: bodyUserId, customerId: bodyCustomerId } = req.body;
+      let finalUserId = bodyUserId as string;
+      let finalCustomerId = bodyCustomerId as string;
+
+      // If no body params, try to extract from Bearer token
+      if (!finalUserId && !finalCustomerId && token) {
+        try {
+          // Look up session in database
+          const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+          
+          if (sessionResults.length > 0) {
+            const session = sessionResults[0];
+            
+            // Check if session is expired
+            if (new Date(session.expiresAt) < new Date()) {
+              await pgDb.delete(sessionsTable).where(eq(sessionsTable.id, session.id));
+              return res.status(401).json({ success: false, error: 'Session expired' });
+            }
+            
+            finalUserId = session.userId;
+          } else {
+            // Try in-memory session (for local dev)
+            const memSession = sessions.get(token);
+            if (memSession && new Date(memSession.expiresAt) >= new Date()) {
+              finalUserId = memSession.userId;
+            } else {
+              return res.status(401).json({ success: false, error: 'Invalid or expired token' });
+            }
+          }
+        } catch (tokenError) {
+          console.error('[Read All Notifications] Token extraction error:', tokenError);
+          return res.status(401).json({ success: false, error: 'Failed to extract user from token' });
+        }
+      }
+      
+      // Require either userId or customerId
+      if (!finalUserId && !finalCustomerId) {
+        return res.status(400).json({ success: false, error: 'userId or customerId is required' });
       }
 
-      await pgDb
-        .update(inAppNotificationsTable)
-        .set({ unread: false })
-        .where(eq(inAppNotificationsTable.userId, String(userId)));
+      if (finalCustomerId) {
+        await pgDb
+          .update(inAppNotificationsTable)
+          .set({ unread: false })
+          .where(eq(inAppNotificationsTable.customerId, String(finalCustomerId)));
+      } else {
+        await pgDb
+          .update(inAppNotificationsTable)
+          .set({ unread: false })
+          .where(eq(inAppNotificationsTable.userId, String(finalUserId)));
+      }
 
       res.json({ success: true, message: 'All notifications marked as read' });
     } catch (error) {
