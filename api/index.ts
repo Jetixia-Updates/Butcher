@@ -1052,36 +1052,10 @@ interface Address {
   updatedAt: string;
 }
 
-// In-memory caches only - NO SEEDING
-// These are used for temporary caching only, primary storage is in database
-const sessions = new Map<string, Session>();
-
-// Legacy empty maps - kept for backward compatibility but NOT seeded
-// All CRUD operations should use database, these are fallback only
-const users = new Map<string, User>();
-const orders = new Map<string, Order>();
-const addresses = new Map<string, Address>();
-
-// Delivery tracking cache for quick access (primary storage is in database)
-const deliveryTrackingCache = new Map<string, {
-  id: string;
-  orderId: string;
-  orderNumber: string;
-  driverId: string;
-  driverName: string;
-  driverMobile: string;
-  status: string;
-  customerName?: string;
-  customerMobile?: string;
-  deliveryAddress?: any;
-  deliveryNotes?: string;
-  items?: { name: string; quantity: number }[];
-  total?: number;
-  estimatedArrival: string;
-  timeline: { status: string; timestamp: string; notes?: string }[];
-  createdAt: string;
-  updatedAt: string;
-}>();
+// ⚠️  ALL DATA NOW IN DATABASE - NO IN-MEMORY STRUCTURES
+// Sessions, users, orders, addresses are all persisted to PostgreSQL
+// This ensures data survives server restarts and scales across multiple instances
+// Note: Removed all Map-based in-memory storage for production reliability
 
 // Generate token
 const generateToken = () => `tok_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
@@ -1693,7 +1667,7 @@ function createApp() {
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const sessionId = `session_${Date.now()}`;
       
-      // Store session in database
+      // Store session in database only (no fallback to in-memory)
       if (isDatabaseAvailable() && pgDb) {
         try {
           await pgDb.insert(sessionsTable).values({
@@ -1705,21 +1679,20 @@ function createApp() {
           });
         } catch (e) {
           console.error('[Session DB Error]', e);
+          return res.status(500).json({ success: false, error: 'Failed to create session' });
         }
+      } else {
+        return res.status(500).json({ success: false, error: 'Database not available' });
       }
       
-      // Also store in memory for fallback
-      sessions.set(token, { userId: user.id, expiresAt: expiresAt.toISOString() });
-      
-      // Update last login in DB if available
-      if (isDatabaseAvailable() && pgDb) {
-        try {
-          await pgDb.update(usersTable)
-            .set({ lastLoginAt: new Date() })
-            .where(eq(usersTable.id, user.id));
-        } catch (e) { /* ignore */ }
+      // Update last login in DB
+      try {
+        await pgDb.update(usersTable)
+          .set({ lastLoginAt: new Date() })
+          .where(eq(usersTable.id, user.id));
+      } catch (e) { 
+        console.error('[Update login time error]', e);
       }
-      user.lastLoginAt = new Date().toISOString();
 
       res.json({
         success: true,
@@ -1806,17 +1779,32 @@ function createApp() {
         }
       }
       
-      // Also store in memory for fallback
-      sessions.set(token, { userId: user.id, expiresAt: expiresAt.toISOString() });
-      
+      // Store session in database only (no fallback to in-memory)
       if (isDatabaseAvailable() && pgDb) {
         try {
-          await pgDb.update(usersTable)
-            .set({ lastLoginAt: new Date() })
-            .where(eq(usersTable.id, user.id));
-        } catch (e) { /* ignore */ }
+          await pgDb.insert(sessionsTable).values({
+            id: sessionId,
+            userId: user.id,
+            token: token,
+            expiresAt: expiresAt,
+            createdAt: new Date(),
+          });
+        } catch (e) {
+          console.error('[Session DB Error]', e);
+          return res.status(500).json({ success: false, error: 'Failed to create session' });
+        }
+      } else {
+        return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      user.lastLoginAt = new Date().toISOString();
+      
+      // Update last login in DB
+      try {
+        await pgDb.update(usersTable)
+          .set({ lastLoginAt: new Date() })
+          .where(eq(usersTable.id, user.id));
+      } catch (e) { 
+        console.error('[Update login time error]', e);
+      }
 
       res.json({
         success: true,
@@ -4959,19 +4947,8 @@ function createApp() {
         }
       }
 
-      // Fallback to in-memory session (for local dev)
-      const memSession = sessions.get(token);
-      if (!memSession || new Date(memSession.expiresAt) < new Date()) {
-        sessions.delete(token);
-        return res.json({ success: true, data: null });
-      }
-
-      const memUser = users.get(memSession.userId);
-      if (!memUser) {
-        return res.json({ success: true, data: null });
-      }
-
-      res.json({ success: true, data: sanitizeUser(memUser) });
+      // No database and no session found - user not authenticated
+      return res.json({ success: true, data: null });
     } catch (error) {
       console.error('[Get Me Error]', error);
       res.json({ success: true, data: null });
@@ -5241,17 +5218,11 @@ function createApp() {
         return res.json({ success: true, data: [] });
       }
 
-      // Try to find session in database
+      // Try to find session in database (required)
       const sessionResult = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token)).limit(1);
       if (sessionResult.length === 0) {
-        // Also check in-memory cache
-        const memSession = sessions.get(token);
-        if (!memSession) {
-          return res.json({ success: true, data: [] });
-        }
-        // Get addresses for user from cache session
-        const userAddresses = await pgDb.select().from(addressesTable).where(eq(addressesTable.userId, memSession.userId));
-        return res.json({ success: true, data: userAddresses });
+        // Session not found - must use database
+        return res.json({ success: true, data: [] });
       }
 
       const session = sessionResult[0];
@@ -5279,9 +5250,8 @@ function createApp() {
         if (sessionResult.length > 0) {
           userId = sessionResult[0].userId;
         } else {
-          // Fallback to in-memory cache
-          const session = sessions.get(token);
-          if (session) userId = session.userId;
+          // Session not found - require database
+          return res.status(401).json({ success: false, error: 'Invalid or expired session' });
         }
       }
 
@@ -5536,7 +5506,8 @@ function createApp() {
         
         // Fallback to in-memory driver if not in DB
         if (!driver) {
-          driver = users.get(driverId) as any;
+          // Driver must be in database
+          return res.status(400).json({ success: false, error: 'Invalid delivery driver' });
         }
         
         if (!driver || driver.role !== 'delivery') {
@@ -5638,11 +5609,9 @@ function createApp() {
         });
       }
 
-      // Fallback to in-memory
-      const order = orders.get(orderId);
-      if (!order) {
-        return res.status(404).json({ success: false, error: 'Order not found' });
-      }
+      // No fallback to in-memory - all data must be in database
+      // If execution reaches here, data was not found in DB and should be rejected
+      return res.status(404).json({ success: false, error: 'Order not found in database' });
 
       const driver = users.get(driverId);
       if (!driver || driver.role !== 'delivery') {
@@ -5831,35 +5800,9 @@ function createApp() {
         });
       }
 
-      // Fallback to in-memory
-      let tracking = deliveryTracking.get(orderId);
-      
-      const order = orders.get(orderId);
-      if (!tracking && order?.trackingInfo) {
-        tracking = {
-          id: order.trackingInfo.id,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          driverId: order.trackingInfo.driverId,
-          driverName: order.trackingInfo.driverName,
-          driverMobile: order.trackingInfo.driverMobile,
-          status: order.trackingInfo.status,
-          customerName: order.customerName,
-          customerMobile: order.customerMobile,
-          deliveryAddress: order.deliveryAddress,
-          deliveryNotes: order.deliveryNotes,
-          items: order.items.map(i => ({ name: i.productName, quantity: i.quantity })),
-          total: order.total,
-          estimatedArrival: order.trackingInfo.estimatedArrival,
-          timeline: order.trackingInfo.timeline,
-          createdAt: order.trackingInfo.createdAt,
-          updatedAt: order.trackingInfo.updatedAt,
-        };
-        deliveryTracking.set(orderId, tracking);
-      }
-      
+      // No fallback to in-memory - delivery tracking must be in database
       if (!tracking) {
-        return res.status(404).json({ success: false, error: 'Tracking not found' });
+        return res.status(404).json({ success: false, error: 'Tracking not found in database' });
       }
       
       tracking.status = status;
@@ -6761,38 +6704,8 @@ function createApp() {
         }
       }
 
-      // Fallback to in-memory
-      const address = addresses.get(id);
-      if (!address || address.userId !== userId) {
-        return res.status(404).json({ success: false, error: 'Address not found' });
-      }
-
-      if (isDefault) {
-        addresses.forEach(addr => {
-          if (addr.userId === userId) {
-            addr.isDefault = addr.id === id;
-          }
-        });
-      }
-
-      Object.assign(address, {
-        label: label ?? address.label,
-        fullName: fullName ?? address.fullName,
-        mobile: mobile ?? address.mobile,
-        emirate: emirate ?? address.emirate,
-        area: area ?? address.area,
-        street: street ?? address.street,
-        building: building ?? address.building,
-        floor: floor ?? address.floor,
-        apartment: apartment ?? address.apartment,
-        landmark: landmark ?? address.landmark,
-        latitude: latitude ?? address.latitude,
-        longitude: longitude ?? address.longitude,
-        isDefault: isDefault ?? address.isDefault,
-        updatedAt: new Date().toISOString(),
-      });
-
-      res.json({ success: true, data: address });
+      // No fallback to in-memory - all addresses must be in database
+      return res.status(404).json({ success: false, error: 'Address not found' });
     } catch (error) {
       console.error('[Addresses PUT Error]', error);
       res.status(500).json({ success: false, error: 'Failed to update address' });
@@ -6891,20 +6804,8 @@ function createApp() {
         }
       }
 
-      // Fallback to in-memory
-      const address = addresses.get(id);
-      if (!address || address.userId !== userId) {
-        return res.status(404).json({ success: false, error: 'Address not found' });
-      }
-
-      // Unset all defaults for this user
-      addresses.forEach(addr => {
-        if (addr.userId === userId) {
-          addr.isDefault = addr.id === id;
-        }
-      });
-
-      res.json({ success: true, data: address });
+      // No fallback to in-memory - all addresses must be in database
+      return res.status(404).json({ success: false, error: 'Address not found' });
     } catch (error) {
       console.error('[Addresses Set Default Error]', error);
       res.status(500).json({ success: false, error: 'Failed to set default address' });
@@ -7270,16 +7171,14 @@ function createApp() {
     });
   });
 
-  // Logout - also delete session from database
+  // Logout - delete session from database only
   app.post('/api/users/logout', async (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    if (token) {
-      sessions.delete(token);
-      // Also delete from database
-      if (isDatabaseAvailable() && pgDb) {
-        try {
-          await pgDb.delete(sessionsTable).where(eq(sessionsTable.token, token));
-        } catch (e) { /* ignore */ }
+    if (token && isDatabaseAvailable() && pgDb) {
+      try {
+        await pgDb.delete(sessionsTable).where(eq(sessionsTable.token, token));
+      } catch (e) { 
+        console.error('[Logout error]', e);
       }
     }
     res.json({ success: true, message: 'Logged out successfully' });
@@ -7903,15 +7802,9 @@ function createApp() {
             finalUserId = session.userId;
             console.log(`[Notifications] ✅ Extracted userId from Bearer token: ${finalUserId}`);
           } else {
-            // Try in-memory session (for local dev)
-            const memSession = sessions.get(token);
-            if (memSession && new Date(memSession.expiresAt) >= new Date()) {
-              finalUserId = memSession.userId;
-              console.log(`[Notifications] ✅ Extracted userId from in-memory session: ${finalUserId}`);
-            } else {
-              console.log(`[Notifications] ❌ Invalid or expired Bearer token`);
-              return res.status(401).json({ success: false, error: 'Invalid or expired token' });
-            }
+            // No in-memory fallback - sessions must be in database
+            console.log(`[Notifications] ❌ Invalid or expired Bearer token`);
+            return res.status(401).json({ success: false, error: 'Invalid or expired token' });
           }
         } catch (tokenError) {
           console.error('[Notifications] Token extraction error:', tokenError);
@@ -8043,13 +7936,8 @@ function createApp() {
             
             finalUserId = session.userId;
           } else {
-            // Try in-memory session (for local dev)
-            const memSession = sessions.get(token);
-            if (memSession && new Date(memSession.expiresAt) >= new Date()) {
-              finalUserId = memSession.userId;
-            } else {
-              return res.status(401).json({ success: false, error: 'Invalid or expired token' });
-            }
+            // No in-memory fallback - sessions must be in database
+            return res.status(401).json({ success: false, error: 'Invalid or expired token' });
           }
         } catch (tokenError) {
           console.error('[Read All Notifications] Token extraction error:', tokenError);
