@@ -35,20 +35,22 @@ interface AuthContextType {
   loginWithCredentials: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginAdmin: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  register: (user: Omit<User, "id"> & { username: string; password: string; deliveryAddress?: {
-    label: string;
-    fullName: string;
-    mobile: string;
-    emirate: string;
-    area: string;
-    street: string;
-    building: string;
-    floor?: string;
-    apartment?: string;
-    latitude?: number;
-    longitude?: number;
-    isDefault: boolean;
-  } }) => Promise<{ success: boolean; error?: string }>;
+  register: (user: Omit<User, "id"> & {
+    username: string; password: string; deliveryAddress?: {
+      label: string;
+      fullName: string;
+      mobile: string;
+      emirate: string;
+      area: string;
+      street: string;
+      building: string;
+      floor?: string;
+      apartment?: string;
+      latitude?: number;
+      longitude?: number;
+      isDefault: boolean;
+    }
+  }) => Promise<{ success: boolean; error?: string }>;
   updateUser: (user: Partial<User>) => void;
   requestPasswordReset: (email: string, mobile: string) => { success: boolean; error?: string };
   verifyResetToken: (token: string) => { valid: boolean; email?: string };
@@ -185,8 +187,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           emirate: response.data.user.emirate,
           address: response.data.user.address,
           isVisitor: false,
-          isAdmin: true,
-          role: "admin",
+          isAdmin: response.data.user.role === "admin",
+          role: response.data.user.role || "admin",
         };
 
         setUser(adminUser);
@@ -202,28 +204,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const logout = () => {
     // Call backend logout (fire and forget)
-    authApi.logout().catch(() => {});
-    
+    authApi.logout().catch(() => { });
+
     setAuthToken(null);
     setUser(null);
     localStorage.removeItem("user");
     localStorage.removeItem("basket");
   };
 
-  const register = async (newUser: Omit<User, "id"> & { username: string; password: string; deliveryAddress?: {
-    label: string;
-    fullName: string;
-    mobile: string;
-    emirate: string;
-    area: string;
-    street: string;
-    building: string;
-    floor?: string;
-    apartment?: string;
-    latitude?: number;
-    longitude?: number;
-    isDefault: boolean;
-  } }): Promise<{ success: boolean; error?: string }> => {
+  const register = async (newUser: Omit<User, "id"> & {
+    username: string; password: string; deliveryAddress?: {
+      label: string;
+      fullName: string;
+      mobile: string;
+      emirate: string;
+      area: string;
+      street: string;
+      building: string;
+      floor?: string;
+      apartment?: string;
+      latitude?: number;
+      longitude?: number;
+      isDefault: boolean;
+    }
+  }): Promise<{ success: boolean; error?: string }> => {
     try {
       const response = await authApi.register({
         username: newUser.username,
@@ -249,7 +253,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           };
           localStorage.setItem(`addresses_${response.data.userId}`, JSON.stringify([addressToSave]));
         }
-        
+
         // Auto-login after registration
         const loginResult = await loginWithCredentials(newUser.username, newUser.password);
         return loginResult;
@@ -307,7 +311,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // In a real app, send email here
     console.log(`Password reset link: /reset-password?token=${token}`);
-    
+
     return { success: true };
   };
 
@@ -331,7 +335,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const resetPassword = (token: string, newPassword: string): { success: boolean; error?: string } => {
     const verification = verifyResetToken(token);
-    
+
     if (!verification.valid) {
       return { success: false, error: "Invalid or expired reset link" };
     }

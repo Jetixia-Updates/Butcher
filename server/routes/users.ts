@@ -41,6 +41,8 @@ const createUserSchema = z.object({
     longitude: z.number().optional(),
     isDefault: z.boolean(),
   }).optional(),
+  isActive: z.boolean().optional(),
+  permissions: z.record(z.boolean()).optional(),
 });
 
 const updateUserSchema = z.object({
@@ -59,6 +61,7 @@ const updateUserSchema = z.object({
     smsNotifications: z.boolean().optional(),
     marketingEmails: z.boolean().optional(),
   }).optional(),
+  permissions: z.record(z.boolean()).optional(),
 });
 
 const loginSchema = z.object({
@@ -250,7 +253,7 @@ const createUser: RequestHandler = async (req, res) => {
       firstName: data.firstName,
       familyName: data.familyName,
       role: role as "admin" | "staff" | "delivery",
-      isActive: true,
+      isActive: data.isActive ?? true,
       isVerified: false,
       emirate: data.emirate,
       address: data.address || null,
@@ -261,6 +264,7 @@ const createUser: RequestHandler = async (req, res) => {
         smsNotifications: true,
         marketingEmails: true,
       },
+      permissions: (data.permissions as any) || null,
     };
 
     await db.insert(users).values(newUser);
@@ -354,13 +358,17 @@ const updateUser: RequestHandler = async (req, res) => {
         smsNotifications: true,
         marketingEmails: false,
       };
-      updateData.preferences = { 
+      updateData.preferences = {
         language: data.preferences.language ?? currentPrefs.language,
         currency: data.preferences.currency ?? currentPrefs.currency,
         emailNotifications: data.preferences.emailNotifications ?? currentPrefs.emailNotifications,
         smsNotifications: data.preferences.smsNotifications ?? currentPrefs.smsNotifications,
         marketingEmails: data.preferences.marketingEmails ?? currentPrefs.marketingEmails,
       };
+    }
+
+    if (data.permissions !== undefined) {
+      updateData.permissions = (data.permissions as any);
     }
 
     await db.update(users).set(updateData).where(eq(users.id, id));
@@ -398,7 +406,7 @@ const deleteUser: RequestHandler = async (req, res) => {
     }
 
     // Soft delete - just deactivate
-    await db.update(users).set({ 
+    await db.update(users).set({
       isActive: false,
       updatedAt: new Date(),
     }).where(eq(users.id, id));
@@ -435,8 +443,8 @@ const login: RequestHandler = async (req, res) => {
     // Find user by username OR email (case-insensitive)
     const result = await db.select().from(users);
     const usernameOrEmail = username.toLowerCase();
-    const user = result.find(u => 
-      u.username.toLowerCase() === usernameOrEmail || 
+    const user = result.find(u =>
+      u.username.toLowerCase() === usernameOrEmail ||
       u.email.toLowerCase() === usernameOrEmail
     );
 
@@ -522,7 +530,7 @@ const adminLogin: RequestHandler = async (req, res) => {
     const allUsers = await db.select().from(users);
     console.log("[Staff Login] Total users in DB:", allUsers.length);
     console.log("[Staff Login] Staff users:", allUsers.filter(u => ["admin", "staff", "delivery"].includes(u.role)).map(u => ({ username: u.username, role: u.role })));
-    
+
     const user = allUsers.find(
       (u) => u.username.toLowerCase() === username.toLowerCase() && ["admin", "staff", "delivery"].includes(u.role)
     );
@@ -537,7 +545,7 @@ const adminLogin: RequestHandler = async (req, res) => {
     }
 
     console.log("[Staff Login] Found user:", user.username, "role:", user.role, "checking password...");
-    
+
     if (user.password !== password) {
       console.log("[Staff Login] Password mismatch");
       const response: ApiResponse<null> = {
@@ -624,7 +632,7 @@ const getCurrentUser: RequestHandler = async (req, res) => {
     }
 
     const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
-    
+
     if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
       if (sessionResult.length > 0) {
         await db.delete(sessions).where(eq(sessions.token, token));
@@ -637,7 +645,7 @@ const getCurrentUser: RequestHandler = async (req, res) => {
     }
 
     const userResult = await db.select().from(users).where(eq(users.id, sessionResult[0].userId));
-    
+
     if (userResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
@@ -678,7 +686,7 @@ const changePassword: RequestHandler = async (req, res) => {
     const { currentPassword, newPassword } = validation.data;
 
     const userResult = await db.select().from(users).where(eq(users.id, id));
-    
+
     if (userResult.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
@@ -699,7 +707,7 @@ const changePassword: RequestHandler = async (req, res) => {
     }
 
     // Update password
-    await db.update(users).set({ 
+    await db.update(users).set({
       password: newPassword,
       updatedAt: new Date(),
     }).where(eq(users.id, id));
@@ -733,7 +741,7 @@ const verifyUser: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    await db.update(users).set({ 
+    await db.update(users).set({
       isVerified: true,
       updatedAt: new Date(),
     }).where(eq(users.id, id));
