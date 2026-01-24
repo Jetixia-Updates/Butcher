@@ -8,8 +8,8 @@ const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
+  '/icons/icon-192x192.svg',
+  '/icons/icon-512x512.svg',
 ];
 
 // Install event - cache static assets
@@ -143,8 +143,8 @@ self.addEventListener('push', (event) => {
   const data = event.data.json();
   const options = {
     body: data.body || 'New notification from Butcher',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
+    icon: '/icons/icon-192x192.svg',
+    badge: '/icons/icon-72x72.svg',
     vibrate: [100, 50, 100],
     data: {
       url: data.url || '/',
