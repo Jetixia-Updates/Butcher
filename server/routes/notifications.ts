@@ -173,18 +173,17 @@ const createNotification: RequestHandler = async (req, res) => {
 
     const newNotification = {
       id: generateId(),
-      userId: userId || null,
-      customerId: customerId || null,
+      userId: userId ? userId : undefined,
+      customerId: customerId ? customerId : undefined,
       type: data.type,
       title: data.title,
       titleAr: data.titleAr,
       message: data.message,
       messageAr: data.messageAr,
-      link: data.link || null,
-      linkTab: data.linkTab || null,
-      linkId: data.linkId || null,
+      link: data.link || undefined,
+      linkTab: data.linkTab || undefined,
+      linkId: data.linkId || undefined,
       unread: true,
-      createdAt: new Date(),
     };
 
     await db.insert(inAppNotifications).values(newNotification);
