@@ -258,7 +258,7 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
   const isRTL = language === 'ar';
   const t = translations[language];
   const STAFF_ROLE_CONFIG = getStaffRoleConfig(isRTL);
-  
+
   const [users, setUsers] = useState<UserType[]>([]);
   const [stats, setStats] = useState<{
     total: number;
@@ -327,20 +327,24 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
     familyName: string;
     emirate: string;
     role: string;
-  }) => {
+  }): Promise<{ success: boolean; error?: string }> => {
     const response = await usersApi.create(userData);
     if (response.success) {
       await fetchData();
       setCreateModal(false);
+      return { success: true };
     }
+    return { success: false, error: response.error || "Failed to create user" };
   };
 
-  const handleUpdateUser = async (userId: string, userData: Partial<UserType>) => {
+  const handleUpdateUser = async (userId: string, userData: Partial<UserType>): Promise<{ success: boolean; error?: string }> => {
     const response = await usersApi.update(userId, userData);
     if (response.success) {
       await fetchData();
       setEditModal(null);
+      return { success: true };
     }
+    return { success: false, error: response.error || "Failed to update user" };
   };
 
   const filteredUsers = users.filter((user) => {
@@ -657,7 +661,7 @@ function UserFormModal({
 }: {
   user?: UserType;
   onClose: () => void;
-  onSave: (data: any) => void;
+  onSave: (data: any) => Promise<{ success: boolean; error?: string }>;
   isRTL: boolean;
   t: typeof translations.en;
 }) {
@@ -679,6 +683,7 @@ function UserFormModal({
   const [showPermissions, setShowPermissions] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Update permissions when role changes
   const handleRoleChange = (newRole: string) => {
@@ -698,26 +703,30 @@ function UserFormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setError(null);
 
     const data = user
       ? {
-          username: formData.username,
-          firstName: formData.firstName,
-          familyName: formData.familyName,
-          email: formData.email,
-          mobile: formData.mobile,
-          emirate: formData.emirate,
-          role: formData.role,
-          isActive: formData.isActive,
-          permissions: formData.role !== "admin" ? permissions : getFullPermissions(),
-        }
+        username: formData.username,
+        firstName: formData.firstName,
+        familyName: formData.familyName,
+        email: formData.email,
+        mobile: formData.mobile,
+        emirate: formData.emirate,
+        role: formData.role,
+        isActive: formData.isActive,
+        permissions: formData.role !== "admin" ? permissions : getFullPermissions(),
+      }
       : {
-          ...formData,
-          permissions: formData.role !== "admin" ? permissions : getFullPermissions(),
-        };
+        ...formData,
+        permissions: formData.role !== "admin" ? permissions : getFullPermissions(),
+      };
 
-    await onSave(data);
+    const result = await onSave(data);
     setSubmitting(false);
+    if (!result.success && result.error) {
+      setError(result.error);
+    }
   };
 
   const toggleAllPermissions = (selectAll: boolean) => {
@@ -836,6 +845,12 @@ function UserFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Error Message */}
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
           {/* Username field */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
