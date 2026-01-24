@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { eq, or, ilike, desc, and, gte, lte, ne } from 'drizzle-orm';
@@ -16,6 +18,101 @@ import {
   integer,
   real,
 } from 'drizzle-orm/pg-core';
+
+// =====================================================
+// VALIDATION SCHEMAS (ZOD)
+// =====================================================
+
+const LoginSchema = z.object({
+  username: z.string().min(3, 'Username must be at least 3 characters').max(100),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+const RegisterSchema = z.object({
+  username: z.string().min(3, 'Username must be at least 3 characters').max(100),
+  email: z.string().email('Invalid email address'),
+  mobile: z.string().regex(/^[0-9+\-\s()]*$/, 'Invalid phone number'),
+  password: z.string().min(8, 'Password must be at least 8 characters').regex(/[A-Z]/, 'Password must contain uppercase').regex(/[0-9]/, 'Password must contain numbers'),
+  firstName: z.string().min(2).max(100),
+  familyName: z.string().min(2).max(100),
+  emirate: z.string().min(2).max(100),
+});
+
+const CreateProductSchema = z.object({
+  name: z.string().min(2).max(200),
+  sku: z.string().min(2).max(50),
+  price: z.number().positive('Price must be positive'),
+  costPrice: z.number().positive('Cost price must be positive'),
+  category: z.string().min(2).max(100),
+  description: z.string().optional(),
+  unit: z.enum(['kg', 'piece', 'gram']),
+  minOrderQuantity: z.number().positive().optional(),
+  maxOrderQuantity: z.number().positive().optional(),
+});
+
+const CreateOrderSchema = z.object({
+  userId: z.string(),
+  items: z.array(z.object({
+    productId: z.string(),
+    quantity: z.number().positive('Quantity must be positive'),
+    unitPrice: z.number().positive(),
+  })).min(1, 'Order must have at least one item'),
+  addressId: z.string(),
+  paymentMethod: z.enum(['card', 'cod', 'bank_transfer']),
+  deliveryFee: z.number().nonnegative(),
+  subtotal: z.number().positive(),
+  vatAmount: z.number().nonnegative(),
+  total: z.number().positive(),
+});
+
+const ProcessPaymentSchema = z.object({
+  orderId: z.string(),
+  amount: z.number().positive(),
+  method: z.enum(['card', 'cod', 'bank_transfer']),
+});
+
+const UpdateOrderStatusSchema = z.object({
+  status: z.enum(['pending', 'confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'cancelled', 'refunded']),
+  notes: z.string().optional(),
+});
+
+// =====================================================
+// RATE LIMITING
+// =====================================================
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per 15 minutes
+  message: 'Too many login attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || 'unknown',
+});
+
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // 3 registrations per hour per IP
+  message: 'Too many registrations, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || 'unknown',
+});
+
+const paymentLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 10, // 10 payment attempts per 10 minutes
+  message: 'Too many payment attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || 'unknown',
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute (general limit)
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // =====================================================
 // NEON DATABASE CONNECTION
@@ -1459,6 +1556,27 @@ async function createRefundTransaction(
 // EXPRESS APP
 // =====================================================
 
+// Cache control middleware
+const cacheControl = (duration: number) => (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  res.set('Cache-Control', `public, max-age=${duration}`);
+  next();
+};
+
+// Middleware to validate request body with Zod
+const validateRequest = (schema: z.ZodSchema) => (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  try {
+    const validated = schema.parse(req.body);
+    req.body = validated;
+    next();
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const messages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      return res.status(400).json({ success: false, error: `Validation error: ${messages}` });
+    }
+    return res.status(400).json({ success: false, error: 'Invalid request' });
+  }
+};
+
 let app: express.Express | null = null;
 
 function createApp() {
@@ -1470,6 +1588,7 @@ function createApp() {
   app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+  app.use(apiLimiter); // Apply general rate limit to all routes
 
   // Ping endpoint
   app.get('/api/ping', (req, res) => {
@@ -1506,14 +1625,10 @@ function createApp() {
     });
   });
 
-  // User login
-  app.post('/api/users/login', async (req, res) => {
+  // User login - with rate limiting and validation
+  app.post('/api/users/login', loginLimiter, validateRequest(LoginSchema), async (req, res) => {
     try {
       const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({ success: false, error: 'Username and password are required' });
-      }
       
       let user: User | undefined;
       
@@ -1621,14 +1736,10 @@ function createApp() {
     }
   });
 
-  // Admin login
-  app.post('/api/users/admin-login', async (req, res) => {
+  // Admin login - with rate limiting and validation
+  app.post('/api/users/admin-login', loginLimiter, validateRequest(LoginSchema), async (req, res) => {
     try {
       const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({ success: false, error: 'Username and password are required' });
-      }
 
       let user: User | undefined;
       
@@ -1728,19 +1839,10 @@ function createApp() {
   // USERS API
   // =====================================================
 
-  // Register user
-  app.post('/api/users', async (req, res) => {
+  // Register user - with rate limiting and validation
+  app.post('/api/users', registrationLimiter, validateRequest(RegisterSchema), async (req, res) => {
     try {
       const { username, email, mobile, password, firstName, familyName, emirate, address, deliveryAddress } = req.body;
-      
-      if (!username || !email || !mobile || !password || !firstName || !familyName || !emirate) {
-        return res.status(400).json({ success: false, error: 'All fields are required' });
-      }
-
-      // Check username
-      if (username.length < 3 || !/^[a-zA-Z0-9_]+$/.test(username)) {
-        return res.status(400).json({ success: false, error: 'Username must be at least 3 characters and contain only letters, numbers, and underscores' });
-      }
 
       const normalizedMobile = mobile.replace(/\s/g, '');
       const userId = `user_${Date.now()}`;
@@ -1903,12 +2005,17 @@ function createApp() {
     }
   });
 
-  // Products endpoint - DATABASE BACKED
-  app.get('/api/products', async (req, res) => {
+  // Products endpoint - DATABASE BACKED with pagination and caching
+  app.get('/api/products', cacheControl(300), async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
+      
+      // Parse pagination parameters
+      const page = Math.max(1, parseInt(String(req.query.page)) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit)) || 20)); // Max 100 per page
+      const offset = (page - 1) * limit;
       
       const { category, search, featured } = req.query;
       let result = await pgDb.select().from(productsTable);
@@ -1933,8 +2040,15 @@ function createApp() {
         result = result.filter(p => p.isFeatured);
       }
       
+      // Get total count before pagination
+      const total = result.length;
+      const totalPages = Math.ceil(total / limit);
+      
+      // Apply pagination
+      const paginatedResult = result.slice(offset, offset + limit);
+      
       // Convert to API format
-      const products = result.map(p => ({
+      const products = paginatedResult.map(p => ({
         id: p.id,
         name: p.name,
         nameAr: p.nameAr,
@@ -1959,15 +2073,24 @@ function createApp() {
         updatedAt: p.updatedAt.toISOString(),
       }));
       
-      res.json({ success: true, data: products });
+      res.json({ 
+        success: true, 
+        data: products,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+        }
+      });
     } catch (error) {
       console.error('[Products Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch products' });
     }
   });
 
-  // Get product by ID - DATABASE BACKED
-  app.get('/api/products/:id', async (req, res) => {
+  // Get product by ID - DATABASE BACKED with caching
+  app.get('/api/products/:id', cacheControl(3600), async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -2187,7 +2310,7 @@ function createApp() {
   // ANALYTICS / DASHBOARD API - DATABASE BACKED
   // =====================================================
 
-  app.get('/api/analytics/dashboard', async (req, res) => {
+  app.get('/api/analytics/dashboard', cacheControl(120), async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -2499,7 +2622,7 @@ function createApp() {
   // ORDERS API - DATABASE BACKED
   // =====================================================
 
-  app.get('/api/orders', async (req, res) => {
+  app.get('/api/orders', cacheControl(60), async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -2655,8 +2778,8 @@ function createApp() {
     }
   });
 
-  // Create new order - DATABASE BACKED
-  app.post('/api/orders', async (req, res) => {
+  // Create new order - DATABASE BACKED with validation and rate limiting
+  app.post('/api/orders', paymentLimiter, validateRequest(CreateOrderSchema), async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -2664,7 +2787,7 @@ function createApp() {
       
       const { 
         userId, 
-        items, 
+        items,
         addressId: providedAddressId, 
         deliveryAddress: providedAddress, 
         paymentMethod, 
@@ -3304,7 +3427,7 @@ function createApp() {
   // STOCK / INVENTORY API - DATABASE BACKED
   // =====================================================
 
-  app.get('/api/stock', async (req, res) => {
+  app.get('/api/stock', cacheControl(300), async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -3332,7 +3455,7 @@ function createApp() {
   });
 
   // Get stock for specific product - DATABASE BACKED
-  app.get('/api/stock/:productId', async (req, res) => {
+  app.get('/api/stock/:productId', cacheControl(600), async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -6031,17 +6154,13 @@ function createApp() {
   });
 
   // Process payment - DATABASE BACKED
-  app.post('/api/payments/process', async (req, res) => {
+  app.post('/api/payments/process', paymentLimiter, validateRequest(ProcessPaymentSchema), async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
       const { orderId, amount, method, currency = 'AED', saveCard } = req.body;
-      
-      if (!orderId || !amount || !method) {
-        return res.status(400).json({ success: false, error: 'orderId, amount, and method are required' });
-      }
 
       // Get order from database
       const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
@@ -7207,7 +7326,7 @@ function createApp() {
     promoCodes: [],
   };
 
-  app.get('/api/settings', async (req, res) => {
+  app.get('/api/settings', cacheControl(3600), async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         // Fallback to static data if database not available
