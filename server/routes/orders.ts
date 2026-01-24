@@ -107,6 +107,107 @@ function getOrderStatusNotification(orderNumber: string, status: string): OrderN
   return notifications[status] || null;
 }
 
+// Helper to create invoice notification when order is confirmed
+async function createInvoiceNotificationForConfirmedOrder(order: typeof orders.$inferSelect, orderItems: typeof orderItems.$inferSelect[]): Promise<void> {
+  if (!order.customerId && !order.userId) {
+    console.log(`[Invoice Notification] Skipped - no customerId or userId`);
+    return;
+  }
+
+  try {
+    const customerId = order.customerId || order.userId;
+    const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${order.orderNumber.replace('ORD-', '')}`;
+    const shopTRN = "100567890123456"; // UAE TRN format
+    
+    // Format items
+    const itemsList = orderItems.map(item => 
+      `• ${item.productName} × ${item.quantity}\n  AED ${Number(item.totalPrice).toFixed(2)}`
+    ).join('\n');
+
+    // Create invoice text - ENGLISH
+    const invoiceText = `
+════════════════════════════════════════
+         🥩 BUTCHER
+════════════════════════════════════════
+TRN: ${shopTRN}
+📄 TAX Invoice #${invoiceNumber}
+════════════════════════════════════════
+Order No: ${order.orderNumber}
+Date: ${new Date().toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+────────────────────────────────────────
+BILL TO:
+Customer: ${order.customerName}
+Mobile: ${order.customerMobile}
+Address: ${order.deliveryAddress ? `${(order.deliveryAddress as any).building || ''}, ${(order.deliveryAddress as any).street || ''}, ${(order.deliveryAddress as any).area || ''}, ${(order.deliveryAddress as any).emirate || ''}` : 'N/A'}
+────────────────────────────────────────
+ITEMS:
+${itemsList}
+────────────────────────────────────────
+Subtotal:           AED ${Number(order.subtotal).toFixed(2)}
+${order.discount > 0 ? `Discount (-):        AED ${Number(order.discount).toFixed(2)}` : ''}
+VAT (5%):           AED ${Number(order.vatAmount).toFixed(2)}
+Delivery Fee:       AED ${Number(order.deliveryFee).toFixed(2)}
+════════════════════════════════════════
+TOTAL:              AED ${Number(order.total).toFixed(2)}
+════════════════════════════════════════
+Payment Method: ${order.paymentMethod === 'card' ? 'Credit Card' : order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : 'Cash on Delivery'}
+
+Thank you for your purchase!
+════════════════════════════════════════`;
+
+    // Create invoice text - ARABIC
+    const invoiceTextAr = `
+════════════════════════════════════════
+         🥩 جزاري
+════════════════════════════════════════
+الرقم الضريبي: ${shopTRN}
+📄 فاتورة ضريبية #${invoiceNumber}
+════════════════════════════════════════
+رقم الطلب: ${order.orderNumber}
+التاريخ: ${new Date().toLocaleDateString('ar-AE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+────────────────────────────────────────
+الفاتورة إلى:
+العميل: ${order.customerName}
+الهاتف: ${order.customerMobile}
+العنوان: ${order.deliveryAddress ? `${(order.deliveryAddress as any).building || ''}, ${(order.deliveryAddress as any).street || ''}, ${(order.deliveryAddress as any).area || ''}, ${(order.deliveryAddress as any).emirate || ''}` : 'N/A'}
+────────────────────────────────────────
+المنتجات:
+${itemsList}
+────────────────────────────────────────
+الإجمالي الجزئي:        ${Number(order.subtotal).toFixed(2)} د.إ
+${order.discount > 0 ? `الخصم (-):             ${Number(order.discount).toFixed(2)} د.إ` : ''}
+الضريبة (5%):          ${Number(order.vatAmount).toFixed(2)} د.إ
+رسوم التوصيل:          ${Number(order.deliveryFee).toFixed(2)} د.إ
+════════════════════════════════════════
+الإجمالي:              ${Number(order.total).toFixed(2)} د.إ
+════════════════════════════════════════
+طريقة الدفع: ${order.paymentMethod === 'card' ? 'بطاقة ائتمان' : order.paymentMethod === 'bank_transfer' ? 'تحويل بنكي' : 'الدفع عند الاستلام'}
+
+شكراً لتسوقك معنا!
+════════════════════════════════════════`;
+
+    await db.insert(inAppNotifications).values({
+      id: generateId("notif"),
+      customerId: order.customerId || undefined,
+      userId: !order.customerId ? order.userId : undefined,
+      type: "payment",
+      title: `📄 TAX Invoice #${invoiceNumber}`,
+      titleAr: `📄 فاتورة ضريبية #${invoiceNumber}`,
+      message: invoiceText,
+      messageAr: invoiceTextAr,
+      link: "/orders",
+      linkTab: null,
+      linkId: order.id,
+      unread: true,
+      createdAt: new Date(),
+    });
+
+    console.log(`[Invoice Notification] ✅ Invoice notification created for customer ${customerId}: Order ${order.orderNumber}, Invoice ${invoiceNumber}`);
+  } catch (error) {
+    console.error(`[Invoice Notification] ❌ Failed to create invoice notification:`, error);
+  }
+}
+
 // Helper to create notification for a customer (server-side)
 async function createCustomerOrderNotification(customerId: string, orderNumber: string, status: string): Promise<void> {
   const content = getOrderStatusNotification(orderNumber, status);
@@ -119,6 +220,7 @@ async function createCustomerOrderNotification(customerId: string, orderNumber: 
     const newNotification = {
       id: generateId("notif"),
       customerId,
+      userId: null,
       type: "order",
       title: content.title,
       titleAr: content.titleAr,
@@ -784,10 +886,47 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     // Orders can be for customers (customerId) or staff (userId) - check both
     try {
       if (order.customerId) {
+        console.log(`[UpdateStatus] Creating notification for customer ${order.customerId}, order ${order.orderNumber}, status ${status}`);
         await createCustomerOrderNotification(order.customerId, order.orderNumber, status);
+        
+        // When order is confirmed, also send invoice notification
+        if (status === "confirmed") {
+          console.log(`[UpdateStatus] Creating invoice notification for confirmed order ${order.orderNumber}`);
+          await createInvoiceNotificationForConfirmedOrder(order, itemsResult);
+        }
       } else if (order.userId) {
-        // For staff orders, create notification with userId
-        await createCustomerOrderNotification(order.userId, order.orderNumber, status);
+        // For staff/internal orders, create notification with userId
+        console.log(`[UpdateStatus] Creating notification for userId ${order.userId}, order ${order.orderNumber}, status ${status}`);
+        try {
+          const content = getOrderStatusNotification(order.orderNumber, status);
+          if (content) {
+            await db.insert(inAppNotifications).values({
+              id: generateId("notif"),
+              userId: order.userId,
+              customerId: null,
+              type: "order",
+              title: content.title,
+              titleAr: content.titleAr,
+              message: content.message,
+              messageAr: content.messageAr,
+              link: "/orders",
+              linkTab: null,
+              linkId: null,
+              unread: true,
+              createdAt: new Date(),
+            });
+            console.log(`[UpdateStatus] ✅ Created notification for user ${order.userId}: ${status}`);
+          }
+          
+          // For staff orders, also send invoice if confirmed
+          if (status === "confirmed") {
+            await createInvoiceNotificationForConfirmedOrder(order, itemsResult);
+          }
+        } catch (err) {
+          console.error(`[UpdateStatus] Failed to create user notification:`, err);
+        }
+      } else {
+        console.warn(`[UpdateStatus] No customerId or userId found for order ${id}`);
       }
     } catch (notifWarn) {
       console.warn(`[UpdateStatus] Notification creation failed but order updated (non-critical):`, notifWarn);
