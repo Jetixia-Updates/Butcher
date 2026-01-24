@@ -5561,9 +5561,6 @@ function createApp() {
           updatedAt: now.toISOString(),
         };
 
-        // Also store in memory for quick access
-        deliveryTracking.set(orderId, tracking);
-
         // Create notification for customer about driver assignment
         if (order.userId) {
           try {
@@ -5635,8 +5632,6 @@ function createApp() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-
-      deliveryTracking.set(orderId, tracking);
 
       res.json({
         success: true,
@@ -5771,7 +5766,6 @@ function createApp() {
             timestamp: now.toISOString(),
             notes,
           });
-          deliveryTracking.set(orderId, tracking);
         }
 
         return res.json({ 
