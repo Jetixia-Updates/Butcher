@@ -196,10 +196,9 @@ ${order.discount > 0 ? `الخصم (-):             ${Number(order.discount).toF
       message: invoiceText,
       messageAr: invoiceTextAr,
       link: "/orders",
-      linkTab: null,
+      linkTab: undefined,
       linkId: order.id,
       unread: true,
-      createdAt: new Date(),
     });
 
     console.log(`[Invoice Notification] ✅ Invoice notification created for customer ${customerId}: Order ${order.orderNumber}, Invoice ${invoiceNumber}`);
@@ -220,17 +219,16 @@ async function createCustomerOrderNotification(customerId: string, orderNumber: 
     const newNotification = {
       id: generateId("notif"),
       customerId,
-      userId: null,
+      userId: undefined,
       type: "order",
       title: content.title,
       titleAr: content.titleAr,
       message: content.message,
       messageAr: content.messageAr,
       link: "/orders",
-      linkTab: null,
-      linkId: null,
+      linkTab: undefined,
+      linkId: undefined,
       unread: true,
-      createdAt: new Date(),
     };
 
     await db.insert(inAppNotifications).values(newNotification);
@@ -707,16 +705,16 @@ const createOrder: RequestHandler = async (req, res) => {
       const customerNotification = {
         id: generateId("notif"),
         customerId: userId,
+        userId: undefined,
         type: "order",
         title: "Order Placed Successfully",
         titleAr: "تم تقديم الطلب بنجاح",
         message: `Your order ${orderNumber} has been placed and is being processed`,
         messageAr: `تم تقديم طلبك ${orderNumber} وجاري معالجته`,
         link: `/orders`,
-        linkTab: null,
+        linkTab: undefined,
         linkId: orderId,
         unread: true,
-        createdAt: new Date(),
       };
       await db.insert(inAppNotifications).values(customerNotification);
       console.log(`[Order Notification] ✅ Customer notification created for order ${orderNumber} (customerId: ${userId})`);
@@ -903,17 +901,16 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
             await db.insert(inAppNotifications).values({
               id: generateId("notif"),
               userId: order.userId,
-              customerId: null,
+              customerId: undefined,
               type: "order",
               title: content.title,
               titleAr: content.titleAr,
               message: content.message,
               messageAr: content.messageAr,
               link: "/orders",
-              linkTab: null,
-              linkId: null,
+              linkTab: undefined,
+              linkId: undefined,
               unread: true,
-              createdAt: new Date(),
             });
             console.log(`[UpdateStatus] ✅ Created notification for user ${order.userId}: ${status}`);
           }
