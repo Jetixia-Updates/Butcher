@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/context/LanguageContext";
-import { customersAdminApi, walletApi, loyaltyApi, reviewsApi, type CustomerAdmin } from "@/lib/api";
+import { usersApi, walletApi, loyaltyApi, reviewsApi } from "@/lib/api";
 import type { User as UserType } from "@shared/api";
 
 interface AdminTabProps {
@@ -229,15 +229,15 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
   const t = translations[language];
 
   const [activeSection, setActiveSection] = useState<"customers" | "wallets" | "loyalty" | "reviews">("customers");
-  const [customers, setCustomers] = useState<CustomerAdmin[]>([]);
+  const [customers, setCustomers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [adjustModal, setAdjustModal] = useState<{ user: CustomerAdmin; type: "wallet" | "loyalty" } | null>(null);
-  const [historyModal, setHistoryModal] = useState<{ user: CustomerAdmin; type: "wallet" | "loyalty" } | null>(null);
+  const [adjustModal, setAdjustModal] = useState<{ user: UserType; type: "wallet" | "loyalty" } | null>(null);
+  const [historyModal, setHistoryModal] = useState<{ user: UserType; type: "wallet" | "loyalty" } | null>(null);
   const [reviewModal, setReviewModal] = useState<Review | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewFilter, setReviewFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
-  const [editModal, setEditModal] = useState<CustomerAdmin | null>(null);
+  const [editModal, setEditModal] = useState<UserType | null>(null);
   
   // Customer wallet/loyalty data cache
   const [customerData, setCustomerData] = useState<Record<string, { balance: number; points: number; tier: string }>>({});
@@ -258,8 +258,8 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch customers from the customers table
-      const response = await customersAdminApi.getAll();
+      // Fetch customers
+      const response = await usersApi.getAll({ role: "customer" });
       if (response.success && response.data) {
         setCustomers(response.data);
         
@@ -435,9 +435,9 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
   };
 
   // Update customer via API
-  const updateCustomer = async (userId: string, data: Partial<CustomerAdmin>) => {
+  const updateCustomer = async (userId: string, data: Partial<UserType>) => {
     try {
-      const response = await customersAdminApi.update(userId, data);
+      const response = await usersApi.update(userId, data);
       if (response.success && response.data) {
         setCustomers(prev => prev.map(c => c.id === userId ? { ...c, ...response.data } : c));
         setEditModal(null);
@@ -458,7 +458,7 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
   const deleteCustomer = async (userId: string) => {
     if (!confirm(t.confirmDeleteCustomer)) return;
     try {
-      const response = await customersAdminApi.delete(userId);
+      const response = await usersApi.delete(userId);
       if (response.success) {
         setCustomers(prev => prev.filter(c => c.id !== userId));
         alert(t.deleteSuccess);

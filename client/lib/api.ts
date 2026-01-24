@@ -149,7 +149,6 @@ async function fetchApi<T>(
 // =====================================================
 
 export const authApi = {
-  // Staff login (admin, staff, delivery roles only)
   login: (username: string, password: string) =>
     fetchApi<LoginResponse>("/users/login", {
       method: "POST",
@@ -168,82 +167,7 @@ export const authApi = {
     }),
 
   getCurrentUser: () => fetchApi<User>("/users/me"),
-};
 
-// =====================================================
-// CUSTOMER AUTH API - Customers only
-// =====================================================
-
-export interface CustomerLoginResponse {
-  customer: {
-    id: string;
-    username: string;
-    email: string;
-    mobile: string;
-    firstName: string;
-    familyName: string;
-    isActive: boolean;
-    isVerified: boolean;
-    emirate: string;
-    address?: string;
-    customerNumber: string;
-    segment: string;
-    creditLimit: string;
-    currentBalance: string;
-    lifetimeValue: string;
-    totalOrders: number;
-    totalSpent: string;
-    averageOrderValue: string;
-    lastOrderDate?: string;
-    preferences?: {
-      language: "en" | "ar";
-      currency: "AED" | "USD" | "EUR";
-      emailNotifications: boolean;
-      smsNotifications: boolean;
-      marketingEmails: boolean;
-    };
-    createdAt: string;
-    updatedAt: string;
-    lastLoginAt?: string;
-  };
-  token: string;
-  expiresAt: string;
-}
-
-export interface CustomerData {
-  id: string;
-  username: string;
-  email: string;
-  mobile: string;
-  firstName: string;
-  familyName: string;
-  isActive: boolean;
-  isVerified: boolean;
-  emirate: string;
-  address?: string;
-  customerNumber: string;
-  segment: string;
-  creditLimit: string;
-  currentBalance: string;
-  lifetimeValue: string;
-  totalOrders: number;
-  totalSpent: string;
-  averageOrderValue: string;
-  lastOrderDate?: string;
-  preferences?: {
-    language: "en" | "ar";
-    currency: "AED" | "USD" | "EUR";
-    emailNotifications: boolean;
-    smsNotifications: boolean;
-    marketingEmails: boolean;
-  };
-  createdAt: string;
-  updatedAt: string;
-  lastLoginAt?: string;
-}
-
-export const customerAuthApi = {
-  // Customer registration
   register: (userData: {
     username: string;
     email: string;
@@ -268,53 +192,9 @@ export const customerAuthApi = {
       isDefault: boolean;
     };
   }) =>
-    fetchApi<CustomerData>("/customers/register", {
+    fetchApi<{ userId: string }>("/users/register", {
       method: "POST",
       body: JSON.stringify(userData),
-    }),
-
-  // Customer login
-  login: (username: string, password: string) =>
-    fetchApi<CustomerLoginResponse>("/customers/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    }),
-
-  // Customer logout
-  logout: () =>
-    fetchApi<null>("/customers/logout", {
-      method: "POST",
-    }),
-
-  // Get current customer profile
-  getCurrentCustomer: () => fetchApi<CustomerData>("/customers/me"),
-
-  // Update customer profile
-  updateProfile: (data: {
-    email?: string;
-    mobile?: string;
-    firstName?: string;
-    familyName?: string;
-    emirate?: string;
-    address?: string;
-    preferences?: {
-      language?: "en" | "ar";
-      currency?: "AED" | "USD" | "EUR";
-      emailNotifications?: boolean;
-      smsNotifications?: boolean;
-      marketingEmails?: boolean;
-    };
-  }) =>
-    fetchApi<CustomerData>("/customers/me", {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
-  // Change password
-  changePassword: (currentPassword: string, newPassword: string) =>
-    fetchApi<null>("/customers/me/password", {
-      method: "PUT",
-      body: JSON.stringify({ currentPassword, newPassword }),
     }),
 };
 
@@ -587,71 +467,6 @@ export const usersApi = {
 
   toggleActive: (id: string, isActive: boolean) =>
     fetchApi<User>(`/users/${id}`, {
-      method: "PUT",
-      body: JSON.stringify({ isActive }),
-    }),
-};
-
-// =====================================================
-// CUSTOMERS ADMIN API (for admin to manage customers)
-// =====================================================
-
-export interface CustomerAdmin {
-  id: string;
-  username: string;
-  email: string;
-  mobile: string;
-  firstName: string;
-  familyName: string;
-  isActive: boolean;
-  isVerified: boolean;
-  emirate: string;
-  address?: string;
-  customerNumber: string;
-  segment: string;
-  creditLimit: string;
-  currentBalance: string;
-  lifetimeValue: string;
-  totalOrders: number;
-  totalSpent: string;
-  averageOrderValue: string;
-  lastOrderDate?: string;
-  preferences?: {
-    language: "en" | "ar";
-    currency: "AED" | "USD" | "EUR";
-    emailNotifications: boolean;
-    smsNotifications: boolean;
-    marketingEmails: boolean;
-  };
-  createdAt: string;
-  updatedAt: string;
-  lastLoginAt?: string;
-}
-
-export const customersAdminApi = {
-  getAll: (params?: { page?: number; limit?: number; search?: string; segment?: string }) => {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set("page", params.page.toString());
-    if (params?.limit) searchParams.set("limit", params.limit.toString());
-    if (params?.search) searchParams.set("search", params.search);
-    if (params?.segment) searchParams.set("segment", params.segment);
-
-    return fetchApi<CustomerAdmin[]>(`/customers?${searchParams.toString()}`);
-  },
-
-  getById: (id: string) => fetchApi<CustomerAdmin>(`/customers/${id}`),
-
-  update: (id: string, data: Partial<CustomerAdmin>) =>
-    fetchApi<CustomerAdmin>(`/customers/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
-  delete: (id: string) =>
-    fetchApi<null>(`/customers/${id}`, { method: "DELETE" }),
-
-  toggleActive: (id: string, isActive: boolean) =>
-    fetchApi<CustomerAdmin>(`/customers/${id}`, {
       method: "PUT",
       body: JSON.stringify({ isActive }),
     }),
