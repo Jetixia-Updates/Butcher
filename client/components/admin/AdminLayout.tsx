@@ -485,7 +485,14 @@ export function AdminLayout({
                           ref={chatMessagesRef}
                           className="flex-1 overflow-y-auto p-4 space-y-3"
                         >
-                          {selectedChat?.messages.map((msg) => (
+                          {selectedChat?.messages && selectedChat.messages.length > 0 && selectedChat.messages
+                            .slice()
+                            .sort((a, b) => {
+                              const timeA = new Date(a.timestamp).getTime();
+                              const timeB = new Date(b.timestamp).getTime();
+                              return timeA - timeB;
+                            })
+                            .map((msg) => (
                             <div
                               key={msg.id}
                               className={cn(

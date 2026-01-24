@@ -8125,7 +8125,7 @@ function createApp() {
       const messages = await pgDb
         .select()
         .from(chatMessagesTable)
-        .orderBy(desc(chatMessagesTable.createdAt));
+        .orderBy(chatMessagesTable.createdAt);
 
       // Group messages by userId
       const chatsMap = new Map<string, {
