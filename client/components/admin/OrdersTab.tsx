@@ -196,7 +196,7 @@ const STATUS_ACTIONS: Record<OrderStatus, (OrderStatus | "assign_driver")[]> = {
   pending: ["confirmed", "cancelled"],
   confirmed: ["processing", "cancelled"],
   processing: ["ready_for_pickup", "cancelled"],
-  ready_for_pickup: ["assign_driver", "cancelled"],
+  ready_for_pickup: ["assign_driver", "out_for_delivery", "delivered", "cancelled"],
   out_for_delivery: ["delivered", "cancelled"],
   delivered: [],
   cancelled: [],
@@ -208,7 +208,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   const isRTL = language === 'ar';
   const t = translations[language];
   const { addUserNotification } = useNotifications();
-  
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
@@ -275,6 +275,8 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
         setSelectedOrder(response.data);
       }
       // Note: Customer notifications are now created server-side when status is updated
+    } else {
+      console.error("Failed to update status:", response.error);
     }
     setUpdating(null);
   };
@@ -291,7 +293,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
         },
         body: JSON.stringify({ status: "captured" }),
       });
-      
+
       if (response.ok) {
         await fetchOrders();
         if (selectedOrder?.id === orderId) {
@@ -591,9 +593,9 @@ function OrderDetailsModal({
 }) {
   // Check if COD payment confirmation should be shown
   // Show when order is delivered, payment method is COD, and payment is still pending
-  const showCodPaymentConfirmation = 
-    order.status === "delivered" && 
-    order.paymentMethod === "cod" && 
+  const showCodPaymentConfirmation =
+    order.status === "delivered" &&
+    order.paymentMethod === "cod" &&
     order.paymentStatus === "pending";
 
   return (
@@ -634,10 +636,10 @@ function OrderDetailsModal({
             <div>
               <p className="text-xs text-slate-500 mb-1">{t.orderTime}</p>
               <span className="text-sm font-medium">
-                {new Date(order.createdAt).toLocaleTimeString(isRTL ? 'ar-AE' : 'en-AE', { 
-                  hour: '2-digit', 
+                {new Date(order.createdAt).toLocaleTimeString(isRTL ? 'ar-AE' : 'en-AE', {
+                  hour: '2-digit',
                   minute: '2-digit',
-                  hour12: true 
+                  hour12: true
                 })}
               </span>
             </div>
@@ -795,8 +797,8 @@ function OrderDetailsModal({
                     status === "cancelled"
                       ? "bg-red-100 text-red-700 hover:bg-red-200"
                       : status === "assign_driver"
-                      ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                      : "bg-primary text-white hover:bg-primary/90"
+                        ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                        : "bg-primary text-white hover:bg-primary/90"
                   )}
                 >
                   {status === "assign_driver" && <UserPlus className="w-4 h-4" />}

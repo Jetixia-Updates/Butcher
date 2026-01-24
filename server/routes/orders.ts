@@ -352,12 +352,12 @@ const createOrder: RequestHandler = async (req, res) => {
     // Get customer (orders are for customers, not staff users)
     let customerResult = await db.select().from(customers).where(eq(customers.id, userId));
     let customer = customerResult[0];
-    
+
     if (!customer && deliveryAddress) {
       // Create a minimal customer for guest checkout
       const countResult = await db.select({ count: sql<number>`count(*)` }).from(customers);
       const customerNumber = `CUST-${String(Number(countResult[0]?.count || 0) + 1).padStart(4, '0')}`;
-      
+
       const newCustomer = {
         id: userId,
         email: `guest-${userId}@temp.local`,
@@ -465,8 +465,8 @@ const createOrder: RequestHandler = async (req, res) => {
       // Calculate discounted price if product has a discount
       const basePrice = parseFloat(product.price);
       const discountPercent = product.discount ? parseFloat(product.discount) : 0;
-      const unitPrice = discountPercent > 0 
-        ? Math.round(basePrice * (1 - discountPercent / 100) * 100) / 100 
+      const unitPrice = discountPercent > 0
+        ? Math.round(basePrice * (1 - discountPercent / 100) * 100) / 100
         : basePrice;
       const totalPrice = unitPrice * item.quantity;
       subtotal += totalPrice;
@@ -519,7 +519,7 @@ const createOrder: RequestHandler = async (req, res) => {
     // Create order
     const orderId = generateId("order");
     const orderNumber = generateOrderNumber();
-    
+
     const deliveryAddressData = {
       id: address.id,
       customerId: address.customerId || undefined,
@@ -586,7 +586,7 @@ const createOrder: RequestHandler = async (req, res) => {
     // Get the created order
     const createdOrderResult = await db.select().from(orders).where(eq(orders.id, orderId));
     const createdItemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
-    
+
     const apiItems: OrderItem[] = createdItemsResult.map(item => ({
       id: item.id,
       productId: item.productId,
@@ -713,6 +713,8 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     }
 
     const { status, notes } = validation.data;
+    console.log(`[UpdateStatus] Request for order ${id}: status=${status}, notes=${notes}, by=${changedBy}`);
+
     const orderResult = await db.select().from(orders).where(eq(orders.id, id));
 
     if (orderResult.length === 0) {
@@ -725,7 +727,7 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
 
     const order = orderResult[0];
     const statusHistory = (order.statusHistory as Order["statusHistory"]) || [];
-    
+
     statusHistory.push({
       status,
       changedBy,
@@ -746,10 +748,11 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     }
 
     await db.update(orders).set(updateData).where(eq(orders.id, id));
+    console.log(`[UpdateStatus] Database updated successfully for order ${id}`);
 
     const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
     const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
-    
+
     const items: OrderItem[] = itemsResult.map(item => ({
       id: item.id,
       productId: item.productId,
@@ -831,7 +834,7 @@ const cancelOrder: RequestHandler = async (req, res) => {
 
     const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
     const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
-    
+
     const items: OrderItem[] = itemsResult.map(item => ({
       id: item.id,
       productId: item.productId,
@@ -947,7 +950,7 @@ const updatePaymentStatus: RequestHandler = async (req, res) => {
     // If payment is captured, update/create payment record
     if (status === "captured") {
       const existingPayment = await db.select().from(payments).where(eq(payments.orderId, id));
-      
+
       if (existingPayment.length > 0) {
         // Update existing payment
         await db.update(payments).set({
@@ -969,13 +972,13 @@ const updatePaymentStatus: RequestHandler = async (req, res) => {
           updatedAt: now,
         });
       }
-      
+
       console.log(`[Payment Confirmed] Order ${order.orderNumber} payment marked as captured`);
     }
 
     const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
     const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
-    
+
     const items: OrderItem[] = itemsResult.map(item => ({
       id: item.id,
       productId: item.productId,
