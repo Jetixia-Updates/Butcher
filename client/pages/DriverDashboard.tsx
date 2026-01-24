@@ -187,8 +187,9 @@ export default function DriverDashboardPage() {
 
     setLoading(true);
     try {
-      // Fetch all tracking assigned to this driver
-      const response = await fetch("/api/delivery/tracking", {
+      // Fetch tracking assigned to this driver explicitly
+      const query = new URLSearchParams({ driverId: user.id }).toString();
+      const response = await fetch(`/api/delivery/tracking?${query}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
         },
@@ -196,32 +197,34 @@ export default function DriverDashboardPage() {
       const result = await response.json();
 
       if (result.success && result.data) {
-        // Filter to only show this driver's deliveries
-        const myDeliveries = result.data
-          .filter((t: any) => t.driverId === user.id)
-          .map((tracking: any) => ({
-            id: tracking.id,
-            orderId: tracking.orderId,
-            orderNumber: tracking.orderNumber,
-            status: tracking.status,
-            customerName: tracking.customerName || "Customer",
-            customerMobile: tracking.customerMobile || "",
-            deliveryAddress: tracking.deliveryAddress || {
-              area: "Dubai",
-              emirate: "Dubai",
-              street: "",
-              building: "",
-            },
-            items: tracking.items || [],
-            total: tracking.total || 0,
-            estimatedArrival: tracking.estimatedArrival,
-            timeline: tracking.timeline || [],
-            createdAt: tracking.createdAt,
-          }));
+        console.log(`[DriverDashboard] Fetched ${result.data.length} deliveries for driver ${user.id}`);
+        // Map backend data to UI format
+        // Backend returns enriched data with customerName etc.
+        const myDeliveries = result.data.map((tracking: any) => ({
+          id: tracking.id,
+          orderId: tracking.orderId,
+          orderNumber: tracking.orderNumber,
+          status: tracking.status,
+          customerName: tracking.customerName || "Customer",
+          customerMobile: tracking.customerMobile || "",
+          deliveryAddress: tracking.deliveryAddress || {
+            area: "Dubai",
+            emirate: "Dubai",
+            street: "",
+            building: "",
+          },
+          items: tracking.items || [],
+          total: tracking.total || 0,
+          estimatedArrival: tracking.estimatedArrival,
+          timeline: tracking.timeline || [],
+          createdAt: tracking.createdAt,
+        }));
         setDeliveries(myDeliveries);
+      } else {
+        console.warn("[DriverDashboard] API error:", result.error);
       }
     } catch (error) {
-      console.error("Error fetching deliveries:", error);
+      console.error("[DriverDashboard] Error fetching deliveries:", error);
     }
     setLoading(false);
   }, [user, isDriver]);
@@ -515,9 +518,8 @@ export default function DriverDashboardPage() {
                       notifications.map((notification) => (
                         <div
                           key={notification.id}
-                          className={`flex items-start gap-3 px-4 py-3 border-b hover:bg-gray-50 cursor-pointer transition-colors ${
-                            notification.unread ? "bg-blue-50/50" : ""
-                          }`}
+                          className={`flex items-start gap-3 px-4 py-3 border-b hover:bg-gray-50 cursor-pointer transition-colors ${notification.unread ? "bg-blue-50/50" : ""
+                            }`}
                           onClick={() => {
                             markAsRead(notification.id);
                             if (notification.link) {
