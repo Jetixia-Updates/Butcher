@@ -29,6 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -208,6 +209,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   const isRTL = language === 'ar';
   const t = translations[language];
   const { addUserNotification } = useNotifications();
+  const { toast } = useToast();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,6 +254,10 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       setUpdating(orderId);
       const response = await ordersApi.updateStatus(orderId, "ready_for_pickup");
       if (response.success && response.data) {
+        toast({
+          title: "Status Updated",
+          description: "Order marked as ready for pickup. Please assign a driver.",
+        });
         await fetchOrders();
         if (selectedOrder?.id === orderId) {
           setSelectedOrder(response.data);
@@ -262,21 +268,49 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
         if (onNavigate) {
           onNavigate("delivery", orderId);
         }
+      } else {
+        toast({
+          title: "Update Failed",
+          description: response.error || "Failed to update order status",
+          variant: "destructive",
+        });
+        console.error("Failed to update status:", response.error);
       }
       setUpdating(null);
       return;
     }
 
     setUpdating(orderId);
-    const response = await ordersApi.updateStatus(orderId, newStatus);
-    if (response.success) {
-      await fetchOrders();
-      if (selectedOrder?.id === orderId && response.data) {
-        setSelectedOrder(response.data);
+    console.log(`[OrdersTab] Updating order ${orderId} to status: ${newStatus}`);
+
+    try {
+      const response = await ordersApi.updateStatus(orderId, newStatus);
+
+      if (response.success) {
+        toast({
+          title: "Status Updated",
+          description: `Order status changed to ${getStatusLabel(newStatus, t)}`,
+        });
+        await fetchOrders();
+        if (selectedOrder?.id === orderId && response.data) {
+          setSelectedOrder(response.data);
+        }
+        // Note: Customer notifications are now created server-side when status is updated
+      } else {
+        console.error("Failed to update status. Response error:", response.error);
+        toast({
+          title: "Update Failed",
+          description: response.error || "Failed to update order status",
+          variant: "destructive",
+        });
       }
-      // Note: Customer notifications are now created server-side when status is updated
-    } else {
-      console.error("Failed to update status:", response.error);
+    } catch (err) {
+      console.error("Exception during status update:", err);
+      toast({
+        title: "Update Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
     }
     setUpdating(null);
   };

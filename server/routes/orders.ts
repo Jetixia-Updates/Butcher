@@ -703,8 +703,11 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     const { id } = req.params;
     const changedBy = req.headers["x-user-id"] as string || "admin";
 
+    console.log(`[UpdateStatus] Received request for order ${id}. Payload:`, req.body);
+
     const validation = updateStatusSchema.safeParse(req.body);
     if (!validation.success) {
+      console.error(`[UpdateStatus] Validation failed for order ${id}:`, validation.error.errors);
       const response: ApiResponse<null> = {
         success: false,
         error: validation.error.errors.map((e) => e.message).join(", "),
@@ -713,11 +716,12 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     }
 
     const { status, notes } = validation.data;
-    console.log(`[UpdateStatus] Request for order ${id}: status=${status}, notes=${notes}, by=${changedBy}`);
+    console.log(`[UpdateStatus] Validated: status=${status}, notes=${notes}, by=${changedBy}`);
 
     const orderResult = await db.select().from(orders).where(eq(orders.id, id));
 
     if (orderResult.length === 0) {
+      console.error(`[UpdateStatus] Order ${id} not found`);
       const response: ApiResponse<null> = {
         success: false,
         error: "Order not found",
@@ -726,7 +730,11 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     }
 
     const order = orderResult[0];
-    const statusHistory = (order.statusHistory as Order["statusHistory"]) || [];
+    // Robustly handle statusHistory initialization
+    let statusHistory = (order.statusHistory as Order["statusHistory"]) || [];
+    if (!Array.isArray(statusHistory)) {
+      statusHistory = [];
+    }
 
     statusHistory.push({
       status,
@@ -747,7 +755,14 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
       updateData.paymentStatus = "captured";
     }
 
-    await db.update(orders).set(updateData).where(eq(orders.id, id));
+    console.log(`[UpdateStatus] Executing DB update for order ${id}...`);
+    try {
+      await db.update(orders).set(updateData).where(eq(orders.id, id));
+    } catch (dbError) {
+      console.error(`[UpdateStatus] DB Update Failed for order ${id}:`, dbError);
+      throw new Error(`Database update failed: ${(dbError as Error).message}`);
+    }
+
     console.log(`[UpdateStatus] Database updated successfully for order ${id}`);
 
     const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
@@ -767,11 +782,15 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
 
     // Create notification for customer (server-side to ensure it's always created)
     // Orders can be for customers (customerId) or staff (userId) - check both
-    if (order.customerId) {
-      await createCustomerOrderNotification(order.customerId, order.orderNumber, status);
-    } else if (order.userId) {
-      // For staff orders, create notification with userId
-      await createCustomerOrderNotification(order.userId, order.orderNumber, status);
+    try {
+      if (order.customerId) {
+        await createCustomerOrderNotification(order.customerId, order.orderNumber, status);
+      } else if (order.userId) {
+        // For staff orders, create notification with userId
+        await createCustomerOrderNotification(order.userId, order.orderNumber, status);
+      }
+    } catch (notifWarn) {
+      console.warn(`[UpdateStatus] Notification creation failed but order updated (non-critical):`, notifWarn);
     }
 
     const response: ApiResponse<Order> = {
