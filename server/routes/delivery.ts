@@ -1163,7 +1163,7 @@ const completeDelivery: RequestHandler = async (req, res) => {
     timeline.push({
       status: "delivered",
       timestamp: new Date().toISOString(),
-      notes: "Delivery completed with proof",
+      notes: notes || "Delivery completed with proof",
     });
 
     const [updated] = await db.update(deliveryTracking)
@@ -1187,11 +1187,45 @@ const completeDelivery: RequestHandler = async (req, res) => {
       })
       .where(eq(orders.id, tracking.orderId));
 
-    // Create notification for customer
+    // Create notification for customer with driver notes
     const orderResult = await db.select().from(orders).where(eq(orders.id, tracking.orderId));
-    if (orderResult.length > 0 && orderResult[0].userId) {
+    if (orderResult.length > 0) {
       const order = orderResult[0];
-      await createOrderNotification(order.userId, order.orderNumber, "delivered");
+      const customerId = order.customerId || order.userId;
+      
+      if (customerId) {
+        console.log(`[Complete Delivery] Creating delivered notification for customer ${customerId}, order ${order.orderNumber}`);
+        
+        // Create a custom notification with driver notes
+        try {
+          const notificationMessage = notes 
+            ? `Your order ${order.orderNumber} has been delivered. Driver note: ${notes}`
+            : `Your order ${order.orderNumber} has been delivered. Enjoy!`;
+          
+          const notificationMessageAr = notes
+            ? `تم تسليم طلبك ${order.orderNumber}. ملاحظة السائق: ${notes}`
+            : `تم تسليم طلبك ${order.orderNumber}. بالهناء والشفاء!`;
+
+          await db.insert(inAppNotifications).values({
+            id: generateId("notif"),
+            customerId: order.customerId || undefined,
+            userId: !order.customerId ? customerId : undefined,
+            type: "order",
+            title: "Order Delivered",
+            titleAr: "تم تسليم الطلب",
+            message: notificationMessage,
+            messageAr: notificationMessageAr,
+            link: "/orders",
+            linkTab: null,
+            linkId: null,
+            unread: true,
+            createdAt: new Date(),
+          });
+          console.log(`[Complete Delivery] ✅ Notification created for customer ${customerId}: Order ${order.orderNumber} delivered with driver note`);
+        } catch (notifError) {
+          console.error(`[Complete Delivery] ❌ Failed to create notification:`, notifError);
+        }
+      }
     }
 
     const response: ApiResponse<typeof updated> = {
@@ -1201,6 +1235,7 @@ const completeDelivery: RequestHandler = async (req, res) => {
     };
     res.json(response);
   } catch (error) {
+    console.error("[Complete Delivery] Error:", error);
     const response: ApiResponse<null> = {
       success: false,
       error: error instanceof Error ? error.message : "Failed to complete delivery",
