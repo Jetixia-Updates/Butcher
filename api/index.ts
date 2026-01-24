@@ -1764,21 +1764,6 @@ function createApp() {
       const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
       const sessionId = `session_${Date.now()}`;
       
-      // Store session in database
-      if (isDatabaseAvailable() && pgDb) {
-        try {
-          await pgDb.insert(sessionsTable).values({
-            id: sessionId,
-            userId: user.id,
-            token: token,
-            expiresAt: expiresAt,
-            createdAt: new Date(),
-          });
-        } catch (e) {
-          console.error('[Admin Session DB Error]', e);
-        }
-      }
-      
       // Store session in database only (no fallback to in-memory)
       if (isDatabaseAvailable() && pgDb) {
         try {
