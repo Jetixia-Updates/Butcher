@@ -927,10 +927,11 @@ export interface InAppNotification {
 
 export const notificationsApi = {
   // Get all notifications for current user (or specific userId/customerId if provided)
-  // Pass undefined to use Bearer token from header instead of query params
+  // Pass userId to let the server determine which notifications to fetch
   getAll: (userId?: string | null) => {
-    // Don't pass userId query param - let the server use the Bearer token to determine user type
-    return fetchApi<InAppNotification[]>(`/notifications`);
+    // If userId provided, pass as query param for server validation
+    const url = userId ? `/notifications?userId=${encodeURIComponent(userId)}` : `/notifications`;
+    return fetchApi<InAppNotification[]>(url);
   },
 
   // Create a notification for a user (used by admin/system)
