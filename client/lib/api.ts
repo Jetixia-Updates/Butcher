@@ -300,15 +300,21 @@ export const ordersApi = {
   },
 
   updateStatus: async (id: string, status: OrderStatus, userId?: string, notes?: string): Promise<ApiResponse<Order>> => {
+    console.log(`[API] updateStatus called: orderId=${id}, status=${status}, userId=${userId}, notes=${notes}`);
     const headers: Record<string, string> = {};
     if (userId) {
       headers["x-user-id"] = userId;
+      console.log(`[API] Added x-user-id header: ${userId}`);
     }
-    return fetchApi<Order>(`/orders/${id}/status`, {
+    const requestBody = { status, notes };
+    console.log(`[API] Request body:`, requestBody);
+    const result = await fetchApi<Order>(`/orders/${id}/status`, {
       method: "PATCH",
       headers,
-      body: JSON.stringify({ status, notes }),
+      body: JSON.stringify(requestBody),
     });
+    console.log(`[API] updateStatus response:`, result);
+    return result;
   },
 
   delete: (id: string) =>

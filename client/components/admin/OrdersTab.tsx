@@ -250,11 +250,15 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   }, [selectedOrderId, orders, onClearSelection]);
 
   const handleStatusUpdate = async (orderId: string, newStatus: OrderStatus | "assign_driver") => {
+    console.log(`[OrdersTab] handleStatusUpdate called: orderId=${orderId}, newStatus=${newStatus}, user=${user?.id}`);
+    
     // Handle special "assign_driver" action - navigate to delivery tab
     if (newStatus === "assign_driver") {
       // First update status to ready_for_pickup, then navigate
       setUpdating(orderId);
+      console.log(`[OrdersTab] Calling updateStatus for assign_driver`);
       const response = await ordersApi.updateStatus(orderId, "ready_for_pickup", user?.id);
+      console.log(`[OrdersTab] assign_driver response:`, response);
       if (response.success && response.data) {
         toast({
           title: "Status Updated",
@@ -271,6 +275,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
           onNavigate("delivery", orderId);
         }
       } else {
+        console.error(`[OrdersTab] assign_driver failed:`, response.error);
         toast({
           title: "Update Failed",
           description: response.error || "Failed to update order status",
@@ -283,12 +288,15 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
     }
 
     setUpdating(orderId);
-    console.log(`[OrdersTab] Updating order ${orderId} to status: ${newStatus}`);
+    console.log(`[OrdersTab] Updating order ${orderId} to status: ${newStatus}, user: ${user?.id}`);
 
     try {
+      console.log(`[OrdersTab] Making API call with userId: ${user?.id}`);
       const response = await ordersApi.updateStatus(orderId, newStatus, user?.id);
+      console.log(`[OrdersTab] updateStatus response:`, response);
 
       if (response.success) {
+        console.log(`[OrdersTab] ✅ Status update succeeded`);
         toast({
           title: "Status Updated",
           description: `Order status changed to ${getStatusLabel(newStatus, t)}`,
@@ -300,6 +308,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
         // Note: Customer notifications are now created server-side when status is updated
       } else {
         console.error("Failed to update status. Response error:", response.error);
+        console.error(`[OrdersTab] ❌ Status update failed:`, response.error);
         toast({
           title: "Update Failed",
           description: response.error || "Failed to update order status",
