@@ -7,7 +7,7 @@ import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import type { Order, OrderItem, ApiResponse, PaginatedResponse } from "../../shared/api";
-import { db, orders, orderItems, products, users, addresses, discountCodes, deliveryZones, stock, payments, inAppNotifications, customers } from "../db/connection";
+import { db, orders, orderItems, products, users, addresses, discountCodes, deliveryZones, stock, payments, inAppNotifications } from "../db/connection";
 import { getInAppNotificationContent } from "../services/notifications";
 
 const router = Router();
@@ -402,14 +402,11 @@ const createOrder: RequestHandler = async (req, res) => {
     const { userId, items, addressId, paymentMethod, deliveryNotes, discountCode: discountCodeStr, deliveryAddress, expressDeliveryFee, driverTip } = validation.data;
 
     // Get customer (orders are for customers, not staff users)
-    let customerResult = await db.select().from(customers).where(eq(customers.id, userId));
+    let customerResult = await db.select().from(users).where(eq(users.id, userId));
     let customer = customerResult[0];
 
     if (!customer && deliveryAddress) {
       // Create a minimal customer for guest checkout
-      const countResult = await db.select({ count: sql<number>`count(*)` }).from(customers);
-      const customerNumber = `CUST-${String(Number(countResult[0]?.count || 0) + 1).padStart(4, '0')}`;
-
       const newCustomer = {
         id: userId,
         email: `guest-${userId}@temp.local`,
@@ -421,19 +418,7 @@ const createOrder: RequestHandler = async (req, res) => {
         emirate: deliveryAddress.emirate || 'Dubai',
         isActive: true,
         isVerified: false,
-        customerNumber,
-        segment: 'regular' as const,
-        creditLimit: '0',
-        currentBalance: '0',
-        lifetimeValue: '0',
-        totalOrders: 0,
-        totalSpent: '0',
-        averageOrderValue: '0',
-        preferredLanguage: 'en' as const,
-        marketingOptIn: false,
-        smsOptIn: false,
-        emailOptIn: false,
-        referralCount: 0,
+        role: 'customer' as const,
         preferences: {
           language: 'en' as const,
           currency: 'AED' as const,
@@ -442,8 +427,8 @@ const createOrder: RequestHandler = async (req, res) => {
           marketingEmails: false,
         },
       };
-      await db.insert(customers).values(newCustomer);
-      customerResult = await db.select().from(customers).where(eq(customers.id, userId));
+      await db.insert(users).values(newCustomer);
+      customerResult = await db.select().from(users).where(eq(users.id, userId));
       customer = customerResult[0];
     }
 
@@ -463,7 +448,7 @@ const createOrder: RequestHandler = async (req, res) => {
       // Create address from the provided delivery address data
       const newAddress = {
         id: addressId || generateId("addr"),
-        customerId: userId,
+        userId: userId,
         label: deliveryAddress.label || 'Delivery Address',
         fullName: deliveryAddress.label || 'Customer',
         mobile: deliveryAddress.phone || '',
@@ -676,37 +661,15 @@ const createOrder: RequestHandler = async (req, res) => {
 
     // === UPDATE CUSTOMER STATS ===
     try {
-      const newTotalOrders = customer.totalOrders + 1;
-      const newTotalSpent = parseFloat(customer.totalSpent) + total;
-      const newLifetimeValue = parseFloat(customer.lifetimeValue) + total;
-      const newAvgOrderValue = newTotalSpent / newTotalOrders;
-
-      // Determine new segment based on total spent
-      let newSegment: "regular" | "premium" | "vip" | "wholesale" | "inactive" = customer.segment;
-      if (newTotalSpent >= 10000) {
-        newSegment = "vip";
-      } else if (newTotalSpent >= 5000) {
-        newSegment = "premium";
-      } else {
-        newSegment = "regular";
-      }
-
-      await db.update(customers)
+      // Simple last login/order timestamp update for user tracking
+      await db.update(users)
         .set({
-          totalOrders: newTotalOrders,
-          totalSpent: String(Math.round(newTotalSpent * 100) / 100),
-          lifetimeValue: String(Math.round(newLifetimeValue * 100) / 100),
-          averageOrderValue: String(Math.round(newAvgOrderValue * 100) / 100),
-          lastOrderDate: new Date(),
-          lastOrderAmount: String(total),
-          segment: newSegment,
-          firstPurchaseDate: customer.firstPurchaseDate || new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(customers.id, userId));
-      console.log(`[Customer Stats] ✅ Updated stats for customer ${customer.customerNumber}`);
+        .where(eq(users.id, userId));
+      console.log(`[Order] ✅ Updated user record for order ${orderNumber}`);
     } catch (customerError) {
-      console.error(`[Customer Stats] ❌ Failed to update customer stats:`, customerError);
+      console.error(`[Order] ❌ Failed to update user stats:`, customerError);
     }
     // === END CUSTOMER STATS ===
 
@@ -715,7 +678,7 @@ const createOrder: RequestHandler = async (req, res) => {
       const adminNotification = {
         id: generateId("notif"),
         userId: "admin", // Admin user constant
-        type: "order",
+        type: "order_placed",
         title: "New Order Received",
         titleAr: "تم استلام طلب جديد",
         message: `New order ${orderNumber} from ${customer.firstName} ${customer.familyName} - Total: ${total.toFixed(2)} AED`,

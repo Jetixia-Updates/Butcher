@@ -8,7 +8,7 @@ import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import type { ApiResponse } from "../../shared/api";
-import { db, sessions, customerSessions, inAppNotifications, users } from "../db/connection";
+import { db, sessions, inAppNotifications, users } from "../db/connection";
 
 const router = Router();
 

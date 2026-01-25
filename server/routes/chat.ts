@@ -6,7 +6,7 @@
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, desc, and, or } from "drizzle-orm";
-import { db, chatMessages, customers, inAppNotifications } from "../db/connection";
+import { db, chatMessages, users, inAppNotifications } from "../db/connection";
 import { generateId } from "../db/connection";
 
 const router = Router();

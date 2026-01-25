@@ -8,7 +8,7 @@ import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, and, or, ilike, desc, sql } from "drizzle-orm";
 import type { ApiResponse, PaginatedResponse } from "../../shared/api";
-import { db, customers, customerSessions, addresses } from "../db/connection";
+import { db, users, sessions, addresses } from "../db/connection";
 
 const router = Router();
 
@@ -108,7 +108,7 @@ const changePasswordSchema = z.object({
 });
 
 // Helper to convert DB customer to API customer (excludes password)
-function toApiCustomer(dbCustomer: typeof customers.$inferSelect): Customer {
+function toApiCustomer(dbCustomer: typeof users.$inferSelect): Customer {
   return {
     id: dbCustomer.id,
     username: dbCustomer.username,
@@ -120,15 +120,15 @@ function toApiCustomer(dbCustomer: typeof customers.$inferSelect): Customer {
     isVerified: dbCustomer.isVerified,
     emirate: dbCustomer.emirate || "",
     address: dbCustomer.address || undefined,
-    customerNumber: dbCustomer.customerNumber,
-    segment: dbCustomer.segment,
-    creditLimit: dbCustomer.creditLimit,
-    currentBalance: dbCustomer.currentBalance,
-    lifetimeValue: dbCustomer.lifetimeValue,
-    totalOrders: dbCustomer.totalOrders,
-    totalSpent: dbCustomer.totalSpent,
-    averageOrderValue: dbCustomer.averageOrderValue,
-    lastOrderDate: dbCustomer.lastOrderDate?.toISOString(),
+    customerNumber: "CUST-0001", // Placeholder
+    segment: "regular",
+    creditLimit: "0",
+    currentBalance: "0",
+    lifetimeValue: "0",
+    totalOrders: 0,
+    totalSpent: "0",
+    averageOrderValue: "0",
+    lastOrderDate: undefined,
     preferences: (dbCustomer.preferences as Customer["preferences"]) || {
       language: "en",
       currency: "AED",
@@ -161,7 +161,7 @@ const registerCustomer: RequestHandler = async (req, res) => {
     const data = validation.data;
 
     // Check if username already exists
-    const existingByUsername = await db.select().from(customers).where(eq(customers.username, data.username.toLowerCase()));
+    const existingByUsername = await db.select().from(users).where(eq(users.username, data.username.toLowerCase()));
     if (existingByUsername.length > 0) {
       const response: ApiResponse<null> = {
         success: false,
@@ -171,7 +171,7 @@ const registerCustomer: RequestHandler = async (req, res) => {
     }
 
     // Check if email already exists
-    const existingByEmail = await db.select().from(customers).where(eq(customers.email, data.email.toLowerCase()));
+    const existingByEmail = await db.select().from(users).where(eq(users.email, data.email.toLowerCase()));
     if (existingByEmail.length > 0) {
       const response: ApiResponse<null> = {
         success: false,
@@ -182,7 +182,7 @@ const registerCustomer: RequestHandler = async (req, res) => {
 
     // Check if mobile already exists
     const normalizedMobile = data.mobile.replace(/\s/g, "");
-    const existingByMobile = await db.select().from(customers).where(eq(customers.mobile, normalizedMobile));
+    const existingByMobile = await db.select().from(users).where(eq(users.mobile, normalizedMobile));
     if (existingByMobile.length > 0) {
       const response: ApiResponse<null> = {
         success: false,
@@ -207,19 +207,7 @@ const registerCustomer: RequestHandler = async (req, res) => {
       isVerified: false,
       emirate: data.emirate,
       address: data.address || null,
-      customerNumber,
-      segment: "regular" as const,
-      creditLimit: "0",
-      currentBalance: "0",
-      lifetimeValue: "0",
-      totalOrders: 0,
-      totalSpent: "0",
-      averageOrderValue: "0",
-      preferredLanguage: "en" as const,
-      marketingOptIn: true,
-      smsOptIn: true,
-      emailOptIn: true,
-      referralCount: 0,
+      role: "customer" as const,
       preferences: {
         language: "en" as const,
         currency: "AED" as const,
@@ -229,14 +217,14 @@ const registerCustomer: RequestHandler = async (req, res) => {
       },
     };
 
-    await db.insert(customers).values(newCustomer);
+    await db.insert(users).values(newCustomer);
 
     // Create default address if provided
     if (data.deliveryAddress) {
       const addressId = generateId("addr");
       await db.insert(addresses).values({
         id: addressId,
-        customerId: newCustomer.id,
+        userId: newCustomer.id,
         label: data.deliveryAddress.label,
         fullName: data.deliveryAddress.fullName,
         mobile: data.deliveryAddress.mobile,
@@ -252,15 +240,15 @@ const registerCustomer: RequestHandler = async (req, res) => {
       });
     }
 
-    const result = await db.select().from(customers).where(eq(customers.id, newCustomer.id));
+    const result = await db.select().from(users).where(eq(users.id, newCustomer.id));
 
     // Create session
     const token = generateToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    await db.insert(customerSessions).values({
+    await db.insert(sessions).values({
       id: generateId("sess"),
-      customerId: newCustomer.id,
+      userId: newCustomer.id,
       token,
       expiresAt,
     });
@@ -300,10 +288,10 @@ const loginCustomer: RequestHandler = async (req, res) => {
     const { username, password } = validation.data;
 
     // Find customer by username or email
-    const customerResult = await db.select().from(customers).where(
+    const customerResult = await db.select().from(users).where(
       or(
-        eq(customers.username, username.toLowerCase()),
-        eq(customers.email, username.toLowerCase())
+        eq(users.username, username.toLowerCase()),
+        eq(users.email, username.toLowerCase())
       )
     );
 
@@ -336,17 +324,17 @@ const loginCustomer: RequestHandler = async (req, res) => {
     }
 
     // Update last login
-    await db.update(customers)
+    await db.update(users)
       .set({ lastLoginAt: new Date() })
-      .where(eq(customers.id, customer.id));
+      .where(eq(users.id, customer.id));
 
     // Create session
     const token = generateToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    await db.insert(customerSessions).values({
+    await db.insert(sessions).values({
       id: generateId("sess"),
-      customerId: customer.id,
+      userId: customer.id,
       token,
       expiresAt,
     });
@@ -377,7 +365,7 @@ const logoutCustomer: RequestHandler = async (req, res) => {
     const token = req.headers.authorization?.replace("Bearer ", "");
     
     if (token) {
-      await db.delete(customerSessions).where(eq(customerSessions.token, token));
+      await db.delete(sessions).where(eq(sessions.token, token));
     }
 
     const response: ApiResponse<null> = {
@@ -409,7 +397,7 @@ const getCurrentCustomer: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    const sessionResult = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
+    const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
     
     if (sessionResult.length === 0) {
       const response: ApiResponse<null> = {
@@ -422,7 +410,7 @@ const getCurrentCustomer: RequestHandler = async (req, res) => {
     const session = sessionResult[0];
 
     if (new Date(session.expiresAt) < new Date()) {
-      await db.delete(customerSessions).where(eq(customerSessions.id, session.id));
+      await db.delete(sessions).where(eq(sessions.id, session.id));
       const response: ApiResponse<null> = {
         success: false,
         error: "Session expired",
@@ -430,7 +418,7 @@ const getCurrentCustomer: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    const customerResult = await db.select().from(customers).where(eq(customers.id, session.customerId));
+    const customerResult = await db.select().from(users).where(eq(users.id, session.userId));
     
     if (customerResult.length === 0) {
       const response: ApiResponse<null> = {
@@ -459,7 +447,7 @@ const getCurrentCustomer: RequestHandler = async (req, res) => {
 const getCustomerById: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.select().from(customers).where(eq(customers.id, id));
+    const result = await db.select().from(users).where(eq(users.id, id));
 
     if (result.length === 0) {
       const response: ApiResponse<null> = {
@@ -487,13 +475,13 @@ const getCustomerById: RequestHandler = async (req, res) => {
 // GET /api/customers - Get all customers (admin only)
 const getAllCustomers: RequestHandler = async (req, res) => {
   try {
-    const { page = "1", limit = "20", search, segment, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+    const { page = "1", limit = "20", search, sortBy = "createdAt", sortOrder = "desc" } = req.query;
     
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const offset = (pageNum - 1) * limitNum;
 
-    let allCustomers = await db.select().from(customers);
+    let allCustomers = await db.select().from(users);
 
     // Filter by search
     if (search) {
@@ -501,14 +489,8 @@ const getAllCustomers: RequestHandler = async (req, res) => {
       allCustomers = allCustomers.filter(c => 
         c.firstName.toLowerCase().includes(searchLower) ||
         c.familyName.toLowerCase().includes(searchLower) ||
-        c.email.toLowerCase().includes(searchLower) ||
-        c.customerNumber.toLowerCase().includes(searchLower)
+        c.email.toLowerCase().includes(searchLower)
       );
-    }
-
-    // Filter by segment
-    if (segment && segment !== "all") {
-      allCustomers = allCustomers.filter(c => c.segment === segment);
     }
 
     // Sort
@@ -549,7 +531,7 @@ const getAllCustomers: RequestHandler = async (req, res) => {
 const updateCustomer: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const existing = await db.select().from(customers).where(eq(customers.id, id));
+    const existing = await db.select().from(users).where(eq(users.id, id));
 
     if (existing.length === 0) {
       const response: ApiResponse<null> = {
@@ -572,7 +554,7 @@ const updateCustomer: RequestHandler = async (req, res) => {
 
     // Check email uniqueness if updating
     if (data.email && data.email.toLowerCase() !== existing[0].email.toLowerCase()) {
-      const emailCheck = await db.select().from(customers).where(eq(customers.email, data.email.toLowerCase()));
+      const emailCheck = await db.select().from(users).where(eq(users.email, data.email.toLowerCase()));
       if (emailCheck.length > 0) {
         const response: ApiResponse<null> = {
           success: false,
@@ -583,7 +565,7 @@ const updateCustomer: RequestHandler = async (req, res) => {
     }
 
     // Build update object
-    const updateData: Partial<typeof customers.$inferInsert> = {
+    const updateData: Partial<typeof users.$inferInsert> = {
       updatedAt: new Date(),
     };
 
@@ -600,9 +582,9 @@ const updateCustomer: RequestHandler = async (req, res) => {
       };
     }
 
-    await db.update(customers).set(updateData).where(eq(customers.id, id));
+    await db.update(users).set(updateData).where(eq(users.id, id));
 
-    const result = await db.select().from(customers).where(eq(customers.id, id));
+    const result = await db.select().from(users).where(eq(users.id, id));
 
     const response: ApiResponse<Customer> = {
       success: true,
@@ -636,7 +618,7 @@ const changePassword: RequestHandler = async (req, res) => {
 
     const { currentPassword, newPassword } = validation.data;
 
-    const existing = await db.select().from(customers).where(eq(customers.id, id));
+    const existing = await db.select().from(users).where(eq(users.id, id));
     if (existing.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
@@ -654,9 +636,9 @@ const changePassword: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    await db.update(customers)
+    await db.update(users)
       .set({ password: newPassword, updatedAt: new Date() })
-      .where(eq(customers.id, id));
+      .where(eq(users.id, id));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -679,7 +661,7 @@ const deactivateCustomer: RequestHandler = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const existing = await db.select().from(customers).where(eq(customers.id, id));
+    const existing = await db.select().from(users).where(eq(users.id, id));
     if (existing.length === 0) {
       const response: ApiResponse<null> = {
         success: false,
@@ -688,12 +670,12 @@ const deactivateCustomer: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    await db.update(customers)
-      .set({ isActive: false, segment: "inactive", updatedAt: new Date() })
-      .where(eq(customers.id, id));
+    await db.update(users)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(users.id, id));
 
     // Invalidate all sessions
-    await db.delete(customerSessions).where(eq(customerSessions.customerId, id));
+    await db.delete(sessions).where(eq(sessions.userId, id));
 
     const response: ApiResponse<null> = {
       success: true,

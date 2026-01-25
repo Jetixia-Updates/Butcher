@@ -7,7 +7,7 @@ import { Router, RequestHandler } from "express";
 import { z } from "zod";
 import { eq, desc } from "drizzle-orm";
 import type { ApiResponse } from "../../shared/api";
-import { db, customerSessions, wallets, walletTransactions } from "../db/connection";
+import { db, sessions, wallets, walletTransactions } from "../db/connection";
 
 const router = Router();
 
@@ -19,11 +19,11 @@ async function getCustomerIdFromToken(token: string | undefined): Promise<string
   if (!token) return null;
   
   try {
-    const sessionResult = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
+    const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
     if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
       return null;
     }
-    return sessionResult[0].customerId;
+    return sessionResult[0].userId;
   } catch {
     return null;
   }
