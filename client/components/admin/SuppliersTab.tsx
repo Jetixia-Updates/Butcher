@@ -27,7 +27,7 @@ import {
   Bell,
   FileText,
 } from "lucide-react";
-import { suppliersApi, stockApi, productsApi } from "@/lib/api";
+import { suppliersApi, stockApi } from "@/lib/api";
 import type {
   Supplier,
   SupplierStatus,
@@ -38,7 +38,6 @@ import type {
   SupplierPaymentTerms,
   CreatePurchaseOrderRequest,
   Currency,
-  Product,
 } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/context/LanguageContext";
@@ -80,39 +79,6 @@ interface PurchaseOrderDraftItem {
   unitCost: number;
   notes?: string;
 }
-
-// Product form state for adding/editing supplier products
-interface SupplierProductFormState {
-  productId: string; // Link to existing product or "custom"
-  productName: string; // Custom product name or from catalog
-  supplierSku: string;
-  unitCost: number;
-  minimumOrderQuantity: number;
-  leadTimeDays: number;
-  isPreferred: boolean;
-  origin: string; // Country of origin
-  storageTemp: "chilled" | "frozen" | "ambient";
-  certifications: string[];
-  packaging: string;
-  caseSize: string;
-  notes: string;
-}
-
-const initialProductForm: SupplierProductFormState = {
-  productId: "",
-  productName: "",
-  supplierSku: "",
-  unitCost: 0,
-  minimumOrderQuantity: 1000,
-  leadTimeDays: 3,
-  isPreferred: false,
-  origin: "UAE",
-  storageTemp: "chilled",
-  certifications: [],
-  packaging: "",
-  caseSize: "",
-  notes: "",
-};
 
 function formatCurrency(amount: number | undefined) {
   if (amount === undefined) return "-";
@@ -208,45 +174,17 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     // Products section
     products: isRTL ? "المنتجات" : "Products",
     noSupplierProducts: isRTL ? "لا توجد منتجات للمورد" : "No supplier products",
-    addProduct: isRTL ? "إضافة منتج" : "Add Product",
-    editProduct: isRTL ? "تعديل المنتج" : "Edit Product",
+    quickAddProduct: isRTL ? "إضافة منتج سريع" : "Quick add product",
     sku: isRTL ? "رمز المنتج" : "SKU",
-    supplierSku: isRTL ? "رمز المورد" : "Supplier SKU",
     moq: isRTL ? "الحد الأدنى للطلب" : "MOQ",
     lead: isRTL ? "وقت التسليم" : "Lead",
     perKg: isRTL ? "لكل كجم" : "per kg",
     preferred: isRTL ? "مفضل" : "Preferred",
     productName: isRTL ? "اسم المنتج" : "Product name",
     unitCost: isRTL ? "تكلفة الوحدة" : "Unit cost",
-    unitCostPerKg: isRTL ? "تكلفة الوحدة لكل كجم" : "Unit Cost per kg (AED)",
-    moqGrams: isRTL ? "الحد الأدنى للطلب (جرام)" : "Minimum Order Quantity (grams)",
-    leadTimeDays: isRTL ? "وقت التسليم (أيام)" : "Lead Time (days)",
-    selectProduct: isRTL ? "اختر المنتج" : "Select Product",
-    orEnterCustom: isRTL ? "أو أدخل اسم مخصص" : "or enter custom name",
-    customProductName: isRTL ? "اسم المنتج المخصص" : "Custom Product Name",
-    origin: isRTL ? "بلد المنشأ" : "Country of Origin",
-    certifications: isRTL ? "الشهادات" : "Certifications",
-    storageTemp: isRTL ? "درجة حرارة التخزين" : "Storage Temperature",
-    chilled: isRTL ? "مبرد (0-4°م)" : "Chilled (0-4°C)",
-    frozen: isRTL ? "مجمد (-18°م)" : "Frozen (-18°C)",
-    ambient: isRTL ? "درجة حرارة الغرفة" : "Ambient",
-    halal: isRTL ? "حلال" : "Halal",
-    organic: isRTL ? "عضوي" : "Organic",
-    grassFed: isRTL ? "تغذية على العشب" : "Grass-fed",
-    antibiotic: isRTL ? "خالي من المضادات" : "Antibiotic-free",
-    freeRange: isRTL ? "حر الحركة" : "Free-range",
-    markAsPreferred: isRTL ? "تعيين كمورد مفضل" : "Set as preferred supplier",
-    productDetails: isRTL ? "تفاصيل المنتج" : "Product Details",
-    pricingDelivery: isRTL ? "التسعير والتوصيل" : "Pricing & Delivery",
-    qualityCompliance: isRTL ? "الجودة والامتثال" : "Quality & Compliance",
-    saveProduct: isRTL ? "حفظ المنتج" : "Save Product",
-    newProductTitle: isRTL ? "إضافة منتج للمورد" : "Add Supplier Product",
-    editProductTitle: isRTL ? "تعديل منتج المورد" : "Edit Supplier Product",
-    productFormDescription: isRTL ? "أضف منتجاً جديداً من هذا المورد مع تفاصيل التسعير والتوصيل" : "Add a new product from this supplier with pricing and delivery details",
-    packaging: isRTL ? "التغليف" : "Packaging",
-    packagingPlaceholder: isRTL ? "مثال: علبة 10 كجم، فراغ مختوم" : "e.g., 10kg box, vacuum sealed",
-    caseSize: isRTL ? "حجم الكرتون/العبوة" : "Case/Box Size",
-    caseSizePlaceholder: isRTL ? "مثال: 12 وحدة، 5 كجم" : "e.g., 12 units, 5kg",
+    unitCostPerKg: isRTL ? "تكلفة الوحدة (لكل كجم)" : "Unit cost (per kg)",
+    moqGrams: isRTL ? "الحد الأدنى للطلب (جرام)" : "MOQ (grams)",
+    leadTimeDays: isRTL ? "وقت التسليم (أيام)" : "Lead time (days)",
     
     // Compliance section
     compliance: isRTL ? "الامتثال" : "Compliance",
@@ -302,6 +240,7 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     receiveItemsDesc: isRTL ? "أدخل الكميات المستلمة لكل صنف" : "Enter received quantities for each item",
     receivedQty: isRTL ? "الكمية المستلمة" : "Received Qty",
     confirmReceive: isRTL ? "تأكيد الاستلام" : "Confirm Receive",
+    selectProduct: isRTL ? "اختر المنتج" : "Select Product",
     remaining: isRTL ? "المتبقي" : "Remaining",
     fullyReceived: isRTL ? "مستلم بالكامل" : "Fully Received",
     partiallyReceived: isRTL ? "مستلم جزئياً" : "Partially Received",
@@ -351,15 +290,6 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
   const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({});
   const [poItems, setPoItems] = useState<PurchaseOrderDraftItem[]>([{ productId: "", quantity: 0, unitCost: 0 }]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  
-  // Product form states
-  const [showProductForm, setShowProductForm] = useState(false);
-  const [productEditMode, setProductEditMode] = useState(false);
-  const [editingProductId, setEditingProductId] = useState<string | null>(null);
-  const [productForm, setProductForm] = useState<SupplierProductFormState>(initialProductForm);
-  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
-  const [savingProduct, setSavingProduct] = useState(false);
-
   const [form, setForm] = useState<SupplierFormState>({
     name: "",
     nameAr: "",
@@ -446,16 +376,8 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     if (poRes.success && poRes.data) setPurchaseOrders(poRes.data);
   };
 
-  const loadCatalogProducts = async () => {
-    const res = await productsApi.getAll();
-    if (res.success && res.data) {
-      setCatalogProducts(res.data);
-    }
-  };
-
   useEffect(() => {
     fetchSuppliers();
-    loadCatalogProducts();
   }, []);
 
   const handleSelect = async (supplier: Supplier) => {
@@ -705,118 +627,23 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
     await handleAddContact({ name, position: position || "", email: email || "", phone: phone || "", isPrimary: false });
   };
 
-  // Reset product form to initial state
-  const resetProductForm = () => {
-    setProductForm(initialProductForm);
-    setProductEditMode(false);
-    setEditingProductId(null);
-  };
-
-  // Open form for adding new product
-  const handleOpenAddProduct = () => {
-    resetProductForm();
-    setShowProductForm(true);
-  };
-
-  // Open form for editing existing product
-  const handleOpenEditProduct = (product: SupplierProduct) => {
-    setProductForm({
-      productId: product.productId,
-      productName: product.productName,
-      supplierSku: product.supplierSku,
-      unitCost: product.unitCost,
-      minimumOrderQuantity: product.minimumOrderQuantity,
-      leadTimeDays: product.leadTimeDays,
-      isPreferred: product.isPreferred,
-      origin: "", // These fields may not be stored yet
-      storageTemp: "chilled",
-      certifications: [],
-      packaging: "",
-      caseSize: "",
-      notes: product.notes || "",
+  const promptQuickAddProduct = async () => {
+    const productNameValue = window.prompt(t.productName, "New Item");
+    if (!productNameValue) return;
+    const unitCostValue = Number(window.prompt(t.unitCostPerKg, "10"));
+    if (!unitCostValue || Number.isNaN(unitCostValue)) return;
+    const minimumOrderQuantity = Number(window.prompt(t.moqGrams, "1000")) || 1000;
+    const leadTimeDaysValue = Number(window.prompt(t.leadTimeDays, "3")) || 3;
+    await handleAddProduct({
+      productId: `custom-${Date.now()}`,
+      productName: productNameValue,
+      supplierSku: "SKU",
+      unitCost: unitCostValue,
+      minimumOrderQuantity,
+      leadTimeDays: leadTimeDaysValue,
+      isPreferred: false,
+      notes: "",
     });
-    setProductEditMode(true);
-    setEditingProductId(product.id);
-    setShowProductForm(true);
-  };
-
-  // Handle product form submission
-  const handleSubmitProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selected) return;
-    
-    setSavingProduct(true);
-    try {
-      // Determine product name - from catalog or custom
-      let finalProductName = productForm.productName;
-      let finalProductId = productForm.productId;
-      
-      if (productForm.productId && productForm.productId !== "custom") {
-        const catalogProduct = catalogProducts.find(p => p.id === productForm.productId);
-        if (catalogProduct) {
-          finalProductName = catalogProduct.name;
-          finalProductId = catalogProduct.id;
-        }
-      } else {
-        // Custom product
-        finalProductId = `custom-${Date.now()}`;
-      }
-      
-      const productData = {
-        productId: finalProductId,
-        productName: finalProductName,
-        supplierSku: productForm.supplierSku,
-        unitCost: productForm.unitCost,
-        minimumOrderQuantity: productForm.minimumOrderQuantity,
-        leadTimeDays: productForm.leadTimeDays,
-        isPreferred: productForm.isPreferred,
-        notes: [
-          productForm.notes,
-          productForm.origin && `Origin: ${productForm.origin}`,
-          productForm.storageTemp && `Storage: ${productForm.storageTemp}`,
-          productForm.certifications.length > 0 && `Certifications: ${productForm.certifications.join(", ")}`,
-          productForm.packaging && `Packaging: ${productForm.packaging}`,
-          productForm.caseSize && `Case Size: ${productForm.caseSize}`,
-        ].filter(Boolean).join(" | "),
-      };
-      
-      const res = await suppliersApi.addProduct(selected.id, productData);
-      if (res.success) {
-        setShowProductForm(false);
-        resetProductForm();
-        await refreshSelection(selected.id);
-        await loadSupplierRelations(selected.id);
-      }
-    } finally {
-      setSavingProduct(false);
-    }
-  };
-
-  // Handle product selection from catalog
-  const handleProductSelection = (productId: string) => {
-    if (productId === "custom") {
-      setProductForm(f => ({ ...f, productId: "custom", productName: "" }));
-    } else {
-      const catalogProduct = catalogProducts.find(p => p.id === productId);
-      if (catalogProduct) {
-        setProductForm(f => ({ 
-          ...f, 
-          productId: catalogProduct.id,
-          productName: catalogProduct.name,
-          unitCost: catalogProduct.costPrice || f.unitCost,
-        }));
-      }
-    }
-  };
-
-  // Toggle certification
-  const toggleCertification = (cert: string) => {
-    setProductForm(f => ({
-      ...f,
-      certifications: f.certifications.includes(cert)
-        ? f.certifications.filter(c => c !== cert)
-        : [...f.certifications, cert]
-    }));
   };
 
   const buildNotifications = () => {
@@ -1154,18 +981,9 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
               <div className="flex items-center gap-2 font-semibold text-slate-900 mb-3"><Package className="w-4 h-4" /> {t.products}</div>
               <div className="space-y-2">
                 {products.map((p) => (
-                  <div key={p.id} className="border border-slate-200 rounded-lg p-3 hover:border-primary/30 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold text-slate-900">{p.productName}</div>
-                      <button 
-                        onClick={() => handleOpenEditProduct(p)}
-                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-primary"
-                        title={t.editProduct}
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="text-xs text-slate-500">{t.supplierSku} {p.supplierSku || "-"} · {t.moq} {p.minimumOrderQuantity}g · {t.lead} {p.leadTimeDays}d</div>
+                  <div key={p.id} className="border border-slate-200 rounded-lg p-3">
+                    <div className="font-semibold text-slate-900">{p.productName}</div>
+                    <div className="text-xs text-slate-500">{t.sku} {p.supplierSku || "-"} · {t.moq} {p.minimumOrderQuantity}g · {t.lead} {p.leadTimeDays}d</div>
                     <div className="flex items-center gap-2 text-sm text-slate-700 mt-1">
                       <BadgeDollarSign className="w-4 h-4" /> {formatCurrency(p.unitCost)} {t.perKg}
                       {p.isPreferred && <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">{t.preferred}</span>}
@@ -1175,10 +993,10 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
                 {products.length === 0 && <p className="text-sm text-slate-500">{t.noSupplierProducts}</p>}
               </div>
               <button
-                onClick={() => handleOpenAddProduct()}
-                className="mt-3 text-sm text-primary flex items-center gap-1 hover:underline"
+                onClick={() => promptQuickAddProduct()}
+                className="mt-3 text-sm text-primary flex items-center gap-1"
               >
-                <Plus className="w-4 h-4" /> {t.addProduct}
+                <Plus className="w-4 h-4" /> {t.quickAddProduct}
               </button>
             </div>
 
@@ -1387,230 +1205,6 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
                 <Package className="w-4 h-4" /> {t.confirmReceive}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Supplier Product Form Modal */}
-      {showProductForm && selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <h4 className="text-lg font-semibold text-slate-900">
-                  {productEditMode ? t.editProductTitle : t.newProductTitle}
-                </h4>
-                <p className="text-sm text-slate-500">{t.productFormDescription}</p>
-              </div>
-              <button 
-                onClick={() => { setShowProductForm(false); resetProductForm(); }} 
-                className="p-2 hover:bg-slate-100 rounded-lg"
-              >
-                <Ban className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmitProduct} className="p-4 max-h-[75vh] overflow-y-auto">
-              {/* Section 1: Product Details */}
-              <div className="mb-6">
-                <h5 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <Package className="w-4 h-4" /> {t.productDetails}
-                </h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Product Selection */}
-                  <div className="md:col-span-2">
-                    <label className="text-xs text-slate-500 block mb-1">{t.selectProduct}</label>
-                    <select
-                      value={productForm.productId}
-                      onChange={(e) => handleProductSelection(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-primary focus:border-transparent"
-                    >
-                      <option value="">{t.selectProduct}...</option>
-                      <option value="custom">-- {t.orEnterCustom} --</option>
-                      {catalogProducts.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.sku}) - {formatCurrency(p.costPrice)}/kg
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  {/* Custom Product Name - only show if custom selected */}
-                  {(productForm.productId === "custom" || productForm.productId === "") && (
-                    <div className="md:col-span-2">
-                      <Input 
-                        label={t.customProductName} 
-                        value={productForm.productName} 
-                        onChange={(v) => setProductForm(f => ({ ...f, productName: v }))}
-                        required={productForm.productId === "custom"}
-                      />
-                    </div>
-                  )}
-                  
-                  <Input 
-                    label={t.supplierSku} 
-                    value={productForm.supplierSku} 
-                    onChange={(v) => setProductForm(f => ({ ...f, supplierSku: v }))}
-                  />
-                  
-                  <Input 
-                    label={t.origin} 
-                    value={productForm.origin} 
-                    onChange={(v) => setProductForm(f => ({ ...f, origin: v }))}
-                  />
-                </div>
-              </div>
-
-              {/* Section 2: Pricing & Delivery */}
-              <div className="mb-6">
-                <h5 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <BadgeDollarSign className="w-4 h-4" /> {t.pricingDelivery}
-                </h5>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Input 
-                    label={t.unitCostPerKg} 
-                    type="number"
-                    value={productForm.unitCost.toString()} 
-                    onChange={(v) => setProductForm(f => ({ ...f, unitCost: Number(v) || 0 }))}
-                    required
-                  />
-                  
-                  <Input 
-                    label={t.moqGrams} 
-                    type="number"
-                    value={productForm.minimumOrderQuantity.toString()} 
-                    onChange={(v) => setProductForm(f => ({ ...f, minimumOrderQuantity: Number(v) || 0 }))}
-                    required
-                  />
-                  
-                  <Input 
-                    label={t.leadTimeDays} 
-                    type="number"
-                    value={productForm.leadTimeDays.toString()} 
-                    onChange={(v) => setProductForm(f => ({ ...f, leadTimeDays: Number(v) || 0 }))}
-                    required
-                  />
-                  
-                  <Input 
-                    label={t.packaging} 
-                    value={productForm.packaging} 
-                    onChange={(v) => setProductForm(f => ({ ...f, packaging: v }))}
-                  />
-                  
-                  <Input 
-                    label={t.caseSize} 
-                    value={productForm.caseSize} 
-                    onChange={(v) => setProductForm(f => ({ ...f, caseSize: v }))}
-                  />
-                </div>
-              </div>
-
-              {/* Section 3: Quality & Compliance */}
-              <div className="mb-6">
-                <h5 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4" /> {t.qualityCompliance}
-                </h5>
-                <div className="space-y-4">
-                  {/* Storage Temperature */}
-                  <div>
-                    <label className="text-xs text-slate-500 block mb-2">{t.storageTemp}</label>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { value: "chilled", label: t.chilled },
-                        { value: "frozen", label: t.frozen },
-                        { value: "ambient", label: t.ambient },
-                      ].map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => setProductForm(f => ({ ...f, storageTemp: option.value as any }))}
-                          className={cn(
-                            "px-3 py-1.5 text-sm rounded-lg border transition-colors",
-                            productForm.storageTemp === option.value
-                              ? "bg-primary text-white border-primary"
-                              : "bg-white text-slate-700 border-slate-200 hover:border-primary"
-                          )}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* Certifications */}
-                  <div>
-                    <label className="text-xs text-slate-500 block mb-2">{t.certifications}</label>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { value: "halal", label: t.halal },
-                        { value: "organic", label: t.organic },
-                        { value: "grass-fed", label: t.grassFed },
-                        { value: "antibiotic-free", label: t.antibiotic },
-                        { value: "free-range", label: t.freeRange },
-                      ].map((cert) => (
-                        <button
-                          key={cert.value}
-                          type="button"
-                          onClick={() => toggleCertification(cert.value)}
-                          className={cn(
-                            "px-3 py-1.5 text-sm rounded-lg border transition-colors",
-                            productForm.certifications.includes(cert.value)
-                              ? "bg-green-100 text-green-700 border-green-300"
-                              : "bg-white text-slate-700 border-slate-200 hover:border-green-300"
-                          )}
-                        >
-                          {cert.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* Preferred Supplier Checkbox */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="isPreferred"
-                      checked={productForm.isPreferred}
-                      onChange={(e) => setProductForm(f => ({ ...f, isPreferred: e.target.checked }))}
-                      className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
-                    />
-                    <label htmlFor="isPreferred" className="text-sm text-slate-700 cursor-pointer">
-                      {t.markAsPreferred}
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div className="mb-6">
-                <label className="text-xs text-slate-500 block mb-1">{t.notes}</label>
-                <textarea
-                  value={productForm.notes}
-                  onChange={(e) => setProductForm(f => ({ ...f, notes: e.target.value }))}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-                  placeholder={isRTL ? "ملاحظات إضافية..." : "Additional notes..."}
-                />
-              </div>
-
-              {/* Form Actions */}
-              <div className="flex justify-end gap-3 pt-2 border-t border-slate-200">
-                <button 
-                  type="button" 
-                  onClick={() => { setShowProductForm(false); resetProductForm(); }}
-                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50"
-                >
-                  {t.cancel}
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={savingProduct || (!productForm.productName && productForm.productId !== "custom" && !productForm.productId)}
-                  className="px-4 py-2 bg-primary text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
-                >
-                  {savingProduct && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {t.saveProduct}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
