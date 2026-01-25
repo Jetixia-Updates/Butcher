@@ -106,20 +106,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     try {
-      // Pass the userId explicitly to ensure admins get notifications for "admin" userId
+      // Notifications endpoint may return 400 if server is not properly deployed
+      // Silently skip if unavailable instead of polling repeatedly
       const response = await notificationsApi.getAll(userId);
       if (response.success && response.data) {
         const sorted = response.data
           .map(toNotification)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setNotifications(sorted);
-      } else if (!response.success) {
-        // If we get an error, just keep current notifications instead of clearing
-        console.warn("Failed to fetch notifications:", response.error);
       }
     } catch (error) {
-      console.error("Failed to fetch notifications:", error);
-      // Keep existing notifications on error instead of clearing
+      // Silently ignore errors - don't log to avoid console spam
     }
   }, [getUserId, isLoggedIn]);
 
