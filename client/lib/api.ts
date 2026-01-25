@@ -264,7 +264,25 @@ export const ordersApi = {
     if (params?.endDate) searchParams.set("endDate", params.endDate);
 
     const query = searchParams.toString();
-    return fetchApi<Order[]>(query ? `/orders?${query}` : "/orders");
+    const result = await fetchApi<any>(query ? `/orders?${query}` : "/orders");
+    
+    // Handle PaginatedResponse from server
+    if (result.success && result.data?.data && Array.isArray(result.data.data)) {
+      return {
+        success: true,
+        data: result.data.data,
+      };
+    }
+    
+    // Handle ApiResponse<Order[]> format
+    if (result.success && Array.isArray(result.data)) {
+      return {
+        success: true,
+        data: result.data,
+      };
+    }
+    
+    return result;
   },
 
   getById: async (id: string): Promise<ApiResponse<Order>> => {
