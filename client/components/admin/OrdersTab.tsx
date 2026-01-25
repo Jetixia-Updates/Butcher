@@ -22,6 +22,7 @@ import type { Order, OrderStatus } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 import { useNotifications, createUserOrderNotification, createDeliveryNotification } from "@/context/NotificationContext";
 import {
   DropdownMenu,
@@ -206,6 +207,7 @@ const STATUS_ACTIONS: Record<OrderStatus, (OrderStatus | "assign_driver")[]> = {
 
 export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: AdminTabProps) {
   const { language } = useLanguage();
+  const { user } = useAuth();
   const isRTL = language === 'ar';
   const t = translations[language];
   const { addUserNotification } = useNotifications();
@@ -252,7 +254,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
     if (newStatus === "assign_driver") {
       // First update status to ready_for_pickup, then navigate
       setUpdating(orderId);
-      const response = await ordersApi.updateStatus(orderId, "ready_for_pickup");
+      const response = await ordersApi.updateStatus(orderId, "ready_for_pickup", user?.id);
       if (response.success && response.data) {
         toast({
           title: "Status Updated",
@@ -284,7 +286,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
     console.log(`[OrdersTab] Updating order ${orderId} to status: ${newStatus}`);
 
     try {
-      const response = await ordersApi.updateStatus(orderId, newStatus);
+      const response = await ordersApi.updateStatus(orderId, newStatus, user?.id);
 
       if (response.success) {
         toast({

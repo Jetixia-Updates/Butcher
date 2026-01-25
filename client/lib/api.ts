@@ -299,9 +299,14 @@ export const ordersApi = {
     }>("/orders/stats");
   },
 
-  updateStatus: async (id: string, status: OrderStatus, notes?: string): Promise<ApiResponse<Order>> => {
+  updateStatus: async (id: string, status: OrderStatus, userId?: string, notes?: string): Promise<ApiResponse<Order>> => {
+    const headers: Record<string, string> = {};
+    if (userId) {
+      headers["x-user-id"] = userId;
+    }
     return fetchApi<Order>(`/orders/${id}/status`, {
       method: "PATCH",
+      headers,
       body: JSON.stringify({ status, notes }),
     });
   },
