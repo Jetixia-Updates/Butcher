@@ -22,6 +22,7 @@ import reviewsRouter from "./routes/reviews";
 import loyaltyRouter from "./routes/loyalty";
 import settingsRouter from "./routes/settings";
 import addressesRouter from "./routes/addresses";
+import chatRouter from "./routes/chat";
 
 export function createServer() {
   const app = express();
@@ -177,8 +178,16 @@ export function createServer() {
   // PATCH /api/notifications/:id/read - Mark notification as read
   // PATCH /api/notifications/read-all - Mark all notifications as read
   // DELETE /api/notifications/:id - Delete notification
+  // PATCH /api/notifications/read-all - Mark all notifications as read
+  // DELETE /api/notifications/:id - Delete notification
   // DELETE /api/notifications - Clear all notifications
   app.use("/api/notifications", notificationsRouter);
+
+  // Chat Support
+  // GET /api/chat/all - Get all chats (admin)
+  // GET /api/chat/:userId - Get user messages
+  // POST /api/chat/send - Send message
+  app.use("/api/chat", chatRouter);
 
   // Wallet Management
   // GET /api/wallet - Get wallet balance and transactions
