@@ -19,7 +19,7 @@
     "test": "vitest --run",
     "format.fix": "prettier --write .",
     "typecheck": "tsc",
-    "db:migrate": "npx tsx server/db/migrate-express-delivery.ts",
+    "db:migrate": "npx tsx server/db/migrate.ts",
     "cap:sync": "npx cap sync",
     "cap:open:ios": "npx cap open ios",
     "cap:open:android": "npx cap open android",
