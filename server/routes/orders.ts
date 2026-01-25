@@ -778,6 +778,12 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     console.log(`[UpdateStatus] Database updated successfully for order ${id}`);
 
     const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
+    
+    if (updatedOrderResult.length === 0) {
+      console.error(`[UpdateStatus] ❌ Updated order not found after update: ${id}`);
+      throw new Error(`Failed to retrieve updated order ${id}`);
+    }
+
     const itemsResult = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
 
     const items: OrderItem[] = itemsResult.map(item => ({
@@ -810,6 +816,7 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
       console.error(`[UpdateStatus] Notification creation failed:`, notifWarn);
     }
 
+    console.log(`[UpdateStatus] ✅ Order ${id} successfully updated with status: ${status}`);
     const response: ApiResponse<Order> = {
       success: true,
       data: toApiOrder(updatedOrderResult[0], items),
