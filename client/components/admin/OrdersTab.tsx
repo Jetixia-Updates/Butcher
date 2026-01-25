@@ -3,7 +3,7 @@
  * View, filter, and manage all orders
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Search,
   Filter,
@@ -220,7 +220,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     const params: { status?: string } = {};
     if (statusFilter !== "all") params.status = statusFilter;
@@ -230,11 +230,11 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       setOrders(response.data);
     }
     setLoading(false);
-  };
+  }, [statusFilter]);
 
   useEffect(() => {
     fetchOrders();
-  }, [statusFilter]);
+  }, [fetchOrders]);
 
   // Auto-select order when selectedOrderId is provided (e.g., from notification click)
   useEffect(() => {
@@ -274,10 +274,13 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
           title: "Status Updated",
           description: "Order marked as ready for pickup. Please assign a driver.",
         });
-        await fetchOrders();
-        if (selectedOrder?.id === orderId) {
-          setSelectedOrder(response.data);
+        
+        // Refresh orders list
+        const updatedOrders = await ordersApi.getAll({ status: statusFilter === "all" ? undefined : statusFilter });
+        if (updatedOrders.success && updatedOrders.data) {
+          setOrders(updatedOrders.data);
         }
+        
         // Close modal if open
         setSelectedOrder(null);
         // Navigate to delivery tab with order ID
@@ -311,9 +314,19 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
           title: "Status Updated",
           description: `Order status changed to ${getStatusLabel(newStatus, t)}`,
         });
-        await fetchOrders();
-        if (selectedOrder?.id === orderId && response.data) {
-          setSelectedOrder(response.data);
+        
+        // Refresh orders list
+        const updatedOrders = await ordersApi.getAll({ status: statusFilter === "all" ? undefined : statusFilter });
+        if (updatedOrders.success && updatedOrders.data) {
+          console.log(`[OrdersTab] Fetched ${updatedOrders.data.length} orders after status update`);
+          setOrders(updatedOrders.data);
+          
+          // Update selectedOrder with latest data
+          const updatedOrder = updatedOrders.data.find(o => o.id === orderId);
+          if (updatedOrder) {
+            console.log(`[OrdersTab] Updated selectedOrder with new status:`, updatedOrder.status);
+            setSelectedOrder(updatedOrder);
+          }
         }
         // Note: Customer notifications are now created server-side when status is updated
       } else {
