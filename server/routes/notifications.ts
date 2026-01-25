@@ -91,6 +91,8 @@ async function getNotificationTarget(token: string | undefined): Promise<{ userI
 // GET /api/notifications - Get notifications for current user/customer
 const getNotifications: RequestHandler = async (req, res) => {
   try {
+    console.log(`[Notifications] GET request received. Headers:`, { auth: req.headers.authorization ? "present" : "missing", query: req.query });
+    
     const token = req.headers.authorization?.replace("Bearer ", "");
     const target = await getNotificationTarget(token);
 
@@ -107,35 +109,40 @@ const getNotifications: RequestHandler = async (req, res) => {
     // If not authenticated, return empty list instead of 401
     if (!targetUserId && !targetCustomerId) {
       console.log(`[Notifications] ⚠️ Not authenticated - returning empty list`);
-      const response: ApiResponse<typeof inAppNotifications.$inferSelect[]> = {
+      const response: ApiResponse<any> = {
         success: true,
         data: [],
       };
       return res.json(response);
     }
 
-    let result;
-    if (targetCustomerId) {
-      result = await db
-        .select()
-        .from(inAppNotifications)
-        .where(eq(inAppNotifications.userId, targetCustomerId))
-        .orderBy(desc(inAppNotifications.createdAt))
-        .limit(50);
-    } else {
-      result = await db
-        .select()
-        .from(inAppNotifications)
-        .where(eq(inAppNotifications.userId, targetUserId!))
-        .orderBy(desc(inAppNotifications.createdAt))
-        .limit(50);
+    let result = [];
+    try {
+      if (targetCustomerId) {
+        result = await db
+          .select()
+          .from(inAppNotifications)
+          .where(eq(inAppNotifications.userId, targetCustomerId))
+          .orderBy(desc(inAppNotifications.createdAt))
+          .limit(50);
+      } else {
+        result = await db
+          .select()
+          .from(inAppNotifications)
+          .where(eq(inAppNotifications.userId, targetUserId!))
+          .orderBy(desc(inAppNotifications.createdAt))
+          .limit(50);
+      }
+    } catch (dbError) {
+      console.error(`[Notifications] DB Query failed:`, dbError);
+      throw dbError;
     }
 
     console.log(`[Notifications] ✅ Found ${result.length} notifications`);
 
-    const response: ApiResponse<typeof result> = {
+    const response: ApiResponse<any> = {
       success: true,
-      data: result,
+      data: result || [],
     };
     res.json(response);
   } catch (error) {
