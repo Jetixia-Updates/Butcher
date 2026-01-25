@@ -302,10 +302,7 @@ export default function DriverDashboardPage() {
     setShowConfirmModal(false);
 
     try {
-      const endpoint =
-        nextStatus === "delivered"
-          ? `/api/delivery/tracking/${selectedDelivery.id}/complete`
-          : `/api/delivery/tracking/${selectedDelivery.orderId}/update`;
+      const endpoint = `/api/delivery/tracking/${selectedDelivery.orderId}/update`;
 
       const response = await fetch(endpoint, {
         method: "POST",
