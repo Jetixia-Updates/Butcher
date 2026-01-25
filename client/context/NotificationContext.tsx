@@ -113,9 +113,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           .map(toNotification)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setNotifications(sorted);
+      } else if (!response.success) {
+        // If we get an error, just keep current notifications instead of clearing
+        console.warn("Failed to fetch notifications:", response.error);
       }
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
+      // Keep existing notifications on error instead of clearing
     }
   }, [getUserId, isLoggedIn]);
 
