@@ -779,8 +779,15 @@ export default function CheckoutPage() {
   // Calculate zone-based delivery fee when address changes
   useEffect(() => {
     const currentAddress = addresses.find(a => a.id === selectedAddressId);
-    if (!currentAddress || zones.length === 0) {
-      setZoneDeliveryFee(0);
+    if (!currentAddress) {
+      setZoneDeliveryFee(settings?.deliveryFee || 15);
+      setMatchedZone(null);
+      return;
+    }
+
+    // If no zones available, use default fee from settings
+    if (zones.length === 0) {
+      setZoneDeliveryFee(settings?.deliveryFee || 15);
       setMatchedZone(null);
       return;
     }
@@ -796,7 +803,7 @@ export default function CheckoutPage() {
     });
 
     if (zone) {
-      setZoneDeliveryFee(Number(zone.deliveryFee) || 0);
+      setZoneDeliveryFee(Number(zone.deliveryFee) || (settings?.deliveryFee || 15));
       setMatchedZone(zone);
     } else {
       // Fallback: try to match just by emirate
@@ -804,15 +811,15 @@ export default function CheckoutPage() {
         z.emirate.toLowerCase() === currentAddress.emirate.toLowerCase()
       );
       if (emirateZone) {
-        setZoneDeliveryFee(Number(emirateZone.deliveryFee) || 0);
+        setZoneDeliveryFee(Number(emirateZone.deliveryFee) || (settings?.deliveryFee || 15));
         setMatchedZone(emirateZone);
       } else {
-        // No matching zone found - could show a warning or use default fee
-        setZoneDeliveryFee(0);
+        // No matching zone found - use default delivery fee from settings
+        setZoneDeliveryFee(settings?.deliveryFee || 15);
         setMatchedZone(null);
       }
     }
-  }, [selectedAddressId, addresses, zones]);
+  }, [selectedAddressId, addresses, zones, settings]);
 
   if (items.length === 0) {
     return (
