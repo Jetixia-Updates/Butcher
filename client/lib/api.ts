@@ -305,16 +305,28 @@ export const ordersApi = {
     if (userId) {
       headers["x-user-id"] = userId;
       console.log(`[API] Added x-user-id header: ${userId}`);
+    } else {
+      console.warn(`[API] ⚠️ No userId provided for status update`);
     }
-    const requestBody = { status, notes };
+    
+    const requestBody: Record<string, any> = { status };
+    if (notes) {
+      requestBody.notes = notes;
+    }
     console.log(`[API] Request body:`, requestBody);
-    const result = await fetchApi<Order>(`/orders/${id}/status`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify(requestBody),
-    });
-    console.log(`[API] updateStatus response:`, result);
-    return result;
+    
+    try {
+      const result = await fetchApi<Order>(`/orders/${id}/status`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+      console.log(`[API] updateStatus response:`, result);
+      return result;
+    } catch (error) {
+      console.error(`[API] updateStatus failed with error:`, error);
+      throw error;
+    }
   },
 
   delete: (id: string) =>
