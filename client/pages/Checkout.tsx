@@ -1811,7 +1811,7 @@ export default function CheckoutPage() {
                         +<PriceDisplay price={expressDeliveryFee} size="md" />
                       </span>
                     </div>
-                  ) : zoneDeliveryFee > 0 ? (
+                  ) : (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         🚚 {t.deliveryFee}
@@ -1822,10 +1822,14 @@ export default function CheckoutPage() {
                         )}
                       </span>
                       <span className="font-semibold">
-                        +<PriceDisplay price={zoneDeliveryFee} size="md" />
+                        {zoneDeliveryFee === 0 ? (
+                          <span className="text-green-600 dark:text-green-400">{isRTL ? 'مجاني' : 'FREE'}</span>
+                        ) : (
+                          <>+<PriceDisplay price={zoneDeliveryFee} size="md" /></>
+                        )}
                       </span>
                     </div>
-                  ) : null}
+                  )}
                   {driverTip > 0 && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
