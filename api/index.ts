@@ -1,8 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import express from 'express';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
-import { z } from 'zod';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { eq, or, ilike, desc, and, gte, lte, ne } from 'drizzle-orm';
@@ -18,101 +16,6 @@ import {
   integer,
   real,
 } from 'drizzle-orm/pg-core';
-
-// =====================================================
-// VALIDATION SCHEMAS (ZOD)
-// =====================================================
-
-const LoginSchema = z.object({
-  username: z.string().min(3, 'Username must be at least 3 characters').max(100),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-});
-
-const RegisterSchema = z.object({
-  username: z.string().min(3, 'Username must be at least 3 characters').max(100),
-  email: z.string().email('Invalid email address'),
-  mobile: z.string().regex(/^[0-9+\-\s()]*$/, 'Invalid phone number'),
-  password: z.string().min(8, 'Password must be at least 8 characters').regex(/[A-Z]/, 'Password must contain uppercase').regex(/[0-9]/, 'Password must contain numbers'),
-  firstName: z.string().min(2).max(100),
-  familyName: z.string().min(2).max(100),
-  emirate: z.string().min(2).max(100),
-});
-
-const CreateProductSchema = z.object({
-  name: z.string().min(2).max(200),
-  sku: z.string().min(2).max(50),
-  price: z.number().positive('Price must be positive'),
-  costPrice: z.number().positive('Cost price must be positive'),
-  category: z.string().min(2).max(100),
-  description: z.string().optional(),
-  unit: z.enum(['kg', 'piece', 'gram']),
-  minOrderQuantity: z.number().positive().optional(),
-  maxOrderQuantity: z.number().positive().optional(),
-});
-
-const CreateOrderSchema = z.object({
-  userId: z.string(),
-  items: z.array(z.object({
-    productId: z.string(),
-    quantity: z.number().positive('Quantity must be positive'),
-    unitPrice: z.number().positive(),
-  })).min(1, 'Order must have at least one item'),
-  addressId: z.string(),
-  paymentMethod: z.enum(['card', 'cod', 'bank_transfer']),
-  deliveryFee: z.number().nonnegative(),
-  subtotal: z.number().positive(),
-  vatAmount: z.number().nonnegative(),
-  total: z.number().positive(),
-});
-
-const ProcessPaymentSchema = z.object({
-  orderId: z.string(),
-  amount: z.number().positive(),
-  method: z.enum(['card', 'cod', 'bank_transfer']),
-});
-
-const UpdateOrderStatusSchema = z.object({
-  status: z.enum(['pending', 'confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'cancelled', 'refunded']),
-  notes: z.string().optional(),
-});
-
-// =====================================================
-// RATE LIMITING
-// =====================================================
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per 15 minutes
-  message: 'Too many login attempts, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.ip || 'unknown',
-});
-
-const registrationLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // 3 registrations per hour per IP
-  message: 'Too many registrations, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.ip || 'unknown',
-});
-
-const paymentLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 10, // 10 payment attempts per 10 minutes
-  message: 'Too many payment attempts, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.ip || 'unknown',
-});
-
-const apiLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 100, // 100 requests per minute (general limit)
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 // =====================================================
 // NEON DATABASE CONNECTION
@@ -153,6 +56,105 @@ const usersTable = pgTable("users", {
 const sessionsTable = pgTable("sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Customer segment enum
+const customerSegmentEnum = pgEnum("customer_segment", [
+  "regular",
+  "premium",
+  "vip",
+  "wholesale",
+  "inactive",
+]);
+
+// Payment method enum for customers
+const paymentMethodEnumCustomer = pgEnum("payment_method", ["card", "cod", "bank_transfer"]);
+
+// Language enum
+const languageEnum = pgEnum("language", ["en", "ar"]);
+
+// Customers table (standalone - for customer registration)
+const customersTable = pgTable("customers", {
+  id: text("id").primaryKey(),
+  
+  // Authentication
+  username: varchar("username", { length: 100 }).notNull().unique(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  mobile: varchar("mobile", { length: 20 }).notNull(),
+  password: text("password").notNull(),
+  
+  // Personal Info
+  firstName: varchar("first_name", { length: 100 }).notNull(),
+  familyName: varchar("family_name", { length: 100 }).notNull(),
+  
+  // Account Status
+  isActive: boolean("is_active").notNull().default(true),
+  isVerified: boolean("is_verified").notNull().default(false),
+  
+  // Location
+  emirate: varchar("emirate", { length: 100 }),
+  address: text("address"),
+  
+  // Customer Classification
+  customerNumber: varchar("customer_number", { length: 20 }).notNull().unique(),
+  segment: customerSegmentEnum("segment").notNull().default("regular"),
+  
+  // Financial Info
+  creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }).notNull().default("0"),
+  currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).notNull().default("0"),
+  lifetimeValue: decimal("lifetime_value", { precision: 14, scale: 2 }).notNull().default("0"),
+  
+  // Statistics
+  totalOrders: integer("total_orders").notNull().default(0),
+  totalSpent: decimal("total_spent", { precision: 14, scale: 2 }).notNull().default("0"),
+  averageOrderValue: decimal("average_order_value", { precision: 10, scale: 2 }).notNull().default("0"),
+  lastOrderDate: timestamp("last_order_date"),
+  lastOrderAmount: decimal("last_order_amount", { precision: 10, scale: 2 }),
+  
+  // Preferences
+  preferredPaymentMethod: paymentMethodEnumCustomer("preferred_payment_method"),
+  preferredDeliveryTime: varchar("preferred_delivery_time", { length: 50 }),
+  dietaryPreferences: jsonb("dietary_preferences").$type<string[]>(),
+  allergies: jsonb("allergies").$type<string[]>(),
+  preferences: jsonb("preferences").$type<{
+    language: "en" | "ar";
+    currency: "AED" | "USD" | "EUR";
+    emailNotifications: boolean;
+    smsNotifications: boolean;
+    marketingEmails: boolean;
+  }>(),
+  
+  // Communication
+  preferredLanguage: languageEnum("preferred_language").default("en"),
+  marketingOptIn: boolean("marketing_opt_in").notNull().default(true),
+  smsOptIn: boolean("sms_opt_in").notNull().default(true),
+  emailOptIn: boolean("email_opt_in").notNull().default(true),
+  
+  // Internal Notes
+  internalNotes: text("internal_notes"),
+  tags: jsonb("tags").$type<string[]>(),
+  
+  // Referrals
+  referredBy: text("referred_by"),
+  referralCount: integer("referral_count").notNull().default(0),
+  
+  // Dates
+  firstPurchaseDate: timestamp("first_purchase_date"),
+  birthDate: timestamp("birth_date"),
+  anniversary: timestamp("anniversary"),
+  lastLoginAt: timestamp("last_login_at"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Customer sessions table
+const customerSessionsTable = pgTable("customer_sessions", {
+  id: text("id").primaryKey(),
+  customerId: text("customer_id").notNull(),
   token: text("token").notNull().unique(),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1052,10 +1054,36 @@ interface Address {
   updatedAt: string;
 }
 
-// ⚠️  ALL DATA NOW IN DATABASE - NO IN-MEMORY STRUCTURES
-// Sessions, users, orders, addresses are all persisted to PostgreSQL
-// This ensures data survives server restarts and scales across multiple instances
-// Note: Removed all Map-based in-memory storage for production reliability
+// In-memory caches only - NO SEEDING
+// These are used for temporary caching only, primary storage is in database
+const sessions = new Map<string, Session>();
+
+// Legacy empty maps - kept for backward compatibility but NOT seeded
+// All CRUD operations should use database, these are fallback only
+const users = new Map<string, User>();
+const orders = new Map<string, Order>();
+const addresses = new Map<string, Address>();
+
+// Delivery tracking cache for quick access (primary storage is in database)
+const deliveryTrackingCache = new Map<string, {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  driverId: string;
+  driverName: string;
+  driverMobile: string;
+  status: string;
+  customerName?: string;
+  customerMobile?: string;
+  deliveryAddress?: any;
+  deliveryNotes?: string;
+  items?: { name: string; quantity: number }[];
+  total?: number;
+  estimatedArrival: string;
+  timeline: { status: string; timestamp: string; notes?: string }[];
+  createdAt: string;
+  updatedAt: string;
+}>();
 
 // Generate token
 const generateToken = () => `tok_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
@@ -1530,27 +1558,6 @@ async function createRefundTransaction(
 // EXPRESS APP
 // =====================================================
 
-// Cache control middleware
-const cacheControl = (duration: number) => (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  res.set('Cache-Control', `public, max-age=${duration}`);
-  next();
-};
-
-// Middleware to validate request body with Zod
-const validateRequest = (schema: z.ZodSchema) => (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  try {
-    const validated = schema.parse(req.body);
-    req.body = validated;
-    next();
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      const messages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-      return res.status(400).json({ success: false, error: `Validation error: ${messages}` });
-    }
-    return res.status(400).json({ success: false, error: 'Invalid request' });
-  }
-};
-
 let app: express.Express | null = null;
 
 function createApp() {
@@ -1562,7 +1569,6 @@ function createApp() {
   app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
-  app.use(apiLimiter); // Apply general rate limit to all routes
 
   // Ping endpoint
   app.get('/api/ping', (req, res) => {
@@ -1599,10 +1605,14 @@ function createApp() {
     });
   });
 
-  // User login - with rate limiting and validation
-  app.post('/api/users/login', loginLimiter, validateRequest(LoginSchema), async (req, res) => {
+  // User login
+  app.post('/api/users/login', async (req, res) => {
     try {
       const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ success: false, error: 'Username and password are required' });
+      }
       
       let user: User | undefined;
       
@@ -1667,7 +1677,7 @@ function createApp() {
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const sessionId = `session_${Date.now()}`;
       
-      // Store session in database only (no fallback to in-memory)
+      // Store session in database
       if (isDatabaseAvailable() && pgDb) {
         try {
           await pgDb.insert(sessionsTable).values({
@@ -1679,20 +1689,21 @@ function createApp() {
           });
         } catch (e) {
           console.error('[Session DB Error]', e);
-          return res.status(500).json({ success: false, error: 'Failed to create session' });
         }
-      } else {
-        return res.status(500).json({ success: false, error: 'Database not available' });
       }
       
-      // Update last login in DB
-      try {
-        await pgDb.update(usersTable)
-          .set({ lastLoginAt: new Date() })
-          .where(eq(usersTable.id, user.id));
-      } catch (e) { 
-        console.error('[Update login time error]', e);
+      // Also store in memory for fallback
+      sessions.set(token, { userId: user.id, expiresAt: expiresAt.toISOString() });
+      
+      // Update last login in DB if available
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          await pgDb.update(usersTable)
+            .set({ lastLoginAt: new Date() })
+            .where(eq(usersTable.id, user.id));
+        } catch (e) { /* ignore */ }
       }
+      user.lastLoginAt = new Date().toISOString();
 
       res.json({
         success: true,
@@ -1709,10 +1720,14 @@ function createApp() {
     }
   });
 
-  // Admin login - with rate limiting and validation
-  app.post('/api/users/admin-login', loginLimiter, validateRequest(LoginSchema), async (req, res) => {
+  // Admin login
+  app.post('/api/users/admin-login', async (req, res) => {
     try {
       const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ success: false, error: 'Username and password are required' });
+      }
 
       let user: User | undefined;
       
@@ -1723,6 +1738,7 @@ function createApp() {
             ilike(usersTable.username, username)
           ).limit(1);
           
+          // Allow admin, staff, and delivery roles to login via this endpoint
           if (dbUsers.length > 0 && ['admin', 'staff', 'delivery'].includes(dbUsers[0].role)) {
             const dbUser = dbUsers[0];
             user = {
@@ -1757,14 +1773,14 @@ function createApp() {
       }
 
       if (!user || user.password !== password) {
-        return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        return res.status(401).json({ success: false, error: 'Invalid staff credentials' });
       }
 
       const token = generateToken();
       const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
       const sessionId = `session_${Date.now()}`;
       
-      // Store session in database only (no fallback to in-memory)
+      // Store session in database
       if (isDatabaseAvailable() && pgDb) {
         try {
           await pgDb.insert(sessionsTable).values({
@@ -1775,21 +1791,21 @@ function createApp() {
             createdAt: new Date(),
           });
         } catch (e) {
-          console.error('[Session DB Error]', e);
-          return res.status(500).json({ success: false, error: 'Failed to create session' });
+          console.error('[Admin Session DB Error]', e);
         }
-      } else {
-        return res.status(500).json({ success: false, error: 'Database not available' });
       }
       
-      // Update last login in DB
-      try {
-        await pgDb.update(usersTable)
-          .set({ lastLoginAt: new Date() })
-          .where(eq(usersTable.id, user.id));
-      } catch (e) { 
-        console.error('[Update login time error]', e);
+      // Also store in memory for fallback
+      sessions.set(token, { userId: user.id, expiresAt: expiresAt.toISOString() });
+      
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          await pgDb.update(usersTable)
+            .set({ lastLoginAt: new Date() })
+            .where(eq(usersTable.id, user.id));
+        } catch (e) { /* ignore */ }
       }
+      user.lastLoginAt = new Date().toISOString();
 
       res.json({
         success: true,
@@ -1798,7 +1814,7 @@ function createApp() {
           token,
           expiresAt: expiresAt.toISOString(),
         },
-        message: 'Login successful',
+        message: 'Admin login successful',
       });
     } catch (error) {
       console.error('[Admin Login Error]', error);
@@ -1806,16 +1822,550 @@ function createApp() {
     }
   });
 
-
-
   // =====================================================
-  // USERS API
+  // CUSTOMER AUTHENTICATION ROUTES
   // =====================================================
 
-  // Register user - with rate limiting and validation
-  app.post('/api/users', registrationLimiter, validateRequest(RegisterSchema), async (req, res) => {
+  // Customer type for API responses
+  interface CustomerResponse {
+    id: string;
+    username: string;
+    email: string;
+    mobile: string;
+    firstName: string;
+    familyName: string;
+    isActive: boolean;
+    isVerified: boolean;
+    emirate: string;
+    address?: string;
+    customerNumber: string;
+    segment: string;
+    creditLimit: string;
+    currentBalance: string;
+    lifetimeValue: string;
+    totalOrders: number;
+    totalSpent: string;
+    averageOrderValue: string;
+    lastOrderDate?: string;
+    preferences?: {
+      language: "en" | "ar";
+      currency: "AED" | "USD" | "EUR";
+      emailNotifications: boolean;
+      smsNotifications: boolean;
+      marketingEmails: boolean;
+    };
+    createdAt: string;
+    updatedAt: string;
+    lastLoginAt?: string;
+  }
+
+  // Helper to sanitize customer for API response (exclude password)
+  function toApiCustomer(dbCustomer: typeof customersTable.$inferSelect): CustomerResponse {
+    return {
+      id: dbCustomer.id,
+      username: dbCustomer.username,
+      email: dbCustomer.email,
+      mobile: dbCustomer.mobile,
+      firstName: dbCustomer.firstName,
+      familyName: dbCustomer.familyName,
+      isActive: dbCustomer.isActive,
+      isVerified: dbCustomer.isVerified,
+      emirate: dbCustomer.emirate || "",
+      address: dbCustomer.address || undefined,
+      customerNumber: dbCustomer.customerNumber,
+      segment: dbCustomer.segment,
+      creditLimit: dbCustomer.creditLimit,
+      currentBalance: dbCustomer.currentBalance,
+      lifetimeValue: dbCustomer.lifetimeValue,
+      totalOrders: dbCustomer.totalOrders,
+      totalSpent: dbCustomer.totalSpent,
+      averageOrderValue: dbCustomer.averageOrderValue,
+      lastOrderDate: dbCustomer.lastOrderDate?.toISOString(),
+      preferences: (dbCustomer.preferences as CustomerResponse["preferences"]) || {
+        language: "en",
+        currency: "AED",
+        emailNotifications: true,
+        smsNotifications: true,
+        marketingEmails: true,
+      },
+      createdAt: dbCustomer.createdAt.toISOString(),
+      updatedAt: dbCustomer.updatedAt.toISOString(),
+      lastLoginAt: dbCustomer.lastLoginAt?.toISOString(),
+    };
+  }
+
+  // POST /api/customers/register - Register new customer
+  app.post('/api/customers/register', async (req, res) => {
     try {
       const { username, email, mobile, password, firstName, familyName, emirate, address, deliveryAddress } = req.body;
+      
+      if (!username || !email || !mobile || !password || !firstName || !familyName || !emirate) {
+        return res.status(400).json({ success: false, error: 'All fields are required' });
+      }
+
+      // Validate username
+      if (username.length < 3 || !/^[a-zA-Z0-9_]+$/.test(username)) {
+        return res.status(400).json({ success: false, error: 'Username must be at least 3 characters and contain only letters, numbers, and underscores' });
+      }
+
+      // Validate password
+      if (password.length < 6) {
+        return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+      }
+
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const normalizedMobile = mobile.replace(/\s/g, '');
+      const customerId = `cust_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      try {
+        // Check for existing username
+        const existingUsername = await pgDb.select().from(customersTable)
+          .where(ilike(customersTable.username, username)).limit(1);
+        if (existingUsername.length > 0) {
+          return res.status(400).json({ success: false, error: 'Username already taken' });
+        }
+
+        // Check for existing email
+        const existingEmail = await pgDb.select().from(customersTable)
+          .where(ilike(customersTable.email, email)).limit(1);
+        if (existingEmail.length > 0) {
+          return res.status(400).json({ success: false, error: 'Email already registered' });
+        }
+
+        // Check for existing mobile
+        const existingMobile = await pgDb.select().from(customersTable)
+          .where(eq(customersTable.mobile, normalizedMobile)).limit(1);
+        if (existingMobile.length > 0) {
+          return res.status(400).json({ success: false, error: 'Phone number already registered' });
+        }
+
+        // Get next customer number using raw SQL
+        const countResult = await pgDb.execute(
+          `SELECT COUNT(*) as count FROM customers`
+        );
+        const customerNumber = `CUST-${String(Number((countResult as any)[0]?.count || 0) + 1).padStart(4, '0')}`;
+
+        // Insert new customer
+        await pgDb.insert(customersTable).values({
+          id: customerId,
+          username: username.toLowerCase(),
+          email: email.toLowerCase(),
+          mobile: normalizedMobile,
+          password, // In production, hash the password!
+          firstName,
+          familyName,
+          isActive: true,
+          isVerified: false,
+          emirate,
+          address: address || null,
+          customerNumber,
+          segment: "regular",
+          creditLimit: "0",
+          currentBalance: "0",
+          lifetimeValue: "0",
+          totalOrders: 0,
+          totalSpent: "0",
+          averageOrderValue: "0",
+          preferredLanguage: "en",
+          marketingOptIn: true,
+          smsOptIn: true,
+          emailOptIn: true,
+          referralCount: 0,
+          preferences: {
+            language: "en",
+            currency: "AED",
+            emailNotifications: true,
+            smsNotifications: true,
+            marketingEmails: true,
+          },
+        });
+
+        // Create default address if provided
+        if (deliveryAddress && addressesTable) {
+          const addressId = `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await pgDb.insert(addressesTable).values({
+            id: addressId,
+            customerId: customerId,
+            label: deliveryAddress.label || 'Home',
+            fullName: deliveryAddress.fullName || `${firstName} ${familyName}`,
+            mobile: deliveryAddress.mobile || normalizedMobile,
+            emirate: deliveryAddress.emirate || emirate,
+            area: deliveryAddress.area || '',
+            street: deliveryAddress.street || '',
+            building: deliveryAddress.building || '',
+            floor: deliveryAddress.floor || null,
+            apartment: deliveryAddress.apartment || null,
+            landmark: deliveryAddress.landmark || null,
+            latitude: deliveryAddress.latitude || null,
+            longitude: deliveryAddress.longitude || null,
+            isDefault: true,
+          });
+        }
+
+        // Fetch the created customer
+        const result = await pgDb.select().from(customersTable).where(eq(customersTable.id, customerId));
+
+        if (result.length === 0) {
+          return res.status(500).json({ success: false, error: 'Failed to create customer' });
+        }
+
+        // Create session
+        const token = `tok_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        await pgDb.insert(customerSessionsTable).values({
+          id: sessionId,
+          customerId: customerId,
+          token,
+          expiresAt,
+        });
+
+        res.status(201).json({
+          success: true,
+          data: {
+            customer: toApiCustomer(result[0]),
+            token,
+            expiresAt: expiresAt.toISOString(),
+          },
+          message: 'Registration successful',
+        });
+      } catch (dbError) {
+        console.error('[Customer Register DB Error]', dbError);
+        return res.status(500).json({ success: false, error: 'Database error during registration' });
+      }
+    } catch (error) {
+      console.error('[Customer Register Error]', error);
+      res.status(500).json({ success: false, error: 'Registration failed' });
+    }
+  });
+
+  // POST /api/customers/login - Customer login
+  app.post('/api/customers/login', async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ success: false, error: 'Username and password are required' });
+      }
+
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      try {
+        // Find customer by username or email
+        const customerResult = await pgDb.select().from(customersTable).where(
+          or(
+            ilike(customersTable.username, username),
+            ilike(customersTable.email, username)
+          )
+        ).limit(1);
+
+        if (customerResult.length === 0) {
+          return res.status(401).json({ success: false, error: 'Invalid username or password' });
+        }
+
+        const customer = customerResult[0];
+
+        // Check password
+        if (customer.password !== password) {
+          return res.status(401).json({ success: false, error: 'Invalid username or password' });
+        }
+
+        // Check if active
+        if (!customer.isActive) {
+          return res.status(403).json({ success: false, error: 'Account is deactivated' });
+        }
+
+        // Update last login
+        await pgDb.update(customersTable)
+          .set({ lastLoginAt: new Date() })
+          .where(eq(customersTable.id, customer.id));
+
+        // Create session
+        const token = `tok_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        await pgDb.insert(customerSessionsTable).values({
+          id: sessionId,
+          customerId: customer.id,
+          token,
+          expiresAt,
+        });
+
+        res.json({
+          success: true,
+          data: {
+            customer: toApiCustomer({ ...customer, lastLoginAt: new Date() }),
+            token,
+            expiresAt: expiresAt.toISOString(),
+          },
+          message: 'Login successful',
+        });
+      } catch (dbError) {
+        console.error('[Customer Login DB Error]', dbError);
+        return res.status(500).json({ success: false, error: 'Database error during login' });
+      }
+    } catch (error) {
+      console.error('[Customer Login Error]', error);
+      res.status(500).json({ success: false, error: 'Login failed' });
+    }
+  });
+
+  // POST /api/customers/logout - Customer logout
+  app.post('/api/customers/logout', async (req, res) => {
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      
+      if (token && isDatabaseAvailable() && pgDb) {
+        try {
+          await pgDb.delete(customerSessionsTable).where(eq(customerSessionsTable.token, token));
+        } catch (dbError) {
+          console.error('[Customer Logout DB Error]', dbError);
+        }
+      }
+
+      res.json({
+        success: true,
+        data: null,
+        message: 'Logged out successfully',
+      });
+    } catch (error) {
+      console.error('[Customer Logout Error]', error);
+      res.status(500).json({ success: false, error: 'Logout failed' });
+    }
+  });
+
+  // GET /api/customers/me - Get current customer (by token)
+  app.get('/api/customers/me', async (req, res) => {
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      
+      if (!token) {
+        return res.status(401).json({ success: false, error: 'No token provided' });
+      }
+
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      try {
+        const sessionResult = await pgDb.select().from(customerSessionsTable)
+          .where(eq(customerSessionsTable.token, token));
+        
+        if (sessionResult.length === 0) {
+          return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+        }
+
+        const session = sessionResult[0];
+
+        if (new Date(session.expiresAt) < new Date()) {
+          await pgDb.delete(customerSessionsTable).where(eq(customerSessionsTable.id, session.id));
+          return res.status(401).json({ success: false, error: 'Session expired' });
+        }
+
+        const customerResult = await pgDb.select().from(customersTable)
+          .where(eq(customersTable.id, session.customerId));
+        
+        if (customerResult.length === 0) {
+          return res.status(404).json({ success: false, error: 'Customer not found' });
+        }
+
+        res.json({
+          success: true,
+          data: toApiCustomer(customerResult[0]),
+        });
+      } catch (dbError) {
+        console.error('[Customer Me DB Error]', dbError);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+    } catch (error) {
+      console.error('[Customer Me Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to get customer' });
+    }
+  });
+
+  // GET /api/customers - Get all customers (admin only)
+  app.get('/api/customers', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { page = '1', limit = '50', search, segment } = req.query;
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+
+      try {
+        let allCustomers = await pgDb.select().from(customersTable);
+
+        // Filter by search
+        if (search) {
+          const searchLower = (search as string).toLowerCase();
+          allCustomers = allCustomers.filter(c => 
+            c.firstName.toLowerCase().includes(searchLower) ||
+            c.familyName.toLowerCase().includes(searchLower) ||
+            c.email.toLowerCase().includes(searchLower) ||
+            c.customerNumber.toLowerCase().includes(searchLower)
+          );
+        }
+
+        // Filter by segment
+        if (segment && segment !== 'all') {
+          allCustomers = allCustomers.filter(c => c.segment === segment);
+        }
+
+        // Sort by createdAt descending
+        allCustomers.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+        const total = allCustomers.length;
+        const paginatedCustomers = allCustomers.slice(offset, offset + limitNum);
+
+        res.json({
+          success: true,
+          data: paginatedCustomers.map(toApiCustomer),
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            totalPages: Math.ceil(total / limitNum),
+          },
+        });
+      } catch (dbError) {
+        console.error('[Get Customers DB Error]', dbError);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+    } catch (error) {
+      console.error('[Get Customers Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch customers' });
+    }
+  });
+
+  // GET /api/customers/:id - Get customer by ID
+  app.get('/api/customers/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const customerResult = await pgDb.select().from(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+      
+      if (customerResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+
+      res.json({
+        success: true,
+        data: toApiCustomer(customerResult[0]),
+      });
+    } catch (error) {
+      console.error('[Get Customer Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch customer' });
+    }
+  });
+
+  // PUT /api/customers/:id - Update customer (admin)
+  app.put('/api/customers/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const customerResult = await pgDb.select().from(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+      
+      if (customerResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+
+      const updateData: Record<string, any> = { updatedAt: new Date() };
+      const { firstName, familyName, email, mobile, emirate, address, isActive, isVerified, segment } = req.body;
+
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (familyName !== undefined) updateData.familyName = familyName;
+      if (email !== undefined) updateData.email = email;
+      if (mobile !== undefined) updateData.mobile = mobile;
+      if (emirate !== undefined) updateData.emirate = emirate;
+      if (address !== undefined) updateData.address = address;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      if (isVerified !== undefined) updateData.isVerified = isVerified;
+      if (segment !== undefined) updateData.segment = segment;
+
+      await pgDb.update(customersTable)
+        .set(updateData)
+        .where(eq(customersTable.id, req.params.id));
+
+      const updatedResult = await pgDb.select().from(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+
+      res.json({
+        success: true,
+        data: toApiCustomer(updatedResult[0]),
+        message: 'Customer updated successfully',
+      });
+    } catch (error) {
+      console.error('[Update Customer Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update customer' });
+    }
+  });
+
+  // DELETE /api/customers/:id - Delete customer (admin)
+  app.delete('/api/customers/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const customerResult = await pgDb.select().from(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+      
+      if (customerResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+
+      // Delete customer sessions first
+      await pgDb.delete(customerSessionsTable)
+        .where(eq(customerSessionsTable.customerId, req.params.id));
+
+      // Delete customer
+      await pgDb.delete(customersTable)
+        .where(eq(customersTable.id, req.params.id));
+
+      res.json({
+        success: true,
+        data: null,
+        message: 'Customer deleted successfully',
+      });
+    } catch (error) {
+      console.error('[Delete Customer Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete customer' });
+    }
+  });
+
+  // =====================================================
+  // END CUSTOMER AUTHENTICATION ROUTES
+  // =====================================================
+
+  // Register user
+  app.post('/api/users', async (req, res) => {
+    try {
+      const { username, email, mobile, password, firstName, familyName, emirate, address, deliveryAddress } = req.body;
+      
+      if (!username || !email || !mobile || !password || !firstName || !familyName || !emirate) {
+        return res.status(400).json({ success: false, error: 'All fields are required' });
+      }
+
+      // Check username
+      if (username.length < 3 || !/^[a-zA-Z0-9_]+$/.test(username)) {
+        return res.status(400).json({ success: false, error: 'Username must be at least 3 characters and contain only letters, numbers, and underscores' });
+      }
 
       const normalizedMobile = mobile.replace(/\s/g, '');
       const userId = `user_${Date.now()}`;
@@ -1978,17 +2528,12 @@ function createApp() {
     }
   });
 
-  // Products endpoint - DATABASE BACKED with pagination and caching
-  app.get('/api/products', cacheControl(300), async (req, res) => {
+  // Products endpoint - DATABASE BACKED
+  app.get('/api/products', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
-      // Parse pagination parameters
-      const page = Math.max(1, parseInt(String(req.query.page)) || 1);
-      const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit)) || 20)); // Max 100 per page
-      const offset = (page - 1) * limit;
       
       const { category, search, featured } = req.query;
       let result = await pgDb.select().from(productsTable);
@@ -2013,15 +2558,8 @@ function createApp() {
         result = result.filter(p => p.isFeatured);
       }
       
-      // Get total count before pagination
-      const total = result.length;
-      const totalPages = Math.ceil(total / limit);
-      
-      // Apply pagination
-      const paginatedResult = result.slice(offset, offset + limit);
-      
       // Convert to API format
-      const products = paginatedResult.map(p => ({
+      const products = result.map(p => ({
         id: p.id,
         name: p.name,
         nameAr: p.nameAr,
@@ -2046,24 +2584,15 @@ function createApp() {
         updatedAt: p.updatedAt.toISOString(),
       }));
       
-      res.json({ 
-        success: true, 
-        data: products,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages,
-        }
-      });
+      res.json({ success: true, data: products });
     } catch (error) {
       console.error('[Products Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch products' });
     }
   });
 
-  // Get product by ID - DATABASE BACKED with caching
-  app.get('/api/products/:id', cacheControl(3600), async (req, res) => {
+  // Get product by ID - DATABASE BACKED
+  app.get('/api/products/:id', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -2283,7 +2812,7 @@ function createApp() {
   // ANALYTICS / DASHBOARD API - DATABASE BACKED
   // =====================================================
 
-  app.get('/api/analytics/dashboard', cacheControl(120), async (req, res) => {
+  app.get('/api/analytics/dashboard', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -2595,7 +3124,7 @@ function createApp() {
   // ORDERS API - DATABASE BACKED
   // =====================================================
 
-  app.get('/api/orders', cacheControl(60), async (req, res) => {
+  app.get('/api/orders', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -2751,8 +3280,8 @@ function createApp() {
     }
   });
 
-  // Create new order - DATABASE BACKED with validation and rate limiting
-  app.post('/api/orders', paymentLimiter, validateRequest(CreateOrderSchema), async (req, res) => {
+  // Create new order - DATABASE BACKED
+  app.post('/api/orders', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -2760,7 +3289,7 @@ function createApp() {
       
       const { 
         userId, 
-        items,
+        items, 
         addressId: providedAddressId, 
         deliveryAddress: providedAddress, 
         paymentMethod, 
@@ -3400,7 +3929,7 @@ function createApp() {
   // STOCK / INVENTORY API - DATABASE BACKED
   // =====================================================
 
-  app.get('/api/stock', cacheControl(300), async (req, res) => {
+  app.get('/api/stock', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -3428,7 +3957,7 @@ function createApp() {
   });
 
   // Get stock for specific product - DATABASE BACKED
-  app.get('/api/stock/:productId', cacheControl(600), async (req, res) => {
+  app.get('/api/stock/:productId', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -4932,8 +5461,19 @@ function createApp() {
         }
       }
 
-      // No database and no session found - user not authenticated
-      return res.json({ success: true, data: null });
+      // Fallback to in-memory session (for local dev)
+      const memSession = sessions.get(token);
+      if (!memSession || new Date(memSession.expiresAt) < new Date()) {
+        sessions.delete(token);
+        return res.json({ success: true, data: null });
+      }
+
+      const memUser = users.get(memSession.userId);
+      if (!memUser) {
+        return res.json({ success: true, data: null });
+      }
+
+      res.json({ success: true, data: sanitizeUser(memUser) });
     } catch (error) {
       console.error('[Get Me Error]', error);
       res.json({ success: true, data: null });
@@ -5059,6 +5599,35 @@ function createApp() {
     } catch (error) {
       console.error('[Verify User Error]', error);
       res.status(500).json({ success: false, error: 'Failed to verify user' });
+    }
+  });
+
+  // Admin reset/set user password
+  app.post('/api/users/:id/admin-reset-password', async (req, res) => {
+    try {
+      const { newPassword } = req.body;
+      
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+      }
+
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, req.params.id));
+      if (userResult.length === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+      
+      await pgDb.update(usersTable)
+        .set({ password: newPassword, updatedAt: new Date() })
+        .where(eq(usersTable.id, req.params.id));
+      
+      res.json({ success: true, data: null, message: 'Password reset successfully' });
+    } catch (error) {
+      console.error('[Admin Reset Password Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to reset password' });
     }
   });
 
@@ -5203,11 +5772,17 @@ function createApp() {
         return res.json({ success: true, data: [] });
       }
 
-      // Try to find session in database (required)
+      // Try to find session in database
       const sessionResult = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token)).limit(1);
       if (sessionResult.length === 0) {
-        // Session not found - must use database
-        return res.json({ success: true, data: [] });
+        // Also check in-memory cache
+        const memSession = sessions.get(token);
+        if (!memSession) {
+          return res.json({ success: true, data: [] });
+        }
+        // Get addresses for user from cache session
+        const userAddresses = await pgDb.select().from(addressesTable).where(eq(addressesTable.userId, memSession.userId));
+        return res.json({ success: true, data: userAddresses });
       }
 
       const session = sessionResult[0];
@@ -5235,8 +5810,9 @@ function createApp() {
         if (sessionResult.length > 0) {
           userId = sessionResult[0].userId;
         } else {
-          // Session not found - require database
-          return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+          // Fallback to in-memory cache
+          const session = sessions.get(token);
+          if (session) userId = session.userId;
         }
       }
 
@@ -5491,8 +6067,7 @@ function createApp() {
         
         // Fallback to in-memory driver if not in DB
         if (!driver) {
-          // Driver must be in database
-          return res.status(400).json({ success: false, error: 'Invalid delivery driver' });
+          driver = users.get(driverId) as any;
         }
         
         if (!driver || driver.role !== 'delivery') {
@@ -5561,6 +6136,9 @@ function createApp() {
           updatedAt: now.toISOString(),
         };
 
+        // Also store in memory for quick access
+        deliveryTracking.set(orderId, tracking);
+
         // Create notification for customer about driver assignment
         if (order.userId) {
           try {
@@ -5591,9 +6169,11 @@ function createApp() {
         });
       }
 
-      // No fallback to in-memory - all data must be in database
-      // If execution reaches here, data was not found in DB and should be rejected
-      return res.status(404).json({ success: false, error: 'Order not found in database' });
+      // Fallback to in-memory
+      const order = orders.get(orderId);
+      if (!order) {
+        return res.status(404).json({ success: false, error: 'Order not found' });
+      }
 
       const driver = users.get(driverId);
       if (!driver || driver.role !== 'delivery') {
@@ -5632,6 +6212,8 @@ function createApp() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+
+      deliveryTracking.set(orderId, tracking);
 
       res.json({
         success: true,
@@ -5766,6 +6348,7 @@ function createApp() {
             timestamp: now.toISOString(),
             notes,
           });
+          deliveryTracking.set(orderId, tracking);
         }
 
         return res.json({ 
@@ -5779,9 +6362,35 @@ function createApp() {
         });
       }
 
-      // No fallback to in-memory - delivery tracking must be in database
+      // Fallback to in-memory
+      let tracking = deliveryTracking.get(orderId);
+      
+      const order = orders.get(orderId);
+      if (!tracking && order?.trackingInfo) {
+        tracking = {
+          id: order.trackingInfo.id,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          driverId: order.trackingInfo.driverId,
+          driverName: order.trackingInfo.driverName,
+          driverMobile: order.trackingInfo.driverMobile,
+          status: order.trackingInfo.status,
+          customerName: order.customerName,
+          customerMobile: order.customerMobile,
+          deliveryAddress: order.deliveryAddress,
+          deliveryNotes: order.deliveryNotes,
+          items: order.items.map(i => ({ name: i.productName, quantity: i.quantity })),
+          total: order.total,
+          estimatedArrival: order.trackingInfo.estimatedArrival,
+          timeline: order.trackingInfo.timeline,
+          createdAt: order.trackingInfo.createdAt,
+          updatedAt: order.trackingInfo.updatedAt,
+        };
+        deliveryTracking.set(orderId, tracking);
+      }
+      
       if (!tracking) {
-        return res.status(404).json({ success: false, error: 'Tracking not found in database' });
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
       }
       
       tracking.status = status;
@@ -6076,13 +6685,17 @@ function createApp() {
   });
 
   // Process payment - DATABASE BACKED
-  app.post('/api/payments/process', paymentLimiter, validateRequest(ProcessPaymentSchema), async (req, res) => {
+  app.post('/api/payments/process', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
       const { orderId, amount, method, currency = 'AED', saveCard } = req.body;
+      
+      if (!orderId || !amount || !method) {
+        return res.status(400).json({ success: false, error: 'orderId, amount, and method are required' });
+      }
 
       // Get order from database
       const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
@@ -6683,8 +7296,38 @@ function createApp() {
         }
       }
 
-      // No fallback to in-memory - all addresses must be in database
-      return res.status(404).json({ success: false, error: 'Address not found' });
+      // Fallback to in-memory
+      const address = addresses.get(id);
+      if (!address || address.userId !== userId) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+
+      if (isDefault) {
+        addresses.forEach(addr => {
+          if (addr.userId === userId) {
+            addr.isDefault = addr.id === id;
+          }
+        });
+      }
+
+      Object.assign(address, {
+        label: label ?? address.label,
+        fullName: fullName ?? address.fullName,
+        mobile: mobile ?? address.mobile,
+        emirate: emirate ?? address.emirate,
+        area: area ?? address.area,
+        street: street ?? address.street,
+        building: building ?? address.building,
+        floor: floor ?? address.floor,
+        apartment: apartment ?? address.apartment,
+        landmark: landmark ?? address.landmark,
+        latitude: latitude ?? address.latitude,
+        longitude: longitude ?? address.longitude,
+        isDefault: isDefault ?? address.isDefault,
+        updatedAt: new Date().toISOString(),
+      });
+
+      res.json({ success: true, data: address });
     } catch (error) {
       console.error('[Addresses PUT Error]', error);
       res.status(500).json({ success: false, error: 'Failed to update address' });
@@ -6783,8 +7426,20 @@ function createApp() {
         }
       }
 
-      // No fallback to in-memory - all addresses must be in database
-      return res.status(404).json({ success: false, error: 'Address not found' });
+      // Fallback to in-memory
+      const address = addresses.get(id);
+      if (!address || address.userId !== userId) {
+        return res.status(404).json({ success: false, error: 'Address not found' });
+      }
+
+      // Unset all defaults for this user
+      addresses.forEach(addr => {
+        if (addr.userId === userId) {
+          addr.isDefault = addr.id === id;
+        }
+      });
+
+      res.json({ success: true, data: address });
     } catch (error) {
       console.error('[Addresses Set Default Error]', error);
       res.status(500).json({ success: false, error: 'Failed to set default address' });
@@ -7150,14 +7805,16 @@ function createApp() {
     });
   });
 
-  // Logout - delete session from database only
+  // Logout - also delete session from database
   app.post('/api/users/logout', async (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    if (token && isDatabaseAvailable() && pgDb) {
-      try {
-        await pgDb.delete(sessionsTable).where(eq(sessionsTable.token, token));
-      } catch (e) { 
-        console.error('[Logout error]', e);
+    if (token) {
+      sessions.delete(token);
+      // Also delete from database
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          await pgDb.delete(sessionsTable).where(eq(sessionsTable.token, token));
+        } catch (e) { /* ignore */ }
       }
     }
     res.json({ success: true, message: 'Logged out successfully' });
@@ -7204,7 +7861,7 @@ function createApp() {
     promoCodes: [],
   };
 
-  app.get('/api/settings', cacheControl(3600), async (req, res) => {
+  app.get('/api/settings', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         // Fallback to static data if database not available
@@ -7745,81 +8402,27 @@ function createApp() {
   // NOTIFICATIONS API
   // =====================================================
 
-  // Get all notifications for a user/customer (using Bearer token or query params)
+  // Get all notifications for a user
   app.get('/api/notifications', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      // Extract Bearer token from Authorization header
-      const token = req.headers.authorization?.replace('Bearer ', '');
-      
-      // Support query params for backward compatibility
-      const { userId, customerId } = req.query;
-      let finalUserId = userId as string;
-      let finalCustomerId = customerId as string;
-
-      // If no query params, try to extract from Bearer token
-      if (!finalUserId && !finalCustomerId && token) {
-        try {
-          // Look up session in database
-          const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
-          
-          if (sessionResults.length > 0) {
-            const session = sessionResults[0];
-            
-            // Check if session is expired
-            if (new Date(session.expiresAt) < new Date()) {
-              // Delete expired session
-              await pgDb.delete(sessionsTable).where(eq(sessionsTable.id, session.id));
-              console.log(`[Notifications] ❌ Session expired`);
-              return res.status(401).json({ success: false, error: 'Session expired' });
-            }
-            
-            // Use userId from session
-            finalUserId = session.userId;
-            console.log(`[Notifications] ✅ Extracted userId from Bearer token: ${finalUserId}`);
-          } else {
-            // No in-memory fallback - sessions must be in database
-            console.log(`[Notifications] ❌ Invalid or expired Bearer token`);
-            return res.status(401).json({ success: false, error: 'Invalid or expired token' });
-          }
-        } catch (tokenError) {
-          console.error('[Notifications] Token extraction error:', tokenError);
-          return res.status(401).json({ success: false, error: 'Failed to extract user from token' });
-        }
+      const { userId } = req.query;
+      if (!userId) {
+        return res.status(400).json({ success: false, error: 'userId is required' });
       }
 
-      // Require either userId or customerId
-      if (!finalUserId && !finalCustomerId) {
-        console.log(`[Notifications] ❌ Not authenticated - no userId, customerId, or Bearer token provided`);
-        return res.status(401).json({ success: false, error: 'Not authenticated' });
-      }
-
-      let notifications;
-      if (finalCustomerId) {
-        console.log(`[Notifications] Fetching notifications for customerId=${finalCustomerId}`);
-        notifications = await pgDb
-          .select()
-          .from(inAppNotificationsTable)
-          .where(eq(inAppNotificationsTable.customerId, finalCustomerId))
-          .orderBy(desc(inAppNotificationsTable.createdAt));
-      } else {
-        console.log(`[Notifications] Fetching notifications for userId=${finalUserId}`);
-        notifications = await pgDb
-          .select()
-          .from(inAppNotificationsTable)
-          .where(eq(inAppNotificationsTable.userId, finalUserId))
-          .orderBy(desc(inAppNotificationsTable.createdAt));
-      }
-
-      console.log(`[Notifications] ✅ Found ${notifications.length} notifications`);
+      const notifications = await pgDb
+        .select()
+        .from(inAppNotificationsTable)
+        .where(eq(inAppNotificationsTable.userId, String(userId)))
+        .orderBy(desc(inAppNotificationsTable.createdAt));
 
       const formattedNotifications = notifications.map(n => ({
         id: n.id,
         userId: n.userId,
-        customerId: n.customerId,
         type: n.type,
         title: n.title,
         titleAr: n.titleAr,
@@ -7846,25 +8449,23 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { userId, customerId, type, title, titleAr, message, messageAr, link, linkTab, linkId } = req.body;
+      const { userId, type, title, titleAr, message, messageAr, link, linkTab, linkId } = req.body;
       
-      // Require either userId or customerId
-      if ((!userId && !customerId) || !type || !title || !message) {
-        return res.status(400).json({ success: false, error: 'userId/customerId, type, title, and message are required' });
+      if (!userId || !type || !title || !message) {
+        return res.status(400).json({ success: false, error: 'userId, type, title, and message are required' });
       }
 
       const newNotification = {
         id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        userId: userId ? String(userId) : undefined,
-        customerId: customerId ? String(customerId) : undefined,
+        userId: String(userId),
         type: type || 'general',
         title: title || '',
         titleAr: titleAr || title || '',
         message: message || '',
         messageAr: messageAr || message || '',
-        link: link || undefined,
-        linkTab: linkTab || undefined,
-        linkId: linkId || undefined,
+        link: link || null,
+        linkTab: linkTab || null,
+        linkId: linkId || null,
         unread: true,
       };
 
@@ -7890,56 +8491,15 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      // Extract Bearer token from Authorization header
-      const token = req.headers.authorization?.replace('Bearer ', '');
-      
-      // Support both body params and Bearer token
-      const { userId: bodyUserId, customerId: bodyCustomerId } = req.body;
-      let finalUserId = bodyUserId as string;
-      let finalCustomerId = bodyCustomerId as string;
-
-      // If no body params, try to extract from Bearer token
-      if (!finalUserId && !finalCustomerId && token) {
-        try {
-          // Look up session in database
-          const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
-          
-          if (sessionResults.length > 0) {
-            const session = sessionResults[0];
-            
-            // Check if session is expired
-            if (new Date(session.expiresAt) < new Date()) {
-              await pgDb.delete(sessionsTable).where(eq(sessionsTable.id, session.id));
-              return res.status(401).json({ success: false, error: 'Session expired' });
-            }
-            
-            finalUserId = session.userId;
-          } else {
-            // No in-memory fallback - sessions must be in database
-            return res.status(401).json({ success: false, error: 'Invalid or expired token' });
-          }
-        } catch (tokenError) {
-          console.error('[Read All Notifications] Token extraction error:', tokenError);
-          return res.status(401).json({ success: false, error: 'Failed to extract user from token' });
-        }
-      }
-      
-      // Require either userId or customerId
-      if (!finalUserId && !finalCustomerId) {
-        return res.status(400).json({ success: false, error: 'userId or customerId is required' });
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ success: false, error: 'userId is required' });
       }
 
-      if (finalCustomerId) {
-        await pgDb
-          .update(inAppNotificationsTable)
-          .set({ unread: false })
-          .where(eq(inAppNotificationsTable.customerId, String(finalCustomerId)));
-      } else {
-        await pgDb
-          .update(inAppNotificationsTable)
-          .set({ unread: false })
-          .where(eq(inAppNotificationsTable.userId, String(finalUserId)));
-      }
+      await pgDb
+        .update(inAppNotificationsTable)
+        .set({ unread: false })
+        .where(eq(inAppNotificationsTable.userId, String(userId)));
 
       res.json({ success: true, message: 'All notifications marked as read' });
     } catch (error) {
@@ -8100,7 +8660,7 @@ function createApp() {
       const messages = await pgDb
         .select()
         .from(chatMessagesTable)
-        .orderBy(chatMessagesTable.createdAt);
+        .orderBy(desc(chatMessagesTable.createdAt));
 
       // Group messages by userId
       const chatsMap = new Map<string, {
@@ -8282,57 +8842,14 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      // Parse date range parameters
-      const { period = 'month', startDate: startDateParam, endDate: endDateParam } = req.query;
-      let start: Date, end: Date;
-      
-      if (startDateParam && endDateParam) {
-        start = new Date(startDateParam as string);
-        end = new Date(endDateParam as string);
-      } else {
-        // Calculate date range based on period
-        const now = new Date();
-        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-        switch (period) {
-          case 'today':
-            start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            break;
-          case 'week':
-            start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            break;
-          case 'quarter':
-            start = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-            break;
-          case 'year':
-            start = new Date(now.getFullYear(), 0, 1);
-            break;
-          case 'month':
-          default:
-            start = new Date(now.getFullYear(), now.getMonth(), 1);
-        }
-      }
-
-      // Get orders for revenue calculation - filter by date range and payment status
+      // Get orders for revenue calculation
       const allOrders = await pgDb.select().from(ordersTable);
-      // Filter orders: within date range, not cancelled, and payment captured
-      const filteredOrders = allOrders.filter(o => {
-        const orderDate = new Date(o.createdAt);
-        return orderDate >= start && 
-               orderDate <= end && 
-               o.status !== 'cancelled' &&
-               o.paymentStatus === 'captured';
-      });
+      const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
+      const totalVAT = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
       
-      const totalRevenue = filteredOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
-      const totalVAT = filteredOrders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
-      
-      // Get expenses from database - filter by date range
+      // Get expenses from database
       const allExpenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.status, 'paid'));
-      const periodExpenses = allExpenses.filter(e => {
-        const expenseDate = new Date(e.createdAt);
-        return expenseDate >= start && expenseDate <= end;
-      });
-      const totalExpenses = periodExpenses.reduce((sum, e) => sum + parseFloat(String(e.amount)), 0);
+      const totalExpenses = allExpenses.reduce((sum, e) => sum + parseFloat(String(e.amount)), 0);
       
       // Get account balances
       const accounts = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.isActive, true));
@@ -8346,8 +8863,8 @@ function createApp() {
       const grossProfit = totalRevenue * 0.35;
       const netProfit = grossProfit - totalExpenses;
 
-      // Calculate payment method breakdown from filtered orders
-      const paymentMethodBreakdown = filteredOrders.reduce((acc, o) => {
+      // Calculate payment method breakdown
+      const paymentMethodBreakdown = allOrders.reduce((acc, o) => {
         const method = o.paymentMethod || 'card';
         if (!acc[method]) acc[method] = { amount: 0, count: 0 };
         acc[method].amount += parseFloat(String(o.total));
@@ -8355,8 +8872,8 @@ function createApp() {
         return acc;
       }, {} as Record<string, { amount: number; count: number }>);
 
-      // Calculate expenses by category from filtered expenses
-      const expensesByCategory = periodExpenses.reduce((acc, e) => {
+      // Calculate expenses by category
+      const expensesByCategory = allExpenses.reduce((acc, e) => {
         const cat = e.category || 'other';
         if (!acc[cat]) acc[cat] = 0;
         acc[cat] += parseFloat(String(e.amount));
@@ -8366,13 +8883,13 @@ function createApp() {
       res.json({
         success: true,
         data: {
-          period: period as string,
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
+          period: req.query.period || 'month',
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          endDate: new Date().toISOString(),
           totalRevenue,
           totalCOGS: totalRevenue * 0.65,
           grossProfit,
-          grossProfitMargin: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,
+          grossProfitMargin: 35,
           totalExpenses,
           netProfit,
           netProfitMargin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
