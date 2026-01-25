@@ -104,13 +104,14 @@ const getNotifications: RequestHandler = async (req, res) => {
 
     console.log(`[Notifications] Fetching notifications for userId=${targetUserId}, customerId=${targetCustomerId}`);
 
+    // If not authenticated, return empty list instead of 401
     if (!targetUserId && !targetCustomerId) {
-      console.log(`[Notifications] ❌ Not authenticated - no ID found`);
-      const response: ApiResponse<null> = {
-        success: false,
-        error: "Not authenticated",
+      console.log(`[Notifications] ⚠️ Not authenticated - returning empty list`);
+      const response: ApiResponse<typeof inAppNotifications.$inferSelect[]> = {
+        success: true,
+        data: [],
       };
-      return res.status(401).json(response);
+      return res.json(response);
     }
 
     let result;
