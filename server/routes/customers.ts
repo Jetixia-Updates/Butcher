@@ -192,7 +192,7 @@ const registerCustomer: RequestHandler = async (req, res) => {
     }
 
     // Get next customer number
-    const countResult = await db.select({ count: sql<number>`count(*)` }).from(customers);
+    const countResult = await db.select({ count: sql<number>`count(*)` }).from(users);
     const customerNumber = `CUST-${String(Number(countResult[0]?.count || 0) + 1).padStart(4, '0')}`;
 
     const newCustomer = {

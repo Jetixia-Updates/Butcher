@@ -13,7 +13,7 @@ const router = Router();
 
 // Validation schemas
 const sendMessageSchema = z.object({
-    userId: z.string(), // This is the customerId
+    userId: z.string(),
     userName: z.string().optional(),
     userEmail: z.string().optional(),
     text: z.string().min(1),
@@ -33,22 +33,22 @@ const getAllChats: RequestHandler = async (req, res) => {
         // Get all messages ordered by time
         const allMessages = await db.select().from(chatMessages).orderBy(desc(chatMessages.createdAt));
 
-        // Group by customer
+        // Group by user
         const chatsMap = new Map<string, any>();
 
         for (const msg of allMessages) {
-            if (!chatsMap.has(msg.customerId)) {
-                chatsMap.set(msg.customerId, {
-                    userId: msg.customerId,
-                    userName: msg.customerName,
-                    userEmail: msg.customerEmail,
+            if (!chatsMap.has(msg.userId)) {
+                chatsMap.set(msg.userId, {
+                    userId: msg.userId,
+                    userName: msg.userName,
+                    userEmail: msg.userEmail,
                     messages: [],
                     lastMessageAt: msg.createdAt,
                     unreadCount: 0,
                 });
             }
 
-            const chat = chatsMap.get(msg.customerId);
+            const chat = chatsMap.get(msg.userId);
             chat.messages.push(msg); // Add to list (desc order)
 
             // Update unread count (messages from user that are not read by admin)
@@ -77,7 +77,7 @@ const getUserMessages: RequestHandler = async (req, res) => {
         const messages = await db
             .select()
             .from(chatMessages)
-            .where(eq(chatMessages.customerId, userId))
+            .where(eq(chatMessages.userId, userId))
             .orderBy(desc(chatMessages.createdAt));
 
         res.json({ success: true, data: messages.reverse() });
@@ -97,23 +97,23 @@ const sendMessage: RequestHandler = async (req, res) => {
 
         const data = validation.data;
 
-        // If sender is admin, we need customer details if not provided
-        let customerName = data.userName || "Customer";
-        let customerEmail = data.userEmail || "";
+        // If sender is admin, we need user details if not provided
+        let userName = data.userName || "User";
+        let userEmail = data.userEmail || "";
 
         // If sender is admin and we don't have details, try to fetch from DB (optional)
         // For now, assume provided or fallback
 
         const newMessage = {
             id: generateId("msg"),
-            customerId: data.userId,
-            customerName: customerName,
-            customerEmail: customerEmail,
+            userId: data.userId,
+            userName: userName,
+            userEmail: userEmail,
             text: data.text,
             sender: data.sender,
             attachments: data.attachments || [],
             readByAdmin: data.sender === "admin" ? true : false,
-            readByCustomer: data.sender === "user" ? true : false,
+            readByUser: data.sender === "user" ? true : false,
             createdAt: new Date(),
         };
 
@@ -159,7 +159,7 @@ const notifyUser: RequestHandler = async (req, res) => {
 
         await db.insert(inAppNotifications).values({
             id: generateId("notif"),
-            customerId: userId, // Target customer
+            userId: userId, // Target user
             type: "chat",
             title: "New Message from Support",
             titleAr: "رسالة جديدة من الدعم",
@@ -182,8 +182,8 @@ const markReadByUser: RequestHandler = async (req, res) => {
     try {
         const { userId } = req.params;
         await db.update(chatMessages)
-            .set({ readByCustomer: true })
-            .where(and(eq(chatMessages.customerId, userId), eq(chatMessages.sender, "admin")));
+            .set({ readByUser: true })
+            .where(and(eq(chatMessages.userId, userId), eq(chatMessages.sender, "admin")));
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false });
@@ -196,7 +196,7 @@ const markReadByAdmin: RequestHandler = async (req, res) => {
         const { userId } = req.params;
         await db.update(chatMessages)
             .set({ readByAdmin: true })
-            .where(and(eq(chatMessages.customerId, userId), eq(chatMessages.sender, "user")));
+            .where(and(eq(chatMessages.userId, userId), eq(chatMessages.sender, "user")));
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false });

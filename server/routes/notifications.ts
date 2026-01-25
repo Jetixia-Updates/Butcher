@@ -52,11 +52,11 @@ async function getCustomerIdFromToken(token: string | undefined): Promise<string
   if (!token) return null;
 
   try {
-    const sessionResult = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
+    const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
     if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
       return null;
     }
-    return sessionResult[0].customerId;
+    return sessionResult[0].userId;
   } catch {
     return null;
   }
@@ -118,7 +118,7 @@ const getNotifications: RequestHandler = async (req, res) => {
       result = await db
         .select()
         .from(inAppNotifications)
-        .where(eq(inAppNotifications.customerId, targetCustomerId))
+        .where(eq(inAppNotifications.userId, targetCustomerId))
         .orderBy(desc(inAppNotifications.createdAt))
         .limit(50);
     } else {
@@ -174,7 +174,6 @@ const createNotification: RequestHandler = async (req, res) => {
     const newNotification = {
       id: generateId(),
       userId: userId ? userId : undefined,
-      customerId: customerId ? customerId : undefined,
       type: data.type,
       title: data.title,
       titleAr: data.titleAr,
@@ -223,7 +222,7 @@ const markAsRead: RequestHandler = async (req, res) => {
       await db
         .update(inAppNotifications)
         .set({ unread: false })
-        .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.customerId, target.customerId)));
+        .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, target.customerId)));
     } else {
       await db
         .update(inAppNotifications)
@@ -264,7 +263,7 @@ const markAllAsRead: RequestHandler = async (req, res) => {
       await db
         .update(inAppNotifications)
         .set({ unread: false })
-        .where(eq(inAppNotifications.customerId, target.customerId));
+        .where(eq(inAppNotifications.userId, target.customerId));
     } else {
       await db
         .update(inAppNotifications)
@@ -305,7 +304,7 @@ const deleteNotification: RequestHandler = async (req, res) => {
     if (target.customerId) {
       await db
         .delete(inAppNotifications)
-        .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.customerId, target.customerId)));
+        .where(and(eq(inAppNotifications.id, id), eq(inAppNotifications.userId, target.customerId)));
     } else {
       await db
         .delete(inAppNotifications)
@@ -342,7 +341,7 @@ const clearAllNotifications: RequestHandler = async (req, res) => {
     }
 
     if (target.customerId) {
-      await db.delete(inAppNotifications).where(eq(inAppNotifications.customerId, target.customerId));
+      await db.delete(inAppNotifications).where(eq(inAppNotifications.userId, target.customerId));
     } else {
       await db.delete(inAppNotifications).where(eq(inAppNotifications.userId, target.userId!));
     }

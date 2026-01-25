@@ -61,13 +61,13 @@ const updateStatusSchema = z.object({
 
 // Helper to create invoice notification when order is confirmed
 async function createInvoiceNotificationForConfirmedOrder(order: typeof orders.$inferSelect, items: (typeof orderItems.$inferSelect)[]): Promise<void> {
-  if (!order.customerId && !order.userId) {
-    console.log(`[Invoice Notification] Skipped - no customerId or userId`);
+  if (!order.userId) {
+    console.log(`[Invoice Notification] Skipped - no userId`);
     return;
   }
 
   try {
-    const customerId = order.customerId || order.userId;
+    const userId = order.userId;
     const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${order.orderNumber.replace('ORD-', '')}`;
     const shopTRN = "100567890123456"; // UAE TRN format
 
@@ -140,8 +140,7 @@ ${Number(order.discount) > 0 ? `الخصم (-):             ${Number(order.disco
 
     await db.insert(inAppNotifications).values({
       id: generateId("notif"),
-      customerId: order.customerId || undefined,
-      userId: !order.customerId ? order.userId : undefined,
+      userId: order.userId,
       type: "payment",
       title: `📄 TAX Invoice #${invoiceNumber}`,
       titleAr: `📄 فاتورة ضريبية #${invoiceNumber}`,
@@ -153,25 +152,24 @@ ${Number(order.discount) > 0 ? `الخصم (-):             ${Number(order.disco
       unread: true,
     });
 
-    console.log(`[Invoice Notification] ✅ Invoice notification created for customer ${customerId}: Order ${order.orderNumber}, Invoice ${invoiceNumber}`);
+    console.log(`[Invoice Notification] ✅ Invoice notification created for customer ${userId}: Order ${order.orderNumber}, Invoice ${invoiceNumber}`);
   } catch (error) {
     console.error(`[Invoice Notification] ❌ Failed to create invoice notification:`, error);
   }
 }
 
 // Helper to create notification for a customer (server-side)
-async function createCustomerOrderNotification(customerId: string, orderNumber: string, status: string): Promise<void> {
+async function createCustomerOrderNotification(userId: string, orderNumber: string, status: string): Promise<void> {
   const content = getInAppNotificationContent(orderNumber, status);
-  if (!content || !customerId) {
-    console.log(`[Notification] Skipped - no content or customerId. customerId=${customerId}, status=${status}`);
+  if (!content || !userId) {
+    console.log(`[Notification] Skipped - no content or userId. userId=${userId}, status=${status}`);
     return;
   }
 
   try {
     const newNotification = {
       id: generateId("notif"),
-      customerId,
-      userId: undefined,
+      userId,
       type: "order",
       title: content.title,
       titleAr: content.titleAr,
@@ -184,9 +182,9 @@ async function createCustomerOrderNotification(customerId: string, orderNumber: 
     };
 
     await db.insert(inAppNotifications).values(newNotification);
-    console.log(`[Notification] ✅ Created order notification for customer ${customerId}: ${status} (Order: ${orderNumber})`);
+    console.log(`[Notification] ✅ Created order notification for customer ${userId}: ${status} (Order: ${orderNumber})`);
   } catch (error) {
-    console.error(`[Notification] ❌ Failed to create notification for customer ${customerId}:`, error);
+    console.error(`[Notification] ❌ Failed to create notification for customer ${userId}:`, error);
   }
 }
 
@@ -559,8 +557,7 @@ const createOrder: RequestHandler = async (req, res) => {
 
     const deliveryAddressData = {
       id: address.id,
-      customerId: address.customerId || undefined,
-      userId: address.userId || undefined,
+      userId: address.userId,
       label: address.label,
       fullName: address.fullName,
       mobile: address.mobile,
@@ -581,7 +578,7 @@ const createOrder: RequestHandler = async (req, res) => {
     const newOrder = {
       id: orderId,
       orderNumber,
-      customerId: userId,
+      userId,
       customerName: `${customer.firstName} ${customer.familyName}`,
       customerEmail: customer.email,
       customerMobile: customer.mobile,
@@ -796,11 +793,11 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     }));
 
     // Create notification for customer (server-side to ensure it's always created)
-    // Orders can be for customers (customerId) or staff (userId) - check both
+    // Orders can be for customers (userId)
     try {
-      if (order.customerId) {
-        console.log(`[UpdateStatus] Creating notification for customer ${order.customerId}, order ${order.orderNumber}, status ${status}`);
-        await createCustomerOrderNotification(order.customerId, order.orderNumber, status);
+      if (order.userId) {
+        console.log(`[UpdateStatus] Creating notification for customer ${order.userId}, order ${order.orderNumber}, status ${status}`);
+        await createCustomerOrderNotification(order.userId, order.orderNumber, status);
 
         // When order is confirmed, also send invoice notification
         if (status === "confirmed") {
@@ -816,7 +813,6 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
             await db.insert(inAppNotifications).values({
               id: generateId("notif"),
               userId: order.userId,
-              customerId: undefined,
               type: "order",
               title: content.title,
               titleAr: content.titleAr,

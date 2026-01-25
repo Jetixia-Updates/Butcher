@@ -57,7 +57,7 @@ const getWishlist: RequestHandler = async (req, res) => {
       })
       .from(wishlists)
       .leftJoin(products, eq(wishlists.productId, products.id))
-      .where(eq(wishlists.customerId, customerId));
+      .where(eq(wishlists.userId, customerId));
 
     const response: ApiResponse<typeof wishlistItems> = {
       success: true,
@@ -95,7 +95,7 @@ const addToWishlist: RequestHandler = async (req, res) => {
     const existing = await db
       .select()
       .from(wishlists)
-      .where(and(eq(wishlists.customerId, customerId), eq(wishlists.productId, productId)));
+      .where(and(eq(wishlists.userId, customerId), eq(wishlists.productId, productId)));
 
     if (existing.length > 0) {
       const response: ApiResponse<null> = { success: true, message: "Already in wishlist" };
@@ -105,7 +105,7 @@ const addToWishlist: RequestHandler = async (req, res) => {
     // Add to wishlist
     const newItem = {
       id: generateId(),
-      customerId,
+      userId: customerId,
       productId,
     };
     await db.insert(wishlists).values(newItem);
@@ -141,7 +141,7 @@ const removeFromWishlist: RequestHandler = async (req, res) => {
 
     await db
       .delete(wishlists)
-      .where(and(eq(wishlists.customerId, customerId), eq(wishlists.productId, productId)));
+      .where(and(eq(wishlists.userId, customerId), eq(wishlists.productId, productId)));
 
     const response: ApiResponse<null> = {
       success: true,
@@ -169,7 +169,7 @@ const clearWishlist: RequestHandler = async (req, res) => {
       return res.status(401).json(response);
     }
 
-    await db.delete(wishlists).where(eq(wishlists.customerId, customerId));
+    await db.delete(wishlists).where(eq(wishlists.userId, customerId));
 
     const response: ApiResponse<null> = {
       success: true,

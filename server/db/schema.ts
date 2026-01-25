@@ -1134,13 +1134,6 @@ export const appSettings = pgTable("app_settings", {
   storeAddressAr: text("store_address_ar"),
   workingHoursStart: varchar("working_hours_start", { length: 10 }).default("08:00"),
   workingHoursEnd: varchar("working_hours_end", { length: 10 }).default("22:00"),
-  // UAE Compliance Fields
-  taxRegistrationNumber: varchar("tax_registration_number", { length: 20 }), // TRN for UAE VAT
-  tradeLicenseNumber: varchar("trade_license_number", { length: 50 }),
-  companyNameEn: varchar("company_name_en", { length: 200 }).default("Al Jazira Butcher Shop"),
-  companyNameAr: varchar("company_name_ar", { length: 200 }).default("ملحمة الجزيرة"),
-  fiscalYearStart: varchar("fiscal_year_start", { length: 5 }).default("01-01"), // MM-DD
-  fiscalYearEnd: varchar("fiscal_year_end", { length: 5 }).default("12-31"), // MM-DD
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

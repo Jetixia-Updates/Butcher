@@ -60,16 +60,15 @@ const getWallet: RequestHandler = async (req, res) => {
       const response: ApiResponse<null> = { success: false, error: "Not authenticated" };
       return res.status(401).json(response);
     }
-
     // Get or create wallet
-    let walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
+    let walletResult = await db.select().from(wallets).where(eq(wallets.userId, customerId));
     
     if (walletResult.length === 0) {
       // Create wallet with welcome bonus
       const welcomeBonus = 50; // Default welcome bonus
       const newWallet = {
         id: generateId("wallet"),
-        customerId,
+        userId: customerId,
         balance: welcomeBonus.toString(),
       };
       await db.insert(wallets).values(newWallet);
@@ -77,7 +76,7 @@ const getWallet: RequestHandler = async (req, res) => {
       // Add welcome bonus transaction
       const welcomeTransaction = {
         id: generateId("wtxn"),
-        customerId,
+        userId: customerId,
         type: "credit" as const,
         amount: welcomeBonus.toString(),
         description: "Welcome bonus! Start shopping with us",
@@ -85,14 +84,14 @@ const getWallet: RequestHandler = async (req, res) => {
       };
       await db.insert(walletTransactions).values(welcomeTransaction);
       
-      walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
+      walletResult = await db.select().from(wallets).where(eq(wallets.userId, customerId));
     }
 
     // Get transactions
     const transactions = await db
       .select()
       .from(walletTransactions)
-      .where(eq(walletTransactions.customerId, customerId))
+      .where(eq(walletTransactions.userId, customerId))
       .orderBy(desc(walletTransactions.createdAt))
       .limit(50);
 
@@ -140,17 +139,17 @@ const topUp: RequestHandler = async (req, res) => {
     const { amount, paymentMethod } = validation.data;
 
     // Get current wallet
-    let walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
+    let walletResult = await db.select().from(wallets).where(eq(wallets.userId, customerId));
     
     if (walletResult.length === 0) {
       // Create wallet
       const newWallet = {
         id: generateId("wallet"),
-        customerId,
+        userId: customerId,
         balance: "0",
       };
       await db.insert(wallets).values(newWallet);
-      walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
+      walletResult = await db.select().from(wallets).where(eq(wallets.userId, customerId));
     }
 
     const currentBalance = parseFloat(walletResult[0].balance);
@@ -160,12 +159,12 @@ const topUp: RequestHandler = async (req, res) => {
     await db.update(wallets).set({ 
       balance: newBalance.toString(),
       updatedAt: new Date(),
-    }).where(eq(wallets.customerId, customerId));
+    }).where(eq(wallets.userId, customerId));
 
     // Add transaction
     const transaction = {
       id: generateId("wtxn"),
-      customerId,
+      userId: customerId,
       type: "topup" as const,
       amount: amount.toString(),
       description: `Top up via ${paymentMethod}`,
@@ -212,7 +211,7 @@ const deduct: RequestHandler = async (req, res) => {
     const { amount, description, descriptionAr, reference } = validation.data;
 
     // Get current wallet
-    const walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
+    const walletResult = await db.select().from(wallets).where(eq(wallets.userId, customerId));
     
     if (walletResult.length === 0) {
       const response: ApiResponse<null> = { success: false, error: "Wallet not found" };
@@ -231,12 +230,12 @@ const deduct: RequestHandler = async (req, res) => {
     await db.update(wallets).set({ 
       balance: newBalance.toString(),
       updatedAt: new Date(),
-    }).where(eq(wallets.customerId, customerId));
+    }).where(eq(wallets.userId, customerId));
 
     // Add transaction
     const transaction = {
       id: generateId("wtxn"),
-      customerId,
+      userId: customerId,
       type: "debit" as const,
       amount: amount.toString(),
       description,
@@ -265,10 +264,10 @@ const deduct: RequestHandler = async (req, res) => {
 const addCredit: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const customerId = req.body.customerId || await getCustomerIdFromToken(token);
+    const customerId = req.body.userId || await getCustomerIdFromToken(token);
 
     if (!customerId) {
-      const response: ApiResponse<null> = { success: false, error: "Customer ID required" };
+      const response: ApiResponse<null> = { success: false, error: "User ID required" };
       return res.status(400).json(response);
     }
 
@@ -284,16 +283,16 @@ const addCredit: RequestHandler = async (req, res) => {
     const { amount, type, description, descriptionAr, reference } = validation.data;
 
     // Get or create wallet
-    let walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
+    let walletResult = await db.select().from(wallets).where(eq(wallets.userId, customerId));
     
     if (walletResult.length === 0) {
       const newWallet = {
         id: generateId("wallet"),
-        customerId,
+        userId: customerId,
         balance: "0",
       };
       await db.insert(wallets).values(newWallet);
-      walletResult = await db.select().from(wallets).where(eq(wallets.customerId, customerId));
+      walletResult = await db.select().from(wallets).where(eq(wallets.userId, customerId));
     }
 
     const currentBalance = parseFloat(walletResult[0].balance);
@@ -303,12 +302,12 @@ const addCredit: RequestHandler = async (req, res) => {
     await db.update(wallets).set({ 
       balance: newBalance.toString(),
       updatedAt: new Date(),
-    }).where(eq(wallets.customerId, customerId));
+    }).where(eq(wallets.userId, customerId));
 
     // Add transaction
     const transaction = {
       id: generateId("wtxn"),
-      customerId,
+      userId: customerId,
       type: type as "credit" | "refund" | "cashback" | "topup",
       amount: amount.toString(),
       description,

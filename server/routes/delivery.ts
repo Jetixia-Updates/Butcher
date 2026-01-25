@@ -23,26 +23,24 @@ const router = Router();
 const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // Helper to create driver assigned notification
-// Supports both staff users (userId) and customers (customerId)
+// Uses userId for user identification
 async function createDriverAssignedNotification(
-  params: { userId?: string | null; customerId?: string | null },
+  params: { userId?: string | null },
   orderNumber: string,
   driverName: string,
   driverMobile: string
 ): Promise<void> {
-  const { userId, customerId } = params;
+  const { userId } = params;
 
-  if (!userId && !customerId) {
-    console.log(`[Driver Assigned Notification] Skipped - no userId or customerId`);
+  if (!userId) {
+    console.log(`[Driver Assigned Notification] Skipped - no userId`);
     return;
   }
 
   try {
     await db.insert(inAppNotifications).values({
       id: generateId("notif"),
-      // Set customerId if available (customer orders), otherwise userId (staff orders)
-      customerId: customerId || undefined,
-      userId: customerId ? undefined : (userId || undefined),
+      userId: userId,
       type: "driver_assigned",
       title: "Driver Assigned to Your Order",
       titleAr: "تم تعيين سائق لطلبك",
@@ -54,33 +52,31 @@ async function createDriverAssignedNotification(
       unread: true,
       createdAt: new Date(),
     });
-    console.log(`[Driver Assigned Notification] ✅ Created notification for ${customerId ? `customer ${customerId}` : `user ${userId}`}: Driver ${driverName} assigned to order ${orderNumber}`);
+    console.log(`[Driver Assigned Notification] ✅ Created notification for user ${userId}: Driver ${driverName} assigned to order ${orderNumber}`);
   } catch (error) {
     console.error(`[Driver Assigned Notification] ❌ Failed to create notification:`, error);
   }
 }
 
 // Helper to create order notification (for delivery status updates)
-// Supports both staff users (userId) and customers (customerId)
+// Uses userId for user identification
 async function createOrderNotification(
-  params: { userId?: string | null; customerId?: string | null },
+  params: { userId?: string | null },
   orderNumber: string,
   status: string
 ): Promise<void> {
   const content = getInAppNotificationContent(orderNumber, status);
-  const { userId, customerId } = params;
+  const { userId } = params;
 
-  if (!content || (!userId && !customerId)) {
-    console.log(`[Delivery Notification] Skipped - no content or user ID. userId=${userId}, customerId=${customerId}, status=${status}`);
+  if (!content || !userId) {
+    console.log(`[Delivery Notification] Skipped - no content or user ID. userId=${userId}, status=${status}`);
     return;
   }
 
   try {
     await db.insert(inAppNotifications).values({
       id: generateId("notif"),
-      // Set customerId if available (customer orders), otherwise userId (staff orders)
-      customerId: customerId || undefined,
-      userId: customerId ? undefined : (userId || undefined),
+      userId: userId,
       type: "order",
       title: content.title,
       titleAr: content.titleAr,
@@ -92,7 +88,7 @@ async function createOrderNotification(
       unread: true,
       createdAt: new Date(),
     });
-    console.log(`[Delivery Notification] ✅ Created notification for ${customerId ? `customer ${customerId}` : `user ${userId}`}: ${status} (Order: ${orderNumber})`);
+    console.log(`[Delivery Notification] ✅ Created notification for user ${userId}: ${status} (Order: ${orderNumber})`);
   } catch (error) {
     console.error(`[Delivery Notification] ❌ Failed to create notification:`, error);
   }
@@ -696,7 +692,7 @@ const getDeliveryTrackings: RequestHandler = async (req, res) => {
           ...tracking,
           customerName: order.customerName,
           customerMobile: order.customerMobile,
-          customerId: order.userId,
+          userId: order.userId,
           deliveryAddress: order.deliveryAddress,
           total: Number(order.total),
           items,
@@ -902,10 +898,10 @@ const assignDelivery: RequestHandler = async (req, res) => {
       .where(eq(orders.id, orderId));
 
     // Create notifications server-side
-    // 1. Notify customer that a driver has been assigned (with driver details)
-    if (order.customerId || order.userId) {
+    // 1. Notify user that a driver has been assigned (with driver details)
+    if (order.userId) {
       const driverFullName = `${driver.firstName} ${driver.familyName}`;
-      await createDriverAssignedNotification({ userId: order.userId, customerId: order.customerId }, order.orderNumber, driverFullName, driver.mobile);
+      await createDriverAssignedNotification({ userId: order.userId }, order.orderNumber, driverFullName, driver.mobile);
     }
     // 2. Notify driver about the assignment
     const addressStr = order.deliveryAddress ?
@@ -1026,7 +1022,7 @@ const updateDeliveryStatus: RequestHandler = async (req, res) => {
       if (orderRes.length > 0) {
         const order = orderRes[0];
         await createOrderNotification(
-          { userId: order.userId, customerId: order.customerId },
+          { userId: order.userId },
           order.orderNumber,
           "delivered"
         );
@@ -1109,11 +1105,11 @@ const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
         .where(eq(orders.id, tracking.orderId));
     }
 
-    // Create notification for customer based on delivery status
+    // Create notification for user based on delivery status
     const orderResult = await db.select().from(orders).where(eq(orders.id, tracking.orderId));
-    if (orderResult.length > 0 && (orderResult[0].customerId || orderResult[0].userId)) {
+    if (orderResult.length > 0 && orderResult[0].userId) {
       const order = orderResult[0];
-      const notifyParams = { userId: order.userId, customerId: order.customerId };
+      const notifyParams = { userId: order.userId };
 
       if (status === "assigned") {
         // Send driver assigned notification with driver details
@@ -1187,14 +1183,14 @@ const completeDelivery: RequestHandler = async (req, res) => {
       })
       .where(eq(orders.id, tracking.orderId));
 
-    // Create notification for customer with driver notes
+    // Create notification for user with driver notes
     const orderResult = await db.select().from(orders).where(eq(orders.id, tracking.orderId));
     if (orderResult.length > 0) {
       const order = orderResult[0];
-      const customerId = order.customerId || order.userId;
+      const userId = order.userId;
 
-      if (customerId) {
-        console.log(`[Complete Delivery] Creating delivered notification for customer ${customerId}, order ${order.orderNumber}`);
+      if (userId) {
+        console.log(`[Complete Delivery] Creating delivered notification for user ${userId}, order ${order.orderNumber}`);
 
         // Create a custom notification with driver notes
         try {
@@ -1208,8 +1204,7 @@ const completeDelivery: RequestHandler = async (req, res) => {
 
           await db.insert(inAppNotifications).values({
             id: generateId("notif"),
-            customerId: order.customerId || undefined,
-            userId: !order.customerId ? customerId : undefined,
+            userId: userId,
             type: "order",
             title: "Order Delivered",
             titleAr: "تم تسليم الطلب",
@@ -1221,7 +1216,7 @@ const completeDelivery: RequestHandler = async (req, res) => {
             unread: true,
             createdAt: new Date(),
           });
-          console.log(`[Complete Delivery] ✅ Notification created for customer ${customerId}: Order ${order.orderNumber} delivered with driver note`);
+          console.log(`[Complete Delivery] ✅ Notification created for user ${userId}: Order ${order.orderNumber} delivered with driver note`);
         } catch (notifError) {
           console.error(`[Complete Delivery] ❌ Failed to create notification:`, notifError);
         }

@@ -11,18 +11,10 @@ import { randomUUID } from "crypto";
 
 const router = Router();
 
-// Helper to get customer or user ID from request
-const getOwnerInfo = (req: Request): { customerId?: string; userId?: string } | null => {
-  const customerId = req.headers["x-customer-id"] as string;
+// Helper to get user ID from request
+const getUserId = (req: Request): string | null => {
   const userId = req.headers["x-user-id"] as string;
-  
-  if (customerId) {
-    return { customerId };
-  }
-  if (userId) {
-    return { userId };
-  }
-  return null;
+  return userId || null;
 };
 
 // Validation schemas
@@ -45,25 +37,16 @@ const addressSchema = z.object({
 // GET /api/addresses - Get all addresses for customer/user
 router.get("/", async (req: Request, res: Response) => {
   try {
-    const owner = getOwnerInfo(req);
-    if (!owner) {
+    const userId = getUserId(req);
+    if (!userId) {
       return res.status(401).json({ success: false, error: "Authentication required" });
     }
 
-    let userAddresses;
-    if (owner.customerId) {
-      userAddresses = await db
-        .select()
-        .from(addresses)
-        .where(eq(addresses.customerId, owner.customerId))
-        .orderBy(addresses.createdAt);
-    } else {
-      userAddresses = await db
-        .select()
-        .from(addresses)
-        .where(eq(addresses.userId, owner.userId!))
-        .orderBy(addresses.createdAt);
-    }
+    const userAddresses = await db
+      .select()
+      .from(addresses)
+      .where(eq(addresses.userId, userId))
+      .orderBy(addresses.createdAt);
 
     res.json({ success: true, data: userAddresses });
   } catch (error) {
@@ -75,10 +58,10 @@ router.get("/", async (req: Request, res: Response) => {
 // POST /api/addresses - Create new address
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const owner = getOwnerInfo(req);
-    console.log("[Addresses] Creating address for:", owner);
+    const userId = getUserId(req);
+    console.log("[Addresses] Creating address for:", userId);
     
-    if (!owner) {
+    if (!userId) {
       console.log("[Addresses] No authentication provided");
       return res.status(401).json({ success: false, error: "Authentication required" });
     }
@@ -95,32 +78,17 @@ router.post("/", async (req: Request, res: Response) => {
 
     // If this is set as default, unset other defaults
     if (data.isDefault) {
-      if (owner.customerId) {
-        await db
-          .update(addresses)
-          .set({ isDefault: false })
-          .where(eq(addresses.customerId, owner.customerId));
-      } else {
-        await db
-          .update(addresses)
-          .set({ isDefault: false })
-          .where(eq(addresses.userId, owner.userId!));
-      }
+      await db
+        .update(addresses)
+        .set({ isDefault: false })
+        .where(eq(addresses.userId, userId));
     }
 
     // If no other addresses exist, make this the default
-    let existingAddresses;
-    if (owner.customerId) {
-      existingAddresses = await db
-        .select()
-        .from(addresses)
-        .where(eq(addresses.customerId, owner.customerId));
-    } else {
-      existingAddresses = await db
-        .select()
-        .from(addresses)
-        .where(eq(addresses.userId, owner.userId!));
-    }
+    const existingAddresses = await db
+      .select()
+      .from(addresses)
+      .where(eq(addresses.userId, userId));
     
     const shouldBeDefault = data.isDefault || existingAddresses.length === 0;
 
@@ -128,8 +96,7 @@ router.post("/", async (req: Request, res: Response) => {
       .insert(addresses)
       .values({
         id: addressId,
-        customerId: owner.customerId || null,
-        userId: owner.userId || null,
+        userId: userId,
         label: data.label,
         fullName: data.fullName,
         mobile: data.mobile,
@@ -158,8 +125,8 @@ router.post("/", async (req: Request, res: Response) => {
 // PUT /api/addresses/:id - Update address
 router.put("/:id", async (req: Request, res: Response) => {
   try {
-    const owner = getOwnerInfo(req);
-    if (!owner) {
+    const userId = getUserId(req);
+    if (!userId) {
       return res.status(401).json({ success: false, error: "Authentication required" });
     }
 
@@ -172,18 +139,10 @@ router.put("/:id", async (req: Request, res: Response) => {
     const data = validation.data;
 
     // Check ownership
-    let existing;
-    if (owner.customerId) {
-      [existing] = await db
-        .select()
-        .from(addresses)
-        .where(and(eq(addresses.id, id), eq(addresses.customerId, owner.customerId)));
-    } else {
-      [existing] = await db
-        .select()
-        .from(addresses)
-        .where(and(eq(addresses.id, id), eq(addresses.userId, owner.userId!)));
-    }
+    const [existing] = await db
+      .select()
+      .from(addresses)
+      .where(and(eq(addresses.id, id), eq(addresses.userId, userId)));
 
     if (!existing) {
       return res.status(404).json({ success: false, error: "Address not found" });
@@ -191,17 +150,10 @@ router.put("/:id", async (req: Request, res: Response) => {
 
     // If setting as default, unset other defaults
     if (data.isDefault) {
-      if (owner.customerId) {
-        await db
-          .update(addresses)
-          .set({ isDefault: false })
-          .where(eq(addresses.customerId, owner.customerId));
-      } else {
-        await db
-          .update(addresses)
-          .set({ isDefault: false })
-          .where(eq(addresses.userId, owner.userId!));
-      }
+      await db
+        .update(addresses)
+        .set({ isDefault: false })
+        .where(eq(addresses.userId, userId));
     }
 
     const [updated] = await db
@@ -223,26 +175,18 @@ router.put("/:id", async (req: Request, res: Response) => {
 // DELETE /api/addresses/:id - Delete address
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
-    const owner = getOwnerInfo(req);
-    if (!owner) {
+    const userId = getUserId(req);
+    if (!userId) {
       return res.status(401).json({ success: false, error: "Authentication required" });
     }
 
     const { id } = req.params;
 
     // Check ownership
-    let existing;
-    if (owner.customerId) {
-      [existing] = await db
-        .select()
-        .from(addresses)
-        .where(and(eq(addresses.id, id), eq(addresses.customerId, owner.customerId)));
-    } else {
-      [existing] = await db
-        .select()
-        .from(addresses)
-        .where(and(eq(addresses.id, id), eq(addresses.userId, owner.userId!)));
-    }
+    const [existing] = await db
+      .select()
+      .from(addresses)
+      .where(and(eq(addresses.id, id), eq(addresses.userId, userId)));
 
     if (!existing) {
       return res.status(404).json({ success: false, error: "Address not found" });
@@ -254,20 +198,11 @@ router.delete("/:id", async (req: Request, res: Response) => {
 
     // If deleted address was default, make another one default
     if (existing.isDefault) {
-      let firstAddress;
-      if (owner.customerId) {
-        [firstAddress] = await db
-          .select()
-          .from(addresses)
-          .where(eq(addresses.customerId, owner.customerId))
-          .limit(1);
-      } else {
-        [firstAddress] = await db
-          .select()
-          .from(addresses)
-          .where(eq(addresses.userId, owner.userId!))
-          .limit(1);
-      }
+      const [firstAddress] = await db
+        .select()
+        .from(addresses)
+        .where(eq(addresses.userId, userId))
+        .limit(1);
 
       if (firstAddress) {
         await db
@@ -287,43 +222,28 @@ router.delete("/:id", async (req: Request, res: Response) => {
 // PUT /api/addresses/:id/default - Set address as default
 router.put("/:id/default", async (req: Request, res: Response) => {
   try {
-    const owner = getOwnerInfo(req);
-    if (!owner) {
+    const userId = getUserId(req);
+    if (!userId) {
       return res.status(401).json({ success: false, error: "Authentication required" });
     }
 
     const { id } = req.params;
 
     // Check ownership
-    let existing;
-    if (owner.customerId) {
-      [existing] = await db
-        .select()
-        .from(addresses)
-        .where(and(eq(addresses.id, id), eq(addresses.customerId, owner.customerId)));
-    } else {
-      [existing] = await db
-        .select()
-        .from(addresses)
-        .where(and(eq(addresses.id, id), eq(addresses.userId, owner.userId!)));
-    }
+    const [existing] = await db
+      .select()
+      .from(addresses)
+      .where(and(eq(addresses.id, id), eq(addresses.userId, userId)));
 
     if (!existing) {
       return res.status(404).json({ success: false, error: "Address not found" });
     }
 
     // Unset all defaults
-    if (owner.customerId) {
-      await db
-        .update(addresses)
-        .set({ isDefault: false })
-        .where(eq(addresses.customerId, owner.customerId));
-    } else {
-      await db
-        .update(addresses)
-        .set({ isDefault: false })
-        .where(eq(addresses.userId, owner.userId!));
-    }
+    await db
+      .update(addresses)
+      .set({ isDefault: false })
+      .where(eq(addresses.userId, userId));
 
     // Set this one as default
     const [updated] = await db

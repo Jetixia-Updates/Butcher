@@ -159,7 +159,7 @@ const createReview: RequestHandler = async (req, res) => {
     const existing = await db
       .select()
       .from(productReviews)
-      .where(and(eq(productReviews.customerId, customerId), eq(productReviews.productId, productId)));
+      .where(and(eq(productReviews.userId, customerId), eq(productReviews.productId, productId)));
 
     if (existing.length > 0) {
       const response: ApiResponse<null> = {
@@ -172,7 +172,7 @@ const createReview: RequestHandler = async (req, res) => {
     const newReview = {
       id: generateId(),
       productId,
-      customerId,
+      userId: customerId,
       userName: customerName || "Anonymous",
       rating,
       title,
@@ -227,7 +227,7 @@ const updateReview: RequestHandler = async (req, res) => {
         return res.status(401).json(response);
       }
       
-      if (existing[0].customerId !== customerId) {
+      if (existing[0].userId !== customerId) {
         const response: ApiResponse<null> = { success: false, error: "Not authorized" };
         return res.status(403).json(response);
       }
@@ -297,7 +297,7 @@ const deleteReview: RequestHandler = async (req, res) => {
 
     // Allow customer to delete own review or admin to delete any
     // For now, just check if it's the customer's review
-    if (existing[0].customerId !== customerId) {
+    if (existing[0].userId !== customerId) {
       const response: ApiResponse<null> = { success: false, error: "Not authorized" };
       return res.status(403).json(response);
     }
