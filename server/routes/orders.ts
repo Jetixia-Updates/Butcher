@@ -8,6 +8,7 @@ import { z } from "zod";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import type { Order, OrderItem, ApiResponse, PaginatedResponse } from "../../shared/api";
 import { db, orders, orderItems, products, users, addresses, discountCodes, deliveryZones, stock, payments, inAppNotifications, customers } from "../db/connection";
+import { getInAppNotificationContent } from "../services/notifications";
 
 const router = Router();
 
@@ -56,59 +57,10 @@ const updateStatusSchema = z.object({
   notes: z.string().optional(),
 });
 
-// Order status notification messages
-interface OrderNotificationContent {
-  title: string;
-  titleAr: string;
-  message: string;
-  messageAr: string;
-}
 
-function getOrderStatusNotification(orderNumber: string, status: string): OrderNotificationContent | null {
-  const notifications: Record<string, OrderNotificationContent> = {
-    confirmed: {
-      title: "Order Confirmed",
-      titleAr: "تم تأكيد الطلب",
-      message: `Great news! Your order ${orderNumber} has been confirmed`,
-      messageAr: `أخبار سارة! تم تأكيد طلبك ${orderNumber}`,
-    },
-    processing: {
-      title: "Order Being Prepared",
-      titleAr: "جاري تحضير الطلب",
-      message: `Your order ${orderNumber} is now being prepared`,
-      messageAr: `جاري تحضير طلبك ${orderNumber} الآن`,
-    },
-    ready_for_pickup: {
-      title: "Order Ready",
-      titleAr: "الطلب جاهز",
-      message: `Your order ${orderNumber} is ready for pickup/delivery`,
-      messageAr: `طلبك ${orderNumber} جاهز للاستلام/التوصيل`,
-    },
-    out_for_delivery: {
-      title: "Out for Delivery",
-      titleAr: "في الطريق إليك",
-      message: `Your order ${orderNumber} is on its way to you!`,
-      messageAr: `طلبك ${orderNumber} في الطريق إليك!`,
-    },
-    delivered: {
-      title: "Order Delivered",
-      titleAr: "تم تسليم الطلب",
-      message: `Your order ${orderNumber} has been delivered. Enjoy!`,
-      messageAr: `تم تسليم طلبك ${orderNumber}. بالهناء والشفاء!`,
-    },
-    cancelled: {
-      title: "Order Cancelled",
-      titleAr: "تم إلغاء الطلب",
-      message: `Your order ${orderNumber} has been cancelled`,
-      messageAr: `تم إلغاء طلبك ${orderNumber}`,
-    },
-  };
-
-  return notifications[status] || null;
-}
 
 // Helper to create invoice notification when order is confirmed
-async function createInvoiceNotificationForConfirmedOrder(order: typeof orders.$inferSelect, orderItems: typeof orderItems.$inferSelect[]): Promise<void> {
+async function createInvoiceNotificationForConfirmedOrder(order: typeof orders.$inferSelect, items: (typeof orderItems.$inferSelect)[]): Promise<void> {
   if (!order.customerId && !order.userId) {
     console.log(`[Invoice Notification] Skipped - no customerId or userId`);
     return;
@@ -118,9 +70,9 @@ async function createInvoiceNotificationForConfirmedOrder(order: typeof orders.$
     const customerId = order.customerId || order.userId;
     const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${order.orderNumber.replace('ORD-', '')}`;
     const shopTRN = "100567890123456"; // UAE TRN format
-    
+
     // Format items
-    const itemsList = orderItems.map(item => 
+    const itemsList = items.map(item =>
       `• ${item.productName} × ${item.quantity}\n  AED ${Number(item.totalPrice).toFixed(2)}`
     ).join('\n');
 
@@ -144,7 +96,7 @@ ITEMS:
 ${itemsList}
 ────────────────────────────────────────
 Subtotal:           AED ${Number(order.subtotal).toFixed(2)}
-${order.discount > 0 ? `Discount (-):        AED ${Number(order.discount).toFixed(2)}` : ''}
+${Number(order.discount) > 0 ? `Discount (-):        AED ${Number(order.discount).toFixed(2)}` : ''}
 VAT (5%):           AED ${Number(order.vatAmount).toFixed(2)}
 Delivery Fee:       AED ${Number(order.deliveryFee).toFixed(2)}
 ════════════════════════════════════════
@@ -175,7 +127,7 @@ Thank you for your purchase!
 ${itemsList}
 ────────────────────────────────────────
 الإجمالي الجزئي:        ${Number(order.subtotal).toFixed(2)} د.إ
-${order.discount > 0 ? `الخصم (-):             ${Number(order.discount).toFixed(2)} د.إ` : ''}
+${Number(order.discount) > 0 ? `الخصم (-):             ${Number(order.discount).toFixed(2)} د.إ` : ''}
 الضريبة (5%):          ${Number(order.vatAmount).toFixed(2)} د.إ
 رسوم التوصيل:          ${Number(order.deliveryFee).toFixed(2)} د.إ
 ════════════════════════════════════════
@@ -209,7 +161,7 @@ ${order.discount > 0 ? `الخصم (-):             ${Number(order.discount).toF
 
 // Helper to create notification for a customer (server-side)
 async function createCustomerOrderNotification(customerId: string, orderNumber: string, status: string): Promise<void> {
-  const content = getOrderStatusNotification(orderNumber, status);
+  const content = getInAppNotificationContent(orderNumber, status);
   if (!content || !customerId) {
     console.log(`[Notification] Skipped - no content or customerId. customerId=${customerId}, status=${status}`);
     return;
@@ -886,7 +838,7 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
       if (order.customerId) {
         console.log(`[UpdateStatus] Creating notification for customer ${order.customerId}, order ${order.orderNumber}, status ${status}`);
         await createCustomerOrderNotification(order.customerId, order.orderNumber, status);
-        
+
         // When order is confirmed, also send invoice notification
         if (status === "confirmed") {
           console.log(`[UpdateStatus] Creating invoice notification for confirmed order ${order.orderNumber}`);
@@ -896,7 +848,7 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
         // For staff/internal orders, create notification with userId
         console.log(`[UpdateStatus] Creating notification for userId ${order.userId}, order ${order.orderNumber}, status ${status}`);
         try {
-          const content = getOrderStatusNotification(order.orderNumber, status);
+          const content = getInAppNotificationContent(order.orderNumber, status);
           if (content) {
             await db.insert(inAppNotifications).values({
               id: generateId("notif"),
@@ -914,7 +866,7 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
             });
             console.log(`[UpdateStatus] ✅ Created notification for user ${order.userId}: ${status}`);
           }
-          
+
           // For staff orders, also send invoice if confirmed
           if (status === "confirmed") {
             await createInvoiceNotificationForConfirmedOrder(order, itemsResult);

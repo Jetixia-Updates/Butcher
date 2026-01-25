@@ -42,7 +42,7 @@ async function isChannelEnabled(userId: string, channel: NotificationChannel): P
     if (result.length === 0) return false;
     const user = result[0];
     const prefs = user.preferences as { smsNotifications?: boolean; emailNotifications?: boolean } || {};
-    
+
     switch (channel) {
       case "sms":
         return prefs.smsNotifications ?? true;
@@ -255,3 +255,61 @@ export async function getNotificationStats(): Promise<{
     byChannel: byChannel as Record<NotificationChannel, number>,
   };
 }
+
+// Get localized content for in-app notifications
+export function getInAppNotificationContent(
+  orderNumber: string,
+  status: string
+): {
+  title: string;
+  titleAr: string;
+  message: string;
+  messageAr: string;
+} | null {
+  const notifications: Record<string, {
+    title: string;
+    titleAr: string;
+    message: string;
+    messageAr: string;
+  }> = {
+    confirmed: {
+      title: "Order Confirmed",
+      titleAr: "تم تأكيد الطلب",
+      message: `Great news! Your order ${orderNumber} has been confirmed`,
+      messageAr: `أخبار سارة! تم تأكيد طلبك ${orderNumber}`,
+    },
+    processing: {
+      title: "Order Being Prepared",
+      titleAr: "جاري تحضير الطلب",
+      message: `Your order ${orderNumber} is now being prepared`,
+      messageAr: `جاري تحضير طلبك ${orderNumber} الآن`,
+    },
+    ready_for_pickup: {
+      title: "Order Ready",
+      titleAr: "الطلب جاهز",
+      message: `Your order ${orderNumber} is ready for pickup/delivery`,
+      messageAr: `طلبك ${orderNumber} جاهز للاستلام/التوصيل`,
+    },
+    out_for_delivery: {
+      title: "Out for Delivery",
+      titleAr: "في الطريق إليك",
+      message: `Your order ${orderNumber} is on its way to you!`,
+      messageAr: `طلبك ${orderNumber} في الطريق إليك!`,
+    },
+    delivered: {
+      title: "Order Delivered",
+      titleAr: "تم تسليم الطلب",
+      message: `Your order ${orderNumber} has been delivered. Enjoy!`,
+      messageAr: `تم تسليم طلبك ${orderNumber}. بالهناء والشفاء!`,
+    },
+    cancelled: {
+      title: "Order Cancelled",
+      titleAr: "تم إلغاء الطلب",
+      message: `Your order ${orderNumber} has been cancelled`,
+      messageAr: `تم إلغاء طلبك ${orderNumber}`,
+    },
+  };
+
+  return notifications[status] || null;
+}
+

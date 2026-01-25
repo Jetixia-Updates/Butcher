@@ -6,7 +6,7 @@
 
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
-import { eq, and, desc, or } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import type { ApiResponse } from "../../shared/api";
 import { db, sessions, customerSessions, inAppNotifications, users } from "../db/connection";
 
@@ -35,7 +35,7 @@ const createNotificationSchema = z.object({
 // Helper to get staff user ID from token
 async function getUserIdFromToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
-  
+
   try {
     const sessionResult = await db.select().from(sessions).where(eq(sessions.token, token));
     if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
@@ -50,7 +50,7 @@ async function getUserIdFromToken(token: string | undefined): Promise<string | n
 // Helper to get customer ID from token
 async function getCustomerIdFromToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
-  
+
   try {
     const sessionResult = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
     if (sessionResult.length === 0 || new Date(sessionResult[0].expiresAt) < new Date()) {
@@ -78,13 +78,13 @@ async function getNotificationTarget(token: string | undefined): Promise<{ userI
       return { userId };
     }
   }
-  
+
   // Try customer session
   const customerId = await getCustomerIdFromToken(token);
   if (customerId) {
     return { customerId };
   }
-  
+
   return null;
 }
 
@@ -93,17 +93,17 @@ const getNotifications: RequestHandler = async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "");
     const target = await getNotificationTarget(token);
-    
+
     // Also support query params for fetching specific user/customer notifications
     const queryUserId = req.query.userId as string;
     const queryCustomerId = req.query.customerId as string;
-    
+
     // Determine which ID to use
     let targetUserId = queryUserId || target?.userId;
     let targetCustomerId = queryCustomerId || target?.customerId;
-    
+
     console.log(`[Notifications] Fetching notifications for userId=${targetUserId}, customerId=${targetCustomerId}`);
-    
+
     if (!targetUserId && !targetCustomerId) {
       console.log(`[Notifications] ❌ Not authenticated - no ID found`);
       const response: ApiResponse<null> = {
@@ -151,7 +151,7 @@ const getNotifications: RequestHandler = async (req, res) => {
 const createNotification: RequestHandler = async (req, res) => {
   try {
     const { userId, customerId } = req.body;
-    
+
     if (!userId && !customerId) {
       const response: ApiResponse<null> = {
         success: false,
@@ -363,11 +363,12 @@ const clearAllNotifications: RequestHandler = async (req, res) => {
 };
 
 // Register routes
+// IMPORTANT: Static routes must come BEFORE parameterized routes
 router.get("/", getNotifications);
 router.post("/", createNotification);
+router.patch("/read-all", markAllAsRead);  // Must be before /:id/read
 router.patch("/:id/read", markAsRead);
-router.patch("/read-all", markAllAsRead);
+router.delete("/", clearAllNotifications); // Must be before /:id
 router.delete("/:id", deleteNotification);
-router.delete("/", clearAllNotifications);
 
 export default router;
