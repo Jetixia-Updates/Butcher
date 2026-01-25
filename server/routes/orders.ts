@@ -793,7 +793,6 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     }));
 
     // Create notification for customer (server-side to ensure it's always created)
-    // Orders can be for customers (userId)
     try {
       if (order.userId) {
         console.log(`[UpdateStatus] Creating notification for customer ${order.userId}, order ${order.orderNumber}, status ${status}`);
@@ -804,40 +803,11 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
           console.log(`[UpdateStatus] Creating invoice notification for confirmed order ${order.orderNumber}`);
           await createInvoiceNotificationForConfirmedOrder(order, itemsResult);
         }
-      } else if (order.userId) {
-        // For staff/internal orders, create notification with userId
-        console.log(`[UpdateStatus] Creating notification for userId ${order.userId}, order ${order.orderNumber}, status ${status}`);
-        try {
-          const content = getInAppNotificationContent(order.orderNumber, status);
-          if (content) {
-            await db.insert(inAppNotifications).values({
-              id: generateId("notif"),
-              userId: order.userId,
-              type: "order",
-              title: content.title,
-              titleAr: content.titleAr,
-              message: content.message,
-              messageAr: content.messageAr,
-              link: "/orders",
-              linkTab: undefined,
-              linkId: undefined,
-              unread: true,
-            });
-            console.log(`[UpdateStatus] ✅ Created notification for user ${order.userId}: ${status}`);
-          }
-
-          // For staff orders, also send invoice if confirmed
-          if (status === "confirmed") {
-            await createInvoiceNotificationForConfirmedOrder(order, itemsResult);
-          }
-        } catch (err) {
-          console.error(`[UpdateStatus] Failed to create user notification:`, err);
-        }
       } else {
-        console.warn(`[UpdateStatus] No customerId or userId found for order ${id}`);
+        console.warn(`[UpdateStatus] No userId found for order ${id}`);
       }
     } catch (notifWarn) {
-      console.warn(`[UpdateStatus] Notification creation failed but order updated (non-critical):`, notifWarn);
+      console.error(`[UpdateStatus] Notification creation failed:`, notifWarn);
     }
 
     const response: ApiResponse<Order> = {
