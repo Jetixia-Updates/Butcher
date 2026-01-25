@@ -268,8 +268,13 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       const response = await ordersApi.updateStatus(orderId, "ready_for_pickup", user.id);
       
       if (response.success) {
-        // Refresh orders list
-        const updatedOrders = await ordersApi.getAll({ status: statusFilter === "all" ? undefined : statusFilter });
+        toast({
+          title: "Status Updated",
+          description: "Order marked as ready for pickup",
+        });
+
+        // Refresh ALL orders (no filter) to ensure we get updated data
+        const updatedOrders = await ordersApi.getAll({ status: undefined });
         if (updatedOrders.success && updatedOrders.data) {
           setOrders(updatedOrders.data);
         }
@@ -297,8 +302,15 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       const response = await ordersApi.updateStatus(orderId, newStatus, user.id);
 
       if (response.success) {
-        // Refresh orders list
-        const updatedOrders = await ordersApi.getAll({ status: statusFilter === "all" ? undefined : statusFilter });
+        // Show success notification
+        toast({
+          title: "Status Updated",
+          description: `Order status changed to ${getStatusLabel(newStatus, t)}`,
+        });
+
+        // Refresh ALL orders (no filter) to ensure we get updated data
+        // This is important because the order might have changed status and might not be in the current filter
+        const updatedOrders = await ordersApi.getAll({ status: undefined });
         if (updatedOrders.success && updatedOrders.data) {
           setOrders(updatedOrders.data);
         }
