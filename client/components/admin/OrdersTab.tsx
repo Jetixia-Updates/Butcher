@@ -252,12 +252,22 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   const handleStatusUpdate = async (orderId: string, newStatus: OrderStatus | "assign_driver") => {
     console.log(`[OrdersTab] handleStatusUpdate called: orderId=${orderId}, newStatus=${newStatus}, user=${user?.id}`);
     
+    if (!user?.id) {
+      console.error(`[OrdersTab] ❌ No user ID available. Cannot update order.`);
+      toast({
+        title: "Error",
+        description: "User not logged in. Please log in again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Handle special "assign_driver" action - navigate to delivery tab
     if (newStatus === "assign_driver") {
       // First update status to ready_for_pickup, then navigate
       setUpdating(orderId);
       console.log(`[OrdersTab] Calling updateStatus for assign_driver`);
-      const response = await ordersApi.updateStatus(orderId, "ready_for_pickup", user?.id);
+      const response = await ordersApi.updateStatus(orderId, "ready_for_pickup", user.id);
       console.log(`[OrdersTab] assign_driver response:`, response);
       if (response.success && response.data) {
         toast({
@@ -288,11 +298,11 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
     }
 
     setUpdating(orderId);
-    console.log(`[OrdersTab] Updating order ${orderId} to status: ${newStatus}, user: ${user?.id}`);
+    console.log(`[OrdersTab] Updating order ${orderId} to status: ${newStatus}, user: ${user.id}`);
 
     try {
-      console.log(`[OrdersTab] Making API call with userId: ${user?.id}`);
-      const response = await ordersApi.updateStatus(orderId, newStatus, user?.id);
+      console.log(`[OrdersTab] Making API call with userId: ${user.id}`);
+      const response = await ordersApi.updateStatus(orderId, newStatus, user.id);
       console.log(`[OrdersTab] updateStatus response:`, response);
 
       if (response.success) {
