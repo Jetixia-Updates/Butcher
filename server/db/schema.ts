@@ -225,25 +225,12 @@ export const sessions = pgTable("sessions", {
 });
 
 // =====================================================
-// CUSTOMER SESSIONS TABLE
-// =====================================================
-
-export const customerSessions = pgTable("customer_sessions", {
-  id: text("id").primaryKey(),
-  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
-  token: text("token").notNull().unique(),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-// =====================================================
 // ADDRESSES TABLE
 // =====================================================
 
 export const addresses = pgTable("addresses", {
   id: text("id").primaryKey(),
-  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
-  customerId: text("customer_id").references(() => customers.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   label: varchar("label", { length: 50 }).notNull(),
   fullName: varchar("full_name", { length: 200 }).notNull(),
   mobile: varchar("mobile", { length: 20 }).notNull(),
@@ -335,8 +322,7 @@ export const stockMovements = pgTable("stock_movements", {
 export const orders = pgTable("orders", {
   id: text("id").primaryKey(),
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
-  userId: text("user_id").references(() => users.id), // For staff orders (optional)
-  customerId: text("customer_id").references(() => customers.id), // For customer orders
+  userId: text("user_id").notNull().references(() => users.id),
   customerName: varchar("customer_name", { length: 200 }).notNull(),
   customerEmail: varchar("customer_email", { length: 255 }).notNull(),
   customerMobile: varchar("customer_mobile", { length: 20 }).notNull(),
@@ -359,8 +345,7 @@ export const orders = pgTable("orders", {
   addressId: text("address_id").notNull(),
   deliveryAddress: jsonb("delivery_address").$type<{
     id: string;
-    userId?: string;
-    customerId?: string;
+    userId: string;
     label: string;
     fullName: string;
     mobile: string;
@@ -537,8 +522,7 @@ export const discountCodes = pgTable("discount_codes", {
 
 export const notifications = pgTable("notifications", {
   id: text("id").primaryKey(),
-  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }), // For staff
-  customerId: text("customer_id").references(() => customers.id, { onDelete: "cascade" }), // For customers
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   type: notificationTypeEnum("type").notNull(),
   channel: notificationChannelEnum("channel").notNull(),
   title: varchar("title", { length: 200 }).notNull(),
@@ -558,8 +542,7 @@ export const notifications = pgTable("notifications", {
 
 export const inAppNotifications = pgTable("in_app_notifications", {
   id: text("id").primaryKey(),
-  userId: text("user_id"), // For staff notifications or "admin"
-  customerId: text("customer_id"), // For customer notifications
+  userId: text("user_id").notNull(), // Can be a user ID or "admin" for admin notifications
   type: varchar("type", { length: 50 }).notNull(),
   title: varchar("title", { length: 200 }).notNull(),
   titleAr: varchar("title_ar", { length: 200 }).notNull(),
@@ -579,14 +562,14 @@ export const inAppNotifications = pgTable("in_app_notifications", {
 export const chatMessages = pgTable("chat_messages", {
   id: text("id").primaryKey(),
   
-  // Customer info (for both customer and admin to see)
-  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
-  customerName: varchar("customer_name", { length: 200 }).notNull(),
-  customerEmail: varchar("customer_email", { length: 255 }).notNull(),
+  // User info (for both user and admin to see)
+  userId: text("user_id").notNull(),
+  userName: varchar("user_name", { length: 200 }).notNull(),
+  userEmail: varchar("user_email", { length: 255 }).notNull(),
   
   // Message content
   text: text("text").notNull(),
-  sender: varchar("sender", { length: 10 }).notNull(), // "customer" or "admin"
+  sender: varchar("sender", { length: 10 }).notNull(), // "user" or "admin"
   attachments: jsonb("attachments").$type<{
     id: string;
     name: string;
@@ -597,7 +580,7 @@ export const chatMessages = pgTable("chat_messages", {
   
   // Read status
   readByAdmin: boolean("read_by_admin").notNull().default(false),
-  readByCustomer: boolean("read_by_customer").notNull().default(false),
+  readByUser: boolean("read_by_user").notNull().default(false),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -618,7 +601,7 @@ export const suppliers = pgTable("suppliers", {
   address: jsonb("address").$type<{
     street: string;
     city: string;
-    emirate: string;
+    state: string;
     country: string;
     postalCode: string;
   }>().notNull(),
@@ -1016,7 +999,7 @@ export const vendors = pgTable("vendors", {
 
 export const savedCards = pgTable("saved_cards", {
   id: text("id").primaryKey(),
-  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   brand: varchar("brand", { length: 50 }).notNull(),
   last4: varchar("last4", { length: 4 }).notNull(),
   expiryMonth: integer("expiry_month").notNull(),
@@ -1040,7 +1023,7 @@ export const walletTransactionTypeEnum = pgEnum("wallet_transaction_type", [
 
 export const wallets = pgTable("wallets", {
   id: text("id").primaryKey(),
-  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }).unique(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   balance: decimal("balance", { precision: 12, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -1048,7 +1031,7 @@ export const wallets = pgTable("wallets", {
 
 export const walletTransactions = pgTable("wallet_transactions", {
   id: text("id").primaryKey(),
-  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   type: walletTransactionTypeEnum("type").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   description: text("description").notNull(),
@@ -1063,7 +1046,7 @@ export const walletTransactions = pgTable("wallet_transactions", {
 
 export const wishlists = pgTable("wishlists", {
   id: text("id").primaryKey(),
-  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -1075,7 +1058,7 @@ export const wishlists = pgTable("wishlists", {
 export const productReviews = pgTable("product_reviews", {
   id: text("id").primaryKey(),
   productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   userName: varchar("user_name", { length: 200 }).notNull(),
   rating: integer("rating").notNull(), // 1-5
   title: varchar("title", { length: 200 }).notNull(),
@@ -1101,7 +1084,7 @@ export const loyaltyTransactionTypeEnum = pgEnum("loyalty_transaction_type", [
 
 export const loyaltyPoints = pgTable("loyalty_points", {
   id: text("id").primaryKey(),
-  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }).unique(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   points: integer("points").notNull().default(0),
   totalEarned: integer("total_earned").notNull().default(0),
   referralCode: varchar("referral_code", { length: 20 }).unique(),
@@ -1112,7 +1095,7 @@ export const loyaltyPoints = pgTable("loyalty_points", {
 
 export const loyaltyTransactions = pgTable("loyalty_transactions", {
   id: text("id").primaryKey(),
-  customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   type: loyaltyTransactionTypeEnum("type").notNull(),
   points: integer("points").notNull(),
   description: text("description").notNull(),
@@ -1445,192 +1428,6 @@ export const vatReturns = pgTable("vat_returns", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// =====================================================
-// CUSTOMERS TABLE (Standalone - for customer registration)
-// =====================================================
-
-export const customerSegmentEnum = pgEnum("customer_segment", [
-  "regular",
-  "premium",
-  "vip",
-  "wholesale",
-  "inactive",
-]);
-
-export const customers = pgTable("customers", {
-  id: text("id").primaryKey(),
-  
-  // Authentication (same as users but for customers)
-  username: varchar("username", { length: 100 }).notNull().unique(),
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  mobile: varchar("mobile", { length: 20 }).notNull(),
-  password: text("password").notNull(),
-  
-  // Personal Info
-  firstName: varchar("first_name", { length: 100 }).notNull(),
-  familyName: varchar("family_name", { length: 100 }).notNull(),
-  
-  // Account Status
-  isActive: boolean("is_active").notNull().default(true),
-  isVerified: boolean("is_verified").notNull().default(false),
-  
-  // Location
-  emirate: varchar("emirate", { length: 100 }),
-  address: text("address"),
-  
-  // Customer Classification
-  customerNumber: varchar("customer_number", { length: 20 }).notNull().unique(), // CUST-0001
-  segment: customerSegmentEnum("segment").notNull().default("regular"),
-  
-  // Financial Info
-  creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }).notNull().default("0"),
-  currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).notNull().default("0"),
-  lifetimeValue: decimal("lifetime_value", { precision: 14, scale: 2 }).notNull().default("0"),
-  
-  // Statistics
-  totalOrders: integer("total_orders").notNull().default(0),
-  totalSpent: decimal("total_spent", { precision: 14, scale: 2 }).notNull().default("0"),
-  averageOrderValue: decimal("average_order_value", { precision: 10, scale: 2 }).notNull().default("0"),
-  lastOrderDate: timestamp("last_order_date"),
-  lastOrderAmount: decimal("last_order_amount", { precision: 10, scale: 2 }),
-  
-  // Preferences
-  preferredPaymentMethod: paymentMethodEnum("preferred_payment_method"),
-  preferredDeliveryTime: varchar("preferred_delivery_time", { length: 50 }),
-  dietaryPreferences: jsonb("dietary_preferences").$type<string[]>(),
-  allergies: jsonb("allergies").$type<string[]>(),
-  preferences: jsonb("preferences").$type<{
-    language: "en" | "ar";
-    currency: "AED" | "USD" | "EUR";
-    emailNotifications: boolean;
-    smsNotifications: boolean;
-    marketingEmails: boolean;
-  }>(),
-  
-  // Communication
-  preferredLanguage: languageEnum("preferred_language").default("en"),
-  marketingOptIn: boolean("marketing_opt_in").notNull().default(true),
-  smsOptIn: boolean("sms_opt_in").notNull().default(true),
-  emailOptIn: boolean("email_opt_in").notNull().default(true),
-  
-  // Internal Notes
-  internalNotes: text("internal_notes"),
-  tags: jsonb("tags").$type<string[]>(),
-  
-  // Referrals
-  referredBy: text("referred_by"), // Customer ID who referred this customer
-  referralCount: integer("referral_count").notNull().default(0),
-  
-  // Dates
-  firstPurchaseDate: timestamp("first_purchase_date"),
-  birthDate: timestamp("birth_date"),
-  anniversary: timestamp("anniversary"),
-  lastLoginAt: timestamp("last_login_at"),
-  
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-// =====================================================
-// REPORTS TABLE (Saved/Generated Reports)
-// =====================================================
-
-export const reportTypeEnum = pgEnum("report_type", [
-  "sales",
-  "revenue",
-  "orders",
-  "products",
-  "customers",
-  "inventory",
-  "expenses",
-  "profit_loss",
-  "vat",
-  "delivery",
-  "staff_performance",
-  "custom",
-]);
-
-export const reportFormatEnum = pgEnum("report_format", [
-  "pdf",
-  "excel",
-  "csv",
-  "json",
-]);
-
-export const reportStatusEnum = pgEnum("report_status", [
-  "pending",
-  "generating",
-  "completed",
-  "failed",
-]);
-
-export const reports = pgTable("reports", {
-  id: text("id").primaryKey(),
-  reportNumber: varchar("report_number", { length: 20 }).notNull().unique(), // RPT-2026-0001
-  
-  // Report Definition
-  name: varchar("name", { length: 200 }).notNull(),
-  nameAr: varchar("name_ar", { length: 200 }),
-  type: reportTypeEnum("type").notNull(),
-  description: text("description"),
-  
-  // Date Range
-  periodStart: timestamp("period_start").notNull(),
-  periodEnd: timestamp("period_end").notNull(),
-  
-  // Filters & Parameters
-  filters: jsonb("filters").$type<{
-    categories?: string[];
-    products?: string[];
-    customers?: string[];
-    emirates?: string[];
-    paymentMethods?: string[];
-    orderStatuses?: string[];
-    customFilters?: Record<string, unknown>;
-  }>(),
-  
-  // Output
-  format: reportFormatEnum("format").notNull().default("pdf"),
-  status: reportStatusEnum("status").notNull().default("pending"),
-  fileUrl: text("file_url"), // URL to generated report file
-  fileSize: integer("file_size"), // Size in bytes
-  
-  // Summary Data (stored for quick access)
-  summary: jsonb("summary").$type<{
-    totalRevenue?: number;
-    totalOrders?: number;
-    totalCustomers?: number;
-    totalProducts?: number;
-    averageOrderValue?: number;
-    topProducts?: { id: string; name: string; quantity: number; revenue: number }[];
-    topCustomers?: { id: string; name: string; orders: number; spent: number }[];
-    revenueByCategory?: { category: string; revenue: number }[];
-    revenueByEmirate?: { emirate: string; revenue: number }[];
-    dailyTrends?: { date: string; revenue: number; orders: number }[];
-    [key: string]: unknown;
-  }>(),
-  
-  // Scheduling (for recurring reports)
-  isScheduled: boolean("is_scheduled").notNull().default(false),
-  scheduleFrequency: varchar("schedule_frequency", { length: 20 }), // daily, weekly, monthly
-  nextRunAt: timestamp("next_run_at"),
-  lastRunAt: timestamp("last_run_at"),
-  recipients: jsonb("recipients").$type<string[]>(), // Email addresses to send report to
-  
-  // Metadata
-  generatedAt: timestamp("generated_at"),
-  generatedBy: text("generated_by").notNull(),
-  generatedByName: varchar("generated_by_name", { length: 100 }),
-  errorMessage: text("error_message"),
-  
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-// =====================================================
-// RELATIONS (continued)
-// =====================================================
-
 // Journal entry relations
 export const journalEntriesRelations = relations(journalEntries, ({ many }) => ({
   lines: many(journalEntryLines),
@@ -1645,10 +1442,4 @@ export const journalEntryLinesRelations = relations(journalEntryLines, ({ one })
     fields: [journalEntryLines.accountId],
     references: [chartOfAccounts.id],
   }),
-}));
-
-// Customer relations (standalone - customers have their own addresses, orders, etc.)
-export const customersRelations = relations(customers, ({ many }) => ({
-  addresses: many(addresses),
-  orders: many(orders),
 }));
