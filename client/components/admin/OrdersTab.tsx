@@ -264,37 +264,27 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
     
     // Handle special "assign_driver" action - navigate to delivery tab
     if (newStatus === "assign_driver") {
-      // First update status to ready_for_pickup, then navigate
       setUpdating(orderId);
-      console.log(`[OrdersTab] Calling updateStatus for assign_driver`);
       const response = await ordersApi.updateStatus(orderId, "ready_for_pickup", user.id);
-      console.log(`[OrdersTab] assign_driver response:`, response);
-      if (response.success && response.data) {
-        toast({
-          title: "Status Updated",
-          description: "Order marked as ready for pickup. Please assign a driver.",
-        });
-        
+      
+      if (response.success) {
         // Refresh orders list
         const updatedOrders = await ordersApi.getAll({ status: statusFilter === "all" ? undefined : statusFilter });
         if (updatedOrders.success && updatedOrders.data) {
           setOrders(updatedOrders.data);
         }
         
-        // Close modal if open
+        // Close modal and navigate to delivery tab
         setSelectedOrder(null);
-        // Navigate to delivery tab with order ID
         if (onNavigate) {
           onNavigate("delivery", orderId);
         }
       } else {
-        console.error(`[OrdersTab] assign_driver failed:`, response.error);
         toast({
           title: "Update Failed",
           description: response.error || "Failed to update order status",
           variant: "destructive",
         });
-        console.error("Failed to update status:", response.error);
       }
       setUpdating(null);
       return;
@@ -304,34 +294,18 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
     console.log(`[OrdersTab] Updating order ${orderId} to status: ${newStatus}, user: ${user.id}`);
 
     try {
-      console.log(`[OrdersTab] Making API call with userId: ${user.id}`);
       const response = await ordersApi.updateStatus(orderId, newStatus, user.id);
-      console.log(`[OrdersTab] updateStatus response:`, response);
 
       if (response.success) {
-        console.log(`[OrdersTab] ✅ Status update succeeded`);
-        toast({
-          title: "Status Updated",
-          description: `Order status changed to ${getStatusLabel(newStatus, t)}`,
-        });
-        
         // Refresh orders list
         const updatedOrders = await ordersApi.getAll({ status: statusFilter === "all" ? undefined : statusFilter });
         if (updatedOrders.success && updatedOrders.data) {
-          console.log(`[OrdersTab] Fetched ${updatedOrders.data.length} orders after status update`);
           setOrders(updatedOrders.data);
-          
-          // Update selectedOrder with latest data
-          const updatedOrder = updatedOrders.data.find(o => o.id === orderId);
-          if (updatedOrder) {
-            console.log(`[OrdersTab] Updated selectedOrder with new status:`, updatedOrder.status);
-            setSelectedOrder(updatedOrder);
-          }
         }
-        // Note: Customer notifications are now created server-side when status is updated
+        
+        // Close modal immediately
+        setSelectedOrder(null);
       } else {
-        console.error("Failed to update status. Response error:", response.error);
-        console.error(`[OrdersTab] ❌ Status update failed:`, response.error);
         toast({
           title: "Update Failed",
           description: response.error || "Failed to update order status",
