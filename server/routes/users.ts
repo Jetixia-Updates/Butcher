@@ -513,9 +513,9 @@ const login: RequestHandler = async (req, res) => {
 // POST /api/users/admin-login - Staff login (admin, staff, delivery)
 const adminLogin: RequestHandler = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    let { username, password } = req.body;
 
-    console.log("[Staff Login] Attempt with username:", username);
+    console.log("[Staff Login] Attempt with identifier:", username);
 
     if (!username || !password) {
       console.log("[Staff Login] Missing username or password");
@@ -526,20 +526,33 @@ const adminLogin: RequestHandler = async (req, res) => {
       return res.status(400).json(response);
     }
 
-    // Find staff user by username (admin, staff, or delivery roles)
+    // Trim whitespace
+    username = username.trim();
+    password = password.trim();
+
+    // Find staff user by username OR email (admin, staff, or delivery roles)
     const allUsers = await db.select().from(users);
-    console.log("[Staff Login] Total users in DB:", allUsers.length);
-    console.log("[Staff Login] Staff users:", allUsers.filter(u => ["admin", "staff", "delivery"].includes(u.role)).map(u => ({ username: u.username, role: u.role })));
 
     const user = allUsers.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase() && ["admin", "staff", "delivery"].includes(u.role)
+      (u) => (u.username.toLowerCase() === username.toLowerCase() ||
+        u.email.toLowerCase() === username.toLowerCase()) &&
+        ["admin", "staff", "delivery"].includes(u.role)
     );
 
     if (!user) {
-      console.log("[Staff Login] No staff user found with username:", username);
+      console.log("[Staff Login] No staff user found with identifier:", username);
       const response: ApiResponse<null> = {
         success: false,
-        error: "Invalid staff credentials",
+        error: "Invalid staff credentials or insufficient permissions",
+      };
+      return res.status(401).json(response);
+    }
+
+    if (!user.isActive) {
+      console.log("[Staff Login] Account deactivated:", username);
+      const response: ApiResponse<null> = {
+        success: false,
+        error: "Account is deactivated. Please contact your administrator.",
       };
       return res.status(401).json(response);
     }
@@ -547,7 +560,7 @@ const adminLogin: RequestHandler = async (req, res) => {
     console.log("[Staff Login] Found user:", user.username, "role:", user.role, "checking password...");
 
     if (user.password !== password) {
-      console.log("[Staff Login] Password mismatch");
+      console.log("[Staff Login] Password mismatch for:", user.username);
       const response: ApiResponse<null> = {
         success: false,
         error: "Invalid staff credentials",

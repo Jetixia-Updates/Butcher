@@ -26,13 +26,24 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     const result = await loginAdmin(username, password);
-    
+
     if (result.success) {
-      navigate("/admin/dashboard");
+      // Fetch the updated user and check their role for correct redirection
+      const savedUser = localStorage.getItem("user");
+      if (savedUser) {
+        const user = JSON.parse(savedUser);
+        if (user.role === 'delivery') {
+          navigate("/driver");
+        } else {
+          navigate("/admin/dashboard");
+        }
+      } else {
+        navigate("/admin/dashboard");
+      }
     } else {
-      setError(result.error || "Invalid admin credentials");
+      setError(result.error || "Invalid staff credentials");
     }
-    
+
     setIsLoading(false);
   };
 
@@ -46,8 +57,8 @@ export default function AdminLoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Admin Portal</h1>
-          <p className="text-slate-400 mt-2 text-sm sm:text-base">Sign in to manage your store</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">Staff Portal</h1>
+          <p className="text-slate-400 mt-2 text-sm sm:text-base">Sign in to manage your tasks</p>
         </div>
 
         {/* Login Form */}
@@ -61,7 +72,7 @@ export default function AdminLoginPage() {
 
             <div>
               <label htmlFor="username" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
-                Username
+                Username or Email
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -69,9 +80,9 @@ export default function AdminLoginPage() {
                   id="username"
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm sm:text-base"
-                  placeholder="admin"
+                  placeholder="Username or email"
                   required
                 />
               </div>
