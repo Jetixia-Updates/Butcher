@@ -339,16 +339,9 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   const handleConfirmPayment = async (orderId: string) => {
     setUpdating(orderId);
     try {
-      // Update payment status to captured via API
-      const response = await fetch(`/api/orders/${orderId}/payment`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: "captured" }),
-      });
+      const response = await ordersApi.updatePaymentStatus(orderId, "captured", user?.id);
 
-      if (response.ok) {
+      if (response.success) {
         await fetchOrders();
         if (selectedOrder?.id === orderId) {
           const orderResponse = await ordersApi.getById(orderId);

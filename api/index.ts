@@ -2975,20 +2975,25 @@ function createApp() {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
 
-      const { status } = req.body;
+      const { status, notes } = req.body;
+      const changedBy = req.headers['x-user-id'] as string || 'admin';
       const now = new Date();
       const order = result[0];
       const previousStatus = order.status;
 
-      const newHistory = [...(order.statusHistory || []), {
+      console.log(`[Order Update] Updating order ${req.params.id} from ${previousStatus} to ${status} by ${changedBy}`);
+
+      const currentHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+      const newHistory = [...currentHistory, {
         status,
         changedAt: now.toISOString(),
-        changedBy: 'admin',
+        changedBy,
+        notes: notes || `Status updated from ${previousStatus} to ${status}`
       }];
 
       await pgDb.update(ordersTable)
         .set({
-          status,
+          status: status as any,
           statusHistory: newHistory,
           updatedAt: now
         })
@@ -3140,10 +3145,19 @@ function createApp() {
       const order = orderResult[0];
       const now = new Date();
 
-      // Update order payment status
+      // Update order payment status and history
+      const changedBy = req.headers['x-user-id'] as string || 'admin';
+      const newHistory = [...(order.statusHistory as any[] || []), {
+        status: order.status,
+        changedAt: now.toISOString(),
+        changedBy,
+        notes: `Payment status updated to ${status}`
+      }];
+
       await pgDb.update(ordersTable)
         .set({
           paymentStatus: status as any,
+          statusHistory: newHistory,
           updatedAt: now
         })
         .where(eq(ordersTable.id, id));
@@ -3163,20 +3177,22 @@ function createApp() {
             })
             .where(eq(paymentsTable.orderId, id));
         } else {
-          // Create new payment record for COD
-          await pgDb.insert(paymentsTable).values({
-            id: `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            orderId: id,
-            orderNumber: order.orderNumber,
-            userId: order.userId || 'guest',
-            amount: parseFloat(String(order.total)),
-            currency: 'AED',
-            paymentMethod: order.paymentMethod || 'cod',
-            status: 'captured',
-            capturedAt: now,
-            createdAt: now,
-            updatedAt: now,
-          });
+          // Create new payment record for COD/Manual
+          try {
+            await pgDb.insert(paymentsTable).values({
+              id: `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              orderId: id,
+              orderNumber: order.orderNumber,
+              amount: String(order.total),
+              currency: 'AED',
+              method: (order.paymentMethod as any) || 'cod',
+              status: 'captured',
+              createdAt: now,
+              updatedAt: now,
+            });
+          } catch (insertError) {
+            console.error('[Payment Insert Error]', insertError);
+          }
         }
 
         console.log(`[Payment Confirmed] Order ${order.orderNumber} payment marked as captured`);

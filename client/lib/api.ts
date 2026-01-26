@@ -347,6 +347,18 @@ export const ordersApi = {
     }
   },
 
+  updatePaymentStatus: async (id: string, status: string, userId?: string): Promise<ApiResponse<Order>> => {
+    const headers: Record<string, string> = {};
+    if (userId) {
+      headers["x-user-id"] = userId;
+    }
+    return fetchApi<Order>(`/orders/${id}/payment`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ status }),
+    });
+  },
+
   delete: (id: string) =>
     fetchApi<null>(`/orders/${id}`, { method: "DELETE" }),
 
