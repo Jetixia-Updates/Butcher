@@ -195,13 +195,13 @@ const ORDER_STATUSES: { value: OrderStatus | "all"; labelKey: keyof typeof trans
 ];
 
 const STATUS_ACTIONS: Record<OrderStatus, (OrderStatus | "assign_driver")[]> = {
-  pending: ["confirmed", "cancelled"],
-  confirmed: ["processing", "cancelled"],
-  processing: ["ready_for_pickup", "cancelled"],
+  pending: ["confirmed", "processing", "ready_for_pickup", "cancelled"],
+  confirmed: ["processing", "ready_for_pickup", "cancelled"],
+  processing: ["ready_for_pickup", "out_for_delivery", "delivered", "cancelled"],
   ready_for_pickup: ["assign_driver", "out_for_delivery", "delivered", "cancelled"],
-  out_for_delivery: ["delivered", "cancelled"],
-  delivered: [],
-  cancelled: [],
+  out_for_delivery: ["delivered", "ready_for_pickup", "cancelled"],
+  delivered: ["refunded"],
+  cancelled: ["pending"],
   refunded: [],
 };
 
@@ -251,7 +251,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
 
   const handleStatusUpdate = async (orderId: string, newStatus: OrderStatus | "assign_driver") => {
     console.log(`[OrdersTab] handleStatusUpdate called: orderId=${orderId}, newStatus=${newStatus}, user=${user?.id}`);
-    
+
     if (!user?.id) {
       console.error(`[OrdersTab] ❌ No user ID available. Cannot update order.`);
       toast({
@@ -261,12 +261,12 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       });
       return;
     }
-    
+
     // Handle special "assign_driver" action - navigate to delivery tab
     if (newStatus === "assign_driver") {
       setUpdating(orderId);
       const response = await ordersApi.updateStatus(orderId, "ready_for_pickup", user.id);
-      
+
       if (response.success) {
         toast({
           title: "Status Updated",
@@ -278,7 +278,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
         if (updatedOrders.success && updatedOrders.data) {
           setOrders(updatedOrders.data);
         }
-        
+
         // Close modal and navigate to delivery tab
         setSelectedOrder(null);
         if (onNavigate) {
@@ -314,7 +314,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
         if (updatedOrders.success && updatedOrders.data) {
           setOrders(updatedOrders.data);
         }
-        
+
         // Close modal immediately
         setSelectedOrder(null);
       } else {

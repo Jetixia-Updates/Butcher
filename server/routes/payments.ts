@@ -86,7 +86,7 @@ const getPayments: RequestHandler = async (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    
+
     const { userId, orderId, status, method, page = "1", limit = "20", startDate, endDate } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
@@ -253,9 +253,24 @@ const processPayment: RequestHandler = async (req, res) => {
 
       if (!gatewayResult.success) {
         // Update order payment status
-        await db.update(orders)
-          .set({ paymentStatus: "failed", updatedAt: new Date() })
-          .where(eq(orders.id, orderId));
+        const ordersInDb = await db.select().from(orders).where(eq(orders.id, orderId));
+        if (ordersInDb.length > 0) {
+          let statusHistory = (ordersInDb[0].statusHistory as any[]) || [];
+          statusHistory.push({
+            status: ordersInDb[0].status,
+            changedBy: "system",
+            changedAt: new Date().toISOString(),
+            notes: `Payment failed: ${gatewayResult.error || "Decline"}`
+          });
+
+          await db.update(orders)
+            .set({
+              paymentStatus: "failed",
+              statusHistory,
+              updatedAt: new Date()
+            })
+            .where(eq(orders.id, orderId));
+        }
 
         const response: ApiResponse<null> = {
           success: false,
@@ -263,7 +278,7 @@ const processPayment: RequestHandler = async (req, res) => {
         };
         return res.status(400).json(response);
       }
-      
+
       gatewayTransactionId = gatewayResult.transactionId;
     }
 
@@ -306,12 +321,24 @@ const processPayment: RequestHandler = async (req, res) => {
     }
 
     // Update order
-    await db.update(orders)
-      .set({
-        paymentStatus: payment.status,
-        updatedAt: new Date(),
-      })
-      .where(eq(orders.id, orderId));
+    const ordersInDb = await db.select().from(orders).where(eq(orders.id, orderId));
+    if (ordersInDb.length > 0) {
+      let statusHistory = (ordersInDb[0].statusHistory as any[]) || [];
+      statusHistory.push({
+        status: ordersInDb[0].status,
+        changedBy: "system",
+        changedAt: new Date().toISOString(),
+        notes: `Payment status updated to ${payment.status} via ${method}`
+      });
+
+      await db.update(orders)
+        .set({
+          paymentStatus: payment.status,
+          statusHistory,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, orderId));
+    }
 
     const response: ApiResponse<typeof payment> = {
       success: true,
@@ -404,13 +431,26 @@ const refundPayment: RequestHandler = async (req, res) => {
       .returning();
 
     // Update order
-    await db.update(orders)
-      .set({
-        paymentStatus: newStatus,
-        status: newStatus === "refunded" ? "refunded" : undefined,
-        updatedAt: new Date(),
-      })
-      .where(eq(orders.id, payment.orderId));
+    const ordersInDb = await db.select().from(orders).where(eq(orders.id, payment.orderId));
+    if (ordersInDb.length > 0) {
+      const currentOrder = ordersInDb[0];
+      let statusHistory = (currentOrder.statusHistory as any[]) || [];
+      statusHistory.push({
+        status: newStatus === "refunded" ? "refunded" : currentOrder.status,
+        changedBy: processedBy,
+        changedAt: new Date().toISOString(),
+        notes: `Refund processed: AED ${amount.toFixed(2)}. Reason: ${reason}`
+      });
+
+      await db.update(orders)
+        .set({
+          paymentStatus: newStatus,
+          status: newStatus === "refunded" ? "refunded" : undefined,
+          statusHistory,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, payment.orderId));
+    }
 
     const response: ApiResponse<typeof updated> = {
       success: true,
@@ -516,12 +556,25 @@ const capturePayment: RequestHandler = async (req, res) => {
       .returning();
 
     // Update order
-    await db.update(orders)
-      .set({
-        paymentStatus: "captured",
-        updatedAt: new Date(),
-      })
-      .where(eq(orders.id, payment.orderId));
+    const ordersInDb = await db.select().from(orders).where(eq(orders.id, payment.orderId));
+    if (ordersInDb.length > 0) {
+      const currentOrder = ordersInDb[0];
+      let statusHistory = (currentOrder.statusHistory as any[]) || [];
+      statusHistory.push({
+        status: currentOrder.status,
+        changedBy: "admin",
+        changedAt: new Date().toISOString(),
+        notes: "Payment captured manually"
+      });
+
+      await db.update(orders)
+        .set({
+          paymentStatus: "captured",
+          statusHistory,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, payment.orderId));
+    }
 
     const response: ApiResponse<typeof updated> = {
       success: true,

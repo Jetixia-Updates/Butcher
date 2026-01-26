@@ -1084,25 +1084,35 @@ const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
       .returning();
 
     // Update order status based on delivery status
-    let orderStatus: string | null = null;
-    if (status === "delivered") {
-      orderStatus = "delivered";
-      await db.update(orders)
-        .set({
-          status: "delivered",
-          actualDeliveryAt: new Date(),
-          paymentStatus: "captured",
+    if (status === "delivered" || status === "in_transit" || status === "picked_up") {
+      const orderStatusValue = status === "delivered" ? "delivered" : "out_for_delivery";
+
+      // Fetch current order to get history
+      const currentOrder = await db.select().from(orders).where(eq(orders.id, tracking.orderId));
+      if (currentOrder.length > 0) {
+        let statusHistory = (currentOrder[0].statusHistory as any[]) || [];
+        statusHistory.push({
+          status: orderStatusValue,
+          changedBy: tracking.driverId || "driver",
+          changedAt: new Date().toISOString(),
+          notes: `Updated via delivery tracking: ${status}`
+        });
+
+        const updatePayload: any = {
+          status: orderStatusValue,
+          statusHistory,
           updatedAt: new Date(),
-        })
-        .where(eq(orders.id, tracking.orderId));
-    } else if (status === "in_transit" || status === "picked_up") {
-      orderStatus = "out_for_delivery";
-      await db.update(orders)
-        .set({
-          status: "out_for_delivery",
-          updatedAt: new Date(),
-        })
-        .where(eq(orders.id, tracking.orderId));
+        };
+
+        if (status === "delivered") {
+          updatePayload.actualDeliveryAt = new Date();
+          updatePayload.paymentStatus = "captured";
+        }
+
+        await db.update(orders)
+          .set(updatePayload)
+          .where(eq(orders.id, tracking.orderId));
+      }
     }
 
     // Create notification for user based on delivery status
@@ -1174,14 +1184,26 @@ const completeDelivery: RequestHandler = async (req, res) => {
       .returning();
 
     // Update order
-    await db.update(orders)
-      .set({
+    const currentOrder = await db.select().from(orders).where(eq(orders.id, tracking.orderId));
+    if (currentOrder.length > 0) {
+      let statusHistory = (currentOrder[0].statusHistory as any[]) || [];
+      statusHistory.push({
         status: "delivered",
-        actualDeliveryAt: new Date(),
-        paymentStatus: "captured",
-        updatedAt: new Date(),
-      })
-      .where(eq(orders.id, tracking.orderId));
+        changedBy: tracking.driverId || "driver",
+        changedAt: new Date().toISOString(),
+        notes: notes || "Delivery completed with proof"
+      });
+
+      await db.update(orders)
+        .set({
+          status: "delivered",
+          statusHistory,
+          actualDeliveryAt: new Date(),
+          paymentStatus: "captured",
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, tracking.orderId));
+    }
 
     // Create notification for user with driver notes
     const orderResult = await db.select().from(orders).where(eq(orders.id, tracking.orderId));

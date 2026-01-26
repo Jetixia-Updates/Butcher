@@ -778,7 +778,7 @@ const updateOrderStatus: RequestHandler = async (req, res) => {
     console.log(`[UpdateStatus] Database updated successfully for order ${id}`);
 
     const updatedOrderResult = await db.select().from(orders).where(eq(orders.id, id));
-    
+
     if (updatedOrderResult.length === 0) {
       console.error(`[UpdateStatus] ❌ Updated order not found after update: ${id}`);
       throw new Error(`Failed to retrieve updated order ${id}`);
@@ -984,9 +984,17 @@ const updatePaymentStatus: RequestHandler = async (req, res) => {
     }
 
     const now = new Date();
+    const statusHistory = (order.statusHistory as any[]) || [];
+    statusHistory.push({
+      status: order.status, // This should probably be paymentStatus, but following the instruction
+      changedBy: "admin",
+      changedAt: now.toISOString(),
+      notes: `Payment status updated to ${status}`
+    });
 
     await db.update(orders).set({
       paymentStatus: status,
+      statusHistory,
       updatedAt: now,
     }).where(eq(orders.id, id));
 
