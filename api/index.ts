@@ -5643,11 +5643,11 @@ function createApp() {
             .where(eq(ordersTable.id, orderId));
 
           // Create delivery status notification for customer
-          const deliveryMessages: Record<string, { en: string; ar: string }> = {
-            'picked_up': { en: 'Your order has been picked up by the driver', ar: 'تم استلام طلبك من قبل السائق' },
-            'in_transit': { en: 'Your order is on its way', ar: 'طلبك في الطريق إليك' },
-            'nearby': { en: 'Your driver is nearby and will arrive soon', ar: 'السائق قريب منك وسيصل قريباً' },
-            'delivered': { en: 'Your order has been delivered', ar: 'تم توصيل طلبك' },
+          const deliveryMessages: Record<string, { en: string; ar: string; type: string }> = {
+            'picked_up': { en: 'Your order has been picked up by the driver', ar: 'تم استلام طلبك من قبل السائق', type: 'order_processing' },
+            'in_transit': { en: 'Your order is on its way', ar: 'طلبك في الطريق إليك', type: 'order_shipped' },
+            'nearby': { en: 'Your driver is nearby and will arrive soon', ar: 'السائق قريب منك وسيصل قريباً', type: 'order_shipped' },
+            'delivered': { en: 'Your order has been delivered', ar: 'تم توصيل طلبك', type: 'order_delivered' },
           };
 
           // Special handling for 'assigned' status to include driver details
@@ -5658,7 +5658,7 @@ function createApp() {
               await pgDb.insert(inAppNotificationsTable).values({
                 id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 userId: String(order.userId),
-                type: 'driver_assigned',
+                type: 'order_confirmed',
                 title: 'Driver Assigned to Your Order',
                 titleAr: 'تم تعيين سائق لطلبك',
                 message: `Driver: ${driverName} | Mobile: ${driverMobile}`,
@@ -5680,7 +5680,7 @@ function createApp() {
               await pgDb.insert(inAppNotificationsTable).values({
                 id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 userId: String(order.userId),
-                type: `delivery_${status}`,
+                type: deliveryMsg.type as any,
                 title: status === 'delivered' ? 'Order Delivered!' : 'Delivery Update',
                 titleAr: status === 'delivered' ? 'تم التوصيل!' : 'تحديث التوصيل',
                 message: `${deliveryMsg.en}. Order #${order.orderNumber}`,
@@ -6171,7 +6171,23 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const allTracking = await pgDb.select().from(deliveryTrackingTable);
+      const { driverId, orderId, status } = req.query;
+
+      let allTracking = await pgDb.select().from(deliveryTrackingTable);
+
+      // Apply filters if provided
+      if (driverId) {
+        allTracking = allTracking.filter(t => t.driverId === driverId);
+      }
+      if (orderId) {
+        allTracking = allTracking.filter(t => t.orderId === orderId);
+      }
+      if (status) {
+        allTracking = allTracking.filter(t => t.status === status);
+      }
+
+      // Sort by creation date (newest first)
+      allTracking.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       // Enrich tracking with order details
       const enrichedTracking = await Promise.all(allTracking.map(async (tracking) => {
@@ -6200,6 +6216,7 @@ function createApp() {
           vatAmount: order ? Number(order.vatAmount) : 0,
           deliveryFee: order ? Number(order.deliveryFee) : 0,
           paymentMethod: order?.paymentMethod || 'cod',
+          userId: order?.userId,
         };
       }));
 

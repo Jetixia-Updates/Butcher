@@ -28,6 +28,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useNotifications, createUserOrderNotification, createUserDeliveryNotification, formatRelativeTime } from "@/context/NotificationContext";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
+import { useToast } from "@/hooks/use-toast";
 
 interface DeliveryOrder {
   id: string;
@@ -161,6 +162,7 @@ export default function DriverDashboardPage() {
   const navigate = useNavigate();
   const { user, loginAdmin, logout, isLoggedIn } = useAuth();
   const { language } = useLanguage();
+  const { toast } = useToast();
   const { notifications, unreadCount, addUserNotification, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const isRTL = language === "ar";
   const t = translations[language];
@@ -317,11 +319,28 @@ export default function DriverDashboardPage() {
       });
 
       if (response.ok) {
+        toast({
+          title: isRTL ? "تم التحديث" : "Status Updated",
+          description: isRTL
+            ? `تم تغيير حالة الطلب إلى ${getStatusLabel(nextStatus)}`
+            : `Order status changed to ${getStatusLabel(nextStatus)}`,
+        });
         await fetchDeliveries();
-        // Notifications are now sent server-side
+      } else {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        toast({
+          title: isRTL ? "فشل التحديث" : "Update Failed",
+          description: errorData.error || (isRTL ? "حدث خطأ أثناء تحديث الحالة" : "Failed to update order status"),
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Error updating status:", error);
+      toast({
+        title: isRTL ? "خطأ في الشبكة" : "Network Error",
+        description: isRTL ? "يرجى التحقق من الاتصال بالإنترنت" : "Please check your internet connection",
+        variant: "destructive",
+      });
     }
 
     setUpdating(null);
