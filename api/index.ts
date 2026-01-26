@@ -125,7 +125,7 @@ const stockMovementsTable = pgTable("stock_movements", {
 
 // Orders table
 const orderStatusEnum = pgEnum("order_status", [
-  "pending", "confirmed", "processing", "ready_for_pickup", 
+  "pending", "confirmed", "processing", "ready_for_pickup",
   "out_for_delivery", "delivered", "cancelled", "refunded"
 ]);
 const paymentStatusEnum = pgEnum("payment_status", [
@@ -1007,9 +1007,9 @@ async function validateStockAvailability(
   db: typeof pgDb
 ): Promise<{ valid: boolean; error?: string; insufficientItems?: Array<{ productId: string; productName: string; available: number; requested: number }> }> {
   if (!db) return { valid: false, error: 'Database not available' };
-  
+
   const insufficientItems: Array<{ productId: string; productName: string; available: number; requested: number }> = [];
-  
+
   for (const item of items) {
     const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
     if (stockResult.length === 0) {
@@ -1022,10 +1022,10 @@ async function validateStockAvailability(
       });
       continue;
     }
-    
+
     const stockItem = stockResult[0];
     const available = parseFloat(stockItem.availableQuantity);
-    
+
     if (available < item.quantity) {
       insufficientItems.push({
         productId: item.productId,
@@ -1035,12 +1035,12 @@ async function validateStockAvailability(
       });
     }
   }
-  
+
   if (insufficientItems.length > 0) {
     const errorItems = insufficientItems.map(i => `${i.productName}: ${i.available} available, ${i.requested} requested`).join('; ');
     return { valid: false, error: `Insufficient stock: ${errorItems}`, insufficientItems };
   }
-  
+
   return { valid: true };
 }
 
@@ -1055,21 +1055,21 @@ async function reserveStockForOrder(
   db: typeof pgDb
 ): Promise<{ success: boolean; error?: string }> {
   if (!db) return { success: false, error: 'Database not available' };
-  
+
   const now = new Date();
-  
+
   for (const item of items) {
     const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
     if (stockResult.length === 0) continue; // Skip if no stock record
-    
+
     const stockItem = stockResult[0];
     const currentQuantity = parseFloat(stockItem.quantity);
     const currentReserved = parseFloat(stockItem.reservedQuantity);
     const currentAvailable = parseFloat(stockItem.availableQuantity);
-    
+
     const newReserved = currentReserved + item.quantity;
     const newAvailable = currentAvailable - item.quantity;
-    
+
     // Update stock
     await db.update(stockTable)
       .set({
@@ -1078,7 +1078,7 @@ async function reserveStockForOrder(
         updatedAt: now,
       })
       .where(eq(stockTable.productId, item.productId));
-    
+
     // Record movement
     await db.insert(stockMovementsTable).values({
       id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1094,7 +1094,7 @@ async function reserveStockForOrder(
       createdAt: now,
     });
   }
-  
+
   return { success: true };
 }
 
@@ -1108,25 +1108,25 @@ async function confirmStockForDeliveredOrder(
   db: typeof pgDb
 ): Promise<{ success: boolean; error?: string }> {
   if (!db) return { success: false, error: 'Database not available' };
-  
+
   const now = new Date();
-  
+
   // Get order items
   const orderItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
-  
+
   for (const item of orderItems) {
     const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
     if (stockResult.length === 0) continue;
-    
+
     const stockItem = stockResult[0];
     const currentQuantity = parseFloat(stockItem.quantity);
     const currentReserved = parseFloat(stockItem.reservedQuantity);
     const itemQty = parseFloat(item.quantity);
-    
+
     const newQuantity = currentQuantity - itemQty;
     const newReserved = Math.max(0, currentReserved - itemQty);
     const newAvailable = newQuantity - newReserved;
-    
+
     // Update stock - reduce total quantity
     await db.update(stockTable)
       .set({
@@ -1136,7 +1136,7 @@ async function confirmStockForDeliveredOrder(
         updatedAt: now,
       })
       .where(eq(stockTable.productId, item.productId));
-    
+
     // Record movement as "out" (sold)
     await db.insert(stockMovementsTable).values({
       id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1151,13 +1151,13 @@ async function confirmStockForDeliveredOrder(
       performedBy: 'system',
       createdAt: now,
     });
-    
+
     // Check for low stock alert
     if (newAvailable <= stockItem.lowStockThreshold) {
       console.log(`[Low Stock Alert] Product ${item.productId} is low on stock: ${newAvailable} remaining`);
     }
   }
-  
+
   return { success: true };
 }
 
@@ -1170,24 +1170,24 @@ async function releaseStockForCancelledOrder(
   db: typeof pgDb
 ): Promise<{ success: boolean; error?: string }> {
   if (!db) return { success: false, error: 'Database not available' };
-  
+
   const now = new Date();
-  
+
   // Get order items
   const orderItems = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
-  
+
   for (const item of orderItems) {
     const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
     if (stockResult.length === 0) continue;
-    
+
     const stockItem = stockResult[0];
     const currentQuantity = parseFloat(stockItem.quantity);
     const currentReserved = parseFloat(stockItem.reservedQuantity);
     const itemQty = parseFloat(item.quantity);
-    
+
     const newReserved = Math.max(0, currentReserved - itemQty);
     const newAvailable = currentQuantity - newReserved;
-    
+
     // Update stock - release reserved, restore available
     await db.update(stockTable)
       .set({
@@ -1196,7 +1196,7 @@ async function releaseStockForCancelledOrder(
         updatedAt: now,
       })
       .where(eq(stockTable.productId, item.productId));
-    
+
     // Record movement as "released"
     await db.insert(stockMovementsTable).values({
       id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1212,7 +1212,7 @@ async function releaseStockForCancelledOrder(
       createdAt: now,
     });
   }
-  
+
   return { success: true };
 }
 
@@ -1228,14 +1228,14 @@ async function receiveStockFromPurchaseOrder(
   db: typeof pgDb
 ): Promise<{ success: boolean; error?: string; totalValue: number }> {
   if (!db) return { success: false, error: 'Database not available', totalValue: 0 };
-  
+
   const now = new Date();
   let totalValue = 0;
-  
+
   for (const item of items) {
     // Check if stock record exists
     const stockResult = await db.select().from(stockTable).where(eq(stockTable.productId, item.productId));
-    
+
     if (stockResult.length === 0) {
       // Create new stock record for this product
       await db.insert(stockTable).values({
@@ -1249,7 +1249,7 @@ async function receiveStockFromPurchaseOrder(
         reorderQuantity: '50',
         updatedAt: now,
       });
-      
+
       // Record movement as "in"
       await db.insert(stockMovementsTable).values({
         id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1268,10 +1268,10 @@ async function receiveStockFromPurchaseOrder(
       const stockItem = stockResult[0];
       const currentQuantity = parseFloat(stockItem.quantity);
       const currentAvailable = parseFloat(stockItem.availableQuantity);
-      
+
       const newQuantity = currentQuantity + item.quantity;
       const newAvailable = currentAvailable + item.quantity;
-      
+
       // Update stock - increase quantity
       await db.update(stockTable)
         .set({
@@ -1280,7 +1280,7 @@ async function receiveStockFromPurchaseOrder(
           updatedAt: now,
         })
         .where(eq(stockTable.productId, item.productId));
-      
+
       // Record movement as "in"
       await db.insert(stockMovementsTable).values({
         id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1296,10 +1296,10 @@ async function receiveStockFromPurchaseOrder(
         createdAt: now,
       });
     }
-    
+
     totalValue += item.quantity * item.unitCost;
   }
-  
+
   console.log(`[Inventory Cycle] Received ${items.length} items from PO ${purchaseOrderNumber}, total value: ${totalValue} AED`);
   return { success: true, totalValue };
 }
@@ -1319,15 +1319,15 @@ async function createSaleTransaction(
   db: typeof pgDb
 ): Promise<{ success: boolean; transactionId?: string; error?: string }> {
   if (!db) return { success: false, error: 'Database not available' };
-  
+
   const now = new Date();
   const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
+
   // Determine account based on payment method
   let accountName = 'Bank Account';
   if (paymentMethod === 'cod') accountName = 'COD Collections';
   else if (paymentMethod === 'card') accountName = 'Card Payments';
-  
+
   await db.insert(financeTransactionsTable).values({
     id: transactionId,
     type: 'sale',
@@ -1354,7 +1354,7 @@ async function createSaleTransaction(
     createdAt: now,
     updatedAt: now,
   });
-  
+
   console.log(`[Finance Cycle] Created sale transaction ${transactionId} for order ${orderNumber}`);
   return { success: true, transactionId };
 }
@@ -1374,10 +1374,10 @@ async function createPurchaseTransaction(
   db: typeof pgDb
 ): Promise<{ success: boolean; transactionId?: string; error?: string }> {
   if (!db) return { success: false, error: 'Database not available' };
-  
+
   const now = new Date();
   const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
+
   await db.insert(financeTransactionsTable).values({
     id: transactionId,
     type: 'purchase',
@@ -1404,7 +1404,7 @@ async function createPurchaseTransaction(
     createdAt: now,
     updatedAt: now,
   });
-  
+
   console.log(`[Finance Cycle] Created purchase transaction ${transactionId} for PO ${purchaseOrderNumber}`);
   return { success: true, transactionId };
 }
@@ -1421,10 +1421,10 @@ async function createRefundTransaction(
   db: typeof pgDb
 ): Promise<{ success: boolean; transactionId?: string; error?: string }> {
   if (!db) return { success: false, error: 'Database not available' };
-  
+
   const now = new Date();
   const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
+
   await db.insert(financeTransactionsTable).values({
     id: transactionId,
     type: 'refund',
@@ -1449,7 +1449,7 @@ async function createRefundTransaction(
     createdAt: now,
     updatedAt: now,
   });
-  
+
   console.log(`[Finance Cycle] Created refund transaction ${transactionId} for order ${orderNumber}`);
   return { success: true, transactionId };
 }
@@ -1462,9 +1462,9 @@ let app: express.Express | null = null;
 
 function createApp() {
   if (app) return app;
-  
+
   // No seedData() - all data comes from real database
-  
+
   app = express();
   app.use(cors());
   app.use(express.json());
@@ -1479,7 +1479,7 @@ function createApp() {
   app.get('/api/health', async (req, res) => {
     const dbConnected = isDatabaseAvailable();
     let dbTest = false;
-    
+
     if (dbConnected && pgDb) {
       try {
         // Test query
@@ -1489,7 +1489,7 @@ function createApp() {
         console.error('[Health Check DB Error]', e);
       }
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -1509,13 +1509,13 @@ function createApp() {
   app.post('/api/users/login', async (req, res) => {
     try {
       const { username, password } = req.body;
-      
+
       if (!username || !password) {
         return res.status(400).json({ success: false, error: 'Username and password are required' });
       }
-      
+
       let user: User | undefined;
-      
+
       // Try database first if available
       if (isDatabaseAvailable() && pgDb) {
         try {
@@ -1525,7 +1525,7 @@ function createApp() {
               ilike(usersTable.email, username)
             )
           ).limit(1);
-          
+
           if (dbUsers.length > 0) {
             const dbUser = dbUsers[0];
             user = {
@@ -1576,7 +1576,7 @@ function createApp() {
       const token = generateToken();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const sessionId = `session_${Date.now()}`;
-      
+
       // Store session in database
       if (isDatabaseAvailable() && pgDb) {
         try {
@@ -1591,10 +1591,10 @@ function createApp() {
           console.error('[Session DB Error]', e);
         }
       }
-      
+
       // Also store in memory for fallback
       sessions.set(token, { userId: user.id, expiresAt: expiresAt.toISOString() });
-      
+
       // Update last login in DB if available
       if (isDatabaseAvailable() && pgDb) {
         try {
@@ -1620,26 +1620,40 @@ function createApp() {
     }
   });
 
-  // Admin login
+  // Admin/Staff login
   app.post('/api/users/admin-login', async (req, res) => {
     try {
-      const { username, password } = req.body;
-      
+      let { username, password } = req.body;
+
       if (!username || !password) {
         return res.status(400).json({ success: false, error: 'Username and password are required' });
       }
 
+      // Trim whitespace
+      username = username.trim();
+      password = password.trim();
+
       let user: User | undefined;
-      
+
       // Try database first if available
       if (isDatabaseAvailable() && pgDb) {
         try {
+          // Find user by username OR email
           const dbUsers = await pgDb.select().from(usersTable).where(
-            ilike(usersTable.username, username)
+            or(
+              ilike(usersTable.username, username),
+              ilike(usersTable.email, username)
+            )
           ).limit(1);
-          
-          if (dbUsers.length > 0 && dbUsers[0].role === 'admin') {
+
+          // Allow admin, staff, and delivery roles
+          if (dbUsers.length > 0 && ['admin', 'staff', 'delivery'].includes(dbUsers[0].role)) {
             const dbUser = dbUsers[0];
+
+            if (!dbUser.isActive) {
+              return res.status(401).json({ success: false, error: 'Account is deactivated' });
+            }
+
             user = {
               id: dbUser.id,
               username: dbUser.username,
@@ -1671,14 +1685,18 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      if (!user || user.password !== password) {
-        return res.status(401).json({ success: false, error: 'Invalid admin credentials' });
+      if (!user) {
+        return res.status(401).json({ success: false, error: 'Invalid staff credentials or insufficient permissions' });
+      }
+
+      if (user.password !== password) {
+        return res.status(401).json({ success: false, error: 'Invalid staff credentials' });
       }
 
       const token = generateToken();
       const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
       const sessionId = `session_${Date.now()}`;
-      
+
       // Store session in database
       if (isDatabaseAvailable() && pgDb) {
         try {
@@ -1693,10 +1711,10 @@ function createApp() {
           console.error('[Admin Session DB Error]', e);
         }
       }
-      
+
       // Also store in memory for fallback
       sessions.set(token, { userId: user.id, expiresAt: expiresAt.toISOString() });
-      
+
       if (isDatabaseAvailable() && pgDb) {
         try {
           await pgDb.update(usersTable)
@@ -1725,7 +1743,7 @@ function createApp() {
   app.post('/api/users', async (req, res) => {
     try {
       const { username, email, mobile, password, firstName, familyName, emirate, address, deliveryAddress } = req.body;
-      
+
       if (!username || !email || !mobile || !password || !firstName || !familyName || !emirate) {
         return res.status(400).json({ success: false, error: 'All fields are required' });
       }
@@ -1737,7 +1755,7 @@ function createApp() {
 
       const normalizedMobile = mobile.replace(/\s/g, '');
       const userId = `user_${Date.now()}`;
-      
+
       // Use database if available
       if (isDatabaseAvailable() && pgDb) {
         try {
@@ -1902,30 +1920,30 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const { category, search, featured } = req.query;
       let result = await pgDb.select().from(productsTable);
-      
+
       // Filter by category
       if (category && category !== 'all') {
         result = result.filter(p => p.category.toLowerCase() === (category as string).toLowerCase());
       }
-      
+
       // Search by name/description
       if (search) {
         const q = (search as string).toLowerCase();
-        result = result.filter(p => 
-          p.name.toLowerCase().includes(q) || 
+        result = result.filter(p =>
+          p.name.toLowerCase().includes(q) ||
           (p.nameAr && p.nameAr.toLowerCase().includes(q)) ||
           (p.description && p.description.toLowerCase().includes(q))
         );
       }
-      
+
       // Filter by featured
       if (featured === 'true') {
         result = result.filter(p => p.isFeatured);
       }
-      
+
       // Convert to API format
       const products = result.map(p => ({
         id: p.id,
@@ -1951,7 +1969,7 @@ function createApp() {
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
       }));
-      
+
       res.json({ success: true, data: products });
     } catch (error) {
       console.error('[Products Error]', error);
@@ -1965,12 +1983,12 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(productsTable).where(eq(productsTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Product not found' });
       }
-      
+
       const p = result[0];
       const product = {
         id: p.id,
@@ -1996,7 +2014,7 @@ function createApp() {
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
       };
-      
+
       res.json({ success: true, data: product });
     } catch (error) {
       console.error('[Product Error]', error);
@@ -2010,10 +2028,10 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const productId = `prod_${Date.now()}`;
       const now = new Date();
-      
+
       const newProduct = {
         id: productId,
         name: req.body.name,
@@ -2039,9 +2057,9 @@ function createApp() {
         createdAt: now,
         updatedAt: now,
       };
-      
+
       await pgDb.insert(productsTable).values(newProduct);
-      
+
       // Create stock item for new product
       const stockId = `stock_${productId}`;
       await pgDb.insert(stockTable).values({
@@ -2056,9 +2074,9 @@ function createApp() {
         lastRestockedAt: now,
         updatedAt: now,
       });
-      
-      res.status(201).json({ 
-        success: true, 
+
+      res.status(201).json({
+        success: true,
         data: {
           ...newProduct,
           price: parseFloat(newProduct.price),
@@ -2083,15 +2101,15 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const existing = await pgDb.select().from(productsTable).where(eq(productsTable.id, req.params.id));
       if (existing.length === 0) {
         return res.status(404).json({ success: false, error: 'Product not found' });
       }
-      
+
       const now = new Date();
       const updateData: Record<string, unknown> = { updatedAt: now };
-      
+
       if (req.body.name !== undefined) updateData.name = req.body.name;
       if (req.body.nameAr !== undefined) updateData.nameAr = req.body.nameAr;
       if (req.body.sku !== undefined) updateData.sku = req.body.sku;
@@ -2112,15 +2130,15 @@ function createApp() {
       if (req.body.isFeatured !== undefined) updateData.isFeatured = req.body.isFeatured;
       if (req.body.isPremium !== undefined) updateData.isPremium = req.body.isPremium;
       if (req.body.tags !== undefined) updateData.tags = req.body.tags;
-      
+
       await pgDb.update(productsTable).set(updateData).where(eq(productsTable.id, req.params.id));
-      
+
       // Fetch updated product
       const updated = await pgDb.select().from(productsTable).where(eq(productsTable.id, req.params.id));
       const p = updated[0];
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           id: p.id,
           name: p.name,
@@ -2158,17 +2176,17 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const existing = await pgDb.select().from(productsTable).where(eq(productsTable.id, req.params.id));
       if (existing.length === 0) {
         return res.status(404).json({ success: false, error: 'Product not found' });
       }
-      
+
       // Delete stock first
       await pgDb.delete(stockTable).where(eq(stockTable.productId, req.params.id));
       // Delete product
       await pgDb.delete(productsTable).where(eq(productsTable.id, req.params.id));
-      
+
       res.json({ success: true, message: 'Product deleted successfully' });
     } catch (error) {
       console.error('[Delete Product Error]', error);
@@ -2185,12 +2203,12 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const monthStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      
+
       // Get all orders from database
       const allOrders = await pgDb.select().from(ordersTable);
       const todayOrders = allOrders.filter(o => new Date(o.createdAt) >= todayStart);
@@ -2202,15 +2220,15 @@ function createApp() {
       const monthRevenue = monthOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
 
       const pendingOrders = allOrders.filter(o => o.status === 'pending').length;
-      
+
       // Get customer count from database
       const allUsers = await pgDb.select().from(usersTable).where(eq(usersTable.role, 'customer'));
       const totalCustomers = allUsers.length;
-      
+
       // Get products for name lookup
       const products = await pgDb.select().from(productsTable);
       const productMap = new Map(products.map(p => [p.id, p]));
-      
+
       // Low stock items from database
       const stockData = await pgDb.select().from(stockTable);
       const lowStockItems = stockData
@@ -2270,21 +2288,21 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const period = (req.query.period as string) || 'week';
       const days = period === 'today' ? 1 : period === 'week' ? 7 : period === 'month' ? 30 : 365;
-      
+
       const allOrders = await pgDb.select().from(ordersTable);
       const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
       const filteredOrders = allOrders.filter(o => new Date(o.createdAt) >= startDate);
-      
+
       // Group by date
       const dateMap = new Map<string, { revenue: number; orders: number }>();
       for (let i = 0; i < Math.min(days, 14); i++) {
         const date = new Date(Date.now() - (days - 1 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         dateMap.set(date, { revenue: 0, orders: 0 });
       }
-      
+
       filteredOrders.forEach(o => {
         const date = new Date(o.createdAt).toISOString().split('T')[0];
         const existing = dateMap.get(date);
@@ -2293,13 +2311,13 @@ function createApp() {
           existing.orders += 1;
         }
       });
-      
+
       const data = Array.from(dateMap.entries()).map(([date, stats]) => ({
         date,
         revenue: Math.round(stats.revenue * 100) / 100,
         orders: stats.orders,
       }));
-      
+
       res.json({ success: true, data });
     } catch (error) {
       console.error('[Revenue Chart Error]', error);
@@ -2313,7 +2331,7 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const products = await pgDb.select().from(productsTable).limit(10);
       const data = products.map((p, i) => ({
         productId: p.id,
@@ -2321,7 +2339,7 @@ function createApp() {
         sales: (5000 - i * 500) + Math.random() * 200, // TODO: Calculate from actual order items
         quantity: 50 - i * 5,
       }));
-      
+
       res.json({ success: true, data });
     } catch (error) {
       console.error('[Top Products Error]', error);
@@ -2335,20 +2353,20 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const allOrders = await pgDb.select().from(ordersTable);
       const statusCounts: Record<string, number> = {};
-      
+
       allOrders.forEach(o => {
         statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
       });
-      
+
       const data = Object.entries(statusCounts).map(([status, count]) => ({
         status,
         count,
         percentage: allOrders.length > 0 ? Math.round((count / allOrders.length) * 100) : 0,
       }));
-      
+
       res.json({ success: true, data });
     } catch (error) {
       console.error('[Orders By Status Error]', error);
@@ -2362,10 +2380,10 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const allOrders = await pgDb.select().from(ordersTable);
       const emirateData: Record<string, { orders: number; revenue: number }> = {};
-      
+
       allOrders.forEach(o => {
         const deliveryAddr = o.deliveryAddress as { emirate?: string } || {};
         const emirate = deliveryAddr.emirate || 'Unknown';
@@ -2375,13 +2393,13 @@ function createApp() {
         emirateData[emirate].orders += 1;
         emirateData[emirate].revenue += parseFloat(String(o.total));
       });
-      
+
       const data = Object.entries(emirateData).map(([emirate, stats]) => ({
         emirate,
         orders: stats.orders,
         revenue: Math.round(stats.revenue * 100) / 100,
       }));
-      
+
       res.json({ success: true, data });
     } catch (error) {
       console.error('[Sales By Emirate Error]', error);
@@ -2395,10 +2413,10 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const allOrders = await pgDb.select().from(ordersTable);
       const methodData: Record<string, { count: number; amount: number }> = {};
-      
+
       allOrders.forEach(o => {
         const method = o.paymentMethod || 'unknown';
         if (!methodData[method]) {
@@ -2407,14 +2425,14 @@ function createApp() {
         methodData[method].count += 1;
         methodData[method].amount += parseFloat(String(o.total));
       });
-      
+
       const data = Object.entries(methodData).map(([method, stats]) => ({
         method,
         count: stats.count,
         amount: Math.round(stats.amount * 100) / 100,
         percentage: allOrders.length > 0 ? Math.round((stats.count / allOrders.length) * 100) : 0,
       }));
-      
+
       res.json({ success: true, data });
     } catch (error) {
       console.error('[Payment Methods Error]', error);
@@ -2432,13 +2450,13 @@ function createApp() {
       // Get today's orders
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      
+
       const allOrders = await pgDb.select().from(ordersTable);
       const todayOrders = allOrders.filter(o => new Date(o.createdAt) >= todayStart);
 
       // Group orders by hour
       const hourlyData = Array.from({ length: 24 }, (_, hour) => ({ hour, orders: 0, revenue: 0 }));
-      
+
       todayOrders.forEach(order => {
         const orderHour = new Date(order.createdAt).getHours();
         hourlyData[orderHour].orders += 1;
@@ -2451,7 +2469,7 @@ function createApp() {
         orders: h.orders,
         revenue: Math.round(h.revenue * 100) / 100,
       }));
-      
+
       res.json({ success: true, data });
     } catch (error) {
       console.error('[Hourly Orders Error]', error);
@@ -2470,7 +2488,7 @@ function createApp() {
       const last30Min = new Date(Date.now() - 30 * 60 * 1000);
       const recentOrders = allOrders.filter(o => new Date(o.createdAt) >= last30Min);
       const allUsers = await pgDb.select().from(usersTable);
-      
+
       res.json({
         success: true,
         data: {
@@ -2497,9 +2515,9 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       let allOrders = await pgDb.select().from(ordersTable);
-      
+
       // Filter by status if provided
       const status = req.query.status as string;
       if (status && status !== 'all') {
@@ -2508,7 +2526,7 @@ function createApp() {
 
       // Sort by date (newest first)
       allOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
+
       // Get order items for each order
       const orderItems = await pgDb.select().from(orderItemsTable);
       const orderItemsMap = new Map<string, typeof orderItems>();
@@ -2518,7 +2536,7 @@ function createApp() {
         }
         orderItemsMap.get(item.orderId)!.push(item);
       });
-      
+
       const formattedOrders = allOrders.map(o => ({
         id: o.id,
         orderNumber: o.orderNumber,
@@ -2553,7 +2571,7 @@ function createApp() {
         createdAt: o.createdAt.toISOString(),
         updatedAt: o.updatedAt.toISOString(),
       }));
-      
+
       res.json({ success: true, data: formattedOrders });
     } catch (error) {
       console.error('[Orders Error]', error);
@@ -2566,7 +2584,7 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const allOrders = await pgDb.select().from(ordersTable);
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
@@ -2597,15 +2615,15 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
-      
+
       const o = result[0];
       const orderItems = await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, o.id));
-      
+
       const formattedOrder = {
         id: o.id,
         orderNumber: o.orderNumber,
@@ -2640,7 +2658,7 @@ function createApp() {
         createdAt: o.createdAt.toISOString(),
         updatedAt: o.updatedAt.toISOString(),
       };
-      
+
       res.json({ success: true, data: formattedOrder });
     } catch (error) {
       console.error('[Order Error]', error);
@@ -2654,14 +2672,14 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
-      const { 
-        userId, 
-        items, 
-        addressId: providedAddressId, 
-        deliveryAddress: providedAddress, 
-        paymentMethod, 
-        deliveryNotes, 
+
+      const {
+        userId,
+        items,
+        addressId: providedAddressId,
+        deliveryAddress: providedAddress,
+        paymentMethod,
+        deliveryNotes,
         discountCode,
         discountAmount: providedDiscountAmount,
         deliveryFee: providedDeliveryFee,
@@ -2673,20 +2691,20 @@ function createApp() {
       } = req.body;
 
       if (!userId || !items || !items.length || !paymentMethod) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Missing required fields: userId, items, paymentMethod' 
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields: userId, items, paymentMethod'
         });
       }
 
       // Get user from database
       const userResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, userId));
       let user = userResult[0];
-      
+
       if (!user && !providedAddress) {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
-      
+
       // Get products from database for product names and SKUs
       const products = await pgDb.select().from(productsTable);
       const productMap = new Map(products.map(p => [p.id, p]));
@@ -2712,7 +2730,7 @@ function createApp() {
         // Use price from checkout if provided, otherwise fall back to database price
         const unitPrice = item.unitPrice !== undefined ? Number(item.unitPrice) : parseFloat(product.price);
         const totalPrice = unitPrice * item.quantity;
-        
+
         orderItemsData.push({
           id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           productId: product.id,
@@ -2750,19 +2768,19 @@ function createApp() {
       const discount = Number(providedDiscountAmount) || 0;
       const driverTip = Number(providedDriverTip) || 0;
       const isExpressDelivery = Boolean(providedIsExpressDelivery);
-      
+
       // Use subtotal from checkout if provided (which already has discounts on item prices)
       // Otherwise use calculated subtotal
       const subtotal = providedSubtotal !== undefined ? Number(providedSubtotal) : calculatedSubtotal;
-      
+
       // Use delivery fee from checkout if provided, otherwise use standard calculation
       const standardDeliveryFee = subtotal > 200 ? 0 : 15;
       const deliveryFee = providedDeliveryFee !== undefined ? Number(providedDeliveryFee) : standardDeliveryFee;
-      
+
       const vatRate = 0.05;
       // Use VAT from checkout if provided
       const vatAmount = providedVatAmount !== undefined ? Number(providedVatAmount) : (subtotal * vatRate);
-      
+
       // Use total from checkout if provided
       const total = providedTotal !== undefined ? Number(providedTotal) : (subtotal + deliveryFee + vatAmount + driverTip);
 
@@ -2951,38 +2969,38 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
-      
+
       const { status } = req.body;
       const now = new Date();
       const order = result[0];
       const previousStatus = order.status;
-      
+
       const newHistory = [...(order.statusHistory || []), {
         status,
         changedAt: now.toISOString(),
         changedBy: 'admin',
       }];
-      
+
       await pgDb.update(ordersTable)
-        .set({ 
-          status, 
+        .set({
+          status,
           statusHistory: newHistory,
-          updatedAt: now 
+          updatedAt: now
         })
         .where(eq(ordersTable.id, req.params.id));
-      
+
       // INVENTORY CYCLE: Handle stock movements based on status change (IAS 2 compliance)
       // FINANCE CYCLE: Create transactions for revenue recognition (IFRS 15 compliance)
       if (status === 'delivered' && previousStatus !== 'delivered') {
         // When order is delivered, confirm stock reduction (move from reserved to sold)
         await confirmStockForDeliveredOrder(req.params.id, order.orderNumber, pgDb);
         console.log(`[Inventory Cycle] Confirmed stock reduction for delivered order ${req.params.id}`);
-        
+
         // Create sale transaction for revenue recognition
         const total = parseFloat(order.total);
         const vatAmount = parseFloat(order.vatAmount);
@@ -3017,59 +3035,59 @@ function createApp() {
           console.log(`[Inventory Cycle] Released reserved stock for refunded order ${req.params.id}`);
         }
       }
-      
+
       // Fetch updated order
       const updated = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
-      
+
       res.json({ success: true, data: updated[0] });
 
       // Create notification for order status change (async, don't wait)
       try {
         const statusMessages: Record<string, { en: string; ar: string; titleEn: string; titleAr: string }> = {
-          confirmed: { 
-            en: 'Your order has been confirmed', 
+          confirmed: {
+            en: 'Your order has been confirmed',
             ar: 'تم تأكيد طلبك',
             titleEn: 'Order Confirmed',
             titleAr: 'تم تأكيد الطلب'
           },
-          processing: { 
-            en: 'Your order is being prepared', 
+          processing: {
+            en: 'Your order is being prepared',
             ar: 'جاري تحضير طلبك',
             titleEn: 'Order Processing',
             titleAr: 'جاري تحضير الطلب'
           },
-          ready_for_pickup: { 
-            en: 'Your order is ready for pickup/delivery', 
+          ready_for_pickup: {
+            en: 'Your order is ready for pickup/delivery',
             ar: 'طلبك جاهز للاستلام/التوصيل',
             titleEn: 'Order Ready',
             titleAr: 'الطلب جاهز'
           },
-          out_for_delivery: { 
-            en: 'Your order is on its way', 
+          out_for_delivery: {
+            en: 'Your order is on its way',
             ar: 'طلبك في الطريق إليك',
             titleEn: 'Out for Delivery',
             titleAr: 'في الطريق للتوصيل'
           },
-          delivered: { 
-            en: 'Your order has been delivered', 
+          delivered: {
+            en: 'Your order has been delivered',
             ar: 'تم توصيل طلبك',
             titleEn: 'Order Delivered',
             titleAr: 'تم التوصيل'
           },
-          cancelled: { 
-            en: 'Your order has been cancelled', 
+          cancelled: {
+            en: 'Your order has been cancelled',
             ar: 'تم إلغاء طلبك',
             titleEn: 'Order Cancelled',
             titleAr: 'تم إلغاء الطلب'
           },
-          refunded: { 
-            en: 'Your order has been refunded', 
+          refunded: {
+            en: 'Your order has been refunded',
             ar: 'تم استرداد مبلغ طلبك',
             titleEn: 'Order Refunded',
             titleAr: 'تم الاسترداد'
           },
         };
-        
+
         const statusMsg = statusMessages[status];
         if (statusMsg && order.userId) {
           await pgDb.insert(inAppNotificationsTable).values({
@@ -3104,37 +3122,37 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const { id } = req.params;
       const { status } = req.body;
-      
+
       // Validate payment status
       const validStatuses = ['pending', 'authorized', 'captured', 'failed', 'refunded', 'partially_refunded'];
       if (!validStatuses.includes(status)) {
         return res.status(400).json({ success: false, error: 'Invalid payment status' });
       }
-      
+
       const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, id));
       if (orderResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
-      
+
       const order = orderResult[0];
       const now = new Date();
-      
+
       // Update order payment status
       await pgDb.update(ordersTable)
-        .set({ 
+        .set({
           paymentStatus: status as any,
-          updatedAt: now 
+          updatedAt: now
         })
         .where(eq(ordersTable.id, id));
-      
+
       // If payment is captured, also update the payments table
       if (status === 'captured') {
         // Check if payment record exists for this order
         const existingPayment = await pgDb.select().from(paymentsTable).where(eq(paymentsTable.orderId, id));
-        
+
         if (existingPayment.length > 0) {
           // Update existing payment
           await pgDb.update(paymentsTable)
@@ -3160,14 +3178,14 @@ function createApp() {
             updatedAt: now,
           });
         }
-        
+
         console.log(`[Payment Confirmed] Order ${order.orderNumber} payment marked as captured`);
       }
-      
+
       // Fetch updated order
       const updated = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, id));
       const orderItems = await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id));
-      
+
       const formattedOrder = {
         id: updated[0].id,
         orderNumber: updated[0].orderNumber,
@@ -3192,11 +3210,11 @@ function createApp() {
         createdAt: updated[0].createdAt.toISOString(),
         updatedAt: updated[0].updatedAt.toISOString(),
       };
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: formattedOrder,
-        message: `Payment status updated to ${status}` 
+        message: `Payment status updated to ${status}`
       });
     } catch (error) {
       console.error('[Update Payment Status Error]', error);
@@ -3210,15 +3228,15 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(ordersTable).where(eq(ordersTable.orderNumber, req.params.orderNumber));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
-      
+
       const o = result[0];
       const orderItems = await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, o.id));
-      
+
       const formattedOrder = {
         id: o.id,
         orderNumber: o.orderNumber,
@@ -3250,7 +3268,7 @@ function createApp() {
         createdAt: o.createdAt.toISOString(),
         updatedAt: o.updatedAt.toISOString(),
       };
-      
+
       res.json({ success: true, data: formattedOrder });
     } catch (error) {
       console.error('[Order By Number Error]', error);
@@ -3269,23 +3287,23 @@ function createApp() {
       if (orderResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
-      
+
       const order = orderResult[0];
       if (['delivered', 'cancelled'].includes(order.status)) {
         return res.status(400).json({ success: false, error: 'Cannot delete delivered or already cancelled orders' });
       }
-      
+
       const newHistory = [...(order.statusHistory as any[] || []), {
         status: 'cancelled',
         changedAt: new Date().toISOString(),
         changedBy: 'admin',
       }];
-      
+
       const [updated] = await pgDb.update(ordersTable)
         .set({ status: 'cancelled', statusHistory: newHistory, updatedAt: new Date() })
         .where(eq(ordersTable.id, req.params.id))
         .returning();
-      
+
       res.json({ success: true, data: updated, message: 'Order cancelled successfully' });
     } catch (error) {
       console.error('[Cancel Order Error]', error);
@@ -3302,7 +3320,7 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const stockData = await pgDb.select().from(stockTable);
       const formattedStock = stockData.map(s => ({
         id: s.id,
@@ -3316,7 +3334,7 @@ function createApp() {
         lastRestockedAt: s.lastRestockedAt?.toISOString() || null,
         updatedAt: s.updatedAt.toISOString(),
       }));
-      
+
       res.json({ success: true, data: formattedStock });
     } catch (error) {
       console.error('[Stock Error]', error);
@@ -3330,12 +3348,12 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(stockTable).where(eq(stockTable.productId, req.params.productId));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Stock item not found' });
       }
-      
+
       const s = result[0];
       const formattedStock = {
         id: s.id,
@@ -3349,7 +3367,7 @@ function createApp() {
         lastRestockedAt: s.lastRestockedAt?.toISOString() || null,
         updatedAt: s.updatedAt.toISOString(),
       };
-      
+
       res.json({ success: true, data: formattedStock });
     } catch (error) {
       console.error('[Stock Item Error]', error);
@@ -3362,11 +3380,11 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const stockData = await pgDb.select().from(stockTable);
       const products = await pgDb.select().from(productsTable);
       const productMap = new Map(products.map(p => [p.id, p]));
-      
+
       const alerts = stockData
         .filter(s => parseFloat(s.availableQuantity) <= parseFloat(s.lowStockThreshold))
         .map(s => ({
@@ -3376,7 +3394,7 @@ function createApp() {
           threshold: parseFloat(s.lowStockThreshold),
           suggestedReorderQuantity: parseFloat(s.reorderQuantity),
         }));
-        
+
       res.json({ success: true, data: alerts });
     } catch (error) {
       console.error('[Stock Alerts Error]', error);
@@ -3389,10 +3407,10 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const limit = parseInt(req.query.limit as string) || 50;
       const movements = await pgDb.select().from(stockMovementsTable).limit(limit);
-      
+
       const formattedMovements = movements.map(m => ({
         id: m.id,
         productId: m.productId,
@@ -3401,7 +3419,7 @@ function createApp() {
         reason: m.reason,
         createdAt: m.createdAt.toISOString(),
       }));
-      
+
       res.json({ success: true, data: formattedMovements });
     } catch (error) {
       console.error('[Stock Movements Error]', error);
@@ -3415,18 +3433,18 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       // Get all stock items with product information
       const stockItems = await pgDb.select().from(stockTable);
       const products = await pgDb.select().from(productsTable);
       const productMap = new Map(products.map(p => [p.id, p]));
-      
+
       // Get stock movements for weighted average calculation
       const movements = await pgDb
         .select()
         .from(stockMovementsTable)
         .orderBy(stockMovementsTable.createdAt);
-      
+
       // Calculate Weighted Average Cost for each product
       const valuationData: Array<{
         productId: string;
@@ -3445,26 +3463,26 @@ function createApp() {
           totalAdjustments: number;
         };
       }> = [];
-      
+
       let totalInventoryValue = 0;
       let totalItems = 0;
-      
+
       for (const stock of stockItems) {
         const product = productMap.get(stock.productId);
         if (!product) continue;
-        
+
         const currentQty = parseFloat(stock.quantity);
         const availableQty = parseFloat(stock.availableQuantity);
         const reservedQty = parseFloat(stock.reservedQuantity);
-        
+
         // Use product price as unit cost (in real implementation, this would track purchase costs)
         const unitCost = parseFloat(product.price);
         const totalValue = currentQty * unitCost;
-        
+
         // Get movement summary for this product
         const productMovements = movements.filter(m => m.productId === stock.productId);
         const lastMovement = productMovements[productMovements.length - 1];
-        
+
         const movementsSummary = {
           totalIn: productMovements
             .filter(m => m.type === 'in')
@@ -3476,7 +3494,7 @@ function createApp() {
             .filter(m => m.type === 'adjustment')
             .reduce((sum, m) => sum + parseFloat(m.quantity), 0),
         };
-        
+
         valuationData.push({
           productId: stock.productId,
           productName: product.name,
@@ -3490,11 +3508,11 @@ function createApp() {
           lastMovementDate: lastMovement?.createdAt?.toISOString() || null,
           movementsSummary,
         });
-        
+
         totalInventoryValue += totalValue;
         totalItems += currentQty;
       }
-      
+
       // Group by category for summary
       const categoryBreakdown: Record<string, { items: number; value: number }> = {};
       for (const item of valuationData) {
@@ -3504,7 +3522,7 @@ function createApp() {
         categoryBreakdown[item.category].items += item.currentQuantity;
         categoryBreakdown[item.category].value += item.totalValue;
       }
-      
+
       res.json({
         success: true,
         data: {
@@ -3532,25 +3550,25 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const { productId } = req.params;
-      
+
       // Get current stock status
       const stockResult = await pgDb.select().from(stockTable).where(eq(stockTable.productId, productId));
       if (stockResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Stock item not found' });
       }
-      
+
       const stock = stockResult[0];
       const product = await pgDb.select().from(productsTable).where(eq(productsTable.id, productId));
-      
+
       // Get all movements for this product
       const movements = await pgDb
         .select()
         .from(stockMovementsTable)
         .where(eq(stockMovementsTable.productId, productId))
         .orderBy(desc(stockMovementsTable.createdAt));
-      
+
       // Calculate running balances for audit trail
       const auditTrail = movements.map((m, index) => ({
         id: m.id,
@@ -3564,7 +3582,7 @@ function createApp() {
         referenceId: m.referenceId,
         performedBy: m.performedBy,
       }));
-      
+
       res.json({
         success: true,
         data: {
@@ -3597,19 +3615,19 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const { productId, quantity, type, reason } = req.body;
-      
+
       const result = await pgDb.select().from(stockTable).where(eq(stockTable.productId, productId));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Stock item not found' });
       }
-      
+
       const item = result[0];
       const now = new Date();
       let newQuantity = parseFloat(item.quantity);
       let newAvailable = parseFloat(item.availableQuantity);
-      
+
       if (type === 'add') {
         newQuantity += quantity;
         newAvailable += quantity;
@@ -3620,15 +3638,15 @@ function createApp() {
         newQuantity = quantity;
         newAvailable = quantity - parseFloat(item.reservedQuantity);
       }
-      
+
       await pgDb.update(stockTable)
-        .set({ 
+        .set({
           quantity: String(newQuantity),
           availableQuantity: String(newAvailable),
-          updatedAt: now 
+          updatedAt: now
         })
         .where(eq(stockTable.productId, productId));
-      
+
       // Create movement record with all required fields
       await pgDb.insert(stockMovementsTable).values({
         id: `mov_${Date.now()}`,
@@ -3641,13 +3659,13 @@ function createApp() {
         performedBy: 'admin',
         createdAt: now,
       });
-      
+
       // Fetch updated item
       const updated = await pgDb.select().from(stockTable).where(eq(stockTable.productId, productId));
       const s = updated[0];
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           id: s.id,
           productId: s.productId,
@@ -3673,7 +3691,7 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const { updates } = req.body;
       const results: Array<{
         id: string;
@@ -3682,14 +3700,14 @@ function createApp() {
         availableQuantity: number;
       }> = [];
       const now = new Date();
-      
+
       for (const update of updates) {
         const result = await pgDb.select().from(stockTable).where(eq(stockTable.productId, update.productId));
         if (result.length > 0) {
           const item = result[0];
           let newQuantity = parseFloat(item.quantity);
           let newAvailable = parseFloat(item.availableQuantity);
-          
+
           if (update.type === 'add') {
             newQuantity += update.quantity;
             newAvailable += update.quantity;
@@ -3700,15 +3718,15 @@ function createApp() {
             newQuantity = update.quantity;
             newAvailable = update.quantity - parseFloat(item.reservedQuantity);
           }
-          
+
           await pgDb.update(stockTable)
-            .set({ 
+            .set({
               quantity: String(newQuantity),
               availableQuantity: String(newAvailable),
-              updatedAt: now 
+              updatedAt: now
             })
             .where(eq(stockTable.productId, update.productId));
-          
+
           results.push({
             id: item.id,
             productId: item.productId,
@@ -3717,7 +3735,7 @@ function createApp() {
           });
         }
       }
-      
+
       res.json({ success: true, data: results });
     } catch (error) {
       console.error('[Bulk Stock Update Error]', error);
@@ -3730,29 +3748,29 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const { productId } = req.params;
       const { quantity, batchNumber } = req.body;
-      
+
       const result = await pgDb.select().from(stockTable).where(eq(stockTable.productId, productId));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Stock item not found' });
       }
-      
+
       const item = result[0];
       const now = new Date();
       const newQuantity = parseFloat(item.quantity) + quantity;
       const newAvailable = parseFloat(item.availableQuantity) + quantity;
-      
+
       await pgDb.update(stockTable)
-        .set({ 
+        .set({
           quantity: String(newQuantity),
           availableQuantity: String(newAvailable),
           lastRestockedAt: now,
-          updatedAt: now 
+          updatedAt: now
         })
         .where(eq(stockTable.productId, productId));
-      
+
       // Create movement record with all required fields
       await pgDb.insert(stockMovementsTable).values({
         id: `mov_${Date.now()}`,
@@ -3765,13 +3783,13 @@ function createApp() {
         performedBy: 'admin',
         createdAt: now,
       });
-      
+
       // Fetch updated item
       const updated = await pgDb.select().from(stockTable).where(eq(stockTable.productId, productId));
       const s = updated[0];
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           id: s.id,
           productId: s.productId,
@@ -3792,30 +3810,30 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(stockTable).where(eq(stockTable.productId, req.params.productId));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Stock item not found' });
       }
-      
+
       const { lowStockThreshold, reorderPoint, reorderQuantity } = req.body;
       const now = new Date();
       const updateData: Record<string, unknown> = { updatedAt: now };
-      
+
       if (lowStockThreshold !== undefined) updateData.lowStockThreshold = String(lowStockThreshold);
       if (reorderPoint !== undefined) updateData.reorderPoint = String(reorderPoint);
       if (reorderQuantity !== undefined) updateData.reorderQuantity = String(reorderQuantity);
-      
+
       await pgDb.update(stockTable)
         .set(updateData)
         .where(eq(stockTable.productId, req.params.productId));
-      
+
       // Fetch updated item
       const updated = await pgDb.select().from(stockTable).where(eq(stockTable.productId, req.params.productId));
       const s = updated[0];
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           id: s.id,
           productId: s.productId,
@@ -3862,10 +3880,10 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const { status, category, search } = req.query;
       let suppliers = await pgDb.select().from(suppliersTable);
-      
+
       if (status && status !== 'all') {
         suppliers = suppliers.filter(s => s.status === status);
       }
@@ -3881,9 +3899,9 @@ function createApp() {
           s.phone.includes(q)
         );
       }
-      
+
       suppliers.sort((a, b) => a.name.localeCompare(b.name));
-      
+
       const formatted = suppliers.map(s => ({
         id: s.id,
         code: s.code,
@@ -3911,7 +3929,7 @@ function createApp() {
         updatedAt: s.updatedAt?.toISOString(),
         lastOrderAt: s.lastOrderAt?.toISOString(),
       }));
-      
+
       res.json({ success: true, data: formatted });
     } catch (error) {
       console.error('[Suppliers List Error]', error);
@@ -3925,11 +3943,11 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const suppliers = await pgDb.select().from(suppliersTable);
       const pos = await pgDb.select().from(purchaseOrdersTable);
       const supplierProds = await pgDb.select().from(supplierProductsTable);
-      
+
       const stats = {
         totalSuppliers: suppliers.length,
         activeSuppliers: suppliers.filter(s => s.status === 'active').length,
@@ -3937,16 +3955,16 @@ function createApp() {
         totalPurchaseOrders: pos.length,
         pendingOrders: pos.filter(po => ['pending', 'ordered'].includes(po.status)).length,
         totalSpent: suppliers.reduce((sum, s) => sum + parseFloat(s.totalSpent), 0),
-        averageLeadTime: supplierProds.length 
-          ? supplierProds.reduce((sum, sp) => sum + sp.leadTimeDays, 0) / supplierProds.length 
+        averageLeadTime: supplierProds.length
+          ? supplierProds.reduce((sum, sp) => sum + sp.leadTimeDays, 0) / supplierProds.length
           : 0,
         topCategories: Array.from(new Set(suppliers.flatMap(s => (s.categories as string[]) || [])))
-          .map(cat => ({ 
-            category: cat, 
-            count: suppliers.filter(s => ((s.categories as string[]) || []).includes(cat)).length 
+          .map(cat => ({
+            category: cat,
+            count: suppliers.filter(s => ((s.categories as string[]) || []).includes(cat)).length
           })),
       };
-      
+
       res.json({ success: true, data: stats });
     } catch (error) {
       console.error('[Supplier Stats Error]', error);
@@ -3960,16 +3978,16 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const body = req.body;
       if (!body.name || !body.email || !body.phone) {
         return res.status(400).json({ success: false, error: 'Missing required fields' });
       }
-      
+
       const now = new Date();
       const id = generateId('sup');
       const code = await generateSupplierCode(pgDb);
-      
+
       const newSupplier = {
         id,
         code,
@@ -3996,11 +4014,11 @@ function createApp() {
         createdAt: now,
         updatedAt: now,
       };
-      
+
       await pgDb.insert(suppliersTable).values(newSupplier);
-      
-      res.status(201).json({ 
-        success: true, 
+
+      res.status(201).json({
+        success: true,
         data: {
           ...newSupplier,
           creditLimit: parseFloat(newSupplier.creditLimit),
@@ -4025,17 +4043,17 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Supplier not found' });
       }
-      
+
       const now = new Date();
       await pgDb.update(suppliersTable)
         .set({ status: req.body.status, updatedAt: now })
         .where(eq(suppliersTable.id, req.params.id));
-      
+
       const updated = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       res.json({ success: true, data: updated[0] });
     } catch (error) {
@@ -4050,12 +4068,12 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Supplier not found' });
       }
-      
+
       // Check for pending POs
       const pendingPOs = await pgDb.select().from(purchaseOrdersTable)
         .where(and(
@@ -4063,11 +4081,11 @@ function createApp() {
           ne(purchaseOrdersTable.status, 'received'),
           ne(purchaseOrdersTable.status, 'cancelled')
         ));
-      
+
       if (pendingPOs.length > 0) {
         return res.status(400).json({ success: false, error: 'Cannot delete supplier with pending purchase orders' });
       }
-      
+
       await pgDb.delete(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       res.json({ success: true, data: null });
     } catch (error) {
@@ -4082,20 +4100,20 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Supplier not found' });
       }
-      
+
       const supplier = result[0];
       const contact = { id: generateId('contact'), ...req.body };
       const contacts = [...(supplier.contacts as any[] || []), contact];
-      
+
       await pgDb.update(suppliersTable)
         .set({ contacts, updatedAt: new Date() })
         .where(eq(suppliersTable.id, req.params.id));
-      
+
       res.status(201).json({ success: true, data: contact });
     } catch (error) {
       console.error('[Add Contact Error]', error);
@@ -4109,19 +4127,19 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Supplier not found' });
       }
-      
+
       const supplier = result[0];
       const contacts = (supplier.contacts as any[] || []).filter((c: any) => c.id !== req.params.contactId);
-      
+
       await pgDb.update(suppliersTable)
         .set({ contacts, updatedAt: new Date() })
         .where(eq(suppliersTable.id, req.params.id));
-      
+
       res.json({ success: true, data: null });
     } catch (error) {
       console.error('[Delete Contact Error]', error);
@@ -4135,10 +4153,10 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const products = await pgDb.select().from(supplierProductsTable)
         .where(eq(supplierProductsTable.supplierId, req.params.id));
-      
+
       const formatted = products.map(p => ({
         id: p.id,
         supplierId: p.supplierId,
@@ -4155,7 +4173,7 @@ function createApp() {
         createdAt: p.createdAt?.toISOString(),
         updatedAt: p.updatedAt?.toISOString(),
       }));
-      
+
       res.json({ success: true, data: formatted });
     } catch (error) {
       console.error('[Supplier Products Error]', error);
@@ -4169,16 +4187,16 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Supplier not found' });
       }
-      
+
       const body = req.body;
       const now = new Date();
       const id = generateId('sp');
-      
+
       const product = {
         id,
         supplierId: req.params.id,
@@ -4195,11 +4213,11 @@ function createApp() {
         createdAt: now,
         updatedAt: now,
       };
-      
+
       await pgDb.insert(supplierProductsTable).values(product);
-      
-      res.status(201).json({ 
-        success: true, 
+
+      res.status(201).json({
+        success: true,
         data: {
           ...product,
           unitCost: parseFloat(product.unitCost),
@@ -4221,13 +4239,13 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(supplierProductsTable)
         .where(eq(supplierProductsTable.id, req.params.productId));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Supplier product not found' });
       }
-      
+
       await pgDb.delete(supplierProductsTable).where(eq(supplierProductsTable.id, req.params.productId));
       res.json({ success: true, data: null });
     } catch (error) {
@@ -4242,22 +4260,22 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const { status, supplierId } = req.query;
       let pos = await pgDb.select().from(purchaseOrdersTable).orderBy(desc(purchaseOrdersTable.orderDate));
-      
+
       if (status && status !== 'all') {
         pos = pos.filter(po => po.status === status);
       }
       if (supplierId) {
         pos = pos.filter(po => po.supplierId === supplierId);
       }
-      
+
       // Get items for each PO
       const formatted = await Promise.all(pos.map(async po => {
         const items = await pgDb!.select().from(purchaseOrderItemsTable)
           .where(eq(purchaseOrderItemsTable.purchaseOrderId, po.id));
-        
+
         return {
           id: po.id,
           orderNumber: po.orderNumber,
@@ -4298,7 +4316,7 @@ function createApp() {
           updatedAt: po.updatedAt?.toISOString(),
         };
       }));
-      
+
       res.json({ success: true, data: formatted });
     } catch (error) {
       console.error('[PO List Error]', error);
@@ -4312,18 +4330,18 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const body = req.body;
       const supplierResult = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, body.supplierId));
       if (supplierResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Supplier not found' });
       }
-      
+
       const supplier = supplierResult[0];
       const now = new Date();
       const poId = generateId('po');
       const orderNumber = await generatePoNumber(pgDb);
-      
+
       // Calculate totals
       let subtotal = 0;
       const itemsData = body.items.map((it: any) => {
@@ -4342,13 +4360,13 @@ function createApp() {
           notes: it.notes || null,
         };
       });
-      
+
       const taxRate = 0.05;
       const taxAmount = subtotal * taxRate;
       const shippingCost = body.shippingCost || 0;
       const discount = body.discount || 0;
       const total = subtotal + taxAmount + shippingCost - discount;
-      
+
       const po = {
         id: poId,
         orderNumber,
@@ -4371,16 +4389,16 @@ function createApp() {
         createdAt: now,
         updatedAt: now,
       };
-      
+
       await pgDb.insert(purchaseOrdersTable).values(po);
-      
+
       // Insert items
       for (const item of itemsData) {
         await pgDb.insert(purchaseOrderItemsTable).values(item);
       }
-      
-      res.status(201).json({ 
-        success: true, 
+
+      res.status(201).json({
+        success: true,
         data: {
           ...po,
           items: itemsData.map((it: any) => ({
@@ -4414,32 +4432,32 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Purchase order not found' });
       }
-      
+
       const po = result[0];
       const { status, notes } = req.body;
       const now = new Date();
-      
+
       const statusHistory = [...(po.statusHistory as any[] || []), { status, changedBy: 'admin', changedAt: now.toISOString(), notes }];
-      
-      const updateData: any = { 
-        status, 
-        statusHistory, 
-        updatedAt: now 
+
+      const updateData: any = {
+        status,
+        statusHistory,
+        updatedAt: now
       };
-      
+
       if (status === 'received') {
         updateData.actualDeliveryDate = now;
       }
-      
+
       await pgDb.update(purchaseOrdersTable)
         .set(updateData)
         .where(eq(purchaseOrdersTable.id, req.params.id));
-      
+
       const updated = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
       res.json({ success: true, data: updated[0] });
     } catch (error) {
@@ -4454,32 +4472,32 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Purchase order not found' });
       }
-      
+
       const po = result[0];
       const { items } = req.body as { items: { itemId: string; receivedQuantity: number }[] };
       const now = new Date();
-      
+
       // Track items being received for inventory update
       const itemsToReceive: Array<{ productId: string; quantity: number; unitCost: number }> = [];
-      
+
       // Update each item's received quantity
       const poItems = await pgDb.select().from(purchaseOrderItemsTable)
         .where(eq(purchaseOrderItemsTable.purchaseOrderId, req.params.id));
-      
+
       for (const poItem of poItems) {
         const recv = items.find(i => i.itemId === poItem.id);
         if (recv && recv.receivedQuantity > 0) {
           const newReceivedQty = parseFloat(poItem.receivedQuantity) + recv.receivedQuantity;
-          
+
           await pgDb.update(purchaseOrderItemsTable)
             .set({ receivedQuantity: String(newReceivedQty) })
             .where(eq(purchaseOrderItemsTable.id, poItem.id));
-          
+
           // Add to items for inventory update
           itemsToReceive.push({
             productId: poItem.productId,
@@ -4488,31 +4506,31 @@ function createApp() {
           });
         }
       }
-      
+
       // Check if all items received
       const updatedItems = await pgDb.select().from(purchaseOrderItemsTable)
         .where(eq(purchaseOrderItemsTable.purchaseOrderId, req.params.id));
-      
+
       const allReceived = updatedItems.every(i => parseFloat(i.receivedQuantity) >= parseFloat(i.quantity));
       const anyReceived = updatedItems.some(i => parseFloat(i.receivedQuantity) > 0);
-      
+
       const newStatus = allReceived ? 'received' : anyReceived ? 'partially_received' : po.status;
       const statusHistory = [...(po.statusHistory as any[] || []), { status: newStatus, changedBy: 'admin', changedAt: now.toISOString() }];
-      
-      const updateData: any = { 
-        status: newStatus, 
-        statusHistory, 
-        updatedAt: now 
+
+      const updateData: any = {
+        status: newStatus,
+        statusHistory,
+        updatedAt: now
       };
-      
+
       if (newStatus === 'received') {
         updateData.actualDeliveryDate = now;
       }
-      
+
       await pgDb.update(purchaseOrdersTable)
         .set(updateData)
         .where(eq(purchaseOrdersTable.id, req.params.id));
-      
+
       // INVENTORY CYCLE: Update stock when receiving PO items (IAS 2 compliance)
       if (itemsToReceive.length > 0) {
         const invResult = await receiveStockFromPurchaseOrder(
@@ -4522,10 +4540,10 @@ function createApp() {
           'admin',
           pgDb
         );
-        
+
         if (invResult.success) {
           console.log(`[Inventory Cycle] Received ${itemsToReceive.length} items from PO ${po.orderNumber}`);
-          
+
           // FINANCE CYCLE: Create purchase transaction when PO is fully received
           if (newStatus === 'received') {
             await createPurchaseTransaction(
@@ -4541,7 +4559,7 @@ function createApp() {
           }
         }
       }
-      
+
       const updatedPo = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
       res.json({ success: true, data: updatedPo[0] });
     } catch (error) {
@@ -4556,18 +4574,18 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Purchase order not found' });
       }
-      
+
       const po = result[0];
       const items = await pgDb.select().from(purchaseOrderItemsTable)
         .where(eq(purchaseOrderItemsTable.purchaseOrderId, po.id));
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           ...po,
           items: items.map(it => ({
@@ -4607,24 +4625,24 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Purchase order not found' });
       }
-      
+
       const po = result[0];
       if (['received', 'partially_received'].includes(po.status)) {
         return res.status(400).json({ success: false, error: 'Cannot delete received or partially received orders' });
       }
-      
+
       const now = new Date();
       const statusHistory = [...(po.statusHistory as any[] || []), { status: 'cancelled', changedBy: 'admin', changedAt: now.toISOString() }];
-      
+
       await pgDb.update(purchaseOrdersTable)
         .set({ status: 'cancelled', statusHistory, updatedAt: now })
         .where(eq(purchaseOrdersTable.id, req.params.id));
-      
+
       const updated = await pgDb.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.id));
       res.json({ success: true, data: updated[0] });
     } catch (error) {
@@ -4639,15 +4657,15 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Supplier not found' });
       }
-      
+
       const s = result[0];
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: {
           id: s.id,
           code: s.code,
@@ -4688,15 +4706,15 @@ function createApp() {
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-      
+
       const result = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Supplier not found' });
       }
-      
+
       const body = req.body;
       const now = new Date();
-      
+
       const updateData: any = { updatedAt: now };
       if (body.name) updateData.name = body.name;
       if (body.nameAr !== undefined) updateData.nameAr = body.nameAr;
@@ -4712,11 +4730,11 @@ function createApp() {
       if (body.categories) updateData.categories = body.categories;
       if (body.notes !== undefined) updateData.notes = body.notes;
       if (body.status) updateData.status = body.status;
-      
+
       await pgDb.update(suppliersTable)
         .set(updateData)
         .where(eq(suppliersTable.id, req.params.id));
-      
+
       const updated = await pgDb.select().from(suppliersTable).where(eq(suppliersTable.id, req.params.id));
       res.json({ success: true, data: updated[0] });
     } catch (error) {
@@ -4737,20 +4755,20 @@ function createApp() {
 
       const { role, search } = req.query;
       let allUsers = await pgDb.select().from(usersTable);
-      
+
       if (role && role !== 'all') {
         allUsers = allUsers.filter(u => u.role === role);
       }
       if (search) {
         const q = (search as string).toLowerCase();
-        allUsers = allUsers.filter(u => 
+        allUsers = allUsers.filter(u =>
           u.firstName.toLowerCase().includes(q) ||
           u.familyName.toLowerCase().includes(q) ||
           u.email.toLowerCase().includes(q) ||
           u.mobile.includes(q)
         );
       }
-      
+
       const sanitized = allUsers.map(u => {
         const { password, ...userWithoutPassword } = u;
         return userWithoutPassword;
@@ -4772,7 +4790,7 @@ function createApp() {
       const monthStart = new Date();
       monthStart.setDate(1);
       monthStart.setHours(0, 0, 0, 0);
-      
+
       res.json({
         success: true,
         data: {
@@ -4804,20 +4822,20 @@ function createApp() {
       if (isDatabaseAvailable() && pgDb) {
         try {
           const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
-          
+
           if (sessionResults.length > 0) {
             const session = sessionResults[0];
-            
+
             // Check if session is expired
             if (new Date(session.expiresAt) < new Date()) {
               // Delete expired session
               await pgDb.delete(sessionsTable).where(eq(sessionsTable.id, session.id));
               return res.json({ success: true, data: null });
             }
-            
+
             // Get user from database
             const userResults = await pgDb.select().from(usersTable).where(eq(usersTable.id, session.userId));
-            
+
             if (userResults.length > 0) {
               const dbUser = userResults[0];
               const { password, ...userWithoutPassword } = dbUser;
@@ -4879,15 +4897,15 @@ function createApp() {
       if (userResult.length === 0) {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
-      
+
       const updates = req.body;
       const updateData: Record<string, unknown> = { ...updates, updatedAt: new Date() };
-      
+
       const [updated] = await pgDb.update(usersTable)
         .set(updateData)
         .where(eq(usersTable.id, req.params.id))
         .returning();
-      
+
       const { password, ...userWithoutPassword } = updated;
       res.json({ success: true, data: userWithoutPassword });
     } catch (error) {
@@ -4929,15 +4947,15 @@ function createApp() {
 
       const user = userResult[0];
       const { currentPassword, newPassword } = req.body;
-      
+
       if (user.password !== currentPassword) {
         return res.status(400).json({ success: false, error: 'Current password is incorrect' });
       }
-      
+
       await pgDb.update(usersTable)
         .set({ password: newPassword, updatedAt: new Date() })
         .where(eq(usersTable.id, req.params.id));
-      
+
       res.json({ success: true, message: 'Password changed successfully' });
     } catch (error) {
       console.error('[Change Password Error]', error);
@@ -4956,12 +4974,12 @@ function createApp() {
       if (userResult.length === 0) {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
-      
+
       const [updated] = await pgDb.update(usersTable)
         .set({ isVerified: true, updatedAt: new Date() })
         .where(eq(usersTable.id, req.params.id))
         .returning();
-      
+
       const { password, ...userWithoutPassword } = updated;
       res.json({ success: true, data: userWithoutPassword, message: 'User verified successfully' });
     } catch (error) {
@@ -5142,7 +5160,7 @@ function createApp() {
 
       const token = req.headers.authorization?.replace('Bearer ', '');
       let userId = 'guest';
-      
+
       if (token) {
         // Try database first
         const sessionResult = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token)).limit(1);
@@ -5156,7 +5174,7 @@ function createApp() {
       }
 
       const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, isDefault } = req.body;
-      
+
       if (!fullName || !mobile || !emirate || !area || !street || !building) {
         return res.status(400).json({ success: false, error: 'Missing required fields' });
       }
@@ -5210,7 +5228,7 @@ function createApp() {
       if (addressResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Address not found' });
       }
-      
+
       const existingAddress = addressResult[0];
       const updates = req.body;
       const now = new Date();
@@ -5245,7 +5263,7 @@ function createApp() {
         .set(updateData)
         .where(eq(addressesTable.id, req.params.id))
         .returning();
-      
+
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('[Update Address Error]', error);
@@ -5305,24 +5323,24 @@ function createApp() {
       }
 
       const { orderId } = req.params;
-      
+
       // Query database for tracking
       const trackingResult = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.orderId, orderId));
-      
+
       if (trackingResult.length === 0) {
         // Return null data if no tracking exists yet (order not assigned)
         return res.json({ success: true, data: null });
       }
-      
+
       const dbTracking = trackingResult[0];
-      
+
       // Get order details for enrichment
       const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
       const order = orderResult[0];
-      
+
       // Get order items
       const orderItems = order ? await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId)) : [];
-      
+
       const tracking = {
         id: dbTracking.id,
         orderId: dbTracking.orderId,
@@ -5345,7 +5363,7 @@ function createApp() {
         createdAt: dbTracking.createdAt.toISOString(),
         updatedAt: dbTracking.updatedAt.toISOString(),
       };
-      
+
       res.json({ success: true, data: tracking });
     } catch (error) {
       console.error('[Get Tracking Error]', error);
@@ -5362,7 +5380,7 @@ function createApp() {
 
       const allUsers = await pgDb.select().from(usersTable);
       const allTracking = await pgDb.select().from(deliveryTrackingTable);
-      
+
       const drivers = allUsers
         .filter(u => u.role === 'delivery' && u.isActive)
         .map(d => ({
@@ -5383,7 +5401,7 @@ function createApp() {
   app.post('/api/delivery/tracking/assign', async (req, res) => {
     try {
       const { orderId, driverId, estimatedArrival } = req.body;
-      
+
       if (!orderId || !driverId) {
         return res.status(400).json({ success: false, error: 'orderId and driverId are required' });
       }
@@ -5403,12 +5421,12 @@ function createApp() {
         // Get driver from database
         const driverResult = await pgDb.select().from(usersTable).where(eq(usersTable.id, driverId));
         let driver = driverResult[0];
-        
+
         // Fallback to in-memory driver if not in DB
         if (!driver) {
           driver = users.get(driverId) as any;
         }
-        
+
         if (!driver || driver.role !== 'delivery') {
           return res.status(400).json({ success: false, error: 'Invalid delivery driver' });
         }
@@ -5436,7 +5454,7 @@ function createApp() {
           timestamp: now.toISOString(),
           notes: `Assigned to driver: ${driver.firstName}`,
         }];
-        
+
         await pgDb.insert(deliveryTrackingTable).values({
           id: trackingId,
           orderId,
@@ -5570,15 +5588,15 @@ function createApp() {
     try {
       const { orderId } = req.params;
       const { status, notes } = req.body;
-      
+
       // Try database first
       if (isDatabaseAvailable() && pgDb) {
         // Get tracking from database
         const trackingResult = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.orderId, orderId));
-        
+
         // Also get in-memory tracking for full data
         let tracking = deliveryTracking.get(orderId);
-        
+
         if (trackingResult.length === 0 && !tracking) {
           return res.status(404).json({ success: false, error: 'Tracking not found' });
         }
@@ -5690,8 +5708,8 @@ function createApp() {
           deliveryTracking.set(orderId, tracking);
         }
 
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           data: tracking || {
             id: dbTracking?.id,
             orderId,
@@ -5703,7 +5721,7 @@ function createApp() {
 
       // Fallback to in-memory
       let tracking = deliveryTracking.get(orderId);
-      
+
       const order = orders.get(orderId);
       if (!tracking && order?.trackingInfo) {
         tracking = {
@@ -5727,11 +5745,11 @@ function createApp() {
         };
         deliveryTracking.set(orderId, tracking);
       }
-      
+
       if (!tracking) {
         return res.status(404).json({ success: false, error: 'Tracking not found' });
       }
-      
+
       tracking.status = status;
       tracking.updatedAt = new Date().toISOString();
       tracking.timeline.push({
@@ -5739,7 +5757,7 @@ function createApp() {
         timestamp: new Date().toISOString(),
         notes,
       });
-      
+
       if (order) {
         const orderStatusMap: Record<string, string> = {
           'assigned': 'out_for_delivery',
@@ -5749,7 +5767,7 @@ function createApp() {
           'delivered': 'delivered',
         };
         const newOrderStatus = orderStatusMap[status] || order.status;
-        
+
         if (order.status !== newOrderStatus) {
           order.status = newOrderStatus;
           order.updatedAt = new Date().toISOString();
@@ -5759,7 +5777,7 @@ function createApp() {
             changedBy: tracking.driverId,
           });
         }
-        
+
         order.trackingInfo = {
           id: tracking.id,
           driverId: tracking.driverId,
@@ -5772,7 +5790,7 @@ function createApp() {
           updatedAt: tracking.updatedAt,
         };
       }
-      
+
       res.json({ success: true, data: tracking });
     } catch (error) {
       console.error('[Delivery Update Error]', error);
@@ -5806,13 +5824,13 @@ function createApp() {
       }
 
       let allPayments = await pgDb.select().from(paymentsTable);
-      
+
       // Filter by status if provided
       const status = req.query.status as string;
       if (status) {
         allPayments = allPayments.filter(p => p.status === status);
       }
-      
+
       // Filter by method if provided
       const method = req.query.method as string;
       if (method) {
@@ -5821,7 +5839,7 @@ function createApp() {
 
       // Sort by date (newest first)
       allPayments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
+
       // Format for API response
       const formattedPayments = allPayments.map(p => ({
         id: p.id,
@@ -5841,7 +5859,7 @@ function createApp() {
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
       }));
-      
+
       res.json({ success: true, data: formattedPayments });
     } catch (error) {
       console.error('[Payments Error]', error);
@@ -5856,16 +5874,16 @@ function createApp() {
       }
 
       const allPayments = await pgDb.select().from(paymentsTable);
-      
+
       const captured = allPayments.filter(p => p.status === 'captured');
       const pending = allPayments.filter(p => p.status === 'pending');
       const authorized = allPayments.filter(p => p.status === 'authorized');
       const refunded = allPayments.filter(p => p.status === 'refunded' || p.status === 'partially_refunded');
-      
+
       const totalRevenue = captured.reduce((sum, p) => sum + parseFloat(String(p.amount)), 0);
       const pendingAmount = pending.reduce((sum, p) => sum + parseFloat(String(p.amount)), 0);
       const refundedAmount = refunded.reduce((sum, p) => sum + parseFloat(String(p.refundedAmount || '0')), 0);
-      
+
       const cardPayments = allPayments.filter(p => p.method === 'card');
       const codPayments = allPayments.filter(p => p.method === 'cod');
       const bankPayments = allPayments.filter(p => p.method === 'bank_transfer');
@@ -5905,14 +5923,14 @@ function createApp() {
       if (paymentResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Payment not found' });
       }
-      
+
       const payment = paymentResult[0];
       const { amount, reason } = req.body;
       const currentAmount = parseFloat(String(payment.amount));
       const currentRefunded = parseFloat(String(payment.refundedAmount || '0'));
       const newRefundedAmount = currentRefunded + amount;
       const newStatus = newRefundedAmount >= currentAmount ? 'refunded' : 'partially_refunded';
-      
+
       const currentRefunds = (payment.refunds as any[]) || [];
       const newRefunds = [...currentRefunds, {
         id: `refund_${Date.now()}`,
@@ -5930,9 +5948,9 @@ function createApp() {
         })
         .where(eq(paymentsTable.id, req.params.id))
         .returning();
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           ...updated,
           amount: parseFloat(String(updated.amount)),
@@ -5958,10 +5976,10 @@ function createApp() {
       if (paymentResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Payment not found' });
       }
-      
+
       const p = paymentResult[0];
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: {
           id: p.id,
           orderId: p.orderId,
@@ -5996,10 +6014,10 @@ function createApp() {
       if (paymentResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Payment not found for this order' });
       }
-      
+
       const p = paymentResult[0];
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: {
           id: p.id,
           orderId: p.orderId,
@@ -6031,7 +6049,7 @@ function createApp() {
       }
 
       const { orderId, amount, method, currency = 'AED', saveCard } = req.body;
-      
+
       if (!orderId || !amount || !method) {
         return res.status(400).json({ success: false, error: 'orderId, amount, and method are required' });
       }
@@ -6039,11 +6057,11 @@ function createApp() {
       // Get order from database
       const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
       const order = orderResult[0];
-      
+
       const paymentId = `pay_${Date.now()}`;
       const now = new Date();
       const paymentStatus = method === 'cod' ? 'pending' : 'authorized';
-      
+
       // Insert payment into database
       await pgDb.insert(paymentsTable).values({
         id: paymentId,
@@ -6103,15 +6121,15 @@ function createApp() {
       if (paymentResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Payment not found' });
       }
-      
+
       const payment = paymentResult[0];
-      
+
       if (payment.status !== 'authorized') {
         return res.status(400).json({ success: false, error: 'Payment must be authorized before capture' });
       }
 
       const now = new Date();
-      
+
       // Update payment status
       const [updated] = await pgDb.update(paymentsTable)
         .set({
@@ -6129,8 +6147,8 @@ function createApp() {
         })
         .where(eq(ordersTable.id, payment.orderId));
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: {
           ...updated,
           amount: parseFloat(String(updated.amount)),
@@ -6138,7 +6156,7 @@ function createApp() {
           createdAt: updated.createdAt.toISOString(),
           updatedAt: updated.updatedAt.toISOString(),
         },
-        message: 'Payment captured successfully' 
+        message: 'Payment captured successfully'
       });
     } catch (error) {
       console.error('[Capture Payment Error]', error);
@@ -6154,15 +6172,15 @@ function createApp() {
       }
 
       const allTracking = await pgDb.select().from(deliveryTrackingTable);
-      
+
       // Enrich tracking with order details
       const enrichedTracking = await Promise.all(allTracking.map(async (tracking) => {
         // Get order details
         const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, tracking.orderId));
         const order = orderResult[0];
-        
+
         // Get order items
-        const orderItems = order 
+        const orderItems = order
           ? await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, tracking.orderId))
           : [];
 
@@ -6172,10 +6190,10 @@ function createApp() {
           customerMobile: order?.customerMobile || '',
           deliveryAddress: order?.deliveryAddress || { area: '', emirate: '', street: '', building: '' },
           deliveryNotes: order?.deliveryNotes || null,
-          items: orderItems.map(i => ({ 
-            name: i.productName, 
+          items: orderItems.map(i => ({
+            name: i.productName,
             nameAr: i.productNameAr,
-            quantity: Number(i.quantity) 
+            quantity: Number(i.quantity)
           })),
           total: order ? Number(order.total) : 0,
           subtotal: order ? Number(order.subtotal) : 0,
@@ -6203,14 +6221,14 @@ function createApp() {
       if (trackingResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Tracking not found' });
       }
-      
+
       const tracking = trackingResult[0];
-      
+
       // Enrich with order details
       const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, tracking.orderId));
       const order = orderResult[0];
-      
-      const orderItems = order 
+
+      const orderItems = order
         ? await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, tracking.orderId))
         : [];
 
@@ -6220,10 +6238,10 @@ function createApp() {
         customerMobile: order?.customerMobile || '',
         deliveryAddress: order?.deliveryAddress || { area: '', emirate: '', street: '', building: '' },
         deliveryNotes: order?.deliveryNotes || null,
-        items: orderItems.map(i => ({ 
-          name: i.productName, 
+        items: orderItems.map(i => ({
+          name: i.productName,
           nameAr: i.productNameAr,
-          quantity: Number(i.quantity) 
+          quantity: Number(i.quantity)
         })),
         total: order ? Number(order.total) : 0,
         subtotal: order ? Number(order.subtotal) : 0,
@@ -6231,7 +6249,7 @@ function createApp() {
         deliveryFee: order ? Number(order.deliveryFee) : 0,
         paymentMethod: order?.paymentMethod || 'cod',
       };
-      
+
       res.json({ success: true, data: enrichedTracking });
     } catch (error) {
       console.error('[Get Tracking Error]', error);
@@ -6250,13 +6268,13 @@ function createApp() {
       if (trackingResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Tracking not found' });
       }
-      
+
       const { latitude, longitude } = req.body;
       const [updated] = await pgDb.update(deliveryTrackingTable)
         .set({ updatedAt: new Date() })
         .where(eq(deliveryTrackingTable.id, req.params.id))
         .returning();
-      
+
       res.json({ success: true, data: { ...updated, currentLocation: { latitude, longitude } } });
     } catch (error) {
       console.error('[Update Tracking Location Error]', error);
@@ -6275,7 +6293,7 @@ function createApp() {
       if (trackingResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Tracking not found' });
       }
-      
+
       const tracking = trackingResult[0];
       const { status, notes } = req.body;
       const newTimeline = [...(tracking.timeline as any[] || []), {
@@ -6283,12 +6301,12 @@ function createApp() {
         timestamp: new Date().toISOString(),
         notes,
       }];
-      
+
       const [updated] = await pgDb.update(deliveryTrackingTable)
         .set({ status, timeline: newTimeline, updatedAt: new Date() })
         .where(eq(deliveryTrackingTable.id, req.params.id))
         .returning();
-      
+
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('[Update Tracking Status Error]', error);
@@ -6307,37 +6325,37 @@ function createApp() {
       if (trackingResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Tracking not found' });
       }
-      
+
       const tracking = trackingResult[0];
       const { signature, photo, notes } = req.body;
-      
+
       const newTimeline = [...(tracking.timeline as any[] || []), {
         status: 'delivered',
         timestamp: new Date().toISOString(),
         notes: notes || 'Delivery completed',
       }];
-      
+
       // Update tracking status
       const [updatedTracking] = await pgDb.update(deliveryTrackingTable)
         .set({ status: 'delivered', timeline: newTimeline, updatedAt: new Date() })
         .where(eq(deliveryTrackingTable.id, req.params.id))
         .returning();
-      
+
       // Update order status
       const newHistory = [...(tracking.statusHistory as any[] || []), {
         status: 'delivered',
         changedAt: new Date().toISOString(),
         changedBy: tracking.driverId,
       }];
-      
+
       await pgDb.update(ordersTable)
         .set({ status: 'delivered', statusHistory: newHistory, updatedAt: new Date() })
         .where(eq(ordersTable.id, tracking.orderId));
-      
-      res.json({ 
-        success: true, 
-        data: updatedTracking, 
-        message: 'Delivery completed successfully' 
+
+      res.json({
+        success: true,
+        data: updatedTracking,
+        message: 'Delivery completed successfully'
       });
     } catch (error) {
       console.error('[Complete Delivery Error]', error);
@@ -6348,13 +6366,13 @@ function createApp() {
   // Check delivery availability for area
   app.post('/api/delivery/check-availability', (req, res) => {
     const { emirate, area } = req.body;
-    
-    const zone = deliveryZones.find(z => 
-      z.isActive && 
-      z.emirate === emirate && 
+
+    const zone = deliveryZones.find(z =>
+      z.isActive &&
+      z.emirate === emirate &&
       (z.areas.includes(area) || z.areas.length === 0)
     );
-    
+
     if (!zone) {
       return res.json({
         success: true,
@@ -6364,7 +6382,7 @@ function createApp() {
         },
       });
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -6406,19 +6424,19 @@ function createApp() {
       if (addressResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Address not found' });
       }
-      
+
       const address = addressResult[0];
-      
+
       // Unset other defaults for this user, set this one as default
       await pgDb.update(addressesTable)
         .set({ isDefault: false })
         .where(eq(addressesTable.userId, address.userId));
-      
+
       const [updated] = await pgDb.update(addressesTable)
         .set({ isDefault: true, updatedAt: new Date() })
         .where(eq(addressesTable.id, req.params.id))
         .returning();
-      
+
       res.json({ success: true, data: updated, message: 'Default address updated' });
     } catch (error) {
       console.error('[Set Default Address Error]', error);
@@ -6474,7 +6492,7 @@ function createApp() {
     try {
       const userId = req.headers['x-user-id'] as string;
       console.log('[Addresses POST] Creating address for user:', userId);
-      
+
       if (!userId) {
         return res.status(401).json({ success: false, error: 'User ID required' });
       }
@@ -6802,7 +6820,7 @@ function createApp() {
       const totalOrders = paidOrders.length;
       const totalVat = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
       const totalDiscount = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.discount || 0)), 0);
-      
+
       res.json({
         success: true,
         data: {
@@ -7070,12 +7088,12 @@ function createApp() {
 
       const { startDate, endDate, granularity = 'day' } = req.query;
       const allOrders = await pgDb.select().from(ordersTable);
-      
+
       // Generate time series data
       const now = new Date();
       const days = granularity === 'hour' ? 1 : granularity === 'week' ? 28 : 7;
       const dataPoints = [];
-      
+
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
         const dateStr = date.toISOString().split('T')[0];
@@ -7087,7 +7105,7 @@ function createApp() {
           averageOrderValue: 150 + Math.random() * 50,
         });
       }
-      
+
       res.json({
         success: true,
         data: {
@@ -7111,10 +7129,10 @@ function createApp() {
   // Export report
   app.post('/api/reports/export', (req, res) => {
     const { reportType, format = 'csv', startDate, endDate, filters } = req.body;
-    
+
     // In a real app, this would generate and return the actual file
     const exportId = `export_${Date.now()}`;
-    
+
     res.json({
       success: true,
       data: {
@@ -7272,7 +7290,7 @@ function createApp() {
       }
 
       const { titleEn, titleAr, subtitleEn, subtitleAr, image, bgColor, link, badge, badgeAr, enabled } = req.body;
-      
+
       // Get existing banners count for sortOrder
       const existing = await pgDb.select().from(bannersTable);
       const sortOrder = existing.length;
@@ -7371,7 +7389,7 @@ function createApp() {
       }
 
       const { label, labelAr, startTime, endTime, isExpressSlot, maxOrders, enabled } = req.body;
-      
+
       const existing = await pgDb.select().from(deliveryTimeSlotsTable);
       const sortOrder = existing.length;
 
@@ -7570,9 +7588,9 @@ function createApp() {
       }
 
       if (orderTotal < parseFloat(String(promo.minimumOrder))) {
-        return res.status(400).json({ 
-          success: false, 
-          error: `Minimum order of ${parseFloat(String(promo.minimumOrder))} AED required` 
+        return res.status(400).json({
+          success: false,
+          error: `Minimum order of ${parseFloat(String(promo.minimumOrder))} AED required`
         });
       }
 
@@ -7789,7 +7807,7 @@ function createApp() {
       }
 
       const { userId, type, title, titleAr, message, messageAr, link, linkTab, linkId } = req.body;
-      
+
       if (!userId || !type || !title || !message) {
         return res.status(400).json({ success: false, error: 'userId, type, title, and message are required' });
       }
@@ -7810,8 +7828,8 @@ function createApp() {
 
       await pgDb.insert(inAppNotificationsTable).values(newNotification);
 
-      res.status(201).json({ 
-        success: true, 
+      res.status(201).json({
+        success: true,
         data: {
           ...newNotification,
           createdAt: new Date().toISOString(),
@@ -7923,7 +7941,7 @@ function createApp() {
       }
 
       const { userId, message } = req.body;
-      
+
       if (!userId || !message) {
         return res.status(400).json({ success: false, error: 'userId and message are required' });
       }
@@ -7958,7 +7976,7 @@ function createApp() {
       }
 
       const { userId, userName, message } = req.body;
-      
+
       if (!userId || !message) {
         return res.status(400).json({ success: false, error: 'userId and message are required' });
       }
@@ -8076,7 +8094,7 @@ function createApp() {
   app.post('/api/chat/send', async (req, res) => {
     try {
       console.log('[Chat Send] Request received:', JSON.stringify(req.body));
-      
+
       if (!isDatabaseAvailable() || !pgDb) {
         console.log('[Chat Send] Database not available');
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -8185,11 +8203,11 @@ function createApp() {
       const allOrders = await pgDb.select().from(ordersTable);
       const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
       const totalVAT = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
-      
+
       // Get expenses from database
       const allExpenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.status, 'paid'));
       const totalExpenses = allExpenses.reduce((sum, e) => sum + parseFloat(String(e.amount)), 0);
-      
+
       // Get account balances
       const accounts = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.isActive, true));
       const accountBalances = accounts.map(a => ({
@@ -8330,7 +8348,7 @@ function createApp() {
       }
 
       const { name, nameAr, type, currency, bankName, accountNumber, iban, isActive } = req.body;
-      
+
       if (!name || !type) {
         return res.status(400).json({ success: false, error: 'Name and type are required' });
       }
@@ -8400,7 +8418,7 @@ function createApp() {
       }
 
       const { fromAccountId, toAccountId, amount, description } = req.body;
-      
+
       if (!fromAccountId || !toAccountId || !amount) {
         return res.status(400).json({ success: false, error: 'fromAccountId, toAccountId, and amount are required' });
       }
@@ -8447,13 +8465,13 @@ function createApp() {
         createdBy: 'system',
       });
 
-      res.json({ 
-        success: true, 
-        data: { 
-          fromAccountId, 
-          toAccountId, 
-          amount: transferAmount, 
-          transferredAt: new Date().toISOString() 
+      res.json({
+        success: true,
+        data: {
+          fromAccountId,
+          toAccountId,
+          amount: transferAmount,
+          transferredAt: new Date().toISOString()
         },
         message: 'Transfer completed successfully'
       });
@@ -8495,9 +8513,9 @@ function createApp() {
       }
 
       const { status, category, vendorId, startDate, endDate } = req.query;
-      
+
       let expenses = await pgDb.select().from(financeExpensesTable).orderBy(desc(financeExpensesTable.createdAt));
-      
+
       // Apply filters
       if (status && typeof status === 'string') {
         expenses = expenses.filter(e => e.status === status);
@@ -8660,7 +8678,7 @@ function createApp() {
       }
 
       await pgDb.delete(financeExpensesTable).where(eq(financeExpensesTable.id, req.params.id));
-      
+
       res.json({ success: true, data: existing, message: 'Expense deleted successfully' });
     } catch (error) {
       console.error('[Delete Expense Error]', error);
@@ -8728,7 +8746,7 @@ function createApp() {
 
       const allOrders = await pgDb.select().from(ordersTable);
       const allExpenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.status, 'paid'));
-      
+
       const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
       const totalCOGS = totalRevenue * 0.65;
       const grossProfit = totalRevenue - totalCOGS;
@@ -8780,7 +8798,7 @@ function createApp() {
       const allOrders = await pgDb.select().from(ordersTable);
       const allExpenses = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.status, 'paid'));
       const accounts = await pgDb.select().from(financeAccountsTable);
-      
+
       const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
       const totalExpenses = allExpenses.reduce((sum, e) => sum + parseFloat(String(e.amount)), 0);
       const totalBalance = accounts.reduce((sum, a) => sum + parseFloat(String(a.balance)), 0);
@@ -8927,7 +8945,7 @@ function createApp() {
       }
 
       const { code, name, nameAr, accountClass, parentId, description, normalBalance } = req.body;
-      
+
       if (!code || !name || !accountClass) {
         return res.status(400).json({ success: false, error: 'Code, name, and accountClass are required' });
       }
@@ -8975,14 +8993,14 @@ function createApp() {
       }
 
       const { date, description, descriptionAr, reference, referenceType, referenceId, lines, notes, attachments } = req.body;
-      
+
       if (!description || !lines || lines.length === 0) {
         return res.status(400).json({ success: false, error: 'Description and at least one line are required' });
       }
 
       const totalDebits = lines.reduce((sum: number, l: any) => sum + (parseFloat(l.debit) || 0), 0);
       const totalCredits = lines.reduce((sum: number, l: any) => sum + (parseFloat(l.credit) || 0), 0);
-      
+
       if (Math.abs(totalDebits - totalCredits) > 0.01) {
         return res.status(400).json({ success: false, error: 'Debits must equal credits' });
       }
@@ -9075,15 +9093,15 @@ function createApp() {
       const totalResult = await pgDb.select().from(auditLogTable);
       const total = totalResult.length;
 
-      res.json({ 
-        success: true, 
-        data: logs, 
-        pagination: { 
-          page, 
-          limit, 
-          total, 
-          totalPages: Math.ceil(total / limit) 
-        } 
+      res.json({
+        success: true,
+        data: logs,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
       });
     } catch (error) {
       console.error('[Audit Log Error]', error);
@@ -9319,12 +9337,12 @@ function createApp() {
       }
 
       const budgets = await pgDb.select().from(expenseBudgetsTable).where(eq(expenseBudgetsTable.isActive, true)).orderBy(desc(expenseBudgetsTable.createdAt));
-      
+
       // Calculate percentUsed for each budget
       const budgetsWithPercent = budgets.map(b => ({
         ...b,
-        percentUsed: parseFloat(String(b.budgetAmount)) > 0 
-          ? (parseFloat(String(b.spentAmount)) / parseFloat(String(b.budgetAmount))) * 100 
+        percentUsed: parseFloat(String(b.budgetAmount)) > 0
+          ? (parseFloat(String(b.spentAmount)) / parseFloat(String(b.budgetAmount))) * 100
           : 0
       }));
 
@@ -9416,14 +9434,14 @@ function createApp() {
         };
       });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: {
-          summary: { 
-            totalBudget, 
-            totalSpent, 
-            totalRemaining, 
-            overallVariancePercent: totalBudget > 0 ? ((totalBudget - totalSpent) / totalBudget) * 100 : 0 
+          summary: {
+            totalBudget,
+            totalSpent,
+            totalRemaining,
+            overallVariancePercent: totalBudget > 0 ? ((totalBudget - totalSpent) / totalBudget) * 100 : 0
           },
           byCategory
         }
@@ -9571,29 +9589,29 @@ function createApp() {
 export default function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const expressApp = createApp();
-    
+
     // Get the path from query parameter (Vercel passes it as 'path' from the rewrite)
     const pathParam = req.query.path;
-    
+
     if (pathParam) {
       const pathArray = Array.isArray(pathParam) ? pathParam : [pathParam];
       // Remove the path param from query to avoid confusion
       delete req.query.path;
-      const queryString = Object.keys(req.query).length > 0 
+      const queryString = Object.keys(req.query).length > 0
         ? '?' + new URLSearchParams(req.query as Record<string, string>).toString()
         : '';
       req.url = '/api/' + pathArray.join('/') + queryString;
     } else if (req.url && !req.url.startsWith('/api')) {
       req.url = '/api' + req.url;
     }
-    
+
     console.log('[Vercel Handler]', req.method, req.url);
-    
+
     return expressApp(req as any, res as any);
   } catch (error) {
     console.error('[Vercel Handler Error]', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
     });

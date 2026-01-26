@@ -176,8 +176,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // Set auth token
         setAuthToken(response.data.token);
 
-        // Create admin user object
-        const adminUser: User = {
+        // Create staff user object
+        const staffUser: User = {
           id: response.data.user.id,
           username: response.data.user.username || response.data.user.email,
           firstName: response.data.user.firstName,
@@ -188,15 +188,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           address: response.data.user.address,
           isVisitor: false,
           isAdmin: response.data.user.role === "admin",
-          role: response.data.user.role || "admin",
+          role: response.data.user.role,
         };
 
-        setUser(adminUser);
-        localStorage.setItem("user", JSON.stringify(adminUser));
+        setUser(staffUser);
+        localStorage.setItem("user", JSON.stringify(staffUser));
         return { success: true };
       }
 
-      return { success: false, error: response.error || "Invalid admin credentials" };
+      return { success: false, error: response.error || "Invalid staff credentials" };
     } catch (error) {
       return { success: false, error: "Network error. Please check if the server is running." };
     }
