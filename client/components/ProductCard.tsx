@@ -98,7 +98,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   // Get localized product name and description
   const productName = language === "ar" && product.nameAr ? product.nameAr : product.name;
   const productDescription = language === "ar" && product.descriptionAr ? product.descriptionAr : product.description;
-  
+
   // Unit labels - gr for weight button, Kg for price
   const weightUnit = language === "ar" ? "جرام" : "gr";
   const priceUnit = language === "ar" ? "كجم" : "Kg";
@@ -122,18 +122,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const handleConfirmAddToBasket = () => {
     setIsAdding(true);
-    
+
     // Build notes from selected options
     const boneLabels = selectedOptions.boneType.map(id => {
       const opt = BONE_OPTIONS.find(o => o.id === id);
       return language === "ar" ? opt?.labelAr : opt?.label;
     }).filter(Boolean);
-    
+
     const cutLabels = selectedOptions.cutType.map(id => {
       const opt = CUT_OPTIONS.find(o => o.id === id);
       return language === "ar" ? opt?.labelAr : opt?.label;
     }).filter(Boolean);
-    
+
     const notes = [
       boneLabels.length > 0 ? boneLabels.join(", ") : null,
       cutLabels.length > 0 ? cutLabels.join(", ") : null,
@@ -191,18 +191,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const handleQuickViewAddToBasket = () => {
     setIsAdding(true);
-    
+
     // Build notes from selected options
     const boneLabels = quickViewOptions.boneType.map(id => {
       const opt = BONE_OPTIONS.find(o => o.id === id);
       return language === "ar" ? opt?.labelAr : opt?.label;
     }).filter(Boolean);
-    
+
     const cutLabels = quickViewOptions.cutType.map(id => {
       const opt = CUT_OPTIONS.find(o => o.id === id);
       return language === "ar" ? opt?.labelAr : opt?.label;
     }).filter(Boolean);
-    
+
     const notes = [
       boneLabels.length > 0 ? boneLabels.join(", ") : null,
       cutLabels.length > 0 ? cutLabels.join(", ") : null,
@@ -246,7 +246,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     <>
       <div className="card-premium overflow-hidden group h-full flex flex-col">
         {/* Product Image - Clickable for Quick View */}
-        <div 
+        <div
           className={`relative overflow-hidden bg-muted ${compact ? "h-24 sm:h-32" : "h-32 sm:h-48"} w-full flex items-center justify-center cursor-pointer`}
           onClick={handleImageClick}
         >
@@ -259,21 +259,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           ) : (
             <div className={`${compact ? "text-3xl sm:text-4xl" : "text-4xl sm:text-6xl"}`}>🥩</div>
           )}
-          
+
           {/* Quick View Overlay */}
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
             <div className="bg-white/90 dark:bg-gray-800/90 rounded-full p-3 transform scale-75 group-hover:scale-100 transition-transform duration-300">
               <Eye className="w-5 h-5 text-primary" />
             </div>
           </div>
-          
+
           {/* Discount Badge */}
           {product.discount !== undefined && product.discount > 0 && (
             <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
               -{product.discount}%
             </div>
           )}
-          
+
           {/* Dietary Badges */}
           {product.badges && product.badges.length > 0 && (
             <div className="absolute top-2 right-2 flex flex-col gap-1">
@@ -292,7 +292,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               })}
             </div>
           )}
-          
+
           {!product.available && (
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
               <p className="text-white font-semibold text-sm sm:text-base">{t("product.outOfStock")}</p>
@@ -308,9 +308,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </p>
 
           {/* Name */}
-          <h3 className="text-sm sm:text-lg font-bold text-foreground mt-1 line-clamp-2">
-            {productName}
-          </h3>
+          <Link to={`/products/${product.id}`} className="hover:text-primary transition-colors">
+            <h3 className="text-sm sm:text-lg font-bold text-foreground mt-1 line-clamp-2">
+              {productName}
+            </h3>
+          </Link>
 
           {/* Description - hidden on mobile */}
           <p className="text-xs sm:text-sm text-muted-foreground mt-1 sm:mt-2 flex-1 line-clamp-2 sm:line-clamp-3 hidden xs:block">
@@ -412,9 +414,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {product.image ? (
-                    <img 
-                      src={product.image} 
-                      alt={productName} 
+                    <img
+                      src={product.image}
+                      alt={productName}
                       className="w-12 h-12 rounded-lg object-cover"
                     />
                   ) : (
@@ -450,11 +452,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   {BONE_OPTIONS.map((option) => (
                     <label
                       key={option.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedOptions.boneType.includes(option.id)
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${selectedOptions.boneType.includes(option.id)
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
-                      }`}
+                        }`}
                     >
                       <input
                         type="checkbox"
@@ -480,11 +481,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   {CUT_OPTIONS.map((option) => (
                     <label
                       key={option.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedOptions.cutType.includes(option.id)
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${selectedOptions.cutType.includes(option.id)
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
-                      }`}
+                        }`}
                     >
                       <input
                         type="checkbox"
@@ -558,11 +558,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
       {/* Quick View Modal */}
       {showQuickView && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={handleCloseQuickView}
         >
-          <div 
+          <div
             className="bg-background rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
@@ -586,7 +586,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-8xl">🥩</div>
                 )}
-                
+
                 {/* Discount Badge */}
                 {product.discount !== undefined && product.discount > 0 && (
                   <div className="absolute top-4 left-4 bg-red-500 text-white text-sm font-bold px-3 py-1.5 rounded-full">
@@ -622,9 +622,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 </p>
 
                 {/* Name */}
-                <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mt-2">
-                  {productName}
-                </h2>
+                <div className="flex items-center justify-between gap-4 mt-2">
+                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
+                    {productName}
+                  </h2>
+                  <Link
+                    to={`/products/${product.id}`}
+                    className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                  >
+                    {language === "ar" ? "عرض التفاصيل الكاملة" : "View Full Details"}
+                    <ExternalLink className="w-4 h-4" />
+                  </Link>
+                </div>
 
                 {/* Rating */}
                 {product.rating !== undefined && product.rating > 0 && (
@@ -680,11 +689,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                           <button
                             key={option.id}
                             onClick={() => handleQuickViewOptionToggle("boneType", option.id)}
-                            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all text-sm ${
-                              quickViewOptions.boneType.includes(option.id)
+                            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all text-sm ${quickViewOptions.boneType.includes(option.id)
                                 ? "border-primary bg-primary/10 text-primary"
                                 : "border-border text-gray-700 dark:text-gray-300 hover:border-primary/50"
-                            }`}
+                              }`}
                           >
                             {language === "ar" ? option.labelAr : option.label}
                           </button>
@@ -703,11 +711,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                           <button
                             key={option.id}
                             onClick={() => handleQuickViewOptionToggle("cutType", option.id)}
-                            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all text-sm ${
-                              quickViewOptions.cutType.includes(option.id)
+                            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all text-sm ${quickViewOptions.cutType.includes(option.id)
                                 ? "border-primary bg-primary/10 text-primary"
                                 : "border-border text-gray-700 dark:text-gray-300 hover:border-primary/50"
-                            }`}
+                              }`}
                           >
                             {language === "ar" ? option.labelAr : option.label}
                           </button>

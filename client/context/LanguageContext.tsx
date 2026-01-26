@@ -16,7 +16,7 @@ const translations: Record<Language, Record<string, string>> = {
     "header.title": "BUTCHER",
     "header.subtitle": "Premium Quality Meats",
     "header.adminPanel": "Admin Panel",
-    
+
     // Products Page
     "products.title": "Premium Cuts",
     "products.welcome": "Welcome, {name}! Browse our selection of premium meats.",
@@ -25,20 +25,20 @@ const translations: Record<Language, Record<string, string>> = {
     "products.loginPrompt": "Want to add items to your basket?",
     "products.loginPromptDesc": "Create an account or log in to start shopping.",
     "products.loginNow": "Login Now",
-    
+
     // Categories
     "category.all": "All",
     "category.beef": "Beef",
     "category.lamb": "Lamb",
     "category.chicken": "Chicken",
     "category.goat": "Goat",
-    
+
     // Product Card
     "product.add": "Add",
     "product.added": "Added!",
     "product.login": "Login to Buy",
     "product.outOfStock": "Out of Stock",
-    
+
     // Basket
     "basket.title": "Your Basket",
     "basket.subtitle": "Review your items and proceed to checkout",
@@ -51,7 +51,7 @@ const translations: Record<Language, Record<string, string>> = {
     "basket.total": "Total",
     "basket.checkout": "Proceed to Checkout",
     "basket.remove": "Remove",
-    
+
     // Login Page
     "login.title": "BUTCHER",
     "login.subtitle": "Premium Quality Meats Delivered Fresh",
@@ -67,7 +67,7 @@ const translations: Record<Language, Record<string, string>> = {
     "login.continueAsVisitor": "Continue as Visitor",
     "login.logout": "Logout",
     "login.loginLink": "Login",
-    
+
     // Footer
     "footer.title": "BUTCHER",
     "footer.description": "Premium quality meats delivered fresh to your door. Since 2020.",
@@ -85,7 +85,7 @@ const translations: Record<Language, Record<string, string>> = {
     "footer.terms": "Terms",
     "footer.privacy": "Privacy",
     "footer.returns": "Returns",
-    
+
     // Forgot Password
     "forgot.title": "Forgot Password",
     "forgot.subtitle": "Enter your details to receive a password reset link",
@@ -102,7 +102,7 @@ const translations: Record<Language, Record<string, string>> = {
     "forgot.successMessage": "We've sent a password reset link to your email. Please check your inbox and follow the instructions.",
     "forgot.backToLogin": "Back to Login",
     "forgot.notFound": "No account found with this phone number and email combination",
-    
+
     // Reset Password
     "reset.title": "Reset Password",
     "reset.subtitle": "Create a new password for your account",
@@ -126,11 +126,11 @@ const translations: Record<Language, Record<string, string>> = {
     "reset.verifying": "Verifying link...",
     "reset.backToLogin": "Back to Login",
     "reset.genericError": "Something went wrong. Please try again.",
-    
+
     // Common
     "common.aed": "₫",
     "common.free": "Free",
-    
+
     // Admin
     "admin.title": "Butcher Admin",
     "admin.subtitle": "Management System",
@@ -138,12 +138,13 @@ const translations: Record<Language, Record<string, string>> = {
     "admin.viewStore": "View Store",
     "admin.notifications": "Notifications",
     "admin.noNotifications": "No new notifications",
-    
+
     // Admin Tabs
     "admin.dashboard": "Dashboard",
     "admin.orders": "Orders",
     "admin.products": "Products",
     "admin.inventory": "Inventory",
+    "admin.stock": "Inventory",
     "admin.suppliers": "Suppliers",
     "admin.users": "Users",
     "admin.customers": "Customers",
@@ -154,7 +155,7 @@ const translations: Record<Language, Record<string, string>> = {
     "admin.settings": "Settings",
     "admin.promoCodes": "Promo Codes",
     "admin.banners": "Banners",
-    
+
     // Dashboard
     "dashboard.todayOrders": "Today's Orders",
     "dashboard.todayRevenue": "Today's Revenue",
@@ -165,7 +166,7 @@ const translations: Record<Language, Record<string, string>> = {
     "dashboard.viewAllOrders": "View All Orders",
     "dashboard.lowStockAlerts": "Low Stock Alerts",
     "dashboard.topProducts": "Top Products",
-    
+
     // Orders
     "orders.title": "Orders Management",
     "orders.allOrders": "All Orders",
@@ -185,7 +186,7 @@ const translations: Record<Language, Record<string, string>> = {
     "orders.viewDetails": "View Details",
     "orders.updateStatus": "Update Status",
     "orders.noOrders": "No orders found",
-    
+
     // Stock/Inventory
     "stock.title": "Inventory Management",
     "stock.product": "Product",
@@ -197,7 +198,7 @@ const translations: Record<Language, Record<string, string>> = {
     "stock.lowStock": "Low Stock",
     "stock.inStock": "In Stock",
     "stock.outOfStock": "Out of Stock",
-    
+
     // Users
     "users.title": "User Management",
     "users.name": "Name",
@@ -211,7 +212,7 @@ const translations: Record<Language, Record<string, string>> = {
     "users.admin": "Admin",
     "users.staff": "Staff",
     "users.driver": "Driver",
-    
+
     // Delivery
     "delivery.title": "Delivery Management",
     "delivery.zones": "Delivery Zones",
@@ -220,7 +221,7 @@ const translations: Record<Language, Record<string, string>> = {
     "delivery.zone": "Zone",
     "delivery.fee": "Fee",
     "delivery.estimatedTime": "Est. Time",
-    
+
     // Payments
     "payments.title": "Payments",
     "payments.transaction": "Transaction",
@@ -233,7 +234,7 @@ const translations: Record<Language, Record<string, string>> = {
     "payments.pending": "Pending",
     "payments.failed": "Failed",
     "payments.refunded": "Refunded",
-    
+
     // Reports
     "reports.title": "Reports & Analytics",
     "reports.salesReport": "Sales Report",
@@ -251,7 +252,7 @@ const translations: Record<Language, Record<string, string>> = {
     "header.title": "الجزارة",
     "header.subtitle": "لحوم عالية الجودة",
     "header.adminPanel": "لوحة الإدارة",
-    
+
     // Products Page
     "products.title": "قطع ممتازة",
     "products.welcome": "مرحباً {name}! تصفح مجموعتنا من اللحوم الممتازة.",
@@ -260,20 +261,20 @@ const translations: Record<Language, Record<string, string>> = {
     "products.loginPrompt": "هل تريد إضافة عناصر إلى سلتك؟",
     "products.loginPromptDesc": "أنشئ حساباً أو سجل الدخول لبدء التسوق.",
     "products.loginNow": "تسجيل الدخول الآن",
-    
+
     // Categories
     "category.all": "الكل",
     "category.beef": "لحم البقر",
     "category.lamb": "لحم الخروف",
     "category.chicken": "دجاج",
     "category.goat": "لحم ماعز",
-    
+
     // Product Card
     "product.add": "إضافة",
     "product.added": "تمت الإضافة!",
     "product.login": "تسجيل الدخول للشراء",
     "product.outOfStock": "غير متوفر",
-    
+
     // Basket
     "basket.title": "سلتك",
     "basket.subtitle": "راجع عناصرك واستمر للدفع",
@@ -286,7 +287,7 @@ const translations: Record<Language, Record<string, string>> = {
     "basket.total": "المجموع",
     "basket.checkout": "الانتقال للدفع",
     "basket.remove": "حذف",
-    
+
     // Login Page
     "login.title": "الجزارة",
     "login.subtitle": "لحوم عالية الجودة طازجة إلى باب منزلك",
@@ -302,7 +303,7 @@ const translations: Record<Language, Record<string, string>> = {
     "login.continueAsVisitor": "متابعة كزائر",
     "login.logout": "تسجيل الخروج",
     "login.loginLink": "تسجيل الدخول",
-    
+
     // Footer
     "footer.title": "الجزارة",
     "footer.description": "لحوم عالية الجودة يتم توصيلها طازجة إلى باب منزلك. منذ 2020.",
@@ -320,7 +321,7 @@ const translations: Record<Language, Record<string, string>> = {
     "footer.terms": "الشروط",
     "footer.privacy": "الخصوصية",
     "footer.returns": "المرتجعات",
-    
+
     // Forgot Password
     "forgot.title": "نسيت كلمة المرور",
     "forgot.subtitle": "أدخل بياناتك لاستلام رابط إعادة تعيين كلمة المرور",
@@ -337,7 +338,7 @@ const translations: Record<Language, Record<string, string>> = {
     "forgot.successMessage": "لقد أرسلنا رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني. يرجى التحقق من صندوق الوارد واتباع التعليمات.",
     "forgot.backToLogin": "العودة لتسجيل الدخول",
     "forgot.notFound": "لم يتم العثور على حساب بهذا الرقم والبريد الإلكتروني",
-    
+
     // Reset Password
     "reset.title": "إعادة تعيين كلمة المرور",
     "reset.subtitle": "أنشئ كلمة مرور جديدة لحسابك",
@@ -361,11 +362,11 @@ const translations: Record<Language, Record<string, string>> = {
     "reset.verifying": "جاري التحقق من الرابط...",
     "reset.backToLogin": "العودة لتسجيل الدخول",
     "reset.genericError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
-    
+
     // Common
     "common.aed": "₫",
     "common.free": "مجاناً",
-    
+
     // Admin
     "admin.title": "إدارة الجزارة",
     "admin.subtitle": "نظام الإدارة",
@@ -373,12 +374,13 @@ const translations: Record<Language, Record<string, string>> = {
     "admin.viewStore": "عرض المتجر",
     "admin.notifications": "الإشعارات",
     "admin.noNotifications": "لا توجد إشعارات جديدة",
-    
+
     // Admin Tabs
     "admin.dashboard": "لوحة التحكم",
     "admin.orders": "الطلبات",
     "admin.products": "المنتجات",
     "admin.inventory": "المخزون",
+    "admin.stock": "المخزون",
     "admin.suppliers": "الموردون",
     "admin.users": "المستخدمون",
     "admin.customers": "العملاء",
@@ -389,7 +391,7 @@ const translations: Record<Language, Record<string, string>> = {
     "admin.settings": "الإعدادات",
     "admin.promoCodes": "أكواد الخصم",
     "admin.banners": "البانرات",
-    
+
     // Dashboard
     "dashboard.todayOrders": "طلبات اليوم",
     "dashboard.todayRevenue": "إيرادات اليوم",
@@ -400,7 +402,7 @@ const translations: Record<Language, Record<string, string>> = {
     "dashboard.viewAllOrders": "عرض جميع الطلبات",
     "dashboard.lowStockAlerts": "تنبيهات المخزون المنخفض",
     "dashboard.topProducts": "أفضل المنتجات",
-    
+
     // Orders
     "orders.title": "إدارة الطلبات",
     "orders.allOrders": "جميع الطلبات",
@@ -420,7 +422,7 @@ const translations: Record<Language, Record<string, string>> = {
     "orders.viewDetails": "عرض التفاصيل",
     "orders.updateStatus": "تحديث الحالة",
     "orders.noOrders": "لا توجد طلبات",
-    
+
     // Stock/Inventory
     "stock.title": "إدارة المخزون",
     "stock.product": "المنتج",
@@ -432,7 +434,7 @@ const translations: Record<Language, Record<string, string>> = {
     "stock.lowStock": "مخزون منخفض",
     "stock.inStock": "متوفر",
     "stock.outOfStock": "غير متوفر",
-    
+
     // Users
     "users.title": "إدارة المستخدمين",
     "users.name": "الاسم",
@@ -446,7 +448,7 @@ const translations: Record<Language, Record<string, string>> = {
     "users.admin": "مدير",
     "users.staff": "موظف",
     "users.driver": "سائق",
-    
+
     // Delivery
     "delivery.title": "إدارة التوصيل",
     "delivery.zones": "مناطق التوصيل",
@@ -455,7 +457,7 @@ const translations: Record<Language, Record<string, string>> = {
     "delivery.zone": "المنطقة",
     "delivery.fee": "الرسوم",
     "delivery.estimatedTime": "الوقت المتوقع",
-    
+
     // Payments
     "payments.title": "المدفوعات",
     "payments.transaction": "المعاملة",
@@ -468,7 +470,7 @@ const translations: Record<Language, Record<string, string>> = {
     "payments.pending": "قيد الانتظار",
     "payments.failed": "فشل",
     "payments.refunded": "مسترد",
-    
+
     // Reports
     "reports.title": "التقارير والتحليلات",
     "reports.salesReport": "تقرير المبيعات",
@@ -507,14 +509,14 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const t = (key: string, replacements?: Record<string, string>): string => {
     let translation = translations[language][key] || key;
-    
+
     // Replace placeholders like {name}
     if (replacements) {
       Object.keys(replacements).forEach((placeholder) => {
         translation = translation.replace(`{${placeholder}}`, replacements[placeholder]);
       });
     }
-    
+
     return translation;
   };
 

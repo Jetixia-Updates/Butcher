@@ -88,7 +88,7 @@ export default function ProductsPage() {
     refreshProducts();
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleVisibilityChange);
-    
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);
@@ -182,10 +182,7 @@ export default function ProductsPage() {
   const isVisitor = !!user && user.isVisitor;
 
   const handleAddToBasket = (item: any) => {
-    if (!isLoggedIn) {
-      navigate("/");
-      return;
-    }
+    // Visitors are welcome to add to basket; they'll be prompted at checkout
     addItem(item);
   };
 
@@ -222,8 +219,8 @@ export default function ProductsPage() {
             {isLoggedIn
               ? t("products.welcome", { name: user?.firstName || "" })
               : isVisitor
-              ? `${t("products.guestMessage")} (${user?.firstName})`
-              : t("products.guestMessage")}
+                ? `${t("products.guestMessage")} (${user?.firstName})`
+                : t("products.guestMessage")}
           </p>
         </div>
 
@@ -365,11 +362,10 @@ export default function ProductsPage() {
                   }
                   setSearchParams(searchParams);
                 }}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-semibold whitespace-nowrap transition-all text-sm sm:text-base ${
-                  selectedCategory === category.id
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-foreground hover:bg-muted/80"
-                }`}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-semibold whitespace-nowrap transition-all text-sm sm:text-base ${selectedCategory === category.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground hover:bg-muted/80"
+                  }`}
               >
                 {isRTL ? category.nameAr : category.nameEn}
               </button>
@@ -407,30 +403,32 @@ export default function ProductsPage() {
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
             {filteredProducts.map((product) => (
               <div key={product.id} className="relative group">
-                {/* Wishlist Button */}
-                {isLoggedIn && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      toggleWishlist({
-                        productId: product.id,
-                        name: product.name,
-                        nameAr: product.nameAr,
-                        price: product.price,
-                        image: product.image,
-                        category: product.category,
-                      });
-                    }}
-                    className={cn(
-                      "absolute top-2 right-2 z-10 p-2 rounded-full bg-white/90 dark:bg-slate-800/90 shadow-sm transition-colors opacity-0 group-hover:opacity-100",
-                      isInWishlist(product.id) ? "text-red-500 opacity-100" : "text-muted-foreground hover:text-red-500"
-                    )}
-                  >
-                    <Heart className={cn("w-4 h-4", isInWishlist(product.id) && "fill-current")} />
-                  </button>
-                )}
-                
+                {/* Wishlist Button - visible to all, prompts for login if not logged in */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    if (!isLoggedIn) {
+                      navigate("/login", { state: { from: window.location.pathname } });
+                      return;
+                    }
+                    toggleWishlist({
+                      productId: product.id,
+                      name: product.name,
+                      nameAr: product.nameAr,
+                      price: product.price,
+                      image: product.image,
+                      category: product.category,
+                    });
+                  }}
+                  className={cn(
+                    "absolute top-2 right-2 z-10 p-2 rounded-full bg-white/90 dark:bg-slate-800/90 shadow-sm transition-colors",
+                    isLoggedIn && isInWishlist(product.id) ? "text-red-500 opacity-100" : "text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100"
+                  )}
+                >
+                  <Heart className={cn("w-4 h-4", isLoggedIn && isInWishlist(product.id) && "fill-current")} />
+                </button>
+
                 {/* Rating Badge */}
                 {(() => {
                   const rating = getProductRating(product.id);

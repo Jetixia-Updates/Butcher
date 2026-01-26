@@ -64,7 +64,7 @@ async function fetchApi<T>(
   retryDelay: number = 1000
 ): Promise<ApiResponse<T>> {
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const headers: Record<string, string> = {
@@ -84,7 +84,7 @@ async function fetchApi<T>(
 
       // Handle empty responses (204 No Content, or empty body)
       const text = await response.text();
-      
+
       if (!text) {
         // Empty response - return success/failure based on status code
         if (response.ok) {
@@ -103,14 +103,14 @@ async function fetchApi<T>(
       // Try to parse as JSON
       try {
         const data = JSON.parse(text);
-        
+
         // If server returned an error and it's a 5xx, retry
         if (!data.success && response.status >= 500 && attempt < retries) {
           lastError = new Error(data.error || 'Server error');
           await delay(retryDelay * (attempt + 1));
           continue;
         }
-        
+
         return data;
       } catch {
         // Response is not JSON
@@ -128,7 +128,7 @@ async function fetchApi<T>(
       }
     } catch (error) {
       lastError = error instanceof Error ? error : new Error("Network error");
-      
+
       // Retry on network errors (common during cold starts)
       if (attempt < retries) {
         await delay(retryDelay * (attempt + 1));
@@ -136,7 +136,7 @@ async function fetchApi<T>(
       }
     }
   }
-  
+
   // All retries exhausted
   return {
     success: false,
@@ -265,7 +265,7 @@ export const ordersApi = {
 
     const query = searchParams.toString();
     const result = await fetchApi<any>(query ? `/orders?${query}` : "/orders");
-    
+
     // Handle PaginatedResponse from server
     if (result.success && result.data?.data && Array.isArray(result.data.data)) {
       return {
@@ -273,7 +273,7 @@ export const ordersApi = {
         data: result.data.data,
       };
     }
-    
+
     // Handle ApiResponse<Order[]> format
     if (result.success && Array.isArray(result.data)) {
       return {
@@ -281,7 +281,7 @@ export const ordersApi = {
         data: result.data,
       };
     }
-    
+
     return result;
   },
 
@@ -326,13 +326,13 @@ export const ordersApi = {
     } else {
       console.warn(`[API] ⚠️ No userId provided for status update`);
     }
-    
+
     const requestBody: Record<string, any> = { status };
     if (notes) {
       requestBody.notes = notes;
     }
     console.log(`[API] Request body:`, requestBody);
-    
+
     try {
       const result = await fetchApi<Order>(`/orders/${id}/status`, {
         method: "PATCH",
@@ -585,14 +585,32 @@ export const deliveryApi = {
 // =====================================================
 
 export const paymentsApi = {
-  getAll: (params?: { page?: number; limit?: number; status?: string; method?: string }) => {
+  getAll: async (params?: { page?: number; limit?: number; status?: string; method?: string }): Promise<ApiResponse<Payment[]>> => {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.set("page", params.page.toString());
     if (params?.limit) searchParams.set("limit", params.limit.toString());
     if (params?.status) searchParams.set("status", params.status);
     if (params?.method) searchParams.set("method", params.method);
 
-    return fetchApi<Payment[]>(`/payments?${searchParams.toString()}`);
+    const result = await fetchApi<any>(`/payments?${searchParams.toString()}`);
+
+    // Handle PaginatedResponse from server
+    if (result.success && result.data?.data && Array.isArray(result.data.data)) {
+      return {
+        success: true,
+        data: result.data.data,
+      };
+    }
+
+    // Handle ApiResponse<Payment[]> format
+    if (result.success && Array.isArray(result.data)) {
+      return {
+        success: true,
+        data: result.data,
+      };
+    }
+
+    return result;
   },
 
   getById: (id: string) => fetchApi<Payment>(`/payments/${id}`),
@@ -975,7 +993,7 @@ export const notificationsApi = {
 
   // Mark all notifications as read
   markAllAsRead: (userId: string) =>
-    fetchApi<null>("/notifications/read-all", { 
+    fetchApi<null>("/notifications/read-all", {
       method: "PATCH",
       body: JSON.stringify({ userId }),
     }),
@@ -1035,11 +1053,11 @@ export const walletApi = {
     fetchApi<{ balance: string }>("/wallet/credit", {
       method: "POST",
       headers: { "x-user-id": userId },
-      body: JSON.stringify({ 
-        amount, 
-        type, 
-        description, 
-        descriptionAr: description 
+      body: JSON.stringify({
+        amount,
+        type,
+        description,
+        descriptionAr: description
       }),
     }),
 };

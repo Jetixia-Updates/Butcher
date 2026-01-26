@@ -38,7 +38,7 @@ export default function DealsPage() {
       "from-amber-500 to-orange-600",
       "from-blue-500 to-cyan-600",
     ];
-    
+
     return adminPromoCodes
       .filter((p) => p.enabled)
       .map((p, index) => ({
@@ -46,7 +46,7 @@ export default function DealsPage() {
         code: p.code,
         titleEn: p.description || `${p.discount}${p.type === "percent" ? "%" : " AED"} Off`,
         titleAr: p.descriptionAr || `خصم ${p.discount}${p.type === "percent" ? "%" : " درهم"}`,
-        descriptionEn: p.minOrder 
+        descriptionEn: p.minOrder
           ? `${p.discount}${p.type === "percent" ? "%" : " AED"} off on orders above ${p.minOrder} AED`
           : `${p.discount}${p.type === "percent" ? "%" : " AED"} off your order`,
         descriptionAr: p.minOrder
@@ -135,7 +135,7 @@ export default function DealsPage() {
     if (activeCategory === "all") return dealsProducts;
     if (activeCategory === "flash") return dealsProducts.filter((p) => (p.discount || 0) >= 20);
     if (activeCategory === "bundle") return dealsProducts.slice(0, 4);
-    if (activeCategory === "seasonal") return dealsProducts.filter((p) => p.category === "lamb");
+    if (activeCategory === "seasonal") return dealsProducts.filter((p) => p.category.toLowerCase() === "lamb");
     if (activeCategory === "clearance") return dealsProducts.filter((p) => (p.discount || 0) >= 30);
     return dealsProducts;
   }, [dealsProducts, activeCategory]);
