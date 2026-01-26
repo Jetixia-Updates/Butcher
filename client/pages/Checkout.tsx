@@ -58,19 +58,19 @@ const generateDeliveryDates = (): DeliveryDate[] => {
   const dates: DeliveryDate[] = [];
   const today = new Date();
   const currentHour = today.getHours();
-  
+
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const dayNamesAr = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const monthNamesAr = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
-  
+
   for (let i = 0; i < 7; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
-    
+
     const isToday = i === 0;
     const isTomorrow = i === 1;
-    
+
     // Filter available slots for today based on current time
     let availableSlots = generateTimeSlots();
     if (isToday) {
@@ -80,10 +80,10 @@ const generateDeliveryDates = (): DeliveryDate[] => {
         return slotStartHour > currentHour + 2;
       });
     }
-    
+
     // Skip days with no available slots
     if (availableSlots.length === 0) continue;
-    
+
     dates.push({
       date,
       dayLabel: isToday ? "Today" : isTomorrow ? "Tomorrow" : dayNames[date.getDay()],
@@ -93,7 +93,7 @@ const generateDeliveryDates = (): DeliveryDate[] => {
       slots: availableSlots,
     });
   }
-  
+
   return dates;
 };
 
@@ -131,13 +131,13 @@ const EMPTY_ADDRESS_FORM: AddressFormData = {
 const UAE_CENTER: [number, number] = [25.2048, 55.2708]; // Dubai
 
 // Map Picker Component using Leaflet + OpenStreetMap (FREE)
-function MapPicker({ 
-  latitude, 
-  longitude, 
-  onLocationSelect 
-}: { 
-  latitude?: number; 
-  longitude?: number; 
+function MapPicker({
+  latitude,
+  longitude,
+  onLocationSelect
+}: {
+  latitude?: number;
+  longitude?: number;
   onLocationSelect: (lat: number, lng: number, address?: string) => void;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -174,14 +174,14 @@ function MapPicker({
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude: lat, longitude: lng } = position.coords;
-        
+
         if (leafletMapRef.current) {
           if (markerRef.current) {
             markerRef.current.setLatLng([lat, lng]);
           } else {
             markerRef.current = L.marker([lat, lng], { draggable: true })
               .addTo(leafletMapRef.current);
-            
+
             markerRef.current.on("dragend", async () => {
               const pos = markerRef.current?.getLatLng();
               if (pos) {
@@ -192,7 +192,7 @@ function MapPicker({
           }
           leafletMapRef.current.setView([lat, lng], 16);
         }
-        
+
         const address = await reverseGeocode(lat, lng);
         onLocationSelect(lat, lng, address);
         setIsLocating(false);
@@ -215,8 +215,8 @@ function MapPicker({
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;
 
-    const initialCenter: [number, number] = latitude && longitude 
-      ? [latitude, longitude] 
+    const initialCenter: [number, number] = latitude && longitude
+      ? [latitude, longitude]
       : UAE_CENTER;
     const initialZoom = latitude && longitude ? 16 : 12;
 
@@ -232,7 +232,7 @@ function MapPicker({
     if (latitude && longitude) {
       markerRef.current = L.marker([latitude, longitude], { draggable: true })
         .addTo(leafletMapRef.current);
-      
+
       markerRef.current.on("dragend", async () => {
         const pos = markerRef.current?.getLatLng();
         if (pos) {
@@ -245,13 +245,13 @@ function MapPicker({
     // Handle map clicks
     leafletMapRef.current.on("click", async (e: L.LeafletMouseEvent) => {
       const { lat, lng } = e.latlng;
-      
+
       if (markerRef.current) {
         markerRef.current.setLatLng([lat, lng]);
       } else {
         markerRef.current = L.marker([lat, lng], { draggable: true })
           .addTo(leafletMapRef.current!);
-        
+
         markerRef.current.on("dragend", async () => {
           const pos = markerRef.current?.getLatLng();
           if (pos) {
@@ -260,7 +260,7 @@ function MapPicker({
           }
         });
       }
-      
+
       const address = await reverseGeocode(lat, lng);
       onLocationSelect(lat, lng, address);
     });
@@ -283,7 +283,7 @@ function MapPicker({
   // Update marker when coordinates change externally
   useEffect(() => {
     if (!leafletMapRef.current || !isMapReady) return;
-    
+
     if (latitude && longitude) {
       if (markerRef.current) {
         markerRef.current.setLatLng([latitude, longitude]);
@@ -329,13 +329,13 @@ function MapPicker({
           <span>Use my current location</span>
         </button>
       )}
-      
+
       {/* Map Container */}
-      <div 
-        ref={mapRef} 
+      <div
+        ref={mapRef}
         className="w-full h-64 rounded-lg border border-input overflow-hidden z-0"
       />
-      
+
       <p className="text-xs text-muted-foreground text-center">
         Your location is detected automatically. Click on the map or drag the marker to adjust.
       </p>
@@ -347,11 +347,11 @@ function MapPicker({
 function AddressMapPreview({ latitude, longitude }: { latitude?: number; longitude?: number }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
-  
+
   useEffect(() => {
     if (!mapRef.current || !latitude || !longitude) return;
     if (leafletMapRef.current) return; // Already initialized
-    
+
     leafletMapRef.current = L.map(mapRef.current, {
       zoomControl: false,
       dragging: false,
@@ -377,7 +377,7 @@ function AddressMapPreview({ latitude, longitude }: { latitude?: number; longitu
   if (!latitude || !longitude) {
     return null;
   }
-  
+
   return (
     <div className="mt-2 rounded-lg overflow-hidden border border-border">
       <div ref={mapRef} className="w-full h-20" />
@@ -386,11 +386,11 @@ function AddressMapPreview({ latitude, longitude }: { latitude?: number; longitu
 }
 
 // Interactive map for viewing a specific address location
-function AddressLocationViewer({ 
-  address, 
-  onClose 
-}: { 
-  address: Address; 
+function AddressLocationViewer({
+  address,
+  onClose
+}: {
+  address: Address;
   onClose: () => void;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -400,9 +400,9 @@ function AddressLocationViewer({
   useEffect(() => {
     if (!mapRef.current || !address.latitude || !address.longitude) return;
     if (leafletMapRef.current) return; // Already initialized
-    
+
     leafletMapRef.current = L.map(mapRef.current).setView(
-      [address.latitude, address.longitude], 
+      [address.latitude, address.longitude],
       16
     );
 
@@ -414,7 +414,7 @@ function AddressLocationViewer({
     L.marker([address.latitude, address.longitude])
       .bindPopup(address.label)
       .addTo(leafletMapRef.current);
-    
+
     // Reverse geocode to get formatted address using Nominatim
     fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${address.latitude}&lon=${address.longitude}&zoom=18&addressdetails=1`,
@@ -426,7 +426,7 @@ function AddressLocationViewer({
           setFormattedAddress(data.display_name);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => {
       if (leafletMapRef.current) {
@@ -471,10 +471,10 @@ function AddressLocationViewer({
             </svg>
           </button>
         </div>
-        
+
         {/* Map */}
         <div ref={mapRef} className="w-full h-80" />
-        
+
         {/* Address Details */}
         <div className="p-4 bg-muted/30 space-y-2">
           <div className="flex items-start gap-2">
@@ -504,7 +504,7 @@ function AddressLocationViewer({
             <span>Lat: {address.latitude.toFixed(6)}, Lng: {address.longitude.toFixed(6)}</span>
           </div>
         </div>
-        
+
         {/* Actions */}
         <div className="p-4 border-t border-border flex gap-3">
           <a
@@ -535,7 +535,7 @@ export default function CheckoutPage() {
   const isRTL = language === 'ar';
   const { addNotification, addAdminNotification } = useNotifications();
   const { validatePromoCode, settings, timeSlots: adminTimeSlots } = useSettings();
-  
+
   // Promo code state
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState<{ code: string; discount: number; type: "percent" | "fixed"; maxDiscount?: number } | null>(null);
@@ -545,22 +545,22 @@ export default function CheckoutPage() {
   const handleApplyPromo = async () => {
     setPromoError(null);
     setIsApplyingPromo(true);
-    
+
     try {
       // Validate promo code using SettingsContext
       const result = await validatePromoCode(promoCode, subtotal);
-      
+
       if (result.valid && result.promo) {
-        setPromoApplied({ 
-          code: result.promo.code, 
-          discount: result.promo.discount, 
+        setPromoApplied({
+          code: result.promo.code,
+          discount: result.promo.discount,
           type: result.promo.type,
           maxDiscount: result.promo.maxDiscount
         });
         setPromoError(null);
       } else {
         setPromoError(
-          isRTL 
+          isRTL
             ? (result.error === "Invalid promo code" ? "كود غير صالح" : result.error || "كود غير صالح")
             : (result.error || "Invalid promo code")
         );
@@ -582,12 +582,12 @@ export default function CheckoutPage() {
   const discountAmount = promoApplied
     ? promoApplied.type === "percent"
       ? Math.round(Math.min(
-          subtotal * (promoApplied.discount / 100),
-          promoApplied.maxDiscount ?? Infinity
-        ) * 100) / 100
+        subtotal * (promoApplied.discount / 100),
+        promoApplied.maxDiscount ?? Infinity
+      ) * 100) / 100
       : Math.round(promoApplied.discount * 100) / 100
     : 0;
-  
+
   // Translations
   const t = {
     basket: isRTL ? 'السلة' : 'Basket',
@@ -664,34 +664,34 @@ export default function CheckoutPage() {
     fujairah: isRTL ? 'الفجيرة' : 'Fujairah',
     ummAlQuwain: isRTL ? 'أم القيوين' : 'Umm Al Quwain',
   };
-  
+
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Address state
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
-  
+
   // Modal state
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
   const [addressForm, setAddressForm] = useState<AddressFormData>(EMPTY_ADDRESS_FORM);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
-  
+
   // View location modal
   const [viewingAddress, setViewingAddress] = useState<Address | null>(null);
-  
+
   // Delivery time slot state
   const [deliveryDates] = useState<DeliveryDate[]>(generateDeliveryDates);
   const [selectedDateIndex, setSelectedDateIndex] = useState<number>(0);
   const [selectedTimeSlotId, setSelectedTimeSlotId] = useState<string | null>(null);
-  
+
   // Express delivery state
   const [isExpressDelivery, setIsExpressDelivery] = useState(false);
-  
+
   // Driver tip state
   const [driverTip, setDriverTip] = useState<number>(0);
   const tipOptions = [0, 5, 10, 15, 20];
@@ -745,7 +745,7 @@ export default function CheckoutPage() {
         const response = await addressesApi.getAll(user.id);
         if (response.success && response.data) {
           setAddresses(response.data);
-          
+
           // Select default address or first address
           const defaultAddress = response.data.find(a => a.isDefault) || response.data[0];
           if (defaultAddress) {
@@ -780,14 +780,14 @@ export default function CheckoutPage() {
   useEffect(() => {
     const currentAddress = addresses.find(a => a.id === selectedAddressId);
     if (!currentAddress) {
-      setZoneDeliveryFee(settings?.deliveryFee || 15);
+      setZoneDeliveryFee(settings?.defaultDeliveryFee || 15);
       setMatchedZone(null);
       return;
     }
 
     // If no zones available, use default fee from settings
     if (zones.length === 0) {
-      setZoneDeliveryFee(settings?.deliveryFee || 15);
+      setZoneDeliveryFee(settings?.defaultDeliveryFee || 15);
       setMatchedZone(null);
       return;
     }
@@ -795,7 +795,7 @@ export default function CheckoutPage() {
     // Find matching zone based on emirate and area
     const zone = zones.find((z) => {
       const emirateMatch = z.emirate.toLowerCase() === currentAddress.emirate.toLowerCase();
-      const areaMatch = z.areas.some((a) => 
+      const areaMatch = z.areas.some((a) =>
         a.toLowerCase().includes(currentAddress.area.toLowerCase()) ||
         currentAddress.area.toLowerCase().includes(a.toLowerCase())
       );
@@ -803,19 +803,19 @@ export default function CheckoutPage() {
     });
 
     if (zone) {
-      setZoneDeliveryFee(Number(zone.deliveryFee) || (settings?.deliveryFee || 15));
+      setZoneDeliveryFee(Number(zone.deliveryFee) || (settings?.defaultDeliveryFee || 15));
       setMatchedZone(zone);
     } else {
       // Fallback: try to match just by emirate
-      const emirateZone = zones.find((z) => 
+      const emirateZone = zones.find((z) =>
         z.emirate.toLowerCase() === currentAddress.emirate.toLowerCase()
       );
       if (emirateZone) {
-        setZoneDeliveryFee(Number(emirateZone.deliveryFee) || (settings?.deliveryFee || 15));
+        setZoneDeliveryFee(Number(emirateZone.deliveryFee) || (settings?.defaultDeliveryFee || 15));
         setMatchedZone(emirateZone);
       } else {
         // No matching zone found - use default delivery fee from settings
-        setZoneDeliveryFee(settings?.deliveryFee || 15);
+        setZoneDeliveryFee(settings?.defaultDeliveryFee || 15);
         setMatchedZone(null);
       }
     }
@@ -851,7 +851,7 @@ export default function CheckoutPage() {
     const selectedDate = deliveryDates[selectedDateIndex];
     const selectedSlot = selectedDate?.slots.find(s => s.id === selectedTimeSlotId);
     if (!selectedDate || !selectedSlot) return "";
-    
+
     const dateStr = selectedDate.date.toLocaleDateString("en-AE", {
       weekday: "long",
       year: "numeric",
@@ -872,11 +872,11 @@ export default function CheckoutPage() {
       return;
     }
     setIsProcessing(true);
-    const deliverySlotInfo = isExpressDelivery 
+    const deliverySlotInfo = isExpressDelivery
       ? (language === "ar" ? "توصيل سريع - خلال 3 ساعات" : "Express Delivery - Within 3 hours")
       : getSelectedDeliverySlotInfo();
-    navigate("/payment/card", { 
-      state: { 
+    navigate("/payment/card", {
+      state: {
         addressId: selectedAddressId,
         deliveryTimeSlot: deliverySlotInfo,
         promoCode: promoApplied?.code,
@@ -885,7 +885,7 @@ export default function CheckoutPage() {
         expressDeliveryFee: isExpressDelivery ? expressDeliveryFee : 0,
         zoneDeliveryFee: zoneDeliveryFee,
         driverTip: driverTip,
-      } 
+      }
     });
   };
 
@@ -931,7 +931,7 @@ export default function CheckoutPage() {
       latitude: lat,
       longitude: lng,
     }));
-    
+
     // Optionally auto-fill address fields from geocoded address
     if (formattedAddress) {
       // You could parse the address here to auto-fill fields
@@ -941,14 +941,14 @@ export default function CheckoutPage() {
 
   const handleSaveAddress = async () => {
     if (!user?.id) return;
-    
+
     // Validation
-    if (!addressForm.fullName || !addressForm.mobile || !addressForm.emirate || 
-        !addressForm.area || !addressForm.street || !addressForm.building) {
+    if (!addressForm.fullName || !addressForm.mobile || !addressForm.emirate ||
+      !addressForm.area || !addressForm.street || !addressForm.building) {
       setError("Please fill in all required fields");
       return;
     }
-    
+
     // Validate location
     if (!addressForm.latitude || !addressForm.longitude) {
       setError("Please select your location on the map");
@@ -1055,7 +1055,7 @@ export default function CheckoutPage() {
     setError(null);
 
     // Build delivery notes with time slot or express delivery
-    const deliverySlotInfo = isExpressDelivery 
+    const deliverySlotInfo = isExpressDelivery
       ? (language === "ar" ? "توصيل سريع - خلال 3 ساعات" : "Express Delivery - Within 3 hours")
       : getSelectedDeliverySlotInfo();
     const deliveryNotes = `Preferred Delivery Time: ${deliverySlotInfo}`;
@@ -1113,11 +1113,11 @@ export default function CheckoutPage() {
 
       if (response.success && response.data) {
         // Notifications are now created server-side for reliability across all devices
-        
+
         // Generate TAX invoice using server-calculated values for accuracy
         const invoiceNumber = generateInvoiceNumber(response.data.orderNumber);
         const orderData = response.data;
-        
+
         const invoiceData: InvoiceData = {
           invoiceNumber,
           orderNumber: orderData.orderNumber,
@@ -1130,9 +1130,9 @@ export default function CheckoutPage() {
           }),
           customerName: orderData.customerName || selectedAddress?.fullName || "Customer",
           customerMobile: orderData.customerMobile || selectedAddress?.mobile || user?.mobile || "",
-          customerAddress: orderData.deliveryAddress 
+          customerAddress: orderData.deliveryAddress
             ? `${orderData.deliveryAddress.building}, ${orderData.deliveryAddress.street}, ${orderData.deliveryAddress.area}, ${orderData.deliveryAddress.emirate}`
-            : (selectedAddress 
+            : (selectedAddress
               ? `${selectedAddress.building}, ${selectedAddress.street}, ${selectedAddress.area}, ${selectedAddress.emirate}`
               : ""),
           items: orderData.items.map((item) => ({
@@ -1156,7 +1156,7 @@ export default function CheckoutPage() {
 
         // Send TAX invoice notification to the user
         addNotification(createDetailedInvoiceNotification(invoiceData));
-        
+
         // Clear basket after successful order
         clearBasket();
         alert(
@@ -1175,307 +1175,300 @@ export default function CheckoutPage() {
 
   return (
     <div className="py-6 sm:py-12 px-3 sm:px-4" dir={isRTL ? 'rtl' : 'ltr'}>
-        <div className="max-w-7xl mx-auto">
-          {/* Progress Indicator */}
-          <div className="mb-6 sm:mb-8 flex justify-center">
-            <div className="flex items-center gap-3 sm:gap-8">
-              <div className="text-center">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-muted text-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
-                  ✓
-                </div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">{t.basket}</p>
+      <div className="max-w-7xl mx-auto">
+        {/* Progress Indicator */}
+        <div className="mb-6 sm:mb-8 flex justify-center">
+          <div className="flex items-center gap-3 sm:gap-8">
+            <div className="text-center">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-muted text-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
+                ✓
               </div>
-              <div className="w-6 sm:w-12 h-1 bg-muted" />
-              <div className="text-center">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary text-primary-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
-                  2
-                </div>
-                <p className="text-[10px] sm:text-xs text-foreground font-semibold">{t.checkout}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">{t.basket}</p>
+            </div>
+            <div className="w-6 sm:w-12 h-1 bg-muted" />
+            <div className="text-center">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary text-primary-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
+                2
               </div>
-              <div className="w-6 sm:w-12 h-1 bg-muted" />
-              <div className="text-center">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-muted text-muted-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
-                  3
-                </div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">{t.confirmation}</p>
+              <p className="text-[10px] sm:text-xs text-foreground font-semibold">{t.checkout}</p>
+            </div>
+            <div className="w-6 sm:w-12 h-1 bg-muted" />
+            <div className="text-center">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-muted text-muted-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
+                3
               </div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">{t.confirmation}</p>
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
-            {/* Checkout Content */}
-            <div className="lg:col-span-2 space-y-4 sm:space-y-8">
-              {/* Error Display */}
-              {error && (
-                <div className="bg-destructive/10 border border-destructive text-destructive px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">
-                  {error}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
+          {/* Checkout Content */}
+          <div className="lg:col-span-2 space-y-4 sm:space-y-8">
+            {/* Error Display */}
+            {error && (
+              <div className="bg-destructive/10 border border-destructive text-destructive px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">
+                {error}
+              </div>
+            )}
+
+            {/* Delivery Address Section */}
+            <div className="card-premium p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <h2 className="text-lg sm:text-2xl font-bold text-foreground">
+                  {t.deliveryAddress}
+                </h2>
+                <button
+                  onClick={handleOpenAddModal}
+                  className="text-primary hover:text-primary/80 text-xs sm:text-sm font-semibold flex items-center gap-1"
+                >
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span className="hidden xs:inline">{t.addNewAddress}</span>
+                  <span className="xs:hidden">{isRTL ? 'إضافة' : 'Add'}</span>
+                </button>
+              </div>
+
+              {isLoadingAddresses ? (
+                <div className="text-center py-6 sm:py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-primary mx-auto"></div>
+                  <p className="text-muted-foreground mt-2 text-sm">{isRTL ? 'جاري تحميل العناوين...' : 'Loading addresses...'}</p>
                 </div>
-              )}
-
-              {/* Delivery Address Section */}
-              <div className="card-premium p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <h2 className="text-lg sm:text-2xl font-bold text-foreground">
-                    {t.deliveryAddress}
-                  </h2>
+              ) : addresses.length === 0 ? (
+                <div className="text-center py-6 sm:py-8 border-2 border-dashed border-border rounded-lg">
+                  <div className="text-3xl sm:text-4xl mb-2">📍</div>
+                  <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4">{t.noAddresses}</p>
                   <button
                     onClick={handleOpenAddModal}
-                    className="text-primary hover:text-primary/80 text-xs sm:text-sm font-semibold flex items-center gap-1"
+                    className="btn-primary px-4 sm:px-6 py-2 text-sm"
                   >
-                    <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span className="hidden xs:inline">{t.addNewAddress}</span>
-                    <span className="xs:hidden">{isRTL ? 'إضافة' : 'Add'}</span>
+                    {t.addFirstAddress}
                   </button>
                 </div>
-
-                {isLoadingAddresses ? (
-                  <div className="text-center py-6 sm:py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-primary mx-auto"></div>
-                    <p className="text-muted-foreground mt-2 text-sm">{isRTL ? 'جاري تحميل العناوين...' : 'Loading addresses...'}</p>
-                  </div>
-                ) : addresses.length === 0 ? (
-                  <div className="text-center py-6 sm:py-8 border-2 border-dashed border-border rounded-lg">
-                    <div className="text-3xl sm:text-4xl mb-2">📍</div>
-                    <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4">{t.noAddresses}</p>
-                    <button
-                      onClick={handleOpenAddModal}
-                      className="btn-primary px-4 sm:px-6 py-2 text-sm"
-                    >
-                      {t.addFirstAddress}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2 sm:space-y-3">
-                    {addresses.map((address) => (
-                      <div
-                        key={address.id}
-                        onClick={() => setSelectedAddressId(address.id)}
-                        className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                          selectedAddressId === address.id
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50"
+              ) : (
+                <div className="space-y-2 sm:space-y-3">
+                  {addresses.map((address) => (
+                    <div
+                      key={address.id}
+                      onClick={() => setSelectedAddressId(address.id)}
+                      className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${selectedAddressId === address.id
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
                         }`}
-                      >
-                        <div className="flex items-start gap-2 sm:gap-3">
-                          <div
-                            className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${
-                              selectedAddressId === address.id
-                                ? "border-primary bg-primary"
-                                : "border-border"
+                    >
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <div
+                          className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${selectedAddressId === address.id
+                              ? "border-primary bg-primary"
+                              : "border-border"
                             }`}
-                          >
-                            {selectedAddressId === address.id && (
-                              <svg className="w-2 h-2 sm:w-3 sm:h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
+                        >
+                          {selectedAddressId === address.id && (
+                            <svg className="w-2 h-2 sm:w-3 sm:h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1 sm:gap-2 mb-1 flex-wrap">
+                            <span className="font-semibold text-foreground text-sm sm:text-base">{address.label}</span>
+                            {address.isDefault && (
+                              <span className="px-1.5 sm:px-2 py-0.5 bg-primary/10 text-primary text-[10px] sm:text-xs rounded-full font-medium">
+                                {t.default}
+                              </span>
                             )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1 sm:gap-2 mb-1 flex-wrap">
-                              <span className="font-semibold text-foreground text-sm sm:text-base">{address.label}</span>
-                              {address.isDefault && (
-                                <span className="px-1.5 sm:px-2 py-0.5 bg-primary/10 text-primary text-[10px] sm:text-xs rounded-full font-medium">
-                                  {t.default}
-                                </span>
-                              )}
-                              {address.latitude && address.longitude && (
-                                <span className="px-1.5 sm:px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] sm:text-xs rounded-full font-medium flex items-center gap-0.5 sm:gap-1">
-                                  📍 <span className="hidden xs:inline">Located</span>
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs sm:text-sm text-foreground">{address.fullName}</p>
-                            <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1 sm:line-clamp-none">
-                              {address.building}, {address.street}
-                              {address.floor && `, ${isRTL ? 'الطابق' : 'Floor'} ${address.floor}`}
-                              {address.apartment && `, ${isRTL ? 'شقة' : 'Apt'} ${address.apartment}`}
-                            </p>
-                            <p className="text-xs sm:text-sm text-muted-foreground">
-                              {address.area}, {address.emirate}
-                            </p>
-                            <p className="text-xs sm:text-sm text-muted-foreground">{address.mobile}</p>
-                            
-                            {/* Mini Map Preview - hidden on mobile */}
-                            <div className="hidden sm:block">
-                              <AddressMapPreview latitude={address.latitude} longitude={address.longitude} />
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                            {/* View on Map button */}
                             {address.latitude && address.longitude && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setViewingAddress(address);
-                                }}
-                                className="p-1.5 sm:p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                                title="View on Map"
-                              >
-                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                                </svg>
-                              </button>
+                              <span className="px-1.5 sm:px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] sm:text-xs rounded-full font-medium flex items-center gap-0.5 sm:gap-1">
+                                📍 <span className="hidden xs:inline">Located</span>
+                              </span>
                             )}
+                          </div>
+                          <p className="text-xs sm:text-sm text-foreground">{address.fullName}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1 sm:line-clamp-none">
+                            {address.building}, {address.street}
+                            {address.floor && `, ${isRTL ? 'الطابق' : 'Floor'} ${address.floor}`}
+                            {address.apartment && `, ${isRTL ? 'شقة' : 'Apt'} ${address.apartment}`}
+                          </p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">
+                            {address.area}, {address.emirate}
+                          </p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">{address.mobile}</p>
+
+                          {/* Mini Map Preview - hidden on mobile */}
+                          <div className="hidden sm:block">
+                            <AddressMapPreview latitude={address.latitude} longitude={address.longitude} />
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+                          {/* View on Map button */}
+                          {address.latitude && address.longitude && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleOpenEditModal(address);
+                                setViewingAddress(address);
                               }}
-                              className="p-1.5 sm:p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                              title="Edit"
+                              className="p-1.5 sm:p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                              title="View on Map"
                             >
                               <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                               </svg>
                             </button>
-                            {addresses.length > 1 && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteAddress(address.id);
-                                }}
-                                className="p-1.5 sm:p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                                title="Delete"
-                              >
-                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditModal(address);
+                            }}
+                            className="p-1.5 sm:p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                            title="Edit"
+                          >
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          {addresses.length > 1 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteAddress(address.id);
+                              }}
+                              className="p-1.5 sm:p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                              title="Delete"
+                            >
+                              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Preferred Delivery Time Slot Section */}
-              <div className="card-premium p-4 sm:p-6">
-                <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-1 sm:mb-2">
-                  {language === "ar" ? "وقت التوصيل المفضل" : "Preferred Delivery Time"}
-                </h2>
-                <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
-                  {language === "ar" 
-                    ? "اختر اليوم والوقت الأنسب لاستلام طلبك" 
-                    : "Choose your preferred date and time for delivery"}
-                </p>
-
-                {/* Date and Time Selection - Hidden when Express Delivery is selected */}
-                {!isExpressDelivery && (
-                  <>
-                {/* Date Selection */}
-                <div className="mb-4 sm:mb-6">
-                  <label className="block text-xs sm:text-sm font-semibold text-foreground mb-2 sm:mb-3">
-                    {language === "ar" ? "📅 اختر اليوم" : "📅 Select Date"}
-                  </label>
-                  <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-2 -mx-3 px-3 sm:-mx-2 sm:px-2">
-                    {deliveryDates.map((dateInfo, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => {
-                          setSelectedDateIndex(index);
-                          setSelectedTimeSlotId(null); // Reset time slot when date changes
-                        }}
-                        className={`flex-shrink-0 min-w-[80px] sm:min-w-[100px] p-2 sm:p-3 rounded-xl border-2 transition-all text-center ${
-                          selectedDateIndex === index
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-background hover:border-primary/50 text-foreground"
-                        }`}
-                      >
-                        <div className="font-semibold text-xs sm:text-sm">
-                          {language === "ar" ? dateInfo.dayLabelAr : dateInfo.dayLabel}
-                        </div>
-                        <div className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
-                          {language === "ar" ? dateInfo.dateLabelAr : dateInfo.dateLabel}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
+              )}
+            </div>
 
-                {/* Time Slot Selection */}
-                <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-foreground mb-2 sm:mb-3">
-                    {language === "ar" ? "🕐 اختر الوقت" : "🕐 Select Time Slot"}
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                    {deliveryDates[selectedDateIndex]?.slots.map((slot) => (
-                      <button
-                        key={slot.id}
-                        type="button"
-                        onClick={() => setSelectedTimeSlotId(slot.id)}
-                        className={`p-2.5 sm:p-4 rounded-xl border-2 transition-all text-left ${
-                          selectedTimeSlotId === slot.id
-                            ? "border-primary bg-primary/10"
-                            : "border-border bg-background hover:border-primary/50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <div
-                            className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                              selectedTimeSlotId === slot.id
-                                ? "border-primary bg-primary"
-                                : "border-border"
+            {/* Preferred Delivery Time Slot Section */}
+            <div className="card-premium p-4 sm:p-6">
+              <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-1 sm:mb-2">
+                {language === "ar" ? "وقت التوصيل المفضل" : "Preferred Delivery Time"}
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
+                {language === "ar"
+                  ? "اختر اليوم والوقت الأنسب لاستلام طلبك"
+                  : "Choose your preferred date and time for delivery"}
+              </p>
+
+              {/* Date and Time Selection - Hidden when Express Delivery is selected */}
+              {!isExpressDelivery && (
+                <>
+                  {/* Date Selection */}
+                  <div className="mb-4 sm:mb-6">
+                    <label className="block text-xs sm:text-sm font-semibold text-foreground mb-2 sm:mb-3">
+                      {language === "ar" ? "📅 اختر اليوم" : "📅 Select Date"}
+                    </label>
+                    <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-2 -mx-3 px-3 sm:-mx-2 sm:px-2">
+                      {deliveryDates.map((dateInfo, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDateIndex(index);
+                            setSelectedTimeSlotId(null); // Reset time slot when date changes
+                          }}
+                          className={`flex-shrink-0 min-w-[80px] sm:min-w-[100px] p-2 sm:p-3 rounded-xl border-2 transition-all text-center ${selectedDateIndex === index
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-background hover:border-primary/50 text-foreground"
                             }`}
-                          >
-                            {selectedTimeSlotId === slot.id && (
-                              <svg className="w-2 h-2 sm:w-3 sm:h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            )}
+                        >
+                          <div className="font-semibold text-xs sm:text-sm">
+                            {language === "ar" ? dateInfo.dayLabelAr : dateInfo.dayLabel}
                           </div>
-                          <div className="min-w-0">
-                            <div className={`font-medium text-xs sm:text-sm ${selectedTimeSlotId === slot.id ? "text-primary" : "text-foreground"}`}>
-                              {language === "ar" ? slot.labelAr : slot.label}
+                          <div className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
+                            {language === "ar" ? dateInfo.dateLabelAr : dateInfo.dateLabel}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Time Slot Selection */}
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-foreground mb-2 sm:mb-3">
+                      {language === "ar" ? "🕐 اختر الوقت" : "🕐 Select Time Slot"}
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                      {deliveryDates[selectedDateIndex]?.slots.map((slot) => (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          onClick={() => setSelectedTimeSlotId(slot.id)}
+                          className={`p-2.5 sm:p-4 rounded-xl border-2 transition-all text-left ${selectedTimeSlotId === slot.id
+                              ? "border-primary bg-primary/10"
+                              : "border-border bg-background hover:border-primary/50"
+                            }`}
+                        >
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div
+                              className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedTimeSlotId === slot.id
+                                  ? "border-primary bg-primary"
+                                  : "border-border"
+                                }`}
+                            >
+                              {selectedTimeSlotId === slot.id && (
+                                <svg className="w-2 h-2 sm:w-3 sm:h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className={`font-medium text-xs sm:text-sm ${selectedTimeSlotId === slot.id ? "text-primary" : "text-foreground"}`}>
+                                {language === "ar" ? slot.labelAr : slot.label}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Selected Time Summary */}
-                {selectedTimeSlotId && (
-                  <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="text-xs sm:text-sm font-medium">
-                        {language === "ar" ? "موعد التوصيل المحدد:" : "Scheduled Delivery:"}
-                      </span>
+                        </button>
+                      ))}
                     </div>
-                    <p className="text-xs sm:text-sm text-green-600 dark:text-green-500 mt-1 mr-6 sm:mr-7">
-                      {getSelectedDeliverySlotInfo()}
-                    </p>
                   </div>
-                )}
-                  </>
-                )}
 
-                {/* Express Delivery Option - only show if zone has express enabled */}
-                {expressEnabled && (
+                  {/* Selected Time Summary */}
+                  {selectedTimeSlotId && (
+                    <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="text-xs sm:text-sm font-medium">
+                          {language === "ar" ? "موعد التوصيل المحدد:" : "Scheduled Delivery:"}
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-green-600 dark:text-green-500 mt-1 mr-6 sm:mr-7">
+                        {getSelectedDeliverySlotInfo()}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Express Delivery Option - only show if zone has express enabled */}
+              {expressEnabled && (
                 <div className="mt-4 sm:mt-6 pt-4 border-t border-border">
                   <div
                     onClick={() => setIsExpressDelivery(!isExpressDelivery)}
-                    className={`p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                      isExpressDelivery
+                    className={`p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all ${isExpressDelivery
                         ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
                         : "border-border hover:border-orange-300"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start gap-3">
                       <div
-                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                          isExpressDelivery
+                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${isExpressDelivery
                             ? "border-orange-500 bg-orange-500"
                             : "border-border"
-                        }`}
+                          }`}
                       >
                         {isExpressDelivery && (
                           <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -1494,8 +1487,8 @@ export default function CheckoutPage() {
                           </span>
                         </div>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                          {language === "ar" 
-                            ? `احصل على طلبك خلال ${expressHours} ساعات! رسوم إضافية ${expressDeliveryFee} درهم` 
+                          {language === "ar"
+                            ? `احصل على طلبك خلال ${expressHours} ساعات! رسوم إضافية ${expressDeliveryFee} درهم`
                             : `Get your order within ${expressHours} hours! Additional AED ${expressDeliveryFee} fee`}
                         </p>
                       </div>
@@ -1505,369 +1498,363 @@ export default function CheckoutPage() {
                     </div>
                   </div>
                 </div>
-                )}
-              </div>
-
-              {/* Driver Tip Section */}
-              <div className="card-premium p-4 sm:p-6">
-                <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-2">
-                  {language === "ar" ? "إكرامية للسائق" : "Tip Your Driver"}
-                </h2>
-                <p className="text-xs sm:text-sm text-muted-foreground mb-4">
-                  {language === "ar" 
-                    ? "100% من الإكرامية تذهب للسائق 💚"
-                    : "100% of your tip goes to the driver 💚"}
-                </p>
-                
-                <div className="flex gap-2 flex-wrap">
-                  {tipOptions.map((tip) => (
-                    <button
-                      key={tip}
-                      type="button"
-                      onClick={() => setDriverTip(tip)}
-                      className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all ${
-                        driverTip === tip
-                          ? "bg-primary text-white"
-                          : "bg-muted text-foreground hover:bg-muted/80"
-                      }`}
-                    >
-                      {tip === 0 
-                        ? (language === "ar" ? "لا شكراً" : "No tip")
-                        : `AED ${tip}`
-                      }
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const customTip = prompt(language === "ar" ? "أدخل مبلغ الإكرامية:" : "Enter tip amount:");
-                      if (customTip) {
-                        const amount = parseFloat(customTip);
-                        if (!isNaN(amount) && amount >= 0) {
-                          setDriverTip(amount);
-                        }
-                      }
-                    }}
-                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all ${
-                      !tipOptions.includes(driverTip) && driverTip > 0
-                        ? "bg-primary text-white"
-                        : "bg-muted text-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    {!tipOptions.includes(driverTip) && driverTip > 0 
-                      ? `AED ${driverTip}`
-                      : (language === "ar" ? "مبلغ آخر" : "Other")}
-                  </button>
-                </div>
-
-                {driverTip > 0 && (
-                  <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center gap-2">
-                    <span className="text-xl">🙏</span>
-                    <p className="text-sm text-green-700 dark:text-green-400">
-                      {language === "ar" 
-                        ? `شكراً لك! سيحصل السائق على ${driverTip} درهم إكرامية`
-                        : `Thank you! Your driver will receive AED ${driverTip} tip`}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Payment Method Selection */}
-              <div className="card-premium p-4 sm:p-6">
-                <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-4 sm:mb-6">
-                  {language === "ar" ? "طريقة الدفع" : "Payment Method"}
-                </h2>
-
-                <div className="space-y-3 sm:space-y-4">
-                  {/* Credit Card Option */}
-                  <div
-                    onClick={() => handlePaymentMethodSelect("card")}
-                    className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      paymentMethod === "card"
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3 sm:gap-4">
-                      <div
-                        className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${
-                          paymentMethod === "card"
-                            ? "border-primary bg-primary"
-                            : "border-border"
-                        }`}
-                      >
-                        {paymentMethod === "card" && (
-                          <svg
-                            className="w-2 h-2 sm:w-3 sm:h-3 text-white"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground text-sm sm:text-base">
-                          {t.payWithCard}
-                        </h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
-                          {isRTL ? 'ادفع بأمان باستخدام فيزا، ماستركارد، أو أمريكان إكسبريس' : 'Pay securely with Visa, Mastercard, or American Express'}
-                        </p>
-                      </div>
-                      <div className="text-xl sm:text-2xl">💳</div>
-                    </div>
-                  </div>
-
-                  {/* Cash on Delivery Option */}
-                  <div
-                    onClick={() => handlePaymentMethodSelect("cod")}
-                    className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      paymentMethod === "cod"
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3 sm:gap-4">
-                      <div
-                        className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${
-                          paymentMethod === "cod"
-                            ? "border-primary bg-primary"
-                            : "border-border"
-                        }`}
-                      >
-                        {paymentMethod === "cod" && (
-                          <svg
-                            className="w-2 h-2 sm:w-3 sm:h-3 text-white"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground text-sm sm:text-base">
-                          {t.cashOnDelivery}
-                        </h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
-                          {t.payWhenReceive}
-                        </p>
-                      </div>
-                      <div className="text-xl sm:text-2xl">💵</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment Button */}
-                {paymentMethod && (
-                  <button
-                    onClick={
-                      paymentMethod === "card"
-                        ? handleCardPayment
-                        : handleCODPayment
-                    }
-                    disabled={isProcessing || !selectedAddressId || (!isExpressDelivery && !selectedTimeSlotId)}
-                    className="w-full btn-primary py-2.5 sm:py-3 rounded-lg font-semibold text-sm sm:text-base mt-4 sm:mt-6 disabled:opacity-50 transition-all"
-                  >
-                    {isProcessing
-                      ? (language === "ar" ? "جاري المعالجة..." : "Processing...")
-                      : !selectedAddressId
-                      ? (language === "ar" ? "اختر عنوان التوصيل" : "Select a Delivery Address")
-                      : (!isExpressDelivery && !selectedTimeSlotId)
-                      ? (language === "ar" ? "اختر موعد التوصيل" : "Select a Delivery Time")
-                      : paymentMethod === "card"
-                      ? (language === "ar" ? "المتابعة للدفع" : "Continue to Payment")
-                      : (language === "ar" ? "تأكيد الطلب" : "Confirm Order")}
-                  </button>
-                )}
-              </div>
-
-              {/* Order Info */}
-              <div className="card-premium p-3 sm:p-6 bg-secondary/10">
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  ℹ️ Your order will be processed securely. No card details are
-                  stored on our servers.
-                </p>
-              </div>
+              )}
             </div>
 
-            {/* Order Summary */}
-            <div className="lg:col-span-1">
-              <div className="card-premium p-4 sm:p-6 sticky top-24 space-y-3 sm:space-y-4">
-                <h2 className="text-lg sm:text-xl font-bold text-foreground">
-                  {t.orderSummary}
-                </h2>
+            {/* Driver Tip Section */}
+            <div className="card-premium p-4 sm:p-6">
+              <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-2">
+                {language === "ar" ? "إكرامية للسائق" : "Tip Your Driver"}
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4">
+                {language === "ar"
+                  ? "100% من الإكرامية تذهب للسائق 💚"
+                  : "100% of your tip goes to the driver 💚"}
+              </p>
 
-                {/* Selected Address Preview */}
-                {selectedAddress && (
-                  <div className="bg-muted/50 rounded-lg p-2.5 sm:p-3 text-xs sm:text-sm">
-                    <p className="font-medium text-foreground mb-1">{isRTL ? 'التوصيل إلى:' : 'Delivering to:'}</p>
-                    <p className="text-muted-foreground">{selectedAddress.fullName}</p>
-                    <p className="text-muted-foreground">{selectedAddress.area}, {selectedAddress.emirate}</p>
-                  </div>
-                )}
-
-                {/* Items */}
-                <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto border-b border-border pb-3 sm:pb-4">
-                  {items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex justify-between items-center text-xs sm:text-sm"
-                    >
-                      <span className="text-muted-foreground line-clamp-1 flex-1 mr-2">
-                        {getItemName(item)} x {formatWeightDisplay(item.quantity)}
-                      </span>
-                      <span className="font-semibold whitespace-nowrap">
-                        <PriceDisplay price={item.price * item.quantity} size="sm" />
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Promo Code Section */}
-                <div className="border-b border-border pb-3 sm:pb-4">
-                  <label className="block text-xs sm:text-sm font-medium text-foreground mb-2">
-                    {t.promoCode}
-                  </label>
-                  {promoApplied ? (
-                    <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2.5 sm:p-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-600 dark:text-green-400">🎉</span>
-                        <div>
-                          <p className="text-xs sm:text-sm font-semibold text-green-700 dark:text-green-400">
-                            {promoApplied.code}
-                          </p>
-                          <p className="text-[10px] sm:text-xs text-green-600 dark:text-green-500">
-                            {promoApplied.type === "percent" 
-                              ? `${promoApplied.discount}% ${isRTL ? 'خصم' : 'off'}`
-                              : `${isRTL ? 'خصم' : 'AED'} ${promoApplied.discount} ${isRTL ? 'درهم' : 'off'}`
-                            }
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleRemovePromo}
-                        className="text-xs sm:text-sm text-red-600 hover:text-red-700 font-medium"
-                      >
-                        {t.remove}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                        placeholder={t.promoPlaceholder}
-                        className="flex-1 px-3 py-2 text-xs sm:text-sm border border-border rounded-lg focus:border-primary outline-none"
-                      />
-                      <button
-                        onClick={handleApplyPromo}
-                        disabled={!promoCode.trim() || isApplyingPromo}
-                        className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground text-xs sm:text-sm font-medium rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                      >
-                        {isApplyingPromo ? t.applying : t.apply}
-                      </button>
-                    </div>
-                  )}
-                  {promoError && (
-                    <p className="text-[10px] sm:text-xs text-red-600 mt-1.5">{promoError}</p>
-                  )}
-                  {!promoApplied && !promoError && (
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5">
-                      {isRTL ? 'جرب: WELCOME10, SAVE20' : 'Try: WELCOME10, SAVE20'}
-                    </p>
-                  )}
-                </div>
-
-                {/* Totals */}
-                <div className="space-y-2 sm:space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">{t.subtotal}</span>
-                    <span className="font-semibold"><PriceDisplay price={subtotal} size="md" /></span>
-                  </div>
-                  {promoApplied && discountAmount > 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-green-600 dark:text-green-400">{t.discount}</span>
-                      <span className="font-semibold text-green-600 dark:text-green-400">
-                        -<PriceDisplay price={discountAmount} size="md" />
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center bg-secondary/10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 text-sm">
-                    <span className="text-muted-foreground">{t.vat}</span>
-                    <span className="font-semibold text-secondary">
-                      <PriceDisplay price={adjustedVat} size="md" />
-                    </span>
-                  </div>
-                  {/* Show either zone delivery fee OR express delivery fee, not both */}
-                  {isExpressDelivery ? (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-orange-600 dark:text-orange-400 flex items-center gap-1">
-                        ⚡ {isRTL ? "توصيل سريع" : "Express Delivery"}
-                      </span>
-                      <span className="font-semibold text-orange-600 dark:text-orange-400">
-                        +<PriceDisplay price={expressDeliveryFee} size="md" />
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        🚚 {t.deliveryFee}
-                        {matchedZone && (
-                          <span className="text-xs text-muted-foreground/70">
-                            ({language === "ar" ? matchedZone.nameAr : matchedZone.name})
-                          </span>
-                        )}
-                      </span>
-                      <span className="font-semibold">
-                        {zoneDeliveryFee === 0 ? (
-                          <span className="text-green-600 dark:text-green-400">{isRTL ? 'مجاني' : 'FREE'}</span>
-                        ) : (
-                          <>+<PriceDisplay price={zoneDeliveryFee} size="md" /></>
-                        )}
-                      </span>
-                    </div>
-                  )}
-                  {driverTip > 0 && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                        💚 {isRTL ? "إكرامية السائق" : "Driver Tip"}
-                      </span>
-                      <span className="font-semibold text-green-600 dark:text-green-400">
-                        +<PriceDisplay price={driverTip} size="md" />
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center pt-2 border-t border-border">
-                    <span className="text-base sm:text-lg font-bold text-foreground">
-                      {t.total}
-                    </span>
-                    <span className="text-xl sm:text-2xl font-bold text-primary">
-                      <PriceDisplay price={adjustedTotal} size="lg" />
-                    </span>
-                  </div>
-                </div>
-
-                {/* Back to Basket */}
+              <div className="flex gap-2 flex-wrap">
+                {tipOptions.map((tip) => (
+                  <button
+                    key={tip}
+                    type="button"
+                    onClick={() => setDriverTip(tip)}
+                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all ${driverTip === tip
+                        ? "bg-primary text-white"
+                        : "bg-muted text-foreground hover:bg-muted/80"
+                      }`}
+                  >
+                    {tip === 0
+                      ? (language === "ar" ? "لا شكراً" : "No tip")
+                      : `AED ${tip}`
+                    }
+                  </button>
+                ))}
                 <button
-                  onClick={() => navigate("/basket")}
-                  className="btn-outline w-full py-2 text-xs sm:text-sm rounded-lg"
+                  type="button"
+                  onClick={() => {
+                    const customTip = prompt(language === "ar" ? "أدخل مبلغ الإكرامية:" : "Enter tip amount:");
+                    if (customTip) {
+                      const amount = parseFloat(customTip);
+                      if (!isNaN(amount) && amount >= 0) {
+                        setDriverTip(amount);
+                      }
+                    }
+                  }}
+                  className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all ${!tipOptions.includes(driverTip) && driverTip > 0
+                      ? "bg-primary text-white"
+                      : "bg-muted text-foreground hover:bg-muted/80"
+                    }`}
                 >
-                  {isRTL ? 'العودة للسلة' : 'Back to Basket'}
+                  {!tipOptions.includes(driverTip) && driverTip > 0
+                    ? `AED ${driverTip}`
+                    : (language === "ar" ? "مبلغ آخر" : "Other")}
                 </button>
               </div>
+
+              {driverTip > 0 && (
+                <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center gap-2">
+                  <span className="text-xl">🙏</span>
+                  <p className="text-sm text-green-700 dark:text-green-400">
+                    {language === "ar"
+                      ? `شكراً لك! سيحصل السائق على ${driverTip} درهم إكرامية`
+                      : `Thank you! Your driver will receive AED ${driverTip} tip`}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Payment Method Selection */}
+            <div className="card-premium p-4 sm:p-6">
+              <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-4 sm:mb-6">
+                {language === "ar" ? "طريقة الدفع" : "Payment Method"}
+              </h2>
+
+              <div className="space-y-3 sm:space-y-4">
+                {/* Credit Card Option */}
+                <div
+                  onClick={() => handlePaymentMethodSelect("card")}
+                  className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "card"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                    }`}
+                >
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div
+                      className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${paymentMethod === "card"
+                          ? "border-primary bg-primary"
+                          : "border-border"
+                        }`}
+                    >
+                      {paymentMethod === "card" && (
+                        <svg
+                          className="w-2 h-2 sm:w-3 sm:h-3 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground text-sm sm:text-base">
+                        {t.payWithCard}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
+                        {isRTL ? 'ادفع بأمان باستخدام فيزا، ماستركارد، أو أمريكان إكسبريس' : 'Pay securely with Visa, Mastercard, or American Express'}
+                      </p>
+                    </div>
+                    <div className="text-xl sm:text-2xl">💳</div>
+                  </div>
+                </div>
+
+                {/* Cash on Delivery Option */}
+                <div
+                  onClick={() => handlePaymentMethodSelect("cod")}
+                  className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "cod"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                    }`}
+                >
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div
+                      className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${paymentMethod === "cod"
+                          ? "border-primary bg-primary"
+                          : "border-border"
+                        }`}
+                    >
+                      {paymentMethod === "cod" && (
+                        <svg
+                          className="w-2 h-2 sm:w-3 sm:h-3 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground text-sm sm:text-base">
+                        {t.cashOnDelivery}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
+                        {t.payWhenReceive}
+                      </p>
+                    </div>
+                    <div className="text-xl sm:text-2xl">💵</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Button */}
+              {paymentMethod && (
+                <button
+                  onClick={
+                    paymentMethod === "card"
+                      ? handleCardPayment
+                      : handleCODPayment
+                  }
+                  disabled={isProcessing || !selectedAddressId || (!isExpressDelivery && !selectedTimeSlotId)}
+                  className="w-full btn-primary py-2.5 sm:py-3 rounded-lg font-semibold text-sm sm:text-base mt-4 sm:mt-6 disabled:opacity-50 transition-all"
+                >
+                  {isProcessing
+                    ? (language === "ar" ? "جاري المعالجة..." : "Processing...")
+                    : !selectedAddressId
+                      ? (language === "ar" ? "اختر عنوان التوصيل" : "Select a Delivery Address")
+                      : (!isExpressDelivery && !selectedTimeSlotId)
+                        ? (language === "ar" ? "اختر موعد التوصيل" : "Select a Delivery Time")
+                        : paymentMethod === "card"
+                          ? (language === "ar" ? "المتابعة للدفع" : "Continue to Payment")
+                          : (language === "ar" ? "تأكيد الطلب" : "Confirm Order")}
+                </button>
+              )}
+            </div>
+
+            {/* Order Info */}
+            <div className="card-premium p-3 sm:p-6 bg-secondary/10">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                ℹ️ Your order will be processed securely. No card details are
+                stored on our servers.
+              </p>
+            </div>
+          </div>
+
+          {/* Order Summary */}
+          <div className="lg:col-span-1">
+            <div className="card-premium p-4 sm:p-6 sticky top-24 space-y-3 sm:space-y-4">
+              <h2 className="text-lg sm:text-xl font-bold text-foreground">
+                {t.orderSummary}
+              </h2>
+
+              {/* Selected Address Preview */}
+              {selectedAddress && (
+                <div className="bg-muted/50 rounded-lg p-2.5 sm:p-3 text-xs sm:text-sm">
+                  <p className="font-medium text-foreground mb-1">{isRTL ? 'التوصيل إلى:' : 'Delivering to:'}</p>
+                  <p className="text-muted-foreground">{selectedAddress.fullName}</p>
+                  <p className="text-muted-foreground">{selectedAddress.area}, {selectedAddress.emirate}</p>
+                </div>
+              )}
+
+              {/* Items */}
+              <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto border-b border-border pb-3 sm:pb-4">
+                {items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex justify-between items-center text-xs sm:text-sm"
+                  >
+                    <span className="text-muted-foreground line-clamp-1 flex-1 mr-2">
+                      {getItemName(item)} x {formatWeightDisplay(item.quantity)}
+                    </span>
+                    <span className="font-semibold whitespace-nowrap">
+                      <PriceDisplay price={item.price * item.quantity} size="sm" />
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Promo Code Section */}
+              <div className="border-b border-border pb-3 sm:pb-4">
+                <label className="block text-xs sm:text-sm font-medium text-foreground mb-2">
+                  {t.promoCode}
+                </label>
+                {promoApplied ? (
+                  <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2.5 sm:p-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600 dark:text-green-400">🎉</span>
+                      <div>
+                        <p className="text-xs sm:text-sm font-semibold text-green-700 dark:text-green-400">
+                          {promoApplied.code}
+                        </p>
+                        <p className="text-[10px] sm:text-xs text-green-600 dark:text-green-500">
+                          {promoApplied.type === "percent"
+                            ? `${promoApplied.discount}% ${isRTL ? 'خصم' : 'off'}`
+                            : `${isRTL ? 'خصم' : 'AED'} ${promoApplied.discount} ${isRTL ? 'درهم' : 'off'}`
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleRemovePromo}
+                      className="text-xs sm:text-sm text-red-600 hover:text-red-700 font-medium"
+                    >
+                      {t.remove}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                      placeholder={t.promoPlaceholder}
+                      className="flex-1 px-3 py-2 text-xs sm:text-sm border border-border rounded-lg focus:border-primary outline-none"
+                    />
+                    <button
+                      onClick={handleApplyPromo}
+                      disabled={!promoCode.trim() || isApplyingPromo}
+                      className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground text-xs sm:text-sm font-medium rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                    >
+                      {isApplyingPromo ? t.applying : t.apply}
+                    </button>
+                  </div>
+                )}
+                {promoError && (
+                  <p className="text-[10px] sm:text-xs text-red-600 mt-1.5">{promoError}</p>
+                )}
+                {!promoApplied && !promoError && (
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5">
+                    {isRTL ? 'جرب: WELCOME10, SAVE20' : 'Try: WELCOME10, SAVE20'}
+                  </p>
+                )}
+              </div>
+
+              {/* Totals */}
+              <div className="space-y-2 sm:space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">{t.subtotal}</span>
+                  <span className="font-semibold"><PriceDisplay price={subtotal} size="md" /></span>
+                </div>
+                {promoApplied && discountAmount > 0 && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-green-600 dark:text-green-400">{t.discount}</span>
+                    <span className="font-semibold text-green-600 dark:text-green-400">
+                      -<PriceDisplay price={discountAmount} size="md" />
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center bg-secondary/10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 text-sm">
+                  <span className="text-muted-foreground">{t.vat}</span>
+                  <span className="font-semibold text-secondary">
+                    <PriceDisplay price={adjustedVat} size="md" />
+                  </span>
+                </div>
+                {/* Show either zone delivery fee OR express delivery fee, not both */}
+                {isExpressDelivery ? (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                      ⚡ {isRTL ? "توصيل سريع" : "Express Delivery"}
+                    </span>
+                    <span className="font-semibold text-orange-600 dark:text-orange-400">
+                      +<PriceDisplay price={expressDeliveryFee} size="md" />
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      🚚 {t.deliveryFee}
+                      {matchedZone && (
+                        <span className="text-xs text-muted-foreground/70">
+                          ({language === "ar" ? matchedZone.nameAr : matchedZone.name})
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-semibold">
+                      {zoneDeliveryFee === 0 ? (
+                        <span className="text-green-600 dark:text-green-400">{isRTL ? 'مجاني' : 'FREE'}</span>
+                      ) : (
+                        <>+<PriceDisplay price={zoneDeliveryFee} size="md" /></>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {driverTip > 0 && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                      💚 {isRTL ? "إكرامية السائق" : "Driver Tip"}
+                    </span>
+                    <span className="font-semibold text-green-600 dark:text-green-400">
+                      +<PriceDisplay price={driverTip} size="md" />
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-border">
+                  <span className="text-base sm:text-lg font-bold text-foreground">
+                    {t.total}
+                  </span>
+                  <span className="text-xl sm:text-2xl font-bold text-primary">
+                    <PriceDisplay price={adjustedTotal} size="lg" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Back to Basket */}
+              <button
+                onClick={() => navigate("/basket")}
+                className="btn-outline w-full py-2 text-xs sm:text-sm rounded-lg"
+              >
+                {isRTL ? 'العودة للسلة' : 'Back to Basket'}
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
       {/* Add/Edit Address Modal */}
       {showAddressModal && (
@@ -1905,11 +1892,10 @@ export default function CheckoutPage() {
                       key={item.key}
                       type="button"
                       onClick={() => setAddressForm({ ...addressForm, label: item.key })}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        addressForm.label === item.key
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${addressForm.label === item.key
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted text-foreground hover:bg-muted/80"
-                      }`}
+                        }`}
                     >
                       {item.label}
                     </button>

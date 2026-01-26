@@ -1244,9 +1244,9 @@ async function receiveStockFromPurchaseOrder(
         quantity: String(item.quantity),
         reservedQuantity: '0',
         availableQuantity: String(item.quantity),
-        lowStockThreshold: '10',
-        reorderPoint: '20',
-        reorderQuantity: '50',
+        lowStockThreshold: 10,
+        reorderPoint: 20,
+        reorderQuantity: 50,
         updatedAt: now,
       });
 
@@ -2232,13 +2232,13 @@ function createApp() {
       // Low stock items from database
       const stockData = await pgDb.select().from(stockTable);
       const lowStockItems = stockData
-        .filter(s => parseFloat(s.availableQuantity) <= parseFloat(s.lowStockThreshold))
+        .filter(s => parseFloat(s.availableQuantity) <= s.lowStockThreshold)
         .map(s => ({
           productId: s.productId,
           productName: productMap.get(s.productId)?.name || s.productId,
           currentQuantity: parseFloat(s.availableQuantity),
-          threshold: parseFloat(s.lowStockThreshold),
-          suggestedReorderQuantity: parseFloat(s.reorderQuantity),
+          threshold: s.lowStockThreshold,
+          suggestedReorderQuantity: s.reorderQuantity,
         }));
 
       // Recent orders for dashboard
@@ -2810,7 +2810,7 @@ function createApp() {
         vatAmount: String(vatAmount),
         total: String(total),
         status: 'pending' as const,
-        paymentStatus: (paymentMethod === 'cod' ? 'pending' : 'captured') as const,
+        paymentStatus: (paymentMethod === 'cod' ? 'pending' : 'captured') as any,
         paymentMethod: paymentMethod as 'cod' | 'card' | 'bank_transfer',
         addressId,
         deliveryAddress: {
@@ -2871,7 +2871,7 @@ function createApp() {
         amount: String(total),
         currency: 'AED',
         method: paymentMethod as 'cod' | 'card' | 'bank_transfer',
-        status: (paymentMethod === 'cod' ? 'pending' : 'captured') as const,
+        status: (paymentMethod === 'cod' ? 'pending' : 'captured') as any,
         gatewayTransactionId: paymentMethod === 'cod' ? null : `TXN-${Date.now()}`,
         refundedAmount: '0',
         createdAt: now,
@@ -3172,7 +3172,6 @@ function createApp() {
           await pgDb.update(paymentsTable)
             .set({
               status: 'captured',
-              capturedAt: now,
               updatedAt: now,
             })
             .where(eq(paymentsTable.orderId, id));
@@ -3344,9 +3343,9 @@ function createApp() {
         quantity: parseFloat(s.quantity),
         reservedQuantity: parseFloat(s.reservedQuantity),
         availableQuantity: parseFloat(s.availableQuantity),
-        lowStockThreshold: parseFloat(s.lowStockThreshold),
-        reorderPoint: parseFloat(s.reorderPoint),
-        reorderQuantity: parseFloat(s.reorderQuantity),
+        lowStockThreshold: s.lowStockThreshold,
+        reorderPoint: s.reorderPoint,
+        reorderQuantity: s.reorderQuantity,
         lastRestockedAt: s.lastRestockedAt?.toISOString() || null,
         updatedAt: s.updatedAt.toISOString(),
       }));
@@ -6401,15 +6400,26 @@ function createApp() {
         .returning();
 
       // Update order status
-      const newHistory = [...(tracking.statusHistory as any[] || []), {
-        status: 'delivered',
-        changedAt: new Date().toISOString(),
-        changedBy: tracking.driverId,
-      }];
+      const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, tracking.orderId));
+      if (orderResult.length > 0) {
+        const order = orderResult[0];
+        const currentHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+        const newHistory = [...currentHistory, {
+          status: 'delivered',
+          changedAt: new Date().toISOString(),
+          changedBy: tracking.driverId || 'driver',
+        }];
 
-      await pgDb.update(ordersTable)
-        .set({ status: 'delivered', statusHistory: newHistory, updatedAt: new Date() })
-        .where(eq(ordersTable.id, tracking.orderId));
+        await pgDb.update(ordersTable)
+          .set({
+            status: 'delivered',
+            statusHistory: newHistory,
+            updatedAt: new Date(),
+            actualDeliveryAt: new Date(),
+            paymentStatus: (order.paymentMethod === 'cod' ? 'captured' : order.paymentStatus) as any
+          })
+          .where(eq(ordersTable.id, tracking.orderId));
+      }
 
       res.json({
         success: true,
@@ -6877,7 +6887,7 @@ function createApp() {
       const paidOrders = allOrders.filter(o => o.paymentStatus === 'captured' && o.status !== 'cancelled');
       const totalRevenue = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
       const totalOrders = paidOrders.length;
-      const totalVat = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
+      const totalVat = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
       const totalDiscount = paidOrders.reduce((sum, o) => sum + parseFloat(String(o.discount || 0)), 0);
 
       res.json({
@@ -8103,7 +8113,7 @@ function createApp() {
         // Serialize message with proper date format
         chat.messages.push({
           ...msg,
-          createdAt: msg.createdAt.toISOString(),
+          createdAt: msg.createdAt, // Keep as Date object
         });
         if (msg.sender === 'user' && !msg.readByAdmin) {
           chat.unreadCount++;
@@ -8897,8 +8907,8 @@ function createApp() {
       }
 
       const allOrders = await pgDb.select().from(ordersTable);
-      const salesVAT = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
-      const salesTaxable = allOrders.reduce((sum, o) => sum + (parseFloat(String(o.total)) - parseFloat(String(o.vat))), 0);
+      const salesVAT = allOrders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
+      const salesTaxable = allOrders.reduce((sum, o) => sum + (parseFloat(String(o.total)) - parseFloat(String(o.vatAmount))), 0);
 
       res.json({
         success: true,
@@ -8915,8 +8925,8 @@ function createApp() {
             date: o.createdAt.toISOString(),
             type: 'sale',
             reference: o.orderNumber,
-            taxableAmount: parseFloat(String(o.total)) - parseFloat(String(o.vat)),
-            vatAmount: parseFloat(String(o.vat)),
+            taxableAmount: parseFloat(String(o.total)) - parseFloat(String(o.vatAmount)),
+            vatAmount: parseFloat(String(o.vatAmount)),
             vatRate: 5,
           })),
         },
@@ -8940,7 +8950,7 @@ function createApp() {
 
       const orders = await pgDb.select().from(ordersTable).where(eq(ordersTable.paymentStatus, 'captured'));
       const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
-      const totalVAT = orders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
+      const totalVAT = orders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
       const pendingOrders = await pgDb.select().from(ordersTable).where(eq(ordersTable.paymentStatus, 'pending'));
       const accountsReceivable = pendingOrders.reduce((sum, o) => sum + parseFloat(String(o.total)), 0);
 
@@ -9199,8 +9209,8 @@ function createApp() {
         eq(ordersTable.paymentStatus, 'captured')
       ));
 
-      const standardRatedSales = orders.reduce((sum, o) => sum + parseFloat(String(o.total)) - parseFloat(String(o.vat)), 0);
-      const vatOnSales = orders.reduce((sum, o) => sum + parseFloat(String(o.vat)), 0);
+      const standardRatedSales = orders.reduce((sum, o) => sum + parseFloat(String(o.total)) - parseFloat(String(o.vatAmount)), 0);
+      const vatOnSales = orders.reduce((sum, o) => sum + parseFloat(String(o.vatAmount)), 0);
 
       // Get expenses for recoverable VAT
       const expenses = await pgDb.select().from(financeExpensesTable).where(and(

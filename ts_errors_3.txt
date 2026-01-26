@@ -1,0 +1,37 @@
+api/index.ts(1242,9): error TS2769: No overload matches this call.
+  Overload 2 of 2, '(values: { id: string | SQL<unknown> | Placeholder<string, any>; productId: string | SQL<unknown> | Placeholder<string, any>; updatedAt?: Date | SQL<unknown> | Placeholder<...>; ... 8 more ...; lastRestockedAt?: Date | ... 1 more ... | Placeholder<...>; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'id' does not exist in type '{ id: string | SQL<unknown> | Placeholder<string, any>; productId: string | SQL<unknown> | Placeholder<string, any>; updatedAt?: Date | SQL<unknown> | Placeholder<...>; ... 8 more ...; lastRestockedAt?: Date | ... 1 more ... | Placeholder<...>; }[]'.
+api/index.ts(2235,68): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(2240,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(2241,48): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(2813,24): error TS1355: A 'const' assertions can only be applied to references to enum members, or string, number, boolean, array, or object literals.
+api/index.ts(2874,17): error TS1355: A 'const' assertions can only be applied to references to enum members, or string, number, boolean, array, or object literals.
+api/index.ts(3175,15): error TS2353: Object literal may only specify known properties, and 'capturedAt' does not exist in type '{ id?: string | SQL<unknown> | PgColumn<ColumnBaseConfig<ColumnDataType, string>, {}, {}>; method?: "card" | "cod" | "bank_transfer" | SQL<...> | PgColumn<...>; ... 14 more ...; refunds?: any[] | ... 1 more ... | PgColumn<...>; }'.
+api/index.ts(3347,39): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3348,34): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3349,37): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3380,39): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3381,34): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3382,37): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3405,68): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3410,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3411,48): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3614,69): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3615,59): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3691,41): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3692,36): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3693,39): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3856,41): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3857,36): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(3858,39): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+api/index.ts(6404,40): error TS2339: Property 'statusHistory' does not exist on type '{ id: string; orderId: string; orderNumber: string; driverId: string; driverName: string; driverMobile: string; status: "delivered" | "failed" | "assigned" | "picked_up" | "in_transit" | "nearby"; ... 6 more ...; updatedAt: Date; }'.
+api/index.ts(6429,18): error TS2304: Cannot find name 'deliveryZones'.
+api/index.ts(6880,80): error TS2339: Property 'vat' does not exist on type '{ id: string; orderNumber: string; userId: string; customerName: string; customerEmail: string; customerMobile: string; subtotal: string; discount: string; discountCode: string; deliveryFee: string; ... 17 more ...; updatedAt: Date; }'.
+api/index.ts(8106,11): error TS2322: Type 'string' is not assignable to type 'Date'.
+api/index.ts(8900,79): error TS2339: Property 'vat' does not exist on type '{ id: string; orderNumber: string; userId: string; customerName: string; customerEmail: string; customerMobile: string; subtotal: string; discount: string; discountCode: string; deliveryFee: string; ... 17 more ...; updatedAt: Date; }'.
+api/index.ts(8901,114): error TS2339: Property 'vat' does not exist on type '{ id: string; orderNumber: string; userId: string; customerName: string; customerEmail: string; customerMobile: string; subtotal: string; discount: string; discountCode: string; deliveryFee: string; ... 17 more ...; updatedAt: Date; }'.
+api/index.ts(8918,78): error TS2339: Property 'vat' does not exist on type '{ id: string; orderNumber: string; userId: string; customerName: string; customerEmail: string; customerMobile: string; subtotal: string; discount: string; discountCode: string; deliveryFee: string; ... 17 more ...; updatedAt: Date; }'.
+api/index.ts(8919,44): error TS2339: Property 'vat' does not exist on type '{ id: string; orderNumber: string; userId: string; customerName: string; customerEmail: string; customerMobile: string; subtotal: string; discount: string; discountCode: string; deliveryFee: string; ... 17 more ...; updatedAt: Date; }'.
+api/index.ts(8943,76): error TS2339: Property 'vat' does not exist on type '{ id: string; orderNumber: string; userId: string; customerName: string; customerEmail: string; customerMobile: string; subtotal: string; discount: string; discountCode: string; deliveryFee: string; ... 17 more ...; updatedAt: Date; }'.
+api/index.ts(9202,116): error TS2339: Property 'vat' does not exist on type '{ id: string; orderNumber: string; userId: string; customerName: string; customerEmail: string; customerMobile: string; subtotal: string; discount: string; discountCode: string; deliveryFee: string; ... 17 more ...; updatedAt: Date; }'.
+api/index.ts(9203,78): error TS2339: Property 'vat' does not exist on type '{ id: string; orderNumber: string; userId: string; customerName: string; customerEmail: string; customerMobile: string; subtotal: string; discount: string; discountCode: string; deliveryFee: string; ... 17 more ...; updatedAt: Date; }'.
