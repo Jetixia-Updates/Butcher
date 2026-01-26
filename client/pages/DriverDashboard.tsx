@@ -190,7 +190,10 @@ export default function DriverDashboardPage() {
     setLoading(true);
     try {
       // Fetch tracking assigned to this driver explicitly
-      const query = new URLSearchParams({ driverId: user.id }).toString();
+      const query = new URLSearchParams({
+        driverId: user.id,
+        t: new Date().getTime().toString()
+      }).toString();
       const response = await fetch(`/api/delivery/tracking?${query}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("auth_token")}`,

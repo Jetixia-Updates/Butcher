@@ -5621,11 +5621,30 @@ function createApp() {
         const now = new Date();
 
         // Update tracking in database
+        const trackingUpdatePayload: any = {
+          status: status as any,
+          updatedAt: now,
+        };
+
+        if (status === 'delivered') {
+          trackingUpdatePayload.actualArrival = now;
+        }
+
+        await pgDb.update(deliveryTrackingTable)
+          .set(trackingUpdatePayload)
+          .where(eq(deliveryTrackingTable.orderId, orderId));
+
+        // Update tracking timeline in database
+        const newTimeline = [...(dbTracking?.timeline as any[] || []), {
+          status,
+          timestamp: now.toISOString(),
+          notes: notes || `Status updated to ${status}`
+        }];
+
         await pgDb.update(deliveryTrackingTable)
           .set({
-            status: status as any,
-            updatedAt: now,
-            actualArrival: status === 'delivered' ? now : undefined,
+            ...trackingUpdatePayload,
+            timeline: newTimeline
           })
           .where(eq(deliveryTrackingTable.orderId, orderId));
 
@@ -5643,7 +5662,10 @@ function createApp() {
         const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
         if (orderResult.length > 0) {
           const order = orderResult[0];
-          const newHistory = [...(order.statusHistory as any[] || []), {
+          console.log(`[Delivery Update] Updating order ${orderId} to ${newOrderStatus} for tracking status ${status}`);
+
+          const currentHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+          const newHistory = [...currentHistory, {
             status: newOrderStatus,
             changedAt: now.toISOString(),
             changedBy: dbTracking?.driverId || 'driver',
@@ -6235,6 +6257,10 @@ function createApp() {
           userId: order?.userId,
         };
       }));
+
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
 
       res.json({ success: true, data: enrichedTracking });
     } catch (error) {
