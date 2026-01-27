@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
+import { fetchApi } from "@/lib/api";
 
 export interface CustomerOrder {
   id: string;
@@ -62,65 +63,59 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsLoading(true);
     try {
       // Fetch orders from API - database is the source of truth
-      const response = await fetch(`/api/orders?userId=${user.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data) {
-          // Transform API orders to CustomerOrder format
-          const apiOrders: CustomerOrder[] = data.data.map((order: any) => ({
-            id: order.id,
-            orderNumber: order.orderNumber,
-            items: order.items.map((item: any) => ({
-              id: item.id,
-              productId: item.productId,
-              name: item.productName,
-              nameAr: item.productNameAr,
-              quantity: item.quantity,
-              price: item.unitPrice,
-              image: item.image,
-              notes: item.notes,
-            })),
-            subtotal: order.subtotal,
-            vat: order.vatAmount,
-            deliveryFee: order.deliveryFee,
-            discount: order.discount,
-            total: order.total,
-            status: order.status === "ready_for_pickup" ? "processing" : order.status,
-            paymentStatus: order.paymentStatus === "captured" ? "paid" : order.paymentStatus,
-            paymentMethod: order.paymentMethod,
-            deliveryAddress: order.deliveryAddress ? {
-              fullName: order.customerName || order.deliveryAddress.label,
-              mobile: order.customerMobile || order.deliveryAddress.phone,
-              emirate: order.deliveryAddress.emirate || order.deliveryAddress.city,
-              area: order.deliveryAddress.city,
-              street: order.deliveryAddress.street,
-              building: order.deliveryAddress.building || "",
-              floor: order.deliveryAddress.floor || "",
-              apartment: order.deliveryAddress.apartment || "",
-            } : {
-              fullName: order.customerName || "",
-              mobile: order.customerMobile || "",
-              emirate: "",
-              area: "",
-              street: "",
-              building: "",
-            },
-            deliveryTimeSlot: order.deliveryTimeSlot,
-            estimatedDelivery: order.estimatedDeliveryAt,
-            createdAt: order.createdAt,
-            updatedAt: order.updatedAt,
-          }));
+      const data = await fetchApi<any[]>(`/orders?userId=${user.id}`);
+      if (data.success && data.data) {
+        // Transform API orders to CustomerOrder format
+        const apiOrders: CustomerOrder[] = data.data.map((order: any) => ({
+          id: order.id,
+          orderNumber: order.orderNumber,
+          items: (order.items || []).map((item: any) => ({
+            id: item.id,
+            productId: item.productId,
+            name: item.productName,
+            nameAr: item.productNameAr,
+            quantity: item.quantity,
+            price: item.unitPrice,
+            image: item.image,
+            notes: item.notes,
+          })),
+          subtotal: order.subtotal,
+          vat: order.vatAmount,
+          deliveryFee: order.deliveryFee,
+          discount: order.discount,
+          total: order.total,
+          status: order.status === "ready_for_pickup" ? "processing" : order.status,
+          paymentStatus: order.paymentStatus === "captured" ? "paid" : order.paymentStatus,
+          paymentMethod: order.paymentMethod,
+          deliveryAddress: order.deliveryAddress ? {
+            fullName: order.customerName || order.deliveryAddress.label,
+            mobile: order.customerMobile || order.deliveryAddress.phone,
+            emirate: order.deliveryAddress.emirate || order.deliveryAddress.city,
+            area: order.deliveryAddress.city,
+            street: order.deliveryAddress.street,
+            building: order.deliveryAddress.building || "",
+            floor: order.deliveryAddress.floor || "",
+            apartment: order.deliveryAddress.apartment || "",
+          } : {
+            fullName: order.customerName || "",
+            mobile: order.customerMobile || "",
+            emirate: "",
+            area: "",
+            street: "",
+            building: "",
+          },
+          deliveryTimeSlot: order.deliveryTimeSlot,
+          estimatedDelivery: order.estimatedDeliveryAt,
+          createdAt: order.createdAt,
+          updatedAt: order.updatedAt,
+        }));
 
-          // Set orders from API (database is source of truth)
-          setOrders(apiOrders);
-          // Cache in localStorage
-          localStorage.setItem(`customer_orders_${user.id}`, JSON.stringify(apiOrders));
-        } else {
-          // No orders from API
-          setOrders([]);
-        }
+        // Set orders from API (database is source of truth)
+        setOrders(apiOrders);
+        // Cache in localStorage
+        localStorage.setItem(`customer_orders_${user.id}`, JSON.stringify(apiOrders));
       } else {
-        // API error - try localStorage cache
+        // API error or no success - try localStorage cache
         const saved = localStorage.getItem(`customer_orders_${user.id}`);
         if (saved) {
           try {

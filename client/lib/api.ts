@@ -57,7 +57,7 @@ export const getAuthToken = () => authToken;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Generic fetch wrapper with retry logic for cold starts
-async function fetchApi<T>(
+export async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit,
   retries: number = 2,

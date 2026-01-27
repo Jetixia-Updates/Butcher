@@ -5,6 +5,8 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { useAuth } from "./AuthContext";
+import { fetchApi } from "@/lib/api";
 
 export interface ChatAttachment {
   id: string;
@@ -70,8 +72,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Fetch all chats for admin
   const refreshChats = useCallback(async () => {
     try {
-      const res = await fetch('/api/chat/all');
-      const data = await res.json();
+      const data = await fetchApi<any[]>('/chat/all');
       console.log('[Chat Admin] Fetched chats:', data.success, 'count:', data.data?.length || 0);
       if (data.success && data.data) {
         const chats: UserChat[] = data.data.map((chat: any) => ({
@@ -93,8 +94,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadUserMessages = useCallback(async (userId: string) => {
     setCurrentUserId(userId);
     try {
-      const res = await fetch(`/api/chat/${userId}`);
-      const data = await res.json();
+      const data = await fetchApi<any[]>(`/chat/${userId}`);
       if (data.success && data.data) {
         const messages = data.data.map(apiToMessage);
         setUserMessages(messages);
@@ -104,18 +104,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Determine if user is admin
+  const { isAdmin: authIsAdmin, isLoggedIn } = useAuth();
+
   // Poll for updates every 5 seconds
   useEffect(() => {
-    // Determine if user is admin - in a real app this would check the user role
-    // For now, satisfy the requirement by checking if we're on an admin path
-    const isAdmin = window.location.pathname.startsWith('/admin');
+    // Both admin and current user should poll if logged in
+    if (!isLoggedIn) return;
 
-    if (isAdmin) {
+    // Initial fetch
+    if (authIsAdmin) {
       refreshChats();
     }
+    if (currentUserId) {
+      loadUserMessages(currentUserId);
+    }
 
-    pollingRef.current = setInterval(() => {
-      if (isAdmin) {
+    const interval = setInterval(() => {
+      if (authIsAdmin) {
         refreshChats();
       }
       if (currentUserId) {
@@ -123,12 +129,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }, 5000);
 
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-      }
-    };
-  }, [refreshChats, loadUserMessages, currentUserId]);
+    return () => clearInterval(interval);
+  }, [refreshChats, loadUserMessages, currentUserId, authIsAdmin, isLoggedIn]);
 
   // Send message from user to admin
   const sendUserMessage = useCallback(async (userId: string, userName: string, userEmail: string, text: string, attachments?: ChatAttachment[]) => {
@@ -146,19 +148,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Send to API
       console.log('[Chat] Sending message to API:', { userId, userName, text: text.substring(0, 50) });
-      const res = await fetch('/api/chat/send', {
+      const data = await fetchApi<any>('/chat/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, userName, userEmail, text, sender: 'user', attachments }),
       });
-      const data = await res.json();
       console.log('[Chat] API response:', data);
 
       if (data.success) {
         // Notify admin
-        fetch('/api/chat/notify-admin', {
+        fetchApi('/chat/notify-admin', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, userName, message: text }),
         }).catch(() => { });
 
@@ -178,9 +177,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const chat = allChats.find(c => c.userId === userId);
 
       // Send to API
-      const res = await fetch('/api/chat/send', {
+      const data = await fetchApi<any>('/chat/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
           userName: chat?.userName || 'Customer',
@@ -190,13 +188,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           attachments
         }),
       });
-      const data = await res.json();
 
       if (data.success) {
         // Notify user
-        fetch('/api/chat/notify-user', {
+        fetchApi('/chat/notify-user', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, message: text }),
         }).catch(() => { });
 
@@ -211,9 +207,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Mark all admin messages as read by user
   const markUserMessagesAsRead = useCallback(async (userId: string) => {
     try {
-      await fetch(`/api/chat/${userId}/read-user`, {
+      await fetchApi(`/chat/${userId}/read-user`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
       });
       // Update local state
       setUserMessages(prev => prev.map(msg =>
@@ -227,9 +222,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Mark all user messages as read by admin
   const markAdminMessagesAsRead = useCallback(async (userId: string) => {
     try {
-      await fetch(`/api/chat/${userId}/read-admin`, {
+      await fetchApi(`/chat/${userId}/read-admin`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
       });
       // Update local state
       setAllChats(prev => prev.map(chat =>

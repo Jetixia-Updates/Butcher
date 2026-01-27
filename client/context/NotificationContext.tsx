@@ -107,16 +107,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       // Notifications endpoint may return 400 if server is not properly deployed
-      // Silently skip if unavailable instead of polling repeatedly
       const response = await notificationsApi.getAll(userId);
       if (response.success && response.data) {
         const sorted = response.data
           .map(toNotification)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setNotifications(sorted);
+      } else {
+        console.warn(`[Notifications] Fetch failed for ${userId}:`, response.error);
       }
     } catch (error) {
-      // Silently ignore errors - don't log to avoid console spam
+      console.error(`[Notifications] Network error for ${userId}:`, error);
     }
   }, [getUserId, isLoggedIn]);
 
@@ -596,9 +597,9 @@ export const generateInvoiceNumber = (orderNumber: string): string => {
 export const formatInvoiceForNotification = (invoice: InvoiceData, language: "en" | "ar" = "en"): string => {
   const separator = "─".repeat(30);
   const doubleSeparator = "═".repeat(30);
-  
+
   if (language === "ar") {
-    const itemsList = invoice.items.map(item => 
+    const itemsList = invoice.items.map(item =>
       `• ${item.nameAr || item.name} × ${item.quantity.toFixed(3)} جم\n  ${item.totalPrice.toFixed(2)} د.إ`
     ).join('\n');
 
@@ -645,7 +646,7 @@ ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatRef
     `.trim();
   }
 
-  const itemsList = invoice.items.map(item => 
+  const itemsList = invoice.items.map(item =>
     `• ${item.name} × ${Number(item.quantity).toFixed(3)} gr\n  AED ${Number(item.totalPrice).toFixed(2)}`
   ).join('\n');
 
