@@ -94,14 +94,14 @@ export function AdminLayout({
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
-  const { 
-    notifications, 
-    unreadCount, 
-    markAsRead, 
-    markAllAsRead, 
-    deleteNotification, 
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
     clearAllNotifications,
-    addNotification 
+    addNotification
   } = useNotifications();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -114,8 +114,15 @@ export function AdminLayout({
   const adminFileInputRef = useRef<HTMLInputElement>(null);
 
   // Use admin chat hook
-  const { chats, sendMessage: sendAdminMessage, markAsRead: markChatAsRead, totalUnread: chatTotalUnread } = useAdminChat();
-  
+  const {
+    chats,
+    sendMessage: sendAdminMessage,
+    markAsRead: markChatAsRead,
+    totalUnread: chatTotalUnread,
+    userMessages,
+    loadUserMessages
+  } = useAdminChat();
+
   // Get selected chat
   const selectedChat = chats.find(c => c.userId === selectedChatUserId);
 
@@ -124,14 +131,17 @@ export function AdminLayout({
     if (chatMessagesRef.current) {
       chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
     }
-  }, [selectedChat?.messages, chatOpen]);
+  }, [selectedChat?.messages, userMessages, chatOpen]);
 
-  // Mark messages as read when a chat is selected
+  // Mark messages as read and start targeted polling when a chat is selected
   useEffect(() => {
-    if (selectedChatUserId && selectedChat && selectedChat.unreadCount > 0) {
-      markChatAsRead(selectedChatUserId);
+    if (selectedChatUserId) {
+      loadUserMessages(selectedChatUserId);
+      if (selectedChat && selectedChat.unreadCount > 0) {
+        markChatAsRead(selectedChatUserId);
+      }
     }
-  }, [selectedChatUserId, selectedChat, markChatAsRead]);
+  }, [selectedChatUserId, selectedChat?.unreadCount, markChatAsRead, loadUserMessages]);
 
   // Handle file selection for admin chat
   const handleAdminFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,7 +149,7 @@ export function AdminLayout({
     if (!files) return;
 
     const newAttachments: ChatAttachment[] = [];
-    
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const reader = new FileReader();
@@ -147,7 +157,7 @@ export function AdminLayout({
         reader.onload = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
       });
-      
+
       newAttachments.push({
         id: `att_${Date.now()}_${i}`,
         name: file.name,
@@ -156,7 +166,7 @@ export function AdminLayout({
         url: dataUrl,
       });
     }
-    
+
     setAdminAttachments(prev => [...prev, ...newAttachments]);
     if (adminFileInputRef.current) {
       adminFileInputRef.current.value = "";
@@ -201,14 +211,14 @@ export function AdminLayout({
 
   const handleNotificationClick = (notif: typeof notifications[0]) => {
     markAsRead(notif.id);
-    
+
     // Check if this is a TAX invoice notification
     if (isInvoiceNotification(notif)) {
       setSelectedInvoice(notif);
       setNotificationOpen(false);
       return;
     }
-    
+
     if (notif.linkTab) {
       // Use onNavigateWithId if available and there's a linkId, otherwise use onTabChange
       if (onNavigateWithId && notif.linkId) {
@@ -379,7 +389,7 @@ export function AdminLayout({
 
             {/* Admin Chat */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => {
                   setChatOpen(!chatOpen);
                   setNotificationOpen(false);
@@ -397,12 +407,12 @@ export function AdminLayout({
               {/* Chat Panel */}
               {chatOpen && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40" 
+                  <div
+                    className="fixed inset-0 z-40"
                     onClick={() => {
                       setChatOpen(false);
                       setSelectedChatUserId(null);
-                    }} 
+                    }}
                   />
                   <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} top-full mt-2 w-80 sm:w-[450px] bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden`}>
                     <div className="p-3 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
@@ -431,44 +441,44 @@ export function AdminLayout({
                           chats
                             .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
                             .map((chat) => (
-                            <button
-                              key={chat.userId}
-                              onClick={() => setSelectedChatUserId(chat.userId)}
-                              className={cn(
-                                "w-full p-4 border-b border-slate-100 hover:bg-slate-50 transition-colors text-left",
-                                chat.unreadCount > 0 && "bg-green-50/50"
-                              )}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center flex-shrink-0">
-                                  <span className="font-medium text-slate-700">
-                                    {chat.userName[0]?.toUpperCase() || 'U'}
-                                  </span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between">
-                                    <p className="font-medium text-slate-900 truncate">{chat.userName}</p>
-                                    {chat.unreadCount > 0 && (
-                                      <span className="flex-shrink-0 bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                                        {chat.unreadCount}
-                                      </span>
-                                    )}
+                              <button
+                                key={chat.userId}
+                                onClick={() => setSelectedChatUserId(chat.userId)}
+                                className={cn(
+                                  "w-full p-4 border-b border-slate-100 hover:bg-slate-50 transition-colors text-left",
+                                  chat.unreadCount > 0 && "bg-green-50/50"
+                                )}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center flex-shrink-0">
+                                    <span className="font-medium text-slate-700">
+                                      {chat.userName[0]?.toUpperCase() || 'U'}
+                                    </span>
                                   </div>
-                                  <p className="text-sm text-slate-500 truncate">
-                                    {chat.messages[chat.messages.length - 1]?.text || ''}
-                                  </p>
-                                  <p className="text-xs text-slate-400 mt-1">
-                                    {new Date(chat.lastMessageAt).toLocaleString(language === 'ar' ? 'ar-SA' : 'en-US', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </p>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <p className="font-medium text-slate-900 truncate">{chat.userName}</p>
+                                      {chat.unreadCount > 0 && (
+                                        <span className="flex-shrink-0 bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                          {chat.unreadCount}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-slate-500 truncate">
+                                      {chat.messages[chat.messages.length - 1]?.text || ''}
+                                    </p>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                      {new Date(chat.lastMessageAt).toLocaleString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            </button>
-                          ))
+                              </button>
+                            ))
                         ) : (
                           <div className="p-8 text-center text-slate-500">
                             <MessageCircle className="w-12 h-12 mx-auto mb-3 text-slate-300" />
@@ -481,82 +491,106 @@ export function AdminLayout({
                       /* Chat conversation */
                       <div className="flex flex-col h-96">
                         {/* Messages */}
-                        <div 
+                        <div
                           ref={chatMessagesRef}
                           className="flex-1 overflow-y-auto p-4 space-y-3"
                         >
-                          {selectedChat?.messages && selectedChat.messages.length > 0 && selectedChat.messages
-                            .slice()
-                            .sort((a, b) => {
-                              const timeA = new Date(a.timestamp).getTime();
-                              const timeB = new Date(b.timestamp).getTime();
-                              return timeA - timeB;
-                            })
-                            .map((msg) => (
-                            <div
-                              key={msg.id}
-                              className={cn(
-                                "max-w-[80%] rounded-lg p-3",
-                                msg.sender === 'admin'
-                                  ? "bg-primary text-white ml-auto rounded-br-none"
-                                  : "bg-slate-100 text-slate-900 rounded-bl-none"
-                              )}
-                            >
-                              {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
-                              {/* Attachments */}
-                              {msg.attachments && msg.attachments.length > 0 && (
-                                <div className={`${msg.text ? "mt-2" : ""} space-y-2`}>
-                                  {msg.attachments.map((att) => (
-                                    <div key={att.id}>
-                                      {att.type.startsWith("image/") ? (
-                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="block">
-                                          <img 
-                                            src={att.url} 
-                                            alt={att.name} 
-                                            className="max-w-full rounded-lg max-h-40 object-cover"
-                                          />
-                                        </a>
-                                      ) : (
-                                        <a 
-                                          href={att.url} 
-                                          download={att.name}
-                                          className={cn(
-                                            "flex items-center gap-2 p-2 rounded-lg transition-colors",
-                                            msg.sender === 'admin' 
-                                              ? "bg-white/20 hover:bg-white/30" 
-                                              : "bg-slate-200 hover:bg-slate-300"
+                          {userMessages.length > 0 ? (
+                            userMessages
+                              .slice()
+                              .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                              .map((msg) => (
+                                <div
+                                  key={msg.id}
+                                  className={cn(
+                                    "max-w-[80%] rounded-lg p-3",
+                                    msg.sender === 'admin'
+                                      ? "bg-primary text-white ml-auto rounded-br-none"
+                                      : "bg-slate-100 text-slate-900 rounded-bl-none"
+                                  )}
+                                >
+                                  {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
+                                  {/* Attachments */}
+                                  {msg.attachments && msg.attachments.length > 0 && (
+                                    <div className={`${msg.text ? "mt-2" : ""} space-y-2`}>
+                                      {msg.attachments.map((att) => (
+                                        <div key={att.id}>
+                                          {att.type.startsWith("image/") ? (
+                                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="block">
+                                              <img
+                                                src={att.url}
+                                                alt={att.name}
+                                                className="max-w-full rounded-lg max-h-40 object-cover"
+                                              />
+                                            </a>
+                                          ) : (
+                                            <a
+                                              href={att.url}
+                                              download={att.name}
+                                              className={cn(
+                                                "flex items-center gap-2 p-2 rounded-lg transition-colors",
+                                                msg.sender === 'admin'
+                                                  ? "bg-white/20 hover:bg-white/30"
+                                                  : "bg-slate-200 hover:bg-slate-300"
+                                              )}
+                                            >
+                                              {getFileIcon(att.type)}
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-medium truncate">{att.name}</p>
+                                                <p className={cn(
+                                                  "text-xs",
+                                                  msg.sender === 'admin' ? "opacity-70" : "text-slate-500"
+                                                )}>
+                                                  {formatFileSize(att.size)}
+                                                </p>
+                                              </div>
+                                              <Download className="w-4 h-4 flex-shrink-0" />
+                                            </a>
                                           )}
-                                        >
-                                          {getFileIcon(att.type)}
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-medium truncate">{att.name}</p>
-                                            <p className={cn(
-                                              "text-xs",
-                                              msg.sender === 'admin' ? "opacity-70" : "text-slate-500"
-                                            )}>
-                                              {formatFileSize(att.size)}
-                                            </p>
-                                          </div>
-                                          <Download className="w-4 h-4 flex-shrink-0" />
-                                        </a>
-                                      )}
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
+                                  )}
+                                  <p className={cn(
+                                    "text-xs mt-1",
+                                    msg.sender === 'admin' ? "text-white/70" : "text-slate-400"
+                                  )}>
+                                    {new Date(msg.timestamp).toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </p>
                                 </div>
-                              )}
-                              <p className={cn(
-                                "text-xs mt-1",
-                                msg.sender === 'admin' ? "text-white/70" : "text-slate-400"
-                              )}>
-                                {new Date(msg.timestamp).toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </p>
-                            </div>
-                          ))}
+                              ))
+                          ) : (
+                            selectedChat?.messages && selectedChat.messages.length > 0 && selectedChat.messages
+                              .slice()
+                              .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                              .map((msg) => (
+                                <div
+                                  key={msg.id}
+                                  className={cn(
+                                    "max-w-[80%] rounded-lg p-3",
+                                    msg.sender === 'admin'
+                                      ? "bg-primary text-white ml-auto rounded-br-none"
+                                      : "bg-slate-100 text-slate-900 rounded-bl-none"
+                                  )}
+                                >
+                                  {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
+                                  <p className={cn(
+                                    "text-xs mt-1",
+                                    msg.sender === 'admin' ? "text-white/70" : "text-slate-400"
+                                  )}>
+                                    {new Date(msg.timestamp).toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </p>
+                                </div>
+                              ))
+                          )}
                         </div>
-                        
+
                         {/* Attachment Preview */}
                         {adminAttachments.length > 0 && (
                           <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 flex flex-wrap gap-2">
@@ -624,7 +658,7 @@ export function AdminLayout({
 
             {/* Notifications */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => {
                   setNotificationOpen(!notificationOpen);
                   setChatOpen(false);
@@ -642,9 +676,9 @@ export function AdminLayout({
               {/* Notification Dropdown */}
               {notificationOpen && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={() => setNotificationOpen(false)} 
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setNotificationOpen(false)}
                   />
                   <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} top-full mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden`}>
                     <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
@@ -662,8 +696,8 @@ export function AdminLayout({
                     <div className="max-h-96 overflow-y-auto">
                       {notifications.length > 0 ? (
                         notifications.map((notif) => (
-                          <div 
-                            key={notif.id} 
+                          <div
+                            key={notif.id}
                             className={cn(
                               "p-4 border-b border-slate-100 hover:bg-slate-50 transition-colors group",
                               notif.unread && "bg-blue-50/50"
@@ -675,7 +709,7 @@ export function AdminLayout({
                                 {getNotificationIcon(notif.type)}
                               </div>
                               {/* Content */}
-                              <div 
+                              <div
                                 className="flex-1 min-w-0 cursor-pointer"
                                 onClick={() => handleNotificationClick(notif)}
                               >
@@ -777,14 +811,14 @@ export function AdminLayout({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             {/* Invoice Content */}
             <div className="p-6 overflow-y-auto max-h-[60vh]">
               <pre className="whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded-lg border border-gray-200 text-gray-800 leading-relaxed">
                 {language === "ar" ? selectedInvoice.messageAr : selectedInvoice.message}
               </pre>
             </div>
-            
+
             {/* Modal Footer */}
             <div className="px-6 py-4 bg-gray-50 border-t flex gap-3">
               <button

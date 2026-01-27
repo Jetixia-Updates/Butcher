@@ -313,7 +313,15 @@ export const useUserChat = (userId: string | undefined) => {
 
 // Hook for admin chat management
 export const useAdminChat = () => {
-  const { allChats, sendAdminMessage, markAdminMessagesAsRead, totalUnreadForAdmin, refreshChats } = useChat();
+  const {
+    allChats,
+    sendAdminMessage,
+    markAdminMessagesAsRead,
+    totalUnreadForAdmin,
+    refreshChats,
+    userMessages,
+    loadUserMessages
+  } = useChat();
 
   // Sort chats by last message time (newest first)
   const sortedChats = [...allChats].sort(
@@ -326,5 +334,7 @@ export const useAdminChat = () => {
     markAsRead: markAdminMessagesAsRead,
     totalUnread: totalUnreadForAdmin,
     refresh: refreshChats,
+    userMessages,
+    loadUserMessages
   };
 };
