@@ -58,7 +58,7 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Define fetchOrders first so it can be used in effects
   const fetchOrders = useCallback(async () => {
     if (!user?.id) return;
-    
+
     setIsLoading(true);
     try {
       // Fetch orders from API - database is the source of truth
@@ -110,7 +110,7 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             createdAt: order.createdAt,
             updatedAt: order.updatedAt,
           }));
-          
+
           // Set orders from API (database is source of truth)
           setOrders(apiOrders);
           // Cache in localStorage
@@ -165,14 +165,14 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [user?.id, fetchOrders]);
 
-  // Poll for order updates every 30 seconds
+  // Poll for order updates every 5 seconds
   useEffect(() => {
     if (!user?.id) return;
-    
+
     const interval = setInterval(() => {
       fetchOrders();
-    }, 30000); // Poll every 30 seconds
-    
+    }, 5000); // Poll every 5 seconds
+
     return () => clearInterval(interval);
   }, [user?.id, fetchOrders]);
 

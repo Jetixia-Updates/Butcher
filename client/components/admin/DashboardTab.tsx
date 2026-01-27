@@ -43,7 +43,7 @@ interface StatCardProps {
 
 function StatCard({ title, value, change, changeText, icon: Icon, iconColor, iconBg, onClick, viewDetailsText, isRTL }: StatCardProps) {
   return (
-    <div 
+    <div
       className={cn(
         "bg-white rounded-xl shadow-sm p-4 sm:p-6",
         onClick && "cursor-pointer hover:shadow-md transition-shadow"
@@ -140,8 +140,8 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
 
   useEffect(() => {
     fetchData();
-    // Refresh every 30 seconds
-    const interval = setInterval(() => fetchData(true), 30000);
+    // Refresh every 5 seconds
+    const interval = setInterval(() => fetchData(true), 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -318,7 +318,7 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
                 </div>
               ))}
               {stats.lowStockItems.length > 3 && (
-                <button 
+                <button
                   onClick={() => onNavigate?.("stock")}
                   className="w-full text-xs text-primary font-medium text-center mt-2 hover:underline"
                 >
@@ -376,7 +376,7 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
               {stats.recentOrders.map((order) => (
                 <tr key={order.id} className="hover:bg-slate-50">
                   <td className="px-3 sm:px-6 py-3 sm:py-4">
-                    <button 
+                    <button
                       onClick={() => onNavigate?.("orders")}
                       className="font-mono text-xs sm:text-sm font-medium text-blue-600 hover:underline"
                     >

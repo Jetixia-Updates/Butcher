@@ -79,11 +79,11 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     fetchWallet();
   }, [fetchWallet]);
 
-  // Poll for updates every 30 seconds when user is logged in
+  // Poll for updates every 5 seconds when user is logged in
   useEffect(() => {
     if (!user?.id) return;
 
-    const interval = setInterval(fetchWallet, 30000);
+    const interval = setInterval(fetchWallet, 5000);
     return () => clearInterval(interval);
   }, [user?.id, fetchWallet]);
 

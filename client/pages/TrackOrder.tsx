@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Phone, 
-  MessageCircle, 
-  MapPin, 
-  Clock, 
-  Package, 
-  Truck, 
+import {
+  ArrowLeft,
+  Phone,
+  MessageCircle,
+  MapPin,
+  Clock,
+  Package,
+  Truck,
   CheckCircle,
   ChefHat,
   User,
@@ -90,13 +90,13 @@ export default function TrackOrderPage() {
   const { orders } = useOrders();
   const { user } = useAuth();
   const isRTL = language === "ar";
-  
+
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const driverMarkerRef = useRef<L.Marker | null>(null);
   const destinationMarkerRef = useRef<L.Marker | null>(null);
   const routeLineRef = useRef<L.Polyline | null>(null);
-  
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tracking, setTracking] = useState<TrackingInfo | null>(null);
   const [countdown, setCountdown] = useState<string>("");
@@ -182,11 +182,11 @@ export default function TrackOrderPage() {
 
     try {
       const response = await deliveryApi.getTracking(order.id);
-      
+
       if (response.success && response.data) {
         // Map API tracking data to component's TrackingInfo format
         const apiTracking = response.data;
-        
+
         const statusMap: Record<string, TrackingInfo["status"]> = {
           assigned: "picked_up",
           picked_up: "picked_up",
@@ -194,27 +194,27 @@ export default function TrackOrderPage() {
           nearby: "nearby",
           delivered: "delivered",
         };
-        
+
         const mappedStatus = statusMap[apiTracking.status] || "on_the_way";
-        
+
         // Build timeline from API data
         const timeline = [
           { status: "preparing", timestamp: order.createdAt, completed: true },
           { status: "ready", timestamp: order.createdAt, completed: true },
-          { 
-            status: "picked_up", 
-            timestamp: apiTracking.timeline?.find(t => t.status === 'assigned')?.timestamp || '', 
-            completed: true 
+          {
+            status: "picked_up",
+            timestamp: apiTracking.timeline?.find(t => t.status === 'assigned')?.timestamp || '',
+            completed: true
           },
-          { 
-            status: "on_the_way", 
-            timestamp: apiTracking.timeline?.find(t => t.status === 'in_transit')?.timestamp || '', 
-            completed: ['in_transit', 'nearby', 'delivered'].includes(apiTracking.status) 
+          {
+            status: "on_the_way",
+            timestamp: apiTracking.timeline?.find(t => t.status === 'in_transit')?.timestamp || '',
+            completed: ['in_transit', 'nearby', 'delivered'].includes(apiTracking.status)
           },
-          { 
-            status: "delivered", 
-            timestamp: apiTracking.timeline?.find(t => t.status === 'delivered')?.timestamp || '', 
-            completed: apiTracking.status === 'delivered' 
+          {
+            status: "delivered",
+            timestamp: apiTracking.timeline?.find(t => t.status === 'delivered')?.timestamp || '',
+            completed: apiTracking.status === 'delivered'
           },
         ];
 
@@ -243,7 +243,7 @@ export default function TrackOrderPage() {
         };
 
         const currentStatus = statusMap[order.status] || "preparing";
-        
+
         const now = new Date();
         const timeline = [
           { status: "preparing", timestamp: order.createdAt, completed: true },
@@ -273,7 +273,7 @@ export default function TrackOrderPage() {
       };
 
       const currentStatus = statusMap[order.status] || "preparing";
-      
+
       const now = new Date();
       const timeline = [
         { status: "preparing", timestamp: order.createdAt, completed: true },
@@ -296,10 +296,10 @@ export default function TrackOrderPage() {
   // Fetch tracking data on mount and when order changes
   useEffect(() => {
     fetchTrackingData();
-    
-    // Set up polling for real-time updates (every 30 seconds)
-    const interval = setInterval(fetchTrackingData, 30000);
-    
+
+    // Set up polling for real-time updates (every 5 seconds)
+    const interval = setInterval(fetchTrackingData, 5000);
+
     return () => clearInterval(interval);
   }, [fetchTrackingData]);
 
@@ -562,8 +562,8 @@ export default function TrackOrderPage() {
                         step.completed
                           ? "bg-green-100 border-green-500 text-green-600"
                           : isActive
-                          ? "bg-primary/10 border-primary text-primary animate-pulse"
-                          : "bg-muted border-border text-muted-foreground"
+                            ? "bg-primary/10 border-primary text-primary animate-pulse"
+                            : "bg-muted border-border text-muted-foreground"
                       )}
                     >
                       {step.completed ? <CheckCircle className="w-5 h-5" /> : statusInfo.icon}
