@@ -205,6 +205,18 @@ const STATUS_ACTIONS: Record<OrderStatus, (OrderStatus | "assign_driver")[]> = {
   refunded: [],
 };
 
+// Define the natural order flow - one step at a time
+const NEXT_STATUS_MAP: Record<OrderStatus, OrderStatus | "assign_driver" | null> = {
+  pending: "confirmed",
+  confirmed: "processing",
+  processing: "ready_for_pickup",
+  ready_for_pickup: "assign_driver", // Goes to delivery assignment
+  out_for_delivery: "delivered",
+  delivered: null, // Final state
+  cancelled: null,
+  refunded: null,
+};
+
 export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: AdminTabProps) {
   const { language } = useLanguage();
   const { user } = useAuth();
@@ -519,15 +531,14 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {STATUS_ACTIONS[order.status]?.length > 0 && (
-                          <StatusDropdown
+                        {NEXT_STATUS_MAP[order.status] && (
+                          <NextStepButton
                             orderId={order.id}
                             currentStatus={order.status}
-                            availableStatuses={STATUS_ACTIONS[order.status]}
+                            nextStatus={NEXT_STATUS_MAP[order.status]!}
                             onUpdate={handleStatusUpdate}
                             updating={updating === order.id}
                             t={t}
-                            isRTL={isRTL}
                           />
                         )}
                       </div>
@@ -556,68 +567,76 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   );
 }
 
-function StatusDropdown({
+// Simple Next Step button - automatically advances to the next status
+function NextStepButton({
   orderId,
   currentStatus,
-  availableStatuses,
+  nextStatus,
   onUpdate,
   updating,
   t,
-  isRTL,
 }: {
   orderId: string;
   currentStatus: OrderStatus;
-  availableStatuses: (OrderStatus | "assign_driver")[];
+  nextStatus: OrderStatus | "assign_driver";
   onUpdate: (orderId: string, status: OrderStatus | "assign_driver") => void;
   updating: boolean;
   t: typeof translations.en;
-  isRTL: boolean;
 }) {
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "cancelled":
-        return <X className="w-4 h-4 text-red-500" />;
-      case "delivered":
-        return <Check className="w-4 h-4 text-green-500" />;
-      case "out_for_delivery":
-        return <Truck className="w-4 h-4 text-blue-500" />;
+  const getNextStatusLabel = () => {
+    // Show what the button will do
+    switch (nextStatus) {
+      case "confirmed":
+        return t.confirmed;
+      case "processing":
+        return t.processing;
+      case "ready_for_pickup":
+        return t.readyForPickup;
       case "assign_driver":
-        return <UserPlus className="w-4 h-4 text-indigo-500" />;
+        return t.assignDriver;
+      case "out_for_delivery":
+        return t.outForDelivery;
+      case "delivered":
+        return t.delivered;
       default:
-        return <Package className="w-4 h-4 text-slate-500" />;
+        return getStatusLabel(nextStatus, t);
+    }
+  };
+
+  const getButtonIcon = () => {
+    switch (nextStatus) {
+      case "confirmed":
+        return <Check className="w-4 h-4" />;
+      case "processing":
+        return <Package className="w-4 h-4" />;
+      case "ready_for_pickup":
+        return <Package className="w-4 h-4" />;
+      case "assign_driver":
+        return <UserPlus className="w-4 h-4" />;
+      case "out_for_delivery":
+        return <Truck className="w-4 h-4" />;
+      case "delivered":
+        return <Check className="w-4 h-4" />;
+      default:
+        return <RefreshCw className="w-4 h-4" />;
     }
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          disabled={updating}
-          className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 disabled:opacity-50"
-        >
-          {updating ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
-          ) : (
-            <>
-              {t.update}
-              <ChevronDown className="w-4 h-4" />
-            </>
-          )}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align={isRTL ? "start" : "end"} className="w-48">
-        {availableStatuses.map((status) => (
-          <DropdownMenuItem
-            key={status}
-            onClick={() => onUpdate(orderId, status)}
-            className={cn("flex items-center gap-2 cursor-pointer", isRTL && "flex-row-reverse")}
-          >
-            {getStatusIcon(status)}
-            <span>{getStatusLabel(status, t)}</span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <button
+      onClick={() => onUpdate(orderId, nextStatus)}
+      disabled={updating}
+      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-lg text-xs sm:text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors"
+    >
+      {updating ? (
+        <RefreshCw className="w-4 h-4 animate-spin" />
+      ) : (
+        <>
+          {getButtonIcon()}
+          <span className="hidden sm:inline">{getNextStatusLabel()}</span>
+        </>
+      )}
+    </button>
   );
 }
 
@@ -831,27 +850,44 @@ function OrderDetailsModal({
             </div>
           </div>
 
-          {/* Status Actions */}
-          {STATUS_ACTIONS[order.status]?.length > 0 && (
+          {/* Status Actions - Single Next Step Button */}
+          {NEXT_STATUS_MAP[order.status] && (
             <div className="flex flex-wrap gap-3">
-              {STATUS_ACTIONS[order.status].map((status) => (
+              {/* Next Step Button */}
+              <button
+                onClick={() => onStatusUpdate(NEXT_STATUS_MAP[order.status]!)}
+                disabled={updating}
+                className={cn(
+                  "flex-1 min-w-[200px] py-3 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2",
+                  NEXT_STATUS_MAP[order.status] === "assign_driver"
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                    : "bg-primary text-white hover:bg-primary/90"
+                )}
+              >
+                {NEXT_STATUS_MAP[order.status] === "confirmed" && <Check className="w-4 h-4" />}
+                {NEXT_STATUS_MAP[order.status] === "processing" && <Package className="w-4 h-4" />}
+                {NEXT_STATUS_MAP[order.status] === "ready_for_pickup" && <Package className="w-4 h-4" />}
+                {NEXT_STATUS_MAP[order.status] === "assign_driver" && <UserPlus className="w-4 h-4" />}
+                {NEXT_STATUS_MAP[order.status] === "out_for_delivery" && <Truck className="w-4 h-4" />}
+                {NEXT_STATUS_MAP[order.status] === "delivered" && <Check className="w-4 h-4" />}
+                {updating ? t.updating : (
+                  NEXT_STATUS_MAP[order.status] === "assign_driver"
+                    ? t.assignDriver
+                    : `${t.markAs} ${getStatusLabel(NEXT_STATUS_MAP[order.status]!, t)}`
+                )}
+              </button>
+
+              {/* Cancel Button - Only show for non-final statuses */}
+              {!["delivered", "cancelled", "refunded"].includes(order.status) && (
                 <button
-                  key={status}
-                  onClick={() => onStatusUpdate(status)}
+                  onClick={() => onStatusUpdate("cancelled")}
                   disabled={updating}
-                  className={cn(
-                    "flex-1 min-w-[140px] py-3 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2",
-                    status === "cancelled"
-                      ? "bg-red-100 text-red-700 hover:bg-red-200"
-                      : status === "assign_driver"
-                        ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                        : "bg-primary text-white hover:bg-primary/90"
-                  )}
+                  className="min-w-[120px] py-3 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2 bg-red-100 text-red-700 hover:bg-red-200"
                 >
-                  {status === "assign_driver" && <UserPlus className="w-4 h-4" />}
-                  {updating ? t.updating : status === "assign_driver" ? t.assignDriver : `${t.markAs} ${getStatusLabel(status, t)}`}
+                  <X className="w-4 h-4" />
+                  {updating ? t.updating : `${t.markAs} ${t.cancelled}`}
                 </button>
-              ))}
+              )}
             </div>
           )}
 
