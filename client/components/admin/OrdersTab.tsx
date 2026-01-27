@@ -232,20 +232,34 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
+  // Fetch orders with optional status filter
+  const fetchOrders = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     const params: { status?: string } = {};
     if (statusFilter !== "all") params.status = statusFilter;
 
-    const response = await ordersApi.getAll(params);
-    if (response.success && response.data) {
-      setOrders(response.data);
+    try {
+      const response = await ordersApi.getAll(params);
+      if (response.success && response.data) {
+        setOrders(response.data);
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+    } finally {
+      if (showLoading) setLoading(false);
     }
-    setLoading(false);
   }, [statusFilter]);
 
+  // Initial fetch and polling
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(true);
+
+    // Set up polling for real-time updates (every 5 seconds)
+    const interval = setInterval(() => {
+      fetchOrders(false); // Fetch silently in background
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [fetchOrders]);
 
   // Auto-select order when selectedOrderId is provided (e.g., from notification click)
@@ -279,17 +293,15 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       setUpdating(orderId);
       const response = await ordersApi.updateStatus(orderId, "ready_for_pickup", user.id);
 
-      if (response.success) {
+      if (response.success && response.data) {
         toast({
           title: "Status Updated",
           description: "Order marked as ready for pickup",
         });
 
-        // Refresh ALL orders (no filter) to ensure we get updated data
-        const updatedOrders = await ordersApi.getAll({ status: undefined });
-        if (updatedOrders.success && updatedOrders.data) {
-          setOrders(updatedOrders.data);
-        }
+        // Update local state immediately with the updated order
+        const updatedOrder = response.data;
+        setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
 
         // Close modal and navigate to delivery tab
         setSelectedOrder(null);
@@ -313,19 +325,17 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
     try {
       const response = await ordersApi.updateStatus(orderId, newStatus, user.id);
 
-      if (response.success) {
+      if (response.success && response.data) {
         // Show success notification
         toast({
           title: "Status Updated",
           description: `Order status changed to ${getStatusLabel(newStatus, t)}`,
         });
 
-        // Refresh ALL orders (no filter) to ensure we get updated data
-        // This is important because the order might have changed status and might not be in the current filter
-        const updatedOrders = await ordersApi.getAll({ status: undefined });
-        if (updatedOrders.success && updatedOrders.data) {
-          setOrders(updatedOrders.data);
-        }
+        // Update local state immediately with the response data
+        // This is more robust than refetching all orders and avoids race conditions
+        const updatedOrder = response.data;
+        setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
 
         // Close modal immediately
         setSelectedOrder(null);
@@ -389,7 +399,7 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
           </p>
         </div>
         <button
-          onClick={fetchOrders}
+          onClick={() => fetchOrders(true)}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
         >
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />

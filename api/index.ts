@@ -3041,10 +3041,80 @@ function createApp() {
         }
       }
 
-      // Fetch updated order
-      const updated = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
+      // Fetch updated order with items
+      const updatedArr = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
+      const updatedOrder = updatedArr[0];
 
-      res.json({ success: true, data: updated[0] });
+      const updatedItems = await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, req.params.id));
+
+      const formattedOrder = {
+        id: updatedOrder.id,
+        orderNumber: updatedOrder.orderNumber,
+        userId: updatedOrder.userId,
+        customerName: updatedOrder.customerName,
+        customerEmail: updatedOrder.customerEmail,
+        customerMobile: updatedOrder.customerMobile,
+        items: updatedItems.map(item => ({
+          id: item.id,
+          productId: item.productId,
+          productName: item.productName,
+          productNameAr: item.productNameAr,
+          quantity: parseFloat(String(item.quantity)),
+          unitPrice: parseFloat(String(item.unitPrice)),
+          totalPrice: parseFloat(String(item.totalPrice)),
+          price: parseFloat(String(item.unitPrice)),
+          name: item.productName,
+        })),
+        subtotal: parseFloat(String(updatedOrder.subtotal)),
+        discount: parseFloat(String(updatedOrder.discount)),
+        deliveryFee: parseFloat(String(updatedOrder.deliveryFee)),
+        vatAmount: parseFloat(String(updatedOrder.vatAmount)),
+        vatRate: parseFloat(String(updatedOrder.vatRate)),
+        total: parseFloat(String(updatedOrder.total)),
+        status: updatedOrder.status as any,
+        paymentStatus: updatedOrder.paymentStatus as any,
+        paymentMethod: updatedOrder.paymentMethod as any,
+        addressId: updatedOrder.addressId,
+        deliveryAddress: updatedOrder.deliveryAddress,
+        deliveryNotes: updatedOrder.deliveryNotes,
+        deliveryZoneId: updatedOrder.deliveryZoneId,
+        estimatedDeliveryAt: updatedOrder.estimatedDeliveryAt?.toISOString(),
+        actualDeliveryAt: updatedOrder.actualDeliveryAt?.toISOString(),
+        statusHistory: updatedOrder.statusHistory,
+        source: updatedOrder.source,
+        ipAddress: updatedOrder.ipAddress,
+        userAgent: updatedOrder.userAgent,
+        createdAt: updatedOrder.createdAt.toISOString(),
+        updatedAt: updatedOrder.updatedAt.toISOString(),
+      };
+
+      // Trigger invoice if confirmed
+      if (status === 'confirmed') {
+        try {
+          // We can use the existing invoice logic if available, or just log
+          console.log(`[Invoice] Triggering invoice for order ${updatedOrder.orderNumber}`);
+          const invoiceNumber = `INV-${Date.now()}`;
+          const invoiceText = `Order confirmed. Invoice #${invoiceNumber} generated for ${formattedOrder.total} AED.`;
+
+          await pgDb.insert(inAppNotificationsTable).values({
+            id: `notif_inv_${Date.now()}`,
+            userId: String(updatedOrder.userId),
+            type: 'payment',
+            title: `📄 TAX Invoice #${invoiceNumber}`,
+            titleAr: `📄 فاتورة ضريبية #${invoiceNumber}`,
+            message: invoiceText,
+            messageAr: `تمت عملية الدفع بنجاح. فاتورة رقم #${invoiceNumber} بمبلغ ${formattedOrder.total} درهم.`,
+            link: '/orders',
+            linkId: updatedOrder.id,
+            unread: true,
+            createdAt: now
+          });
+        } catch (invErr) {
+          console.error('[Invoice Error]', invErr);
+        }
+      }
+
+      res.json({ success: true, data: formattedOrder });
 
       // Create notification for order status change (async, don't wait)
       try {

@@ -77,8 +77,15 @@ async function fetchApi<T>(
         headers["Authorization"] = `Bearer ${authToken}`;
       }
 
-      const response = await fetch(`${API_BASE}${endpoint}`, {
+      // Add a timestamp to GET requests to bust cache
+      const url = new URL(`${API_BASE}${endpoint}`, window.location.origin);
+      if (options?.method === "GET" || !options?.method) {
+        url.searchParams.set("_t", Date.now().toString());
+      }
+
+      const response = await fetch(url.toString(), {
         ...options,
+        cache: "no-store", // Ensure we don't use browser cache
         headers,
       });
 
