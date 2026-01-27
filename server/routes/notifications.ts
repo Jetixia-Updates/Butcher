@@ -92,7 +92,7 @@ async function getNotificationTarget(token: string | undefined): Promise<{ userI
 const getNotifications: RequestHandler = async (req, res) => {
   try {
     console.log(`[Notifications] GET request received. Headers:`, { auth: req.headers.authorization ? "present" : "missing", query: req.query });
-    
+
     const token = req.headers.authorization?.replace("Bearer ", "");
     const target = await getNotificationTarget(token);
 
@@ -181,7 +181,7 @@ const createNotification: RequestHandler = async (req, res) => {
 
     const newNotification = {
       id: generateId(),
-      userId: userId ? userId : undefined,
+      userId: userId || customerId,  // Use customerId if userId not provided (DB only has userId column)
       type: data.type,
       title: data.title,
       titleAr: data.titleAr,

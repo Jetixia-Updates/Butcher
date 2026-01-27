@@ -638,8 +638,7 @@ const createOrder: RequestHandler = async (req, res) => {
     try {
       const customerNotification = {
         id: generateId("notif"),
-        customerId: userId,
-        userId: undefined,
+        userId: userId,  // Use userId - this is the customer's user ID
         type: "order",
         title: "Order Placed Successfully",
         titleAr: "تم تقديم الطلب بنجاح",
@@ -651,7 +650,7 @@ const createOrder: RequestHandler = async (req, res) => {
         unread: true,
       };
       await db.insert(inAppNotifications).values(customerNotification);
-      console.log(`[Order Notification] ✅ Customer notification created for order ${orderNumber} (customerId: ${userId})`);
+      console.log(`[Order Notification] ✅ Customer notification created for order ${orderNumber} (userId: ${userId})`);
     } catch (notifError) {
       console.error(`[Order Notification] ❌ Failed to create customer notification:`, notifError);
     }
