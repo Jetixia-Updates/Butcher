@@ -1084,7 +1084,9 @@ const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
       .returning();
 
     // Update order status based on delivery status
-    if (status === "delivered" || status === "in_transit" || status === "picked_up") {
+    // Only change to 'out_for_delivery' when driver starts delivery (in_transit), not when picking up
+    if (status === "delivered" || status === "in_transit" || status === "nearby") {
+      // Only in_transit and beyond triggers out_for_delivery
       const orderStatusValue = status === "delivered" ? "delivered" : "out_for_delivery";
 
       // Fetch current order to get history

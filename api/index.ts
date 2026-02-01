@@ -5533,16 +5533,20 @@ function createApp() {
         }
 
         const now = new Date();
+        // When driver is assigned, update status to ready_for_pickup if not already there
+        // Order will become 'out_for_delivery' when driver clicks 'Start Delivery' (in_transit)
+        const newStatus = order.status === 'confirmed' || order.status === 'processing' ? 'ready_for_pickup' : order.status;
         const newHistory = [...(order.statusHistory as any[] || []), {
-          status: 'out_for_delivery',
+          status: newStatus,
           changedAt: now.toISOString(),
           changedBy: driverId,
+          notes: 'Driver assigned',
         }];
 
-        // Update order status in database
+        // Update order status in database - keep at ready_for_pickup until driver starts delivery
         await pgDb.update(ordersTable)
           .set({
-            status: 'out_for_delivery',
+            status: newStatus as any,
             updatedAt: now,
             statusHistory: newHistory,
           })
@@ -5638,13 +5642,15 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Invalid delivery driver' });
       }
 
-      // Update order status
-      order.status = 'out_for_delivery';
+      // Update order status - keep at ready_for_pickup until driver starts delivery
+      const newStatus = order.status === 'confirmed' || order.status === 'processing' ? 'ready_for_pickup' : order.status;
+      order.status = newStatus;
       order.updatedAt = new Date().toISOString();
       order.statusHistory.push({
-        status: 'out_for_delivery',
+        status: newStatus,
         changedAt: new Date().toISOString(),
         changedBy: driverId,
+        notes: 'Driver assigned',
       });
 
       const tracking = {
@@ -5734,14 +5740,15 @@ function createApp() {
           .where(eq(deliveryTrackingTable.orderId, orderId));
 
         // Map tracking status to order status
+        // Order becomes 'out_for_delivery' only when driver starts delivery (in_transit)
         const orderStatusMap: Record<string, string> = {
-          'assigned': 'out_for_delivery',
-          'picked_up': 'out_for_delivery',
-          'in_transit': 'out_for_delivery',
-          'nearby': 'out_for_delivery',
-          'delivered': 'delivered',
+          'assigned': 'ready_for_pickup',    // Driver assigned, waiting for pickup
+          'picked_up': 'ready_for_pickup',   // Driver picked up, still preparing
+          'in_transit': 'out_for_delivery',  // Driver started delivery - now out for delivery
+          'nearby': 'out_for_delivery',      // Driver nearby
+          'delivered': 'delivered',          // Delivered
         };
-        const newOrderStatus = orderStatusMap[status] || 'out_for_delivery';
+        const newOrderStatus = orderStatusMap[status] || order.status;
 
         // Get and update order in database
         const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
