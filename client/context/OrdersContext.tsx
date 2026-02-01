@@ -160,15 +160,30 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [user?.id, fetchOrders]);
 
-  // Poll for order updates every 5 seconds
+  // Refresh orders when page becomes visible or window gains focus
+  // This allows updates from admin/driver to be reflected when customer checks their orders
   useEffect(() => {
     if (!user?.id) return;
 
-    const interval = setInterval(() => {
-      fetchOrders();
-    }, 5000); // Poll every 5 seconds
+    // Refresh when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchOrders();
+      }
+    };
 
-    return () => clearInterval(interval);
+    // Refresh when window gains focus
+    const handleFocus = () => {
+      fetchOrders();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [user?.id, fetchOrders]);
 
   // Save to localStorage
@@ -192,14 +207,29 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return false;
     }
 
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? { ...o, status: "cancelled", updatedAt: new Date().toISOString() }
-          : o
-      )
-    );
-    return true;
+    try {
+      // Call API to cancel order
+      const response = await fetchApi(`/orders/${orderId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+
+      if (response.success) {
+        // Update local state
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, status: "cancelled", updatedAt: new Date().toISOString() }
+              : o
+          )
+        );
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to cancel order:", error);
+      return false;
+    }
   }, [orders]);
 
   const reorderItems = useCallback((orderId: string) => {
