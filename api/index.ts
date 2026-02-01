@@ -19,10 +19,16 @@ import {
 
 // =====================================================
 // NEON DATABASE CONNECTION
+// Uses Neon serverless driver with connection caching
+// For best performance, use the Neon pooler URL (-pooler suffix)
+// e.g., postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/db
 // =====================================================
 
 const databaseUrl = process.env.DATABASE_URL;
-const neonClient = databaseUrl ? neon(databaseUrl) : null;
+const neonClient = databaseUrl ? neon(databaseUrl, {
+  // Enable connection caching for better performance in serverless
+  fetchConnectionCache: true,
+}) : null;
 const pgDb = neonClient ? drizzle(neonClient) : null;
 
 // User role enum and table definition (inline for Vercel)

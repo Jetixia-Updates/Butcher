@@ -31,10 +31,12 @@ import {
   UserCheck,
   UserX,
   Edit2,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/context/LanguageContext";
 import { usersApi, walletApi, loyaltyApi, reviewsApi } from "@/lib/api";
+import { useAdminChat } from "@/context/ChatContext";
 import type { User as UserType } from "@shared/api";
 
 interface AdminTabProps {
@@ -141,6 +143,12 @@ const translations = {
     deleteSuccess: "Customer deleted successfully",
     deleteFailed: "Failed to delete customer",
     toggleActive: "Toggle Active Status",
+    sendMessage: "Send Message",
+    messageCustomer: "Message Customer",
+    typeMessage: "Type your message...",
+    send: "Send",
+    messageSent: "Message sent successfully",
+    messageFailed: "Failed to send message",
   },
   ar: {
     customersManagement: "إدارة العملاء",
@@ -213,6 +221,12 @@ const translations = {
     deleteSuccess: "تم حذف العميل بنجاح",
     deleteFailed: "فشل حذف العميل",
     toggleActive: "تغيير حالة النشاط",
+    sendMessage: "إرسال رسالة",
+    messageCustomer: "مراسلة العميل",
+    typeMessage: "اكتب رسالتك...",
+    send: "إرسال",
+    messageSent: "تم إرسال الرسالة بنجاح",
+    messageFailed: "فشل إرسال الرسالة",
   },
 };
 
@@ -228,6 +242,9 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
   const isRTL = language === "ar";
   const t = translations[language];
 
+  // Admin chat hook
+  const { sendMessage: sendAdminMessage } = useAdminChat();
+
   const [activeSection, setActiveSection] = useState<"customers" | "wallets" | "loyalty" | "reviews">("customers");
   const [customers, setCustomers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -238,6 +255,7 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewFilter, setReviewFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
   const [editModal, setEditModal] = useState<UserType | null>(null);
+  const [messageModal, setMessageModal] = useState<UserType | null>(null);
   
   // Customer wallet/loyalty data cache
   const [customerData, setCustomerData] = useState<Record<string, { balance: number; points: number; tier: string }>>({});
@@ -698,6 +716,13 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
                           isRTL ? "justify-start" : "justify-end"
                         )}>
                           <button
+                            onClick={() => setMessageModal(customer)}
+                            className="p-1.5 sm:p-2 text-slate-500 hover:text-primary hover:bg-primary/10 rounded-lg"
+                            title={t.sendMessage}
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => setEditModal(customer)}
                             className="p-1.5 sm:p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                             title={t.editCustomer}
@@ -1082,6 +1107,21 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
           t={t}
         />
       )}
+
+      {/* Message Customer Modal */}
+      {messageModal && (
+        <MessageCustomerModal
+          customer={messageModal}
+          onClose={() => setMessageModal(null)}
+          onSend={(message) => {
+            sendAdminMessage(messageModal.id, message);
+            setMessageModal(null);
+            alert(t.messageSent);
+          }}
+          isRTL={isRTL}
+          t={t}
+        />
+      )}
     </div>
   );
 }
@@ -1459,6 +1499,84 @@ function EditCustomerModal({
             {saving ? "..." : t.save}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Message Customer Modal Component
+function MessageCustomerModal({
+  customer,
+  onClose,
+  onSend,
+  isRTL,
+  t,
+}: {
+  customer: UserType;
+  onClose: () => void;
+  onSend: (message: string) => void;
+  isRTL: boolean;
+  t: typeof translations.en;
+}) {
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim()) return;
+    setSending(true);
+    onSend(message.trim());
+    setSending(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">{t.messageCustomer}</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              {customer.firstName} {customer.familyName}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              {t.sendMessage}
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder={t.typeMessage}
+              rows={4}
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none"
+              required
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 border border-slate-300 rounded-lg font-medium hover:bg-slate-50"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="submit"
+              disabled={sending || !message.trim()}
+              className="flex-1 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <Send className="w-4 h-4" />
+              {sending ? "..." : t.send}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

@@ -1768,11 +1768,6 @@ export default function CheckoutPage() {
                 {promoError && (
                   <p className="text-[10px] sm:text-xs text-red-600 mt-1.5">{promoError}</p>
                 )}
-                {!promoApplied && !promoError && (
-                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5">
-                    {isRTL ? 'جرب: WELCOME10, SAVE20' : 'Try: WELCOME10, SAVE20'}
-                  </p>
-                )}
               </div>
 
               {/* Totals */}

@@ -118,10 +118,15 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
     }
   }, [showChat, chatUnreadCount, markChatAsRead]);
 
-  // Scroll to bottom when new messages arrive
+  // Scroll to bottom when new messages arrive or chat opens
   useEffect(() => {
-    if (chatMessagesRef.current) {
-      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+    if (chatMessagesRef.current && showChat) {
+      // Use setTimeout to ensure DOM has updated
+      setTimeout(() => {
+        if (chatMessagesRef.current) {
+          chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+        }
+      }, 50);
     }
   }, [chatMessages, showChat]);
 

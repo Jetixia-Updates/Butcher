@@ -1,6 +1,11 @@
 /**
  * Database Connection for Butcher Shop
  * Using Drizzle ORM with Neon PostgreSQL
+ * 
+ * Performance Optimization:
+ * - Uses fetchConnectionCache for connection reuse in serverless
+ * - For best performance, use the Neon pooler URL (-pooler suffix)
+ *   e.g., postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/db
  */
 
 import { neon } from "@neondatabase/serverless";
@@ -14,8 +19,10 @@ if (!databaseUrl) {
   console.error("DATABASE_URL environment variable is not set. Database operations will fail.");
 }
 
-// Create Neon serverless connection (use empty string if no URL to prevent crash during import)
-const sql = neon(databaseUrl || "postgresql://placeholder:placeholder@localhost/placeholder");
+// Create Neon serverless connection with connection caching
+const sql = neon(databaseUrl || "postgresql://placeholder:placeholder@localhost/placeholder", {
+  fetchConnectionCache: true,
+});
 
 // Create Drizzle instance with schema
 export const db = drizzle(sql, { schema });
