@@ -191,7 +191,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
 
           {/* Discount Badge */}
-          {product.discount !== undefined && product.discount > 0 && (
+          {Number(product.discount) > 0 && (
             <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
               -{product.discount}%
             </div>
@@ -246,17 +246,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <div className={`${compact ? "mt-1 mb-1" : "mt-2 sm:mt-4 mb-2 sm:mb-4"}`}>
             <div className="flex items-center gap-2 flex-wrap">
               <p className={`${compact ? "text-sm sm:text-lg" : "text-lg sm:text-2xl"} font-bold text-primary`}>
-                <PriceDisplay price={product.discount ? product.price * (1 - product.discount / 100) : product.price} size={compact ? "md" : "lg"} />
+                <PriceDisplay price={Number(product.discount) > 0 ? product.price * (1 - product.discount / 100) : product.price} size={compact ? "md" : "lg"} />
                 <span className="text-[10px] sm:text-sm text-muted-foreground font-normal"> / {priceUnit}</span>
               </p>
-              {product.discount !== undefined && product.discount > 0 && (
+              {Number(product.discount) > 0 && (
                 <span className="text-xs text-muted-foreground line-through">
                   <PriceDisplay price={product.price} size="sm" />
                 </span>
               )}
             </div>
-            {/* Rating */}
-            {product.rating !== undefined && Number(product.rating) > 0 && (
+            {/* Rating - only show if rating exists and is greater than 0 */}
+            {Number(product.rating) > 0 && (
               <div className="flex items-center gap-1 mt-1">
                 <span className="text-yellow-500 text-sm">★</span>
                 <span className="text-xs text-muted-foreground">{Number(product.rating).toFixed(1)}</span>
