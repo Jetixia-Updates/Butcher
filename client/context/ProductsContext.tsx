@@ -70,6 +70,26 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Check if running on native mobile platform
   const isNative = Capacitor.isNativePlatform();
 
+  // One-time cleanup of bloated localStorage on mount
+  useEffect(() => {
+    try {
+      // Check if stored products data is too large (likely contains base64 images)
+      const storedProducts = localStorage.getItem("butcher_products");
+      if (storedProducts && storedProducts.length > 500000) { // > 500KB is suspicious
+        console.log("[ProductsContext] Clearing bloated localStorage cache");
+        localStorage.removeItem("butcher_products");
+      }
+      // Also check basket
+      const storedBasket = localStorage.getItem("basket");
+      if (storedBasket && storedBasket.length > 100000) { // > 100KB for basket is suspicious
+        console.log("[ProductsContext] Clearing bloated basket cache");
+        localStorage.removeItem("basket");
+      }
+    } catch (err) {
+      console.error("[ProductsContext] Error during localStorage cleanup:", err);
+    }
+  }, []);
+
   // Sync products across browser tabs using storage event (web only)
   useEffect(() => {
     if (isNative) return; // Skip on mobile - no cross-tab sync needed
@@ -89,15 +109,38 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [isNative]);
 
+  // Helper to check if a string is a base64 data URL
+  const isBase64Image = (str: string | undefined): boolean => {
+    return !!str && str.startsWith('data:image/');
+  };
+
+  // Helper to prepare products for localStorage (strip large base64 images)
+  const prepareForStorage = (productsToStore: Product[]): Product[] => {
+    return productsToStore.map(p => ({
+      ...p,
+      // Don't store base64 images in localStorage - they're too large
+      // Only keep URL-based images (http/https) or placeholder references
+      image: p.image && !isBase64Image(p.image) ? p.image : undefined,
+    }));
+  };
+
   // Save to localStorage whenever products change (as cache, not source of truth)
   useEffect(() => {
     // Only save to localStorage after we've fetched from API or manually added/updated data
     // Also save if we have products even if hasFetchedFromApi is false (e.g. initial add)
     if ((hasFetchedFromApi || products.length > 0)) {
       try {
-        localStorage.setItem("butcher_products", JSON.stringify(products));
+        // Strip base64 images before saving to avoid quota exceeded errors
+        const storageProducts = prepareForStorage(products);
+        localStorage.setItem("butcher_products", JSON.stringify(storageProducts));
       } catch (err) {
         console.error("Failed to save products to localStorage:", err);
+        // If still failing, try clearing the old data and saving minimal info
+        try {
+          localStorage.removeItem("butcher_products");
+        } catch {
+          // Ignore
+        }
       }
     }
   }, [products, hasFetchedFromApi]);
@@ -128,7 +171,7 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
         setProducts(mappedProducts);
         setHasFetchedFromApi(true);
-        localStorage.setItem("butcher_products", JSON.stringify(mappedProducts));
+        // Note: localStorage save is handled by the useEffect that watches products
       } else {
         // API failed or returned no data - try localStorage as cache fallback
         const saved = localStorage.getItem("butcher_products");

@@ -71,6 +71,21 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  // Helper to check if a string is a base64 data URL
+  const isBase64Image = (str: string | undefined): boolean => {
+    return !!str && str.startsWith('data:image/');
+  };
+
+  // Helper to prepare basket items for localStorage (strip large base64 images)
+  const prepareForStorage = (itemsToStore: BasketItem[]): BasketItem[] => {
+    return itemsToStore.map(item => ({
+      ...item,
+      // Don't store base64 images in localStorage - they're too large
+      // Only keep URL-based images or skip entirely
+      image: item.image && !isBase64Image(item.image) ? item.image : undefined,
+    }));
+  };
+
   // Recalculate totals whenever items change
   useEffect(() => {
     const newSubtotal = items.reduce(
@@ -83,7 +98,24 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
     setVat(newVat);
     setTotal(newTotal);
 
-    localStorage.setItem("basket", JSON.stringify(items));
+    try {
+      // Strip base64 images before saving to avoid quota exceeded errors
+      const storageItems = prepareForStorage(items);
+      localStorage.setItem("basket", JSON.stringify(storageItems));
+    } catch (err) {
+      console.error("Failed to save basket to localStorage:", err);
+      // If still failing, try saving without images at all
+      try {
+        const minimalItems = items.map(item => ({
+          ...item,
+          image: undefined,
+        }));
+        localStorage.setItem("basket", JSON.stringify(minimalItems));
+      } catch {
+        // Last resort - clear and don't persist
+        console.error("localStorage is full, basket will not persist");
+      }
+    }
   }, [items]);
 
   const addItem = (item: BasketItem) => {
@@ -139,14 +171,20 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const saveBasket = (name: string) => {
     const savedBaskets = getSavedBaskets();
+    // Strip base64 images from saved baskets to avoid quota issues
+    const itemsToSave = prepareForStorage(items);
     const newSavedBasket: SavedBasket = {
       id: `basket_${Date.now()}`,
       name,
-      items,
+      items: itemsToSave,
       savedAt: new Date().toISOString(),
     };
     savedBaskets.push(newSavedBasket);
-    localStorage.setItem("savedBaskets", JSON.stringify(savedBaskets));
+    try {
+      localStorage.setItem("savedBaskets", JSON.stringify(savedBaskets));
+    } catch (err) {
+      console.error("Failed to save basket:", err);
+    }
   };
 
   const loadBasket = (id: string) => {
