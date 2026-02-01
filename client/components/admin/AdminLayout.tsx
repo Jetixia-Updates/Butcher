@@ -465,7 +465,7 @@ export function AdminLayout({
                                       )}
                                     </div>
                                     <p className="text-sm text-slate-500 truncate">
-                                      {chat.messages[chat.messages.length - 1]?.text || ''}
+                                      {chat.messages[0]?.text || ''}
                                     </p>
                                     <p className="text-xs text-slate-400 mt-1">
                                       {new Date(chat.lastMessageAt).toLocaleString(language === 'ar' ? 'ar-SA' : 'en-US', {

@@ -290,7 +290,7 @@ export const useChat = () => {
 
 // Hook for user-specific chat
 export const useUserChat = (userId: string | undefined) => {
-  const { userMessages, sendUserMessage, markUserMessagesAsRead, loadUserMessages, getUnreadCountForUser } = useChat();
+  const { userMessages, sendUserMessage, markUserMessagesAsRead, loadUserMessages, userUnreadCount } = useChat();
 
   // Load messages when userId changes
   useEffect(() => {
@@ -299,7 +299,9 @@ export const useUserChat = (userId: string | undefined) => {
     }
   }, [userId, loadUserMessages]);
 
-  const unreadCount = userId ? getUnreadCountForUser(userId) : 0;
+  // Use userUnreadCount from context (computed from userMessages) instead of getUnreadCountForUser
+  // which relies on allChats that is only populated for admin
+  const unreadCount = userId ? userUnreadCount : 0;
 
   const sendMessage = useCallback((userName: string, userEmail: string, text: string, attachments?: ChatAttachment[]) => {
     if (userId) {
