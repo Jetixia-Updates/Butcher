@@ -67,20 +67,23 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
     updatedAt: r.updatedAt,
   });
 
-  // Fetch all reviews on mount
-  useEffect(() => {
-    const loadAllReviews = async () => {
-      try {
-        const response = await reviewsApi.getAll();
-        if (response.success && response.data) {
-          setReviews(response.data.map(mapReview));
-        }
-      } catch (error) {
-        console.error("Error loading reviews:", error);
+  // Track if we've loaded all reviews (to avoid double-fetching)
+  const [hasLoadedAll, setHasLoadedAll] = useState(false);
+
+  // Lazy load reviews - only fetch when needed, not on initial mount
+  // This prevents blocking the initial page load
+  const ensureReviewsLoaded = useCallback(async () => {
+    if (hasLoadedAll) return;
+    try {
+      const response = await reviewsApi.getAll();
+      if (response.success && response.data) {
+        setReviews(response.data.map(mapReview));
+        setHasLoadedAll(true);
       }
-    };
-    loadAllReviews();
-  }, []);
+    } catch (error) {
+      console.error("Error loading reviews:", error);
+    }
+  }, [hasLoadedAll]);
 
   // Fetch reviews for a specific product
   const fetchReviews = useCallback(async (productId: string) => {

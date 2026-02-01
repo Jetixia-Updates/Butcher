@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Heart, ShoppingCart, Trash2, ArrowLeft } from "lucide-react";
 import { useWishlist } from "@/context/WishlistContext";
@@ -10,11 +10,18 @@ import { cn } from "@/lib/utils";
 
 export default function WishlistPage() {
   const navigate = useNavigate();
-  const { items, removeFromWishlist, clearWishlist } = useWishlist();
+  const { items, removeFromWishlist, clearWishlist, ensureLoaded } = useWishlist();
   const { addItem } = useBasket();
   const { isLoggedIn } = useAuth();
   const { language } = useLanguage();
   const isRTL = language === "ar";
+
+  // Load wishlist data when page mounts
+  useEffect(() => {
+    if (isLoggedIn) {
+      ensureLoaded();
+    }
+  }, [isLoggedIn, ensureLoaded]);
 
   const translations = {
     en: {

@@ -142,10 +142,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
-    // Start polling
+    // Start polling (30 seconds - reduced frequency to minimize API calls)
     pollingIntervalRef.current = setInterval(() => {
       fetchNotifications();
-    }, 5000);
+    }, 30000);
 
     return () => {
       if (pollingIntervalRef.current) {

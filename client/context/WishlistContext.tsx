@@ -23,6 +23,7 @@ interface WishlistContextType {
   itemCount: number;
   isLoading: boolean;
   refresh: () => Promise<void>;
+  ensureLoaded: () => Promise<void>;
 }
 
 const WishlistContext = createContext<WishlistContextType | undefined>(undefined);
@@ -31,6 +32,7 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const { user } = useAuth();
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   // Convert API item to local format
   const mapWishlistItem = (item: ApiWishlistItem): WishlistItem => ({
@@ -48,6 +50,7 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const fetchWishlist = useCallback(async () => {
     if (!user?.id) {
       setItems([]);
+      setHasLoaded(false);
       return;
     }
 
@@ -56,15 +59,26 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (response.success && response.data) {
         setItems(response.data.map(mapWishlistItem));
       }
+      setHasLoaded(true);
     } catch (error) {
       console.error("Error fetching wishlist:", error);
     }
   }, [user?.id]);
 
-  // Load wishlist on mount or user change
+  // Lazy load - only fetch when needed (called by pages that use wishlist)
+  const ensureLoaded = useCallback(async () => {
+    if (!hasLoaded && user?.id) {
+      await fetchWishlist();
+    }
+  }, [hasLoaded, user?.id, fetchWishlist]);
+
+  // Clear loaded state on user change (but don't auto-fetch)
   useEffect(() => {
-    fetchWishlist();
-  }, [fetchWishlist]);
+    if (!user?.id) {
+      setItems([]);
+      setHasLoaded(false);
+    }
+  }, [user?.id]);
 
   // Refresh wishlist data
   const refresh = async () => {
@@ -153,6 +167,7 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         itemCount: items.length,
         isLoading,
         refresh,
+        ensureLoaded,
       }}
     >
       {children}

@@ -54,10 +54,18 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { user, isLoggedIn, updateUser, logout } = useAuth();
   const { language, setLanguage } = useLanguage();
-  const { items: wishlistItems, removeFromWishlist } = useWishlist();
-  const { points, currentTier, nextTier, pointsToNextTier, transactions, referralCode, applyReferral } = useLoyalty();
+  const { items: wishlistItems, removeFromWishlist, ensureLoaded: ensureWishlistLoaded } = useWishlist();
+  const { points, currentTier, nextTier, pointsToNextTier, transactions, referralCode, applyReferral, ensureLoaded: ensureLoyaltyLoaded } = useLoyalty();
   const { orders } = useOrders();
   const isRTL = language === "ar";
+
+  // Lazy load wishlist and loyalty data when needed
+  useEffect(() => {
+    if (isLoggedIn) {
+      ensureWishlistLoaded();
+      ensureLoyaltyLoaded();
+    }
+  }, [isLoggedIn, ensureWishlistLoaded, ensureLoyaltyLoaded]);
 
   const [activeTab, setActiveTab] = useState<TabType>("profile");
   const [isEditing, setIsEditing] = useState(false);

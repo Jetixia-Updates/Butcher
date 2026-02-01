@@ -74,18 +74,18 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     }
   }, [user?.id]);
 
-  // Load wallet data on mount and user change
+  // Load wallet data when user changes (login/logout)
+  // Only fetch if user is logged in
   useEffect(() => {
-    fetchWallet();
-  }, [fetchWallet]);
+    if (user?.id) {
+      fetchWallet();
+    } else {
+      setBalance(0);
+      setTransactions([]);
+    }
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll for updates every 5 seconds when user is logged in
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const interval = setInterval(fetchWallet, 5000);
-    return () => clearInterval(interval);
-  }, [user?.id, fetchWallet]);
+  // Removed excessive polling - fetch on-demand instead via refresh()
 
   // Refresh wallet data
   const refresh = async () => {

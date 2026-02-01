@@ -2532,7 +2532,13 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      let allOrders = await pgDb.select().from(ordersTable);
+      // Run both queries in PARALLEL for faster response
+      const [allOrdersRaw, orderItems] = await Promise.all([
+        pgDb.select().from(ordersTable),
+        pgDb.select().from(orderItemsTable),
+      ]);
+
+      let allOrders = allOrdersRaw;
 
       // Filter by status if provided
       const status = req.query.status as string;
@@ -2543,8 +2549,7 @@ function createApp() {
       // Sort by date (newest first)
       allOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      // Get order items for each order
-      const orderItems = await pgDb.select().from(orderItemsTable);
+      // Build order items map
       const orderItemsMap = new Map<string, typeof orderItems>();
       orderItems.forEach(item => {
         if (!orderItemsMap.has(item.orderId)) {
@@ -7397,46 +7402,35 @@ function createApp() {
         return res.json({ success: true, data: DEFAULT_SETTINGS_DATA });
       }
 
-      // Fetch each table with individual error handling
-      let settings = DEFAULT_SETTINGS_DATA.settings;
-      let banners: any[] = [];
-      let timeSlots: any[] = [];
-      let promoCodes: any[] = [];
+      // Run all queries in PARALLEL for much faster response time
+      const [settingsResult, bannersResult, timeSlotsResult, promoCodesResult] = await Promise.all([
+        pgDb.select().from(appSettingsTable).where(eq(appSettingsTable.id, "default")).catch((e) => {
+          console.error('[Settings fetch error]', e);
+          return [];
+        }),
+        pgDb.select().from(bannersTable).catch((e) => {
+          console.error('[Banners fetch error]', e);
+          return [];
+        }),
+        pgDb.select().from(deliveryTimeSlotsTable).catch((e) => {
+          console.error('[TimeSlots fetch error]', e);
+          return [];
+        }),
+        pgDb.select().from(discountCodesTable).catch((e) => {
+          console.error('[PromoCodes fetch error]', e);
+          return [];
+        }),
+      ]);
 
-      try {
-        const settingsResult = await pgDb.select().from(appSettingsTable).where(eq(appSettingsTable.id, "default"));
-        if (settingsResult.length > 0) {
-          settings = settingsResult[0] as any;
-        }
-      } catch (e) {
-        console.error('[Settings fetch error]', e);
-      }
-
-      try {
-        banners = await pgDb.select().from(bannersTable);
-      } catch (e) {
-        console.error('[Banners fetch error]', e);
-      }
-
-      try {
-        timeSlots = await pgDb.select().from(deliveryTimeSlotsTable);
-      } catch (e) {
-        console.error('[TimeSlots fetch error]', e);
-      }
-
-      try {
-        promoCodes = await pgDb.select().from(discountCodesTable);
-      } catch (e) {
-        console.error('[PromoCodes fetch error]', e);
-      }
+      const settings = settingsResult.length > 0 ? settingsResult[0] as any : DEFAULT_SETTINGS_DATA.settings;
 
       res.json({
         success: true,
         data: {
           settings,
-          banners,
-          timeSlots,
-          promoCodes,
+          banners: bannersResult,
+          timeSlots: timeSlotsResult,
+          promoCodes: promoCodesResult,
         },
       });
     } catch (error) {

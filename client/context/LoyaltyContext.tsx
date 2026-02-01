@@ -38,6 +38,7 @@ interface LoyaltyContextType {
   applyReferral: (code: string) => Promise<{ success: boolean; message: string }>;
   isLoading: boolean;
   refresh: () => Promise<void>;
+  ensureLoaded: () => Promise<void>;
 }
 
 const LoyaltyContext = createContext<LoyaltyContextType | undefined>(undefined);
@@ -64,6 +65,7 @@ export const LoyaltyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [pointsToNextTier, setPointsToNextTier] = useState(0);
   const [referralCode, setReferralCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   // Points to AED rate (10 points = 1 AED)
   const pointsToAedRate = 0.1;
@@ -114,16 +116,33 @@ export const LoyaltyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setNextTier(response.data.nextTier ? mapTier(response.data.nextTier) : null);
         setPointsToNextTier(response.data.pointsToNextTier);
         setTransactions(response.data.transactions.map(mapTransaction));
+        setHasLoaded(true);
       }
     } catch (error) {
       console.error("Error fetching loyalty data:", error);
     }
   }, [user?.id]);
 
-  // Load loyalty data on mount and user change
+  // Lazy load - only fetch when needed (called by pages that use loyalty)
+  const ensureLoaded = useCallback(async () => {
+    if (!hasLoaded && user?.id) {
+      await fetchLoyalty();
+    }
+  }, [hasLoaded, user?.id, fetchLoyalty]);
+
+  // Clear loaded state on user change (but don't auto-fetch)
   useEffect(() => {
-    fetchLoyalty();
-  }, [fetchLoyalty]);
+    if (!user?.id) {
+      setPoints(0);
+      setTotalEarned(0);
+      setTransactions([]);
+      setCurrentTier(DEFAULT_TIER);
+      setNextTier(null);
+      setPointsToNextTier(0);
+      setReferralCode("");
+      setHasLoaded(false);
+    }
+  }, [user?.id]);
 
   // Refresh loyalty data
   const refresh = async () => {
@@ -207,6 +226,7 @@ export const LoyaltyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         applyReferral,
         isLoading,
         refresh,
+        ensureLoaded,
       }}
     >
       {children}
