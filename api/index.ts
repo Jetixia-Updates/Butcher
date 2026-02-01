@@ -3446,9 +3446,9 @@ function createApp() {
         quantity: parseFloat(s.quantity),
         reservedQuantity: parseFloat(s.reservedQuantity),
         availableQuantity: parseFloat(s.availableQuantity),
-        lowStockThreshold: parseFloat(s.lowStockThreshold),
-        reorderPoint: parseFloat(s.reorderPoint),
-        reorderQuantity: parseFloat(s.reorderQuantity),
+        lowStockThreshold: s.lowStockThreshold,
+        reorderPoint: s.reorderPoint,
+        reorderQuantity: s.reorderQuantity,
         lastRestockedAt: s.lastRestockedAt?.toISOString() || null,
         updatedAt: s.updatedAt.toISOString(),
       };
@@ -3471,13 +3471,13 @@ function createApp() {
       const productMap = new Map(products.map(p => [p.id, p]));
 
       const alerts = stockData
-        .filter(s => parseFloat(s.availableQuantity) <= parseFloat(s.lowStockThreshold))
+        .filter(s => parseFloat(s.availableQuantity) <= s.lowStockThreshold)
         .map(s => ({
           productId: s.productId,
           productName: productMap.get(s.productId)?.name || s.productId,
           currentQuantity: parseFloat(s.availableQuantity),
-          threshold: parseFloat(s.lowStockThreshold),
-          suggestedReorderQuantity: parseFloat(s.reorderQuantity),
+          threshold: s.lowStockThreshold,
+          suggestedReorderQuantity: s.reorderQuantity,
         }));
 
       res.json({ success: true, data: alerts });
@@ -3680,8 +3680,8 @@ function createApp() {
             quantity: parseFloat(stock.quantity),
             availableQuantity: parseFloat(stock.availableQuantity),
             reservedQuantity: parseFloat(stock.reservedQuantity),
-            lowStockThreshold: stock.lowStockThreshold ? parseFloat(stock.lowStockThreshold) : null,
-            reorderPoint: stock.reorderPoint ? parseFloat(stock.reorderPoint) : null,
+            lowStockThreshold: stock.lowStockThreshold ? stock.lowStockThreshold : null,
+            reorderPoint: stock.reorderPoint ? stock.reorderPoint : null,
             lastUpdated: stock.updatedAt?.toISOString(),
           },
           auditTrail,
@@ -3757,9 +3757,9 @@ function createApp() {
           quantity: parseFloat(s.quantity),
           reservedQuantity: parseFloat(s.reservedQuantity),
           availableQuantity: parseFloat(s.availableQuantity),
-          lowStockThreshold: parseFloat(s.lowStockThreshold),
-          reorderPoint: parseFloat(s.reorderPoint),
-          reorderQuantity: parseFloat(s.reorderQuantity),
+          lowStockThreshold: s.lowStockThreshold,
+          reorderPoint: s.reorderPoint,
+          reorderQuantity: s.reorderQuantity,
           lastRestockedAt: s.lastRestockedAt?.toISOString() || null,
           updatedAt: s.updatedAt.toISOString(),
         }
@@ -3905,9 +3905,9 @@ function createApp() {
       const now = new Date();
       const updateData: Record<string, unknown> = { updatedAt: now };
 
-      if (lowStockThreshold !== undefined) updateData.lowStockThreshold = String(lowStockThreshold);
-      if (reorderPoint !== undefined) updateData.reorderPoint = String(reorderPoint);
-      if (reorderQuantity !== undefined) updateData.reorderQuantity = String(reorderQuantity);
+      if (lowStockThreshold !== undefined) updateData.lowStockThreshold = lowStockThreshold;
+      if (reorderPoint !== undefined) updateData.reorderPoint = reorderPoint;
+      if (reorderQuantity !== undefined) updateData.reorderQuantity = reorderQuantity;
 
       await pgDb.update(stockTable)
         .set(updateData)
@@ -3922,9 +3922,9 @@ function createApp() {
         data: {
           id: s.id,
           productId: s.productId,
-          lowStockThreshold: parseFloat(s.lowStockThreshold),
-          reorderPoint: parseFloat(s.reorderPoint),
-          reorderQuantity: parseFloat(s.reorderQuantity),
+          lowStockThreshold: s.lowStockThreshold,
+          reorderPoint: s.reorderPoint,
+          reorderQuantity: s.reorderQuantity,
           updatedAt: s.updatedAt.toISOString(),
         }
       });
@@ -6503,35 +6503,45 @@ function createApp() {
   });
 
   // Check delivery availability for area
-  app.post('/api/delivery/check-availability', (req, res) => {
-    const { emirate, area } = req.body;
+  app.post('/api/delivery/check-availability', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
 
-    const zone = deliveryZones.find(z =>
-      z.isActive &&
-      z.emirate === emirate &&
-      (z.areas.includes(area) || z.areas.length === 0)
-    );
+      const { emirate, area } = req.body;
 
-    if (!zone) {
-      return res.json({
+      const zones = await pgDb.select().from(deliveryZonesTable);
+      const zone = zones.find(z =>
+        z.isActive &&
+        z.emirate === emirate &&
+        (z.areas.includes(area) || z.areas.length === 0)
+      );
+
+      if (!zone) {
+        return res.json({
+          success: true,
+          data: {
+            available: false,
+            message: 'Delivery not available in this area',
+          },
+        });
+      }
+
+      res.json({
         success: true,
         data: {
-          available: false,
-          message: 'Delivery not available in this area',
+          available: true,
+          zone: zone,
+          deliveryFee: zone.deliveryFee,
+          minimumOrder: zone.minimumOrder,
+          estimatedMinutes: zone.estimatedMinutes,
         },
       });
+    } catch (error) {
+      console.error('[Check Availability Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to check availability' });
     }
-
-    res.json({
-      success: true,
-      data: {
-        available: true,
-        zone: zone,
-        deliveryFee: zone.deliveryFee,
-        minimumOrder: zone.minimumOrder,
-        estimatedMinutes: zone.estimatedMinutes,
-      },
-    });
   });
 
   // Get address by ID - DATABASE BACKED
