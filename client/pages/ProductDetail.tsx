@@ -41,6 +41,8 @@ const NUTRITIONAL_INFO: Record<string, { calories: number; protein: number; fat:
   Lamb: { calories: 294, protein: 25, fat: 21, carbs: 0 },
   Goat: { calories: 143, protein: 27, fat: 3, carbs: 0 },
   Chicken: { calories: 239, protein: 27, fat: 14, carbs: 0 },
+  Marinated: { calories: 180, protein: 22, fat: 8, carbs: 5 },
+  Premium: { calories: 270, protein: 28, fat: 18, carbs: 0 },
 };
 
 export default function ProductDetailPage() {
