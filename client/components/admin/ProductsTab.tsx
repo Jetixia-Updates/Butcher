@@ -605,7 +605,7 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
 
     setSubmitting(true);
     try {
-      await onSave({
+      const formData = {
         name,
         nameAr: nameAr || undefined,
         price: parseFloat(price),
@@ -616,7 +616,9 @@ function ProductFormModal({ product, onClose, onSave, isRTL, t, mode }: ProductF
         descriptionAr: descriptionAr || undefined,
         image: imageUrl || undefined,
         available,
-      });
+      };
+      console.log('[ProductFormModal] Submitting form data:', formData);
+      await onSave(formData);
     } finally {
       setSubmitting(false);
     }

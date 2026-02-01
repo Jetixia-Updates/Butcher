@@ -246,20 +246,26 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const updateProduct = async (id: string, updates: Partial<Product>) => {
     try {
-      const response = await productsApi.update(id, {
-        name: updates.name,
-        nameAr: updates.nameAr,
-        price: updates.price,
-        category: updates.category,
-        description: updates.description,
-        descriptionAr: updates.descriptionAr,
-        image: updates.image,
-        isActive: updates.available,
-        isPremium: updates.isPremium,
-        discount: updates.discount,
-        rating: updates.rating,
-        badges: updates.badges,
-      });
+      // Build update payload - only include fields that are actually provided
+      const updatePayload: Record<string, unknown> = {};
+      
+      if (updates.name !== undefined) updatePayload.name = updates.name;
+      if (updates.nameAr !== undefined) updatePayload.nameAr = updates.nameAr;
+      if (updates.price !== undefined) updatePayload.price = updates.price;
+      if (updates.category !== undefined) updatePayload.category = updates.category;
+      if (updates.description !== undefined) updatePayload.description = updates.description;
+      if (updates.descriptionAr !== undefined) updatePayload.descriptionAr = updates.descriptionAr;
+      if (updates.image !== undefined) updatePayload.image = updates.image;
+      if (updates.available !== undefined) updatePayload.isActive = updates.available;
+      if (updates.isPremium !== undefined) updatePayload.isPremium = updates.isPremium;
+      if (updates.discount !== undefined) updatePayload.discount = updates.discount;
+      if (updates.rating !== undefined) updatePayload.rating = updates.rating;
+      if (updates.badges !== undefined) updatePayload.badges = updates.badges;
+
+      console.log('[ProductsContext] Updating product:', id, 'with payload:', updatePayload);
+      
+      const response = await productsApi.update(id, updatePayload as any);
+      console.log('[ProductsContext] Update response:', response);
 
       if (response.success) {
         // Refresh from API to ensure consistency

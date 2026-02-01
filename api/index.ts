@@ -1467,8 +1467,18 @@ function createApp() {
 
   app = express();
   app.use(cors());
-  // Increase body size limit to 50MB for base64 image uploads
-  app.use(express.json({ limit: '50mb' }));
+  
+  // Handle Vercel's pre-parsed body - Vercel parses the body before Express sees it
+  // This middleware ensures req.body is available for Express routes
+  app.use((req, res, next) => {
+    // If body is already parsed by Vercel, skip express.json()
+    if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+      console.log('[Body Parser] Body already parsed by Vercel:', Object.keys(req.body));
+      return next();
+    }
+    // Otherwise, use express.json()
+    express.json({ limit: '50mb' })(req, res, next);
+  });
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // Ping endpoint
@@ -2099,6 +2109,9 @@ function createApp() {
   // Update product - DATABASE BACKED
   app.put('/api/products/:id', async (req, res) => {
     try {
+      console.log('[Update Product] Received request for ID:', req.params.id);
+      console.log('[Update Product] Request body:', JSON.stringify(req.body));
+      
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
@@ -2132,6 +2145,8 @@ function createApp() {
       if (req.body.isPremium !== undefined) updateData.isPremium = req.body.isPremium;
       if (req.body.tags !== undefined) updateData.tags = req.body.tags;
 
+      console.log('[Update Product] Update data to be applied:', JSON.stringify(updateData));
+      
       await pgDb.update(productsTable).set(updateData).where(eq(productsTable.id, req.params.id));
 
       // Fetch updated product
