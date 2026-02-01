@@ -200,6 +200,7 @@ export interface Product {
   maxOrderQuantity: number;
   isActive: boolean;
   isFeatured: boolean;
+  isPremium?: boolean; // Whether this product appears in Premium category
   rating?: number; // Product rating (0-5)
   tags: string[];
   badges?: ("halal" | "organic" | "grass-fed" | "premium" | "fresh" | "local")[];

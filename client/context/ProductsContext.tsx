@@ -122,7 +122,7 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
           available: p.isActive,
           discount: p.discount,
           rating: p.rating,
-          isPremium: (p as any).isPremium || false,
+          isPremium: p.isPremium || false,
           badges: p.badges,
         }));
 
@@ -220,6 +220,7 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
         maxOrderQuantity: 10,
         isActive: product.available,
         isFeatured: false,
+        isPremium: product.isPremium || false,
         tags: [],
         discount: product.discount,
         rating: product.rating,
@@ -227,52 +228,16 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
       });
 
       if (response.success && response.data) {
-        const newProduct: Product = {
-          id: response.data.id,
-          name: response.data.name,
-          nameAr: response.data.nameAr,
-          price: response.data.price,
-          category: response.data.category,
-          description: response.data.description,
-          descriptionAr: response.data.descriptionAr,
-          image: response.data.image,
-          available: response.data.isActive,
-          discount: response.data.discount,
-          rating: response.data.rating,
-          badges: response.data.badges,
-        };
-        setProducts((prev) => {
-          const updated = [...prev, newProduct];
-          localStorage.setItem("butcher_products", JSON.stringify(updated));
-          return updated;
-        });
-        setHasFetchedFromApi(true);
+        // Product was successfully created in the database
+        // Immediately refresh from API to ensure consistency across all tabs/views
+        await fetchProducts();
       } else {
-        // Fallback to local add
-        const newProduct: Product = {
-          ...product,
-          id: `prod_${Date.now()}`,
-        };
-        setProducts((prev) => {
-          const updated = [...prev, newProduct];
-          localStorage.setItem("butcher_products", JSON.stringify(updated));
-          return updated;
-        });
-        setHasFetchedFromApi(true);
+        console.error("Failed to add product: API returned", response.error);
+        throw new Error(response.error || "Failed to add product");
       }
     } catch (err) {
       console.error("Failed to add product:", err);
-      // Fallback to local add
-      const newProduct: Product = {
-        ...product,
-        id: `prod_${Date.now()}`,
-      };
-      setProducts((prev) => {
-        const updated = [...prev, newProduct];
-        localStorage.setItem("butcher_products", JSON.stringify(updated));
-        return updated;
-      });
-      setHasFetchedFromApi(true);
+      throw err; // Re-throw so the caller knows it failed
     }
   };
 
@@ -287,61 +252,38 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
         descriptionAr: updates.descriptionAr,
         image: updates.image,
         isActive: updates.available,
+        isPremium: updates.isPremium,
         discount: updates.discount,
         rating: updates.rating,
         badges: updates.badges,
       });
 
       if (response.success) {
-        setProducts((prev) => {
-          const updated = prev.map((product) =>
-            product.id === id ? { ...product, ...updates } : product
-          );
-          localStorage.setItem("butcher_products", JSON.stringify(updated));
-          return updated;
-        });
-        setHasFetchedFromApi(true);
+        // Refresh from API to ensure consistency
+        await fetchProducts();
       } else {
-        // Still update locally for responsiveness
-        setProducts((prev) => {
-          const updated = prev.map((product) =>
-            product.id === id ? { ...product, ...updates } : product
-          );
-          localStorage.setItem("butcher_products", JSON.stringify(updated));
-          return updated;
-        });
-        setHasFetchedFromApi(true);
+        console.error("Failed to update product: API returned", response.error);
+        throw new Error(response.error || "Failed to update product");
       }
     } catch (err) {
       console.error("Failed to update product:", err);
-      // Fallback to local update
-      setProducts((prev) => {
-        const updated = prev.map((product) =>
-          product.id === id ? { ...product, ...updates } : product
-        );
-        localStorage.setItem("butcher_products", JSON.stringify(updated));
-        return updated;
-      });
-      setHasFetchedFromApi(true);
+      throw err;
     }
   };
 
   const deleteProduct = async (id: string) => {
     try {
-      await productsApi.delete(id);
-      setProducts((prev) => {
-        const updated = prev.filter((product) => product.id !== id);
-        localStorage.setItem("butcher_products", JSON.stringify(updated));
-        return updated;
-      });
+      const response = await productsApi.delete(id);
+      if (response.success) {
+        // Refresh from API to ensure consistency
+        await fetchProducts();
+      } else {
+        console.error("Failed to delete product: API returned", response.error);
+        throw new Error(response.error || "Failed to delete product");
+      }
     } catch (err) {
       console.error("Failed to delete product:", err);
-      // Fallback to local delete
-      setProducts((prev) => {
-        const updated = prev.filter((product) => product.id !== id);
-        localStorage.setItem("butcher_products", JSON.stringify(updated));
-        return updated;
-      });
+      throw err;
     }
   };
 

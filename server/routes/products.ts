@@ -31,6 +31,7 @@ const createProductSchema = z.object({
   maxOrderQuantity: z.number().positive().optional(),
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
+  isPremium: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   discount: z.number().min(0).max(100).optional(),
   rating: z.number().min(0).max(5).optional(),
@@ -58,6 +59,7 @@ function toApiProduct(dbProduct: typeof products.$inferSelect): Product {
     maxOrderQuantity: parseFloat(dbProduct.maxOrderQuantity),
     isActive: dbProduct.isActive,
     isFeatured: dbProduct.isFeatured,
+    isPremium: dbProduct.isPremium,
     tags: (dbProduct.tags as string[]) || [],
     discount: dbProduct.discount ? parseFloat(dbProduct.discount) : undefined,
     rating: dbProduct.rating ? parseFloat(dbProduct.rating) : undefined,
@@ -191,6 +193,7 @@ const createProduct: RequestHandler = async (req, res) => {
       maxOrderQuantity: String(data.maxOrderQuantity || 10),
       isActive: data.isActive ?? true,
       isFeatured: data.isFeatured ?? false,
+      isPremium: data.isPremium ?? false,
       tags: data.tags || [],
       discount: String(data.discount || 0),
       rating: data.rating ? String(data.rating) : null,
@@ -274,6 +277,7 @@ const updateProduct: RequestHandler = async (req, res) => {
     if (data.maxOrderQuantity !== undefined) updateData.maxOrderQuantity = String(data.maxOrderQuantity);
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured;
+    if (data.isPremium !== undefined) updateData.isPremium = data.isPremium;
     if (data.tags !== undefined) updateData.tags = data.tags;
     if (data.discount !== undefined) updateData.discount = String(data.discount);
     if (data.rating !== undefined) updateData.rating = String(data.rating);

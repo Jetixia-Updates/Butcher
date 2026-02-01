@@ -178,14 +178,25 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
   const unavailableCount = products.filter((p) => !p.available).length;
 
   const handleToggleAvailability = async (product: Product) => {
-    await updateProduct(product.id, { available: !product.available });
+    try {
+      await updateProduct(product.id, { available: !product.available });
+    } catch (err) {
+      console.error("Failed to toggle availability:", err);
+      alert(isRTL ? "فشل تحديث حالة المنتج" : "Failed to update product status");
+    }
     setActionMenuId(null);
   };
 
   const handleDelete = async () => {
     if (deleteModal) {
-      await deleteProduct(deleteModal.id);
-      setDeleteModal(null);
+      try {
+        await deleteProduct(deleteModal.id);
+        setDeleteModal(null);
+      } catch (err) {
+        console.error("Failed to delete product:", err);
+        alert(isRTL ? "فشل حذف المنتج" : "Failed to delete product");
+        setDeleteModal(null);
+      }
     }
   };
 
@@ -455,8 +466,13 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
         <ProductFormModal
           onClose={() => setAddModal(false)}
           onSave={async (data) => {
-            await addProduct(data);
-            setAddModal(false);
+            try {
+              await addProduct(data);
+              setAddModal(false);
+            } catch (err) {
+              console.error("Failed to add product:", err);
+              alert(isRTL ? "فشل إضافة المنتج. يرجى المحاولة مرة أخرى." : "Failed to add product. Please try again.");
+            }
           }}
           isRTL={isRTL}
           t={t}
@@ -470,8 +486,13 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
           product={editModal}
           onClose={() => setEditModal(null)}
           onSave={async (data) => {
-            await updateProduct(editModal.id, data);
-            setEditModal(null);
+            try {
+              await updateProduct(editModal.id, data);
+              setEditModal(null);
+            } catch (err) {
+              console.error("Failed to update product:", err);
+              alert(isRTL ? "فشل تحديث المنتج. يرجى المحاولة مرة أخرى." : "Failed to update product. Please try again.");
+            }
           }}
           isRTL={isRTL}
           t={t}
