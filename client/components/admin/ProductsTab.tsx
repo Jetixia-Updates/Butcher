@@ -469,9 +469,10 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
             try {
               await addProduct(data);
               setAddModal(false);
-            } catch (err) {
+            } catch (err: any) {
               console.error("Failed to add product:", err);
-              alert(isRTL ? "فشل إضافة المنتج. يرجى المحاولة مرة أخرى." : "Failed to add product. Please try again.");
+              const errorMessage = err?.message || (isRTL ? "فشل إضافة المنتج. يرجى المحاولة مرة أخرى." : "Failed to add product. Please try again.");
+              alert(errorMessage);
             }
           }}
           isRTL={isRTL}
@@ -489,9 +490,10 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
             try {
               await updateProduct(editModal.id, data);
               setEditModal(null);
-            } catch (err) {
+            } catch (err: any) {
               console.error("Failed to update product:", err);
-              alert(isRTL ? "فشل تحديث المنتج. يرجى المحاولة مرة أخرى." : "Failed to update product. Please try again.");
+              const errorMessage = err?.message || (isRTL ? "فشل تحديث المنتج. يرجى المحاولة مرة أخرى." : "Failed to update product. Please try again.");
+              alert(errorMessage);
             }
           }}
           isRTL={isRTL}

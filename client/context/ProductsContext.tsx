@@ -205,14 +205,17 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const addProduct = async (product: Omit<Product, "id">) => {
     try {
+      // Generate a unique SKU with timestamp and random string to avoid collisions
+      const uniqueSku = `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      
       const response = await productsApi.create({
         name: product.name,
         nameAr: product.nameAr,
-        sku: `SKU-${Date.now()}`,
+        sku: uniqueSku,
         price: product.price,
         costPrice: product.price * 0.6,
         category: product.category,
-        description: product.description,
+        description: product.description || "No description", // Ensure description is never empty
         descriptionAr: product.descriptionAr,
         image: product.image,
         unit: "kg",

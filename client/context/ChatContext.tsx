@@ -73,7 +73,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshChats = useCallback(async () => {
     try {
       const data = await fetchApi<any[]>('/chat/all');
-      console.log('[Chat Admin] Fetched chats:', data.success, 'count:', data.data?.length || 0);
+      // Reduced logging - only log on errors or first fetch
       if (data.success && data.data) {
         const chats: UserChat[] = data.data.map((chat: any) => ({
           userId: chat.userId,
@@ -107,29 +107,39 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Determine if user is admin
   const { isAdmin: authIsAdmin, isLoggedIn } = useAuth();
 
-  // Poll for updates every 5 seconds
+  // Poll for updates every 15 seconds (reduced from 5 to minimize API calls)
   useEffect(() => {
     // Both admin and current user should poll if logged in
     if (!isLoggedIn) return;
 
+    // Use a ref to track if we've already fetched to avoid duplicates on re-render
+    let isMounted = true;
+
     // Initial fetch
-    if (authIsAdmin) {
-      refreshChats();
-    }
-    if (currentUserId) {
-      loadUserMessages(currentUserId);
-    }
+    const doInitialFetch = async () => {
+      if (authIsAdmin && isMounted) {
+        await refreshChats();
+      }
+      if (currentUserId && isMounted) {
+        await loadUserMessages(currentUserId);
+      }
+    };
+    doInitialFetch();
 
     const interval = setInterval(() => {
+      if (!isMounted) return;
       if (authIsAdmin) {
         refreshChats();
       }
       if (currentUserId) {
         loadUserMessages(currentUserId);
       }
-    }, 5000);
+    }, 15000); // Increased to 15 seconds
 
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [refreshChats, loadUserMessages, currentUserId, authIsAdmin, isLoggedIn]);
 
   // Send message from user to admin
