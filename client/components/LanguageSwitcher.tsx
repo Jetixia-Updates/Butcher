@@ -12,13 +12,13 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
 
   if (variant === "compact") {
     return (
-      <div className="flex gap-0.5 items-center bg-white border border-border rounded-md p-0.5 sm:p-1">
+      <div className="flex gap-0.5 items-center bg-white dark:bg-slate-800 border border-border rounded-md p-0.5 sm:p-1">
         <button
           onClick={() => setLanguage("en")}
           className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs sm:text-sm font-medium rounded transition-colors ${
             language === "en"
               ? "bg-primary text-primary-foreground"
-              : "text-foreground hover:bg-muted"
+              : "text-gray-700 dark:text-gray-200 hover:bg-muted"
           }`}
         >
           <span className="hidden sm:inline">EN</span>
@@ -29,7 +29,7 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
           className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs sm:text-sm font-medium rounded transition-colors ${
             language === "ar"
               ? "bg-primary text-primary-foreground"
-              : "text-foreground hover:bg-muted"
+              : "text-gray-700 dark:text-gray-200 hover:bg-muted"
           }`}
         >
           <span className="hidden sm:inline">AR</span>
