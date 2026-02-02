@@ -62,7 +62,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex flex-col">
       {/* Header */}
-      <header className="py-3 px-3 sm:py-4 sm:px-4 border-b border-border/50 bg-white/80 backdrop-blur-sm">
+      <header className="py-3 px-3 sm:py-4 sm:px-4 border-b border-border/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           {/* Left side - Register & Login icons */}
           <div className="flex items-center gap-1 sm:gap-2">
@@ -141,7 +141,7 @@ export default function LoginPage() {
                   className={`w-full pl-10 pr-4 py-3 rounded-lg border-2 transition-colors ${
                     errors.username
                       ? "border-destructive bg-destructive/5"
-                      : "border-input bg-white focus:border-primary"
+                      : "border-input bg-white dark:bg-gray-800 focus:border-primary"
                   } text-foreground placeholder-muted-foreground focus:outline-none`}
                 />
               </div>
@@ -176,7 +176,7 @@ export default function LoginPage() {
                   className={`w-full px-4 py-3 rounded-lg border-2 transition-colors ${
                     errors.password
                       ? "border-destructive bg-destructive/5"
-                      : "border-input bg-white focus:border-primary"
+                      : "border-input bg-white dark:bg-gray-800 focus:border-primary"
                   } text-foreground placeholder-muted-foreground focus:outline-none pr-10`}
                 />
                 <button

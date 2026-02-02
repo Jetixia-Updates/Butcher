@@ -70,7 +70,7 @@ const FormField: React.FC<FormFieldProps> = ({
       className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${
         error
           ? "border-destructive bg-destructive/5"
-          : "border-input bg-white focus:border-primary"
+          : "border-input bg-white dark:bg-gray-800 focus:border-primary"
       } text-foreground placeholder-muted-foreground focus:outline-none`}
     />
     {error && (
@@ -524,7 +524,7 @@ export default function RegisterPage() {
                     className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${
                       errors.emirate
                         ? "border-destructive bg-destructive/5"
-                        : "border-input bg-white focus:border-primary"
+                        : "border-input bg-white dark:bg-gray-800 focus:border-primary"
                     } text-foreground focus:outline-none`}
                   >
                     <option value="">Select an emirate</option>
@@ -613,7 +613,7 @@ export default function RegisterPage() {
                       className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${
                         errors.password
                           ? "border-destructive bg-destructive/5"
-                          : "border-input bg-white focus:border-primary"
+                          : "border-input bg-white dark:bg-gray-800 focus:border-primary"
                       } text-foreground placeholder-muted-foreground focus:outline-none pr-10`}
                     />
                     <button
@@ -648,7 +648,7 @@ export default function RegisterPage() {
                       className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${
                         errors.confirmPassword
                           ? "border-destructive bg-destructive/5"
-                          : "border-input bg-white focus:border-primary"
+                          : "border-input bg-white dark:bg-gray-800 focus:border-primary"
                       } text-foreground placeholder-muted-foreground focus:outline-none pr-10`}
                     />
                     <button

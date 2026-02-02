@@ -284,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
                 {/* Chat Dropdown */}
                 {showChat && (
-                  <div className={`fixed sm:absolute inset-x-2 sm:inset-x-auto top-14 sm:top-auto sm:mt-2 ${language === "ar" ? "sm:left-0 sm:right-auto" : "sm:right-0 sm:left-auto"} w-auto sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden`}>
+                  <div className={`fixed sm:absolute inset-x-2 sm:inset-x-auto top-14 sm:top-auto sm:mt-2 ${language === "ar" ? "sm:left-0 sm:right-auto" : "sm:right-0 sm:left-auto"} w-auto sm:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden`}>
                     {/* Chat Header */}
                     <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary to-primary/80 text-white">
                       <div className="flex items-center gap-2">
@@ -309,10 +309,10 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                     {/* Chat Messages */}
                     <div 
                       ref={chatMessagesRef}
-                      className="h-64 overflow-y-auto p-4 space-y-3 bg-gray-50"
+                      className="h-64 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900"
                     >
                       {chatMessages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
                           <MessageCircle className="w-12 h-12 mb-2 opacity-50" />
                           <p className="text-sm text-center">
                             {language === "ar" 
@@ -330,7 +330,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                               className={`max-w-[80%] rounded-2xl px-4 py-2 ${
                                 msg.sender === "user"
                                   ? "bg-primary text-white rounded-br-md"
-                                  : "bg-white text-gray-800 border border-gray-200 rounded-bl-md"
+                                  : "bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600 rounded-bl-md"
                               }`}
                             >
                               {msg.text && <p className="text-sm">{msg.text}</p>}
@@ -354,13 +354,13 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                                           className={`flex items-center gap-2 p-2 rounded-lg ${
                                             msg.sender === "user" 
                                               ? "bg-white/20 hover:bg-white/30" 
-                                              : "bg-gray-100 hover:bg-gray-200"
+                                              : "bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500"
                                           } transition-colors`}
                                         >
                                           {getFileIcon(att.type)}
                                           <div className="flex-1 min-w-0">
                                             <p className="text-xs font-medium truncate">{att.name}</p>
-                                            <p className={`text-xs ${msg.sender === "user" ? "opacity-70" : "text-gray-500"}`}>
+                                            <p className={`text-xs ${msg.sender === "user" ? "opacity-70" : "text-gray-500 dark:text-gray-400"}`}>
                                               {formatFileSize(att.size)}
                                             </p>
                                           </div>
@@ -372,7 +372,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                                 </div>
                               )}
                               <p className={`text-xs mt-1 ${
-                                msg.sender === "user" ? "text-white/70" : "text-gray-400"
+                                msg.sender === "user" ? "text-white/70" : "text-gray-400 dark:text-gray-500"
                               }`}>
                                 {new Date(msg.timestamp).toLocaleTimeString(language === "ar" ? "ar-AE" : "en-US", {
                                   hour: "2-digit",
@@ -387,13 +387,13 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
                     {/* Attachment Preview */}
                     {chatAttachments.length > 0 && (
-                      <div className="px-3 py-2 border-t bg-gray-50 flex flex-wrap gap-2">
+                      <div className="px-3 py-2 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex flex-wrap gap-2">
                         {chatAttachments.map((att) => (
                           <div key={att.id} className="relative group">
                             {att.type.startsWith("image/") ? (
                               <img src={att.url} alt={att.name} className="w-12 h-12 rounded object-cover" />
                             ) : (
-                              <div className="w-12 h-12 rounded bg-gray-200 flex items-center justify-center">
+                              <div className="w-12 h-12 rounded bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                                 {getFileIcon(att.type)}
                               </div>
                             )}
@@ -409,7 +409,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                     )}
 
                     {/* Chat Input */}
-                    <div className="p-3 border-t bg-white">
+                    <div className="p-3 border-t dark:border-gray-700 bg-white dark:bg-gray-800">
                       <div className="flex gap-2">
                         <input
                           type="file"
@@ -421,7 +421,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         />
                         <button
                           onClick={() => fileInputRef.current?.click()}
-                          className="p-2 text-gray-500 hover:text-primary hover:bg-gray-100 rounded-full transition-colors"
+                          className="p-2 text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
                           title={language === "ar" ? "إرفاق ملف" : "Attach file"}
                         >
                           <Paperclip className="w-5 h-5" />
@@ -432,7 +432,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                           onChange={(e) => setNewMessage(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
                           placeholder={language === "ar" ? "اكتب رسالتك..." : "Type your message..."}
-                          className="flex-1 px-4 py-2 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                          className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         />
                         <button
                           onClick={handleSendMessage}
@@ -466,10 +466,10 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
                 {/* Notifications Dropdown */}
                 {showNotifications && (
-                  <div className={`fixed sm:absolute inset-x-2 sm:inset-x-auto top-14 sm:top-auto sm:mt-2 ${language === "ar" ? "sm:left-0 sm:right-auto" : "sm:right-0 sm:left-auto"} w-auto sm:w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden`}>
+                  <div className={`fixed sm:absolute inset-x-2 sm:inset-x-auto top-14 sm:top-auto sm:mt-2 ${language === "ar" ? "sm:left-0 sm:right-auto" : "sm:right-0 sm:left-auto"} w-auto sm:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden`}>
                     {/* Header */}
-                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
-                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base">
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
                         {language === "ar" ? "الإشعارات" : "Notifications"}
                       </h3>
                       <div className="flex items-center gap-2">
@@ -487,16 +487,16 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                     {/* Notification List */}
                     <div className="max-h-80 overflow-y-auto">
                       {userNotifications.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500">
-                          <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                          <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
                           <p>{language === "ar" ? "لا توجد إشعارات" : "No notifications"}</p>
                         </div>
                       ) : (
                         userNotifications.map((notification) => (
                           <div
                             key={notification.id}
-                            className={`flex items-start gap-3 px-4 py-3 border-b hover:bg-gray-50 cursor-pointer transition-colors ${
-                              notification.unread ? "bg-blue-50/50" : ""
+                            className={`flex items-start gap-3 px-4 py-3 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
+                              notification.unread ? "bg-blue-50/50 dark:bg-blue-900/20" : ""
                             }`}
                             onClick={() => handleNotificationClick(notification)}
                           >
@@ -505,7 +505,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
-                                <p className={`text-sm ${notification.unread ? "font-semibold" : "font-medium"} text-gray-900`}>
+                                <p className={`text-sm ${notification.unread ? "font-semibold" : "font-medium"} text-gray-900 dark:text-gray-100`}>
                                   {language === "ar" ? notification.titleAr : notification.title}
                                 </p>
                                 <button
@@ -513,24 +513,24 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                                     e.stopPropagation();
                                     deleteNotification(notification.id);
                                   }}
-                                  className="flex-shrink-0 p-1 hover:bg-gray-200 rounded"
+                                  className="flex-shrink-0 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                                 >
                                   <X className="w-3 h-3 text-gray-400" />
                                 </button>
                               </div>
-                              <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 line-clamp-2">
                                 {isInvoiceNotification(notification) 
                                   ? (language === "ar" ? "اضغط لعرض الفاتورة الكاملة" : "Click to view full invoice")
                                   : (language === "ar" ? notification.messageAr : notification.message)
                                 }
                               </p>
                               {isInvoiceNotification(notification) && (
-                                <span className="inline-flex items-center gap-1 mt-1 text-xs text-emerald-600 font-medium">
+                                <span className="inline-flex items-center gap-1 mt-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                                   <FileText className="w-3 h-3" />
                                   {language === "ar" ? "عرض الفاتورة" : "View Invoice"}
                                 </span>
                               )}
-                              <p className="text-xs text-gray-400 mt-1">
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                                 {formatRelativeTime(notification.createdAt, language)}
                               </p>
                             </div>
@@ -544,7 +544,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
                     {/* Footer */}
                     {userNotifications.length > 0 && (
-                      <div className="px-4 py-2 bg-gray-50 border-t">
+                      <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border-t dark:border-gray-600">
                         <button
                           onClick={() => {
                             clearAllNotifications();
@@ -612,9 +612,9 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
                 {/* User Dropdown Menu */}
                 {showUserMenu && (
-                  <div className={`absolute top-full mt-2 ${language === "ar" ? "left-0" : "right-0"} w-56 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden`}>
+                  <div className={`absolute top-full mt-2 ${language === "ar" ? "left-0" : "right-0"} w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden`}>
                     {/* User Info */}
-                    <div className="px-4 py-3 bg-gray-50 border-b">
+                    <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
                       <p className="font-semibold text-foreground text-sm">{user?.firstName} {user?.familyName}</p>
                       <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                     </div>
@@ -624,7 +624,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                       <Link
                         to="/home"
                         onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <Home className="w-4 h-4 text-muted-foreground" />
                         {language === "ar" ? "الرئيسية" : "Home"}
@@ -632,7 +632,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                       <Link
                         to="/profile"
                         onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <User className="w-4 h-4 text-muted-foreground" />
                         {language === "ar" ? "حسابي" : "My Account"}
@@ -640,7 +640,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                       <Link
                         to="/orders"
                         onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <ShoppingBag className="w-4 h-4 text-muted-foreground" />
                         {language === "ar" ? "طلباتي" : "My Orders"}
@@ -648,7 +648,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                       <Link
                         to="/wallet"
                         onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <Wallet className="w-4 h-4 text-muted-foreground" />
                         {language === "ar" ? "المحفظة" : "Wallet"}
@@ -656,7 +656,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                       <Link
                         to="/deals"
                         onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <Percent className="w-4 h-4 text-muted-foreground" />
                         {language === "ar" ? "العروض" : "Deals & Offers"}
@@ -664,12 +664,12 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                       <Link
                         to="/wishlist"
                         onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <Heart className="w-4 h-4 text-muted-foreground" />
                         {language === "ar" ? "المفضلة" : "Wishlist"}
                         {wishlistItems.length > 0 && (
-                          <span className="ml-auto bg-red-100 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full">
+                          <span className="ml-auto bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-medium px-2 py-0.5 rounded-full">
                             {wishlistItems.length}
                           </span>
                         )}
@@ -677,11 +677,11 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                       
                       {isAdmin && (
                         <>
-                          <div className="border-t border-gray-100 my-2" />
+                          <div className="border-t border-gray-100 dark:border-gray-600 my-2" />
                           <Link
                             to="/admin/dashboard"
                             onClick={() => setShowUserMenu(false)}
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                           >
                             <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -692,14 +692,14 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         </>
                       )}
                       
-                      <div className="border-t border-gray-100 my-2" />
+                      <div className="border-t border-gray-100 dark:border-gray-600 my-2" />
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
                           logout();
                           window.location.href = "/";
                         }}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors w-full"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors w-full"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -727,7 +727,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
       {/* Invoice Modal */}
       {selectedInvoice && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-primary/80 text-white">
               <div className="flex items-center gap-3">
@@ -751,13 +751,13 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
             
             {/* Invoice Content */}
             <div className="p-6 overflow-y-auto max-h-[60vh]">
-              <pre className="whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded-lg border border-gray-200 text-gray-800 leading-relaxed">
+              <pre className="whitespace-pre-wrap font-mono text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 leading-relaxed">
                 {language === "ar" ? selectedInvoice.messageAr : selectedInvoice.message}
               </pre>
             </div>
             
             {/* Modal Footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t flex gap-3">
+            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t dark:border-gray-600 flex gap-3">
               <button
                 onClick={() => {
                   // Copy invoice to clipboard

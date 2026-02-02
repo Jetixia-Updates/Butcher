@@ -150,7 +150,7 @@ export default function ForgotPasswordPage() {
                 className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border-2 transition-colors text-sm sm:text-base ${
                   errors.mobile
                     ? "border-destructive bg-destructive/5"
-                    : "border-input bg-white focus:border-primary"
+                    : "border-input bg-white dark:bg-gray-800 focus:border-primary"
                 } text-foreground placeholder-muted-foreground focus:outline-none`}
               />
               {errors.mobile && (
@@ -175,7 +175,7 @@ export default function ForgotPasswordPage() {
                 className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border-2 transition-colors text-sm sm:text-base ${
                   errors.email
                     ? "border-destructive bg-destructive/5"
-                    : "border-input bg-white focus:border-primary"
+                    : "border-input bg-white dark:bg-gray-800 focus:border-primary"
                 } text-foreground placeholder-muted-foreground focus:outline-none`}
               />
               {errors.email && (
