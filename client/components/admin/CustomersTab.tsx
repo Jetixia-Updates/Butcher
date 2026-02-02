@@ -712,19 +712,19 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
                       </td>
                       <td className="px-3 sm:px-6 py-3 sm:py-4">
                         <div className={cn(
-                          "flex items-center gap-1 sm:gap-2",
+                          "flex items-center gap-1 sm:gap-2 flex-wrap",
                           isRTL ? "justify-start" : "justify-end"
                         )}>
                           <button
                             onClick={() => setMessageModal(customer)}
-                            className="p-1.5 sm:p-2 text-slate-500 hover:text-primary hover:bg-primary/10 rounded-lg"
+                            className="p-1.5 sm:p-2 text-slate-500 hover:text-primary hover:bg-primary/10 rounded-lg flex-shrink-0"
                             title={t.sendMessage}
                           >
                             <MessageSquare className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => setEditModal(customer)}
-                            className="p-1.5 sm:p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                            className="p-1.5 sm:p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg flex-shrink-0"
                             title={t.editCustomer}
                           >
                             <Edit2 className="w-4 h-4" />
@@ -732,7 +732,7 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
                           <button
                             onClick={() => toggleCustomerActive(customer.id, customer.isActive)}
                             className={cn(
-                              "p-1.5 sm:p-2 rounded-lg",
+                              "p-1.5 sm:p-2 rounded-lg flex-shrink-0",
                               customer.isActive
                                 ? "text-green-600 hover:text-orange-600 hover:bg-orange-50"
                                 : "text-slate-500 hover:text-green-600 hover:bg-green-50"
@@ -743,21 +743,21 @@ export function CustomersTab({ onNavigate }: AdminTabProps) {
                           </button>
                           <button
                             onClick={() => setActiveSection("wallets")}
-                            className="p-1.5 sm:p-2 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg"
+                            className="p-1.5 sm:p-2 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg flex-shrink-0 hidden sm:flex"
                             title={t.wallets}
                           >
                             <Wallet className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => setActiveSection("loyalty")}
-                            className="p-1.5 sm:p-2 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg"
+                            className="p-1.5 sm:p-2 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg flex-shrink-0 hidden sm:flex"
                             title={t.loyalty}
                           >
                             <Award className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => deleteCustomer(customer.id)}
-                            className="p-1.5 sm:p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                            className="p-1.5 sm:p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg flex-shrink-0"
                             title={t.deleteCustomer}
                           >
                             <Trash2 className="w-4 h-4" />
