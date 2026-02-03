@@ -8,6 +8,8 @@ import { useNotifications, formatRelativeTime, Notification } from "@/context/No
 import { useUserChat, ChatAttachment } from "@/context/ChatContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { Capacitor } from "@capacitor/core";
+import { StatusBar, Style } from "@capacitor/status-bar";
 
 // Dark mode hook
 const useDarkMode = () => {
@@ -28,6 +30,15 @@ const useDarkMode = () => {
     } else {
       root.classList.remove("dark");
     }
+    
+    // Update Capacitor status bar if on native app
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(console.error);
+      if (Capacitor.getPlatform() === 'android') {
+        StatusBar.setBackgroundColor({ color: isDark ? '#111827' : '#ffffff' }).catch(console.error);
+      }
+    }
+
     localStorage.setItem("darkMode", JSON.stringify(isDark));
   }, [isDark]);
 
@@ -795,7 +806,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                     printWindow.print();
                   }
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />

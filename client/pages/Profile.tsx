@@ -22,7 +22,8 @@ import {
   Copy,
   Check,
   Navigation,
-  Loader2
+  Loader2,
+  RefreshCw
 } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -557,9 +558,18 @@ export default function ProfilePage() {
     <div className="py-6 sm:py-12 px-3 sm:px-4" dir={isRTL ? "rtl" : "ltr"}>
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2">{t.myAccount}</h1>
-          <p className="text-muted-foreground">{t.subtitle}</p>
+        <div className="mb-6 sm:mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2">{t.myAccount}</h1>
+            <p className="text-muted-foreground">{t.subtitle}</p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="p-2 hover:bg-muted rounded-full transition-colors"
+            title={language === "ar" ? "تحديث" : "Refresh"}
+          >
+            <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

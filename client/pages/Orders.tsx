@@ -12,7 +12,8 @@ import {
   RotateCcw,
   Search,
   Filter,
-  MapPin
+  MapPin,
+  RefreshCw
 } from "lucide-react";
 import { useOrders, CustomerOrder } from "@/context/OrdersContext";
 import { useBasket } from "@/context/BasketContext";
@@ -336,9 +337,18 @@ export default function OrdersPage() {
     <div className="py-6 sm:py-12 px-3 sm:px-4" dir={isRTL ? "rtl" : "ltr"}>
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2">{t.myOrders}</h1>
-          <p className="text-muted-foreground">{t.subtitle}</p>
+        <div className="mb-6 sm:mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2">{t.myOrders}</h1>
+            <p className="text-muted-foreground">{t.subtitle}</p>
+          </div>
+          <button
+            onClick={() => fetchOrders()}
+            className={cn("p-2 hover:bg-muted rounded-full transition-colors", isLoading && "animate-spin")}
+            title={language === "ar" ? "تحديث" : "Refresh"}
+          >
+            <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+          </button>
         </div>
 
         {/* Filters */}

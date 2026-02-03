@@ -93,13 +93,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             setUser(userData);
             localStorage.setItem("user", JSON.stringify(userData));
           } else {
-            // Token invalid, clear auth
+            // Token explicitly invalid or expired - ONLY clear if we're sure
+            // A network failure or temporary server issue shouldn't log the user out
             setAuthToken(null);
             localStorage.removeItem("user");
           }
         } catch (error) {
-          // Fallback to local user if API fails
+          // Fallback to local user if API fails (network error)
+          try {
+            setUser(JSON.parse(savedUser));
+          } catch (e) {
+            console.error("Failed to parse saved user", e);
+          }
+        }
+      } else if (savedUser) {
+        // We have a saved user but no token - this shouldn't happen usually
+        // but let's try to restore the user state just in case
+        try {
           setUser(JSON.parse(savedUser));
+        } catch (e) {
+          console.error("Failed to parse saved user", e);
         }
       }
       setIsLoading(false);
