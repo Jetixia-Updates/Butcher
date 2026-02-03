@@ -21,17 +21,25 @@ import { SettingsTab } from "@/components/admin/SettingsTab";
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isAuthLoading } = useAuth();
 
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  // Redirect if not admin
+  // Redirect if not admin (and auth check is complete)
   React.useEffect(() => {
-    if (!isAdmin) {
+    if (!isAuthLoading && !isAdmin) {
       navigate("/admin/login");
     }
-  }, [isAdmin, navigate]);
+  }, [isAdmin, isAuthLoading, navigate]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return null;

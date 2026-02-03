@@ -680,9 +680,9 @@ export function AdminLayout({
                     className="fixed inset-0 z-40"
                     onClick={() => setNotificationOpen(false)}
                   />
-                  <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} top-full mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden`}>
-                    <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
-                      <h3 className="font-semibold text-slate-900 text-sm sm:text-base">{t("admin.notifications")}</h3>
+                  <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} top-full mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 overflow-hidden`}>
+                    <div className="p-3 sm:p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex items-center justify-between gap-2">
+                      <h3 className="font-semibold text-slate-900 dark:text-white text-sm sm:text-base">{t("admin.notifications")}</h3>
                       {unreadCount > 0 && (
                         <button
                           onClick={() => markAllAsRead()}
@@ -699,8 +699,8 @@ export function AdminLayout({
                           <div
                             key={notif.id}
                             className={cn(
-                              "p-4 border-b border-slate-100 hover:bg-slate-50 transition-colors group",
-                              notif.unread && "bg-blue-50/50"
+                              "p-4 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group",
+                              notif.unread && "bg-blue-50/50 dark:bg-blue-900/10"
                             )}
                           >
                             <div className="flex items-start gap-3">
@@ -713,22 +713,22 @@ export function AdminLayout({
                                 className="flex-1 min-w-0 cursor-pointer"
                                 onClick={() => handleNotificationClick(notif)}
                               >
-                                <p className="text-sm font-medium text-slate-900">
+                                <p className="text-sm font-medium text-slate-900 dark:text-white">
                                   {language === 'ar' ? notif.titleAr : notif.title}
                                 </p>
-                                <p className="text-sm text-slate-600 mt-0.5 line-clamp-2">
+                                <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">
                                   {isInvoiceNotification(notif)
                                     ? (language === 'ar' ? 'اضغط لعرض الفاتورة الكاملة' : 'Click to view full invoice')
                                     : (language === 'ar' ? notif.messageAr : notif.message)
                                   }
                                 </p>
                                 {isInvoiceNotification(notif) && (
-                                  <span className="inline-flex items-center gap-1 mt-1 text-xs text-emerald-600 font-medium">
+                                  <span className="inline-flex items-center gap-1 mt-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                                     <FileText className="w-3 h-3" />
                                     {language === 'ar' ? 'عرض الفاتورة' : 'View Invoice'}
                                   </span>
                                 )}
-                                <p className="text-xs text-slate-400 mt-1">
+                                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                                   {formatRelativeTime(notif.createdAt, language)}
                                 </p>
                               </div>
@@ -737,7 +737,7 @@ export function AdminLayout({
                                 {notif.unread && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); markAsRead(notif.id); }}
-                                    className="p-1.5 hover:bg-slate-200 rounded-md text-slate-500 hover:text-green-600"
+                                    className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-500 hover:text-green-600"
                                     title={language === 'ar' ? 'تحديد كمقروء' : 'Mark as read'}
                                   >
                                     <Check className="w-4 h-4" />
@@ -745,7 +745,7 @@ export function AdminLayout({
                                 )}
                                 <button
                                   onClick={(e) => { e.stopPropagation(); deleteNotification(notif.id); }}
-                                  className="p-1.5 hover:bg-slate-200 rounded-md text-slate-500 hover:text-red-600"
+                                  className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-500 hover:text-red-600"
                                   title={language === 'ar' ? 'حذف' : 'Delete'}
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -760,17 +760,17 @@ export function AdminLayout({
                         ))
                       ) : (
                         <div className="p-8 text-center">
-                          <Bell className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                          <p className="text-slate-500">{t("admin.noNotifications")}</p>
+                          <Bell className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                          <p className="text-slate-500 dark:text-slate-400">{t("admin.noNotifications")}</p>
                         </div>
                       )}
                     </div>
                     {/* Footer with clear all */}
                     {notifications.length > 0 && (
-                      <div className="p-3 border-t border-slate-100 bg-slate-50">
+                      <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
                         <button
                           onClick={() => clearAllNotifications()}
-                          className="w-full text-center text-sm text-slate-500 hover:text-red-600 font-medium py-1"
+                          className="w-full text-center text-sm text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-medium py-1"
                         >
                           {language === 'ar' ? 'مسح جميع الإشعارات' : 'Clear all notifications'}
                         </button>

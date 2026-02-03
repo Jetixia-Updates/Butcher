@@ -18,8 +18,15 @@ export default function PaymentCardPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { items, subtotal, vat, total, clearBasket } = useBasket();
-  const { user } = useAuth();
+  const { user, isAuthLoading, isLoggedIn } = useAuth();
   const { addNotification, addAdminNotification } = useNotifications();
+
+  // Redirect if not logged in and not loading
+  React.useEffect(() => {
+    if (!isAuthLoading && !isLoggedIn) {
+      navigate("/login?redirect=/checkout");
+    }
+  }, [isAuthLoading, isLoggedIn, navigate]);
   
   // Define type for navigation state passed from Checkout
   interface CheckoutState {

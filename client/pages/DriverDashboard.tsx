@@ -160,12 +160,21 @@ const STATUS_FLOW = ["assigned", "picked_up", "in_transit", "nearby", "delivered
 
 export default function DriverDashboardPage() {
   const navigate = useNavigate();
-  const { user, loginAdmin, logout, isLoggedIn } = useAuth();
+  const { user, loginAdmin, logout, isLoggedIn, isAuthLoading } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
   const { notifications, unreadCount, addUserNotification, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const isRTL = language === "ar";
   const t = translations[language];
+
+  // Loading Screen for Auth Initialization
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   const [deliveries, setDeliveries] = useState<DeliveryOrder[]>([]);
   const [loading, setLoading] = useState(true);

@@ -530,11 +530,21 @@ function AddressLocationViewer({
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { items, subtotal, vat, total, clearBasket } = useBasket();
-  const { user } = useAuth();
+  const { user, isAuthLoading, isLoggedIn } = useAuth();
   const { language } = useLanguage();
   const isRTL = language === 'ar';
   const { addNotification, addAdminNotification } = useNotifications();
   const { validatePromoCode, settings, timeSlots: adminTimeSlots } = useSettings();
+
+  // Redirect if not logged in and not loading
+  useEffect(() => {
+    if (!isAuthLoading && !isLoggedIn) {
+      navigate("/login?redirect=/checkout");
+    }
+  }, [isAuthLoading, isLoggedIn, navigate]);
+
+  // Loading state
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Promo code state
   const [promoCode, setPromoCode] = useState("");

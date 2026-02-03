@@ -18,11 +18,12 @@ export function useCapacitorInit() {
       }
 
       try {
-        // Configure status bar
-        await StatusBar.setStyle({ style: Style.Dark });
+        // Configure status bar - Default to light style (dark text) for Day Mode
+        await StatusBar.setStyle({ style: Style.Light });
         
         if (Capacitor.getPlatform() === 'android') {
-          await StatusBar.setBackgroundColor({ color: '#1a1a1a' });
+          // White background for the status bar on Android
+          await StatusBar.setBackgroundColor({ color: '#ffffff' });
         }
 
         // Hide splash screen after app is ready

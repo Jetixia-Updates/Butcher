@@ -15,7 +15,8 @@ const useDarkMode = () => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("darkMode");
       if (saved !== null) return JSON.parse(saved);
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+      // Default to light mode (day mode) unless explicitly selected
+      return false;
     }
     return false;
   });
@@ -505,7 +506,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
-                                <p className={`text-sm ${notification.unread ? "font-semibold" : "font-medium"} text-gray-900 dark:text-gray-100`}>
+                                <p className={`text-sm ${notification.unread ? "font-semibold" : "font-medium"} text-gray-900 dark:text-white`}>
                                   {language === "ar" ? notification.titleAr : notification.title}
                                 </p>
                                 <button
@@ -518,19 +519,19 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                                   <X className="w-3 h-3 text-gray-400" />
                                 </button>
                               </div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 line-clamp-2">
+                              <p className="text-xs text-gray-600 dark:text-gray-200 mt-0.5 line-clamp-2">
                                 {isInvoiceNotification(notification) 
                                   ? (language === "ar" ? "اضغط لعرض الفاتورة الكاملة" : "Click to view full invoice")
                                   : (language === "ar" ? notification.messageAr : notification.message)
                                 }
                               </p>
                               {isInvoiceNotification(notification) && (
-                                <span className="inline-flex items-center gap-1 mt-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                                <span className="inline-flex items-center gap-1 mt-1 text-xs text-emerald-600 dark:text-emerald-300 font-medium">
                                   <FileText className="w-3 h-3" />
                                   {language === "ar" ? "عرض الفاتورة" : "View Invoice"}
                                 </span>
                               )}
-                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                              <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">
                                 {formatRelativeTime(notification.createdAt, language)}
                               </p>
                             </div>
