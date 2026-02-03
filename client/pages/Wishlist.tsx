@@ -12,7 +12,7 @@ export default function WishlistPage() {
   const navigate = useNavigate();
   const { items, removeFromWishlist, clearWishlist, ensureLoaded } = useWishlist();
   const { addItem } = useBasket();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isLoading: isAuthLoading } = useAuth();
   const { language } = useLanguage();
   const isRTL = language === "ar";
 
@@ -71,8 +71,21 @@ export default function WishlistPage() {
     removeFromWishlist(item.productId);
   };
 
+  useEffect(() => {
+    if (!isAuthLoading && !isLoggedIn) {
+      navigate("/login");
+    }
+  }, [isLoggedIn, isAuthLoading, navigate]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   if (!isLoggedIn) {
-    navigate("/login");
     return null;
   }
 

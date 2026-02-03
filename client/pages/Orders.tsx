@@ -25,7 +25,7 @@ export default function OrdersPage() {
   const navigate = useNavigate();
   const { orders, isLoading, cancelOrder, fetchOrders } = useOrders();
   const { addItem } = useBasket();
-  const { user, isLoggedIn } = useAuth();
+  const { user, isLoggedIn, isLoading: isAuthLoading } = useAuth();
   const { language } = useLanguage();
   const isRTL = language === "ar";
 
@@ -34,14 +34,16 @@ export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!isAuthLoading && !isLoggedIn) {
       navigate("/login");
     }
-  }, [isLoggedIn, navigate]);
+  }, [isLoggedIn, isAuthLoading, navigate]);
 
   useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+    if (isLoggedIn) {
+      fetchOrders();
+    }
+  }, [fetchOrders, isLoggedIn]);
 
   const translations = {
     en: {
@@ -317,6 +319,14 @@ export default function OrdersPage() {
       };
     }
   };
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   if (!isLoggedIn) {
     return null;

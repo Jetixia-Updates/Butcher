@@ -199,7 +199,7 @@ export const authApi = {
       isDefault: boolean;
     };
   }) =>
-    fetchApi<{ userId: string }>("/users/register", {
+    fetchApi<{ userId: string }>("/users", {
       method: "POST",
       body: JSON.stringify(userData),
     }),

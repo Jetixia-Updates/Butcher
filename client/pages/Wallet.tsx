@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Wallet,
   Plus,
@@ -15,12 +15,21 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useWallet, WalletTransaction } from "@/context/WalletContext";
+import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
 export default function WalletPage() {
+  const navigate = useNavigate();
   const { language } = useLanguage();
   const { balance, transactions, isLoading, topUp } = useWallet();
+  const { isLoggedIn, isLoading: isAuthLoading } = useAuth();
   const isRTL = language === "ar";
+  
+  useEffect(() => {
+    if (!isAuthLoading && !isLoggedIn) {
+      navigate("/login");
+    }
+  }, [isLoggedIn, isAuthLoading, navigate]);
 
   const [showTopUp, setShowTopUp] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState<number>(100);
@@ -134,6 +143,18 @@ export default function WalletPage() {
     };
     return labels[type] || type;
   };
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20" dir={isRTL ? "rtl" : "ltr"}>

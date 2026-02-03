@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, or, ilike, desc, and, gte, lte, ne } from 'drizzle-orm';
+import { eq, or, ilike, desc, and, gte, lte, ne, inArray } from 'drizzle-orm';
 import {
   pgTable,
   text,
@@ -1757,6 +1757,7 @@ function createApp() {
   });
 
   // Register user
+  // Register user
   app.post('/api/users', async (req, res) => {
     try {
       const { username, email, mobile, password, firstName, familyName, emirate, address, deliveryAddress } = req.body;
@@ -1820,7 +1821,30 @@ function createApp() {
             },
           });
 
-          const newUser: User = {
+          // Create default delivery address if provided
+          if (deliveryAddress) {
+            const addressId = `addr_${Date.now()}`;
+            await pgDb.insert(addressesTable).values({
+              id: addressId,
+              userId: userId,
+              label: deliveryAddress.label || 'Home',
+              fullName: deliveryAddress.fullName || `${firstName} ${familyName}`,
+              mobile: deliveryAddress.mobile || normalizedMobile,
+              emirate: deliveryAddress.emirate || emirate,
+              area: deliveryAddress.area || '',
+              street: deliveryAddress.street || '',
+              building: deliveryAddress.building || '',
+              floor: deliveryAddress.floor || null,
+              apartment: deliveryAddress.apartment || null,
+              latitude: deliveryAddress.latitude || null,
+              longitude: deliveryAddress.longitude || null,
+              isDefault: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+          }
+
+          const newUser = {
             id: userId,
             username,
             email: email.toLowerCase(),
@@ -1844,12 +1868,9 @@ function createApp() {
             },
           };
 
-          // Also add to in-memory for session lookup
-          users.set(userId, newUser);
-
           return res.status(201).json({
             success: true,
-            data: sanitizeUser(newUser),
+            data: sanitizeUser(newUser as any),
             message: 'User registered successfully',
           });
         } catch (dbError: any) {
@@ -1869,62 +1890,6 @@ function createApp() {
       } else {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
-
-      const newUser: User = {
-        id: userId,
-        username,
-        email,
-        mobile,
-        password,
-        firstName,
-        familyName,
-        role: 'customer',
-        isActive: true,
-        isVerified: false,
-        emirate,
-        address,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        preferences: {
-          language: 'en',
-          currency: 'AED',
-          emailNotifications: true,
-          smsNotifications: true,
-          marketingEmails: true,
-        },
-      };
-
-      users.set(userId, newUser);
-
-      // Create default delivery address if provided
-      if (deliveryAddress) {
-        const addressId = `addr_${Date.now()}`;
-        const newAddress: Address = {
-          id: addressId,
-          userId: userId,
-          label: deliveryAddress.label || 'Home',
-          fullName: deliveryAddress.fullName || `${firstName} ${familyName}`,
-          mobile: deliveryAddress.mobile || mobile,
-          emirate: deliveryAddress.emirate || emirate,
-          area: deliveryAddress.area || '',
-          street: deliveryAddress.street || '',
-          building: deliveryAddress.building || '',
-          floor: deliveryAddress.floor,
-          apartment: deliveryAddress.apartment,
-          latitude: deliveryAddress.latitude,
-          longitude: deliveryAddress.longitude,
-          isDefault: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        addresses.set(addressId, newAddress);
-      }
-
-      res.status(201).json({
-        success: true,
-        data: sanitizeUser(newUser),
-        message: 'User registered successfully',
-      });
     } catch (error) {
       console.error('[Register Error]', error);
       res.status(500).json({ success: false, error: 'Registration failed' });
@@ -2538,25 +2503,88 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      // Run both queries in PARALLEL for faster response
-      const [allOrdersRaw, orderItems] = await Promise.all([
-        pgDb.select().from(ordersTable),
-        pgDb.select().from(orderItemsTable),
-      ]);
+      // --- AUTHENTICATION & AUTHORIZATION ---
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) {
+        return res.status(401).json({ success: false, error: 'Authorization token missing' });
+      }
+
+      let currentUser: any = null;
+      // Try database for session
+      if (isDatabaseAvailable() && pgDb) {
+        try {
+          const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+          if (sessionResults.length > 0) {
+            const session = sessionResults[0];
+            if (new Date(session.expiresAt) > new Date()) {
+              const userResults = await pgDb.select().from(usersTable).where(eq(usersTable.id, session.userId));
+              if (userResults.length > 0) {
+                currentUser = userResults[0];
+              }
+            }
+          }
+        } catch (dbError) {
+          console.error('[Orders Auth DB Error]', dbError);
+        }
+      }
+
+      // Fallback to in-memory session
+      if (!currentUser) {
+        const memSession = sessions.get(token);
+        if (memSession && new Date(memSession.expiresAt) > new Date()) {
+          currentUser = users.get(memSession.userId);
+        }
+      }
+
+      if (!currentUser) {
+        return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+      }
+
+      // --- FILTERING ---
+      let userIdFilter = req.query.userId as string;
+      const statusFilter = req.query.status as string;
+
+      // SECURITY: If not admin, FORCE filter to current user's ID
+      if (currentUser.role !== 'admin') {
+        userIdFilter = currentUser.id;
+      }
+
+      // Build the query conditions
+      const conditions = [];
+      if (userIdFilter) {
+        conditions.push(eq(ordersTable.userId, userIdFilter));
+      }
+      if (statusFilter && statusFilter !== 'all') {
+        conditions.push(eq(ordersTable.status, statusFilter as any));
+      }
+
+      // Fetch orders
+      let allOrdersRaw;
+      if (conditions.length > 0) {
+        allOrdersRaw = await pgDb.select().from(ordersTable).where(and(...conditions));
+      } else {
+        allOrdersRaw = await pgDb.select().from(ordersTable);
+      }
+
+      // Fetch order items (only for the retrieved orders to improve performance and security)
+      let orderItems: any[] = [];
+      if (allOrdersRaw.length > 0) {
+        const orderIds = allOrdersRaw.map(o => o.id);
+        const chunkSize = 100;
+        for (let i = 0; i < orderIds.length; i += chunkSize) {
+          const chunk = orderIds.slice(i, i + chunkSize);
+          const chunkItems = await pgDb.select().from(orderItemsTable).where(inArray(orderItemsTable.orderId, chunk));
+          orderItems = [...orderItems, ...chunkItems];
+        }
+      }
 
       let allOrders = allOrdersRaw;
-
-      // Filter by status if provided
-      const status = req.query.status as string;
-      if (status && status !== 'all') {
-        allOrders = allOrders.filter(o => o.status === status);
-      }
 
       // Sort by date (newest first)
       allOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       // Build order items map
-      const orderItemsMap = new Map<string, typeof orderItems>();
+      const orderItemsMap = new Map<string, any[]>();
       orderItems.forEach(item => {
         if (!orderItemsMap.has(item.orderId)) {
           orderItemsMap.set(item.orderId, []);
@@ -2612,6 +2640,31 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
+      // --- ADMIN ONLY ---
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+      let currentUser: any = null;
+      const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+      if (sessionResults.length > 0) {
+        const session = sessionResults[0];
+        if (new Date(session.expiresAt) > new Date()) {
+          const userResults = await pgDb.select().from(usersTable).where(eq(usersTable.id, session.userId));
+          if (userResults.length > 0) currentUser = userResults[0];
+        }
+      }
+      
+      if (!currentUser) {
+        const memSession = sessions.get(token);
+        if (memSession && new Date(memSession.expiresAt) > new Date()) {
+          currentUser = users.get(memSession.userId);
+        }
+      }
+
+      if (!currentUser || currentUser.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+      }
+
       const allOrders = await pgDb.select().from(ordersTable);
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
@@ -2643,12 +2696,39 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
+      // --- AUTH CHECK ---
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+      let currentUser: any = null;
+      const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+      if (sessionResults.length > 0) {
+        const session = sessionResults[0];
+        if (new Date(session.expiresAt) > new Date()) {
+          const userResults = await pgDb.select().from(usersTable).where(eq(usersTable.id, session.userId));
+          if (userResults.length > 0) currentUser = userResults[0];
+        }
+      }
+      
+      if (!currentUser) {
+        const memSession = sessions.get(token);
+        if (memSession && new Date(memSession.expiresAt) > new Date()) {
+          currentUser = users.get(memSession.userId);
+        }
+      }
+
       const result = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
 
       const o = result[0];
+
+      // SECURITY: If not admin, check if the order belongs to the user
+      if (currentUser?.role !== 'admin' && o.userId !== currentUser?.id) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+
       const orderItems = await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, o.id));
 
       const formattedOrder = {
@@ -2997,13 +3077,38 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
+      // --- ADMIN ONLY ---
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+      let currentUser: any = null;
+      const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+      if (sessionResults.length > 0) {
+        const session = sessionResults[0];
+        if (new Date(session.expiresAt) > new Date()) {
+          const userResults = await pgDb.select().from(usersTable).where(eq(usersTable.id, session.userId));
+          if (userResults.length > 0) currentUser = userResults[0];
+        }
+      }
+      
+      if (!currentUser) {
+        const memSession = sessions.get(token);
+        if (memSession && new Date(memSession.expiresAt) > new Date()) {
+          currentUser = users.get(memSession.userId);
+        }
+      }
+
+      if (!currentUser || currentUser.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required for status updates' });
+      }
+
       const result = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
 
       const { status, notes } = req.body;
-      const changedBy = req.headers['x-user-id'] as string || 'admin';
+      const changedBy = currentUser.username;
       const now = new Date();
       const order = result[0];
       const previousStatus = order.status;
@@ -3341,12 +3446,39 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
+      // --- AUTH CHECK ---
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+      let currentUser: any = null;
+      const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+      if (sessionResults.length > 0) {
+        const session = sessionResults[0];
+        if (new Date(session.expiresAt) > new Date()) {
+          const userResults = await pgDb.select().from(usersTable).where(eq(usersTable.id, session.userId));
+          if (userResults.length > 0) currentUser = userResults[0];
+        }
+      }
+      
+      if (!currentUser) {
+        const memSession = sessions.get(token);
+        if (memSession && new Date(memSession.expiresAt) > new Date()) {
+          currentUser = users.get(memSession.userId);
+        }
+      }
+
       const result = await pgDb.select().from(ordersTable).where(eq(ordersTable.orderNumber, req.params.orderNumber));
       if (result.length === 0) {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
 
       const o = result[0];
+
+      // SECURITY: If not admin, check if the order belongs to the user
+      if (currentUser?.role !== 'admin' && o.userId !== currentUser?.id) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+
       const orderItems = await pgDb.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, o.id));
 
       const formattedOrder = {
@@ -3395,12 +3527,39 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
+      // --- AUTH CHECK ---
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+      let currentUser: any = null;
+      const sessionResults = await pgDb.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+      if (sessionResults.length > 0) {
+        const session = sessionResults[0];
+        if (new Date(session.expiresAt) > new Date()) {
+          const userResults = await pgDb.select().from(usersTable).where(eq(usersTable.id, session.userId));
+          if (userResults.length > 0) currentUser = userResults[0];
+        }
+      }
+      
+      if (!currentUser) {
+        const memSession = sessions.get(token);
+        if (memSession && new Date(memSession.expiresAt) > new Date()) {
+          currentUser = users.get(memSession.userId);
+        }
+      }
+
       const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
       if (orderResult.length === 0) {
         return res.status(404).json({ success: false, error: 'Order not found' });
       }
 
       const order = orderResult[0];
+
+      // SECURITY: Only owner or admin can cancel
+      if (currentUser?.role !== 'admin' && order.userId !== currentUser?.id) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+
       if (['delivered', 'cancelled'].includes(order.status)) {
         return res.status(400).json({ success: false, error: 'Cannot delete delivered or already cancelled orders' });
       }
@@ -3408,7 +3567,7 @@ function createApp() {
       const newHistory = [...(order.statusHistory as any[] || []), {
         status: 'cancelled',
         changedAt: new Date().toISOString(),
-        changedBy: 'admin',
+        changedBy: currentUser?.username || 'user',
       }];
 
       const [updated] = await pgDb.update(ordersTable)

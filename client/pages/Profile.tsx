@@ -52,7 +52,7 @@ type TabType = "profile" | "addresses" | "preferences" | "loyalty" | "wishlist";
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { user, isLoggedIn, updateUser, logout } = useAuth();
+  const { user, isLoggedIn, isLoading: isAuthLoading, updateUser, logout } = useAuth();
   const { language, setLanguage } = useLanguage();
   const { items: wishlistItems, removeFromWishlist, ensureLoaded: ensureWishlistLoaded } = useWishlist();
   const { points, currentTier, nextTier, pointsToNextTier, transactions, referralCode, applyReferral, ensureLoaded: ensureLoyaltyLoaded } = useLoyalty();
@@ -349,10 +349,22 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!isAuthLoading && !isLoggedIn) {
       navigate("/login");
     }
-  }, [isLoggedIn, navigate]);
+  }, [isLoggedIn, isAuthLoading, navigate]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null;
+  }
 
   useEffect(() => {
     if (user) {

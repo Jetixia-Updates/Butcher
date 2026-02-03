@@ -88,8 +88,14 @@ export default function TrackOrderPage() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const { orders } = useOrders();
-  const { user } = useAuth();
+  const { user, isLoggedIn, isLoading: isAuthLoading } = useAuth();
   const isRTL = language === "ar";
+
+  useEffect(() => {
+    if (!isAuthLoading && !isLoggedIn) {
+      navigate("/login");
+    }
+  }, [isLoggedIn, isAuthLoading, navigate]);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
@@ -427,6 +433,18 @@ export default function TrackOrderPage() {
     };
     return statusConfig[status] || { icon: <Clock className="w-5 h-5" />, color: "text-gray-500" };
   };
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null;
+  }
 
   if (!order) {
     return (
