@@ -22,7 +22,7 @@ export default function WalletPage() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const { balance, transactions, isLoading, topUp } = useWallet();
-  const { isLoggedIn, isLoading: isAuthLoading } = useAuth();
+  const { isLoggedIn, isAuthLoading } = useAuth();
   const isRTL = language === "ar";
   
   useEffect(() => {

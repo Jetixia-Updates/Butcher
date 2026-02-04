@@ -20,9 +20,7 @@ if (!databaseUrl) {
 }
 
 // Create Neon serverless connection with connection caching
-const sql = neon(databaseUrl || "postgresql://placeholder:placeholder@localhost/placeholder", {
-  fetchConnectionCache: true,
-});
+const sql = neon(databaseUrl || "postgresql://placeholder:placeholder@localhost/placeholder");
 
 // Create Drizzle instance with schema
 export const db = drizzle(sql, { schema });

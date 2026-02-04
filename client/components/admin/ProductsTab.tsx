@@ -591,7 +591,11 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
           onClose={() => setAddCategoryModal(false)}
           onSave={async (data) => {
             try {
-              await addCategory(data);
+              await addCategory({
+                ...data,
+                isActive: true,
+                sortOrder: categories.length // Put it at the end
+              });
               setAddCategoryModal(false);
             } catch (err: any) {
               console.error("Failed to add category:", err);

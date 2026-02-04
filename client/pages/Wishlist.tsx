@@ -12,7 +12,7 @@ export default function WishlistPage() {
   const navigate = useNavigate();
   const { items, removeFromWishlist, clearWishlist, ensureLoaded } = useWishlist();
   const { addItem } = useBasket();
-  const { isLoggedIn, isLoading: isAuthLoading } = useAuth();
+  const { isLoggedIn, isAuthLoading } = useAuth();
   const { language } = useLanguage();
   const isRTL = language === "ar";
 

@@ -102,7 +102,6 @@ export default function ProductsPage() {
     { id: "All", nameEn: "All", nameAr: "الكل" },
     ...dynamicCategories
   ], [dynamicCategories]);
-  ];
 
   // Sync category with URL params
   useEffect(() => {

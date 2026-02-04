@@ -26,7 +26,7 @@ export default function OrdersPage() {
   const navigate = useNavigate();
   const { orders, isLoading, cancelOrder, fetchOrders } = useOrders();
   const { addItem } = useBasket();
-  const { user, isLoggedIn, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoggedIn, isAuthLoading } = useAuth();
   const { language } = useLanguage();
   const isRTL = language === "ar";
 

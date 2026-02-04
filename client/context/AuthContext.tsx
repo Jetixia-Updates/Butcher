@@ -30,7 +30,7 @@ interface AuthContextType {
   user: User | null;
   isLoggedIn: boolean;
   isAdmin: boolean;
-  isLoading: boolean;
+  isAuthLoading: boolean;
   login: (user: User) => void;
   loginWithCredentials: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginAdmin: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -64,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // Load user from localStorage on mount and validate token
   useEffect(() => {
@@ -115,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           console.error("Failed to parse saved user", e);
         }
       }
-      setIsLoading(false);
+      setIsAuthLoading(false);
     };
 
     initAuth();
@@ -380,7 +380,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         user,
         isLoggedIn: !!user && !user.isVisitor,
         isAdmin: !!user?.isAdmin,
-        isLoading,
+        isAuthLoading,
         login,
         loginWithCredentials,
         loginAdmin,

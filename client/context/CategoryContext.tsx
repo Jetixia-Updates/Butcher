@@ -11,6 +11,7 @@ interface CategoryContextType {
   addCategory: (category: Omit<Category, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   updateCategory: (id: string, updates: Partial<Category>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
+  getCategoryName: (id: string, language?: "en" | "ar") => string;
 }
 
 const CategoryContext = createContext<CategoryContextType | undefined>(undefined);
@@ -102,6 +103,12 @@ export const CategoryProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
+  const getCategoryName = (id: string, language: "en" | "ar" = "en") => {
+    const category = categories.find((c) => c.id === id);
+    if (!category) return id;
+    return language === "ar" ? category.nameAr : category.nameEn;
+  };
+
   return (
     <CategoryContext.Provider
       value={{
@@ -112,6 +119,7 @@ export const CategoryProvider: React.FC<{ children: ReactNode }> = ({ children }
         addCategory,
         updateCategory,
         deleteCategory,
+        getCategoryName,
       }}
     >
       {children}

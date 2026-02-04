@@ -53,7 +53,7 @@ type TabType = "profile" | "addresses" | "preferences" | "loyalty" | "wishlist";
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { user, isLoggedIn, isLoading: isAuthLoading, updateUser, logout } = useAuth();
+  const { user, isLoggedIn, isAuthLoading, updateUser, logout } = useAuth();
   const { language, setLanguage } = useLanguage();
   const { items: wishlistItems, removeFromWishlist, ensureLoaded: ensureWishlistLoaded } = useWishlist();
   const { points, currentTier, nextTier, pointsToNextTier, transactions, referralCode, applyReferral, ensureLoaded: ensureLoyaltyLoaded } = useLoyalty();

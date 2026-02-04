@@ -88,7 +88,7 @@ export default function TrackOrderPage() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const { orders } = useOrders();
-  const { user, isLoggedIn, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoggedIn, isAuthLoading } = useAuth();
   const isRTL = language === "ar";
 
   useEffect(() => {

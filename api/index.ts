@@ -25,10 +25,7 @@ import {
 // =====================================================
 
 const databaseUrl = process.env.DATABASE_URL;
-const neonClient = databaseUrl ? neon(databaseUrl, {
-  // Enable connection caching for better performance in serverless
-  fetchConnectionCache: true,
-}) : null;
+const neonClient = databaseUrl ? neon(databaseUrl) : null;
 const pgDb = neonClient ? drizzle(neonClient) : null;
 
 // User role enum and table definition (inline for Vercel)
@@ -5820,7 +5817,6 @@ function createApp() {
         status: newStatus,
         changedAt: new Date().toISOString(),
         changedBy: driverId,
-        notes: 'Driver assigned',
       });
 
       const tracking = {
@@ -5918,12 +5914,12 @@ function createApp() {
           'nearby': 'out_for_delivery',      // Driver nearby
           'delivered': 'delivered',          // Delivered
         };
-        const newOrderStatus = orderStatusMap[status] || order.status;
 
         // Get and update order in database
         const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, orderId));
         if (orderResult.length > 0) {
           const order = orderResult[0];
+          const newOrderStatus = orderStatusMap[status] || order.status;
           console.log(`[Delivery Update] Updating order ${orderId} to ${newOrderStatus} for tracking status ${status}`);
 
           const currentHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [];

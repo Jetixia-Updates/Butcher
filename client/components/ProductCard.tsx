@@ -229,7 +229,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <div className="p-2 sm:p-4 flex-1 flex flex-col">
           {/* Category */}
           <p className="text-[10px] sm:text-xs font-semibold text-secondary uppercase tracking-wide">
-            {lookupCategoryName(product.category)}
+            {lookupCategoryName(product.category, language)}
           </p>
 
           {/* Name */}
