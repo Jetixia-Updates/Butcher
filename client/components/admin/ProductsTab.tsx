@@ -1036,7 +1036,7 @@ function CategoryFormModal({ onClose, onSave, isRTL, t }: CategoryFormModalProps
     }
   };
 
-  const icons = ["🥩", "🍖", "🐐", "🍗", "🌿", "⭐", "🥓", "🍔", "🥪", "🥗"];
+  const icons = ["🥩", "🍖", "🐐", "🍗", "🌿", "⭐", "🥓", "🐟"];
   const colors = [
     { label: "Red", value: "bg-red-100 text-red-600" },
     { label: "Orange", value: "bg-orange-100 text-orange-600" },
