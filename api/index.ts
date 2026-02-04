@@ -67,6 +67,19 @@ const sessionsTable = pgTable("sessions", {
 // Unit enum for products
 const unitEnum = pgEnum("unit", ["kg", "piece", "gram"]);
 
+// Product categories table
+const productCategoriesTable = pgTable("product_categories", {
+  id: text("id").primaryKey(),
+  nameEn: varchar("name_en", { length: 100 }).notNull(),
+  nameAr: varchar("name_ar", { length: 100 }).notNull(),
+  icon: varchar("icon", { length: 50 }).notNull().default("🥩"),
+  color: varchar("color", { length: 100 }).notNull().default("bg-red-100 text-red-600"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Products table - MATCHES ACTUAL DATABASE SCHEMA
 const productsTable = pgTable("products", {
   id: text("id").primaryKey(),
