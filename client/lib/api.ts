@@ -24,6 +24,7 @@ import type {
   InventoryReport,
   LoginResponse,
   Product,
+  Category,
   CreateOrderRequest,
   Supplier,
   SupplierProduct,
@@ -426,6 +427,29 @@ export const productsApi = {
 
   delete: (id: string) =>
     fetchApi<null>(`/products/${id}`, { method: "DELETE" }),
+};
+
+// =====================================================
+// CATEGORIES API
+// =====================================================
+
+export const categoriesApi = {
+  getAll: () => fetchApi<Category[]>("/categories"),
+
+  create: (categoryData: Omit<Category, "id" | "createdAt" | "updatedAt">) =>
+    fetchApi<Category>("/categories", {
+      method: "POST",
+      body: JSON.stringify(categoryData),
+    }),
+
+  update: (id: string, categoryData: Partial<Category>) =>
+    fetchApi<Category>(`/categories/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(categoryData),
+    }),
+
+  delete: (id: string) =>
+    fetchApi<null>(`/categories/${id}`, { method: "DELETE" }),
 };
 
 // =====================================================

@@ -22,7 +22,7 @@ import { useBasket, BasketItem } from "@/context/BasketContext";
 import { useSettings } from "@/context/SettingsContext";
 import { cn } from "@/lib/utils";
 import ProductCard from "@/components/ProductCard";
-import { PRODUCT_CATEGORIES } from "@shared/categories";
+import { useCategories } from "@/context/CategoryContext";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 
 // Banner Carousel Component
@@ -47,6 +47,7 @@ export default function HomePage() {
   const { user, isLoggedIn } = useAuth();
   const { addItem } = useBasket();
   const { banners: allBanners, settings } = useSettings();
+  const { categories } = useCategories();
   const navigate = useNavigate();
   const isRTL = language === "ar";
   
@@ -146,9 +147,6 @@ export default function HomePage() {
   };
 
   const tt = t[language];
-
-  // Use shared categories from the centralized config
-  const categories = PRODUCT_CATEGORIES;
 
   // Get featured products (with discount or high rating)
   const dealsProducts = products

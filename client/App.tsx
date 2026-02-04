@@ -11,6 +11,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { BasketProvider } from "@/context/BasketContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { ProductsProvider } from "@/context/ProductsContext";
+import { CategoryProvider } from "@/context/CategoryContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { ChatProvider } from "@/context/ChatContext";
 import { WishlistProvider } from "@/context/WishlistContext";
@@ -60,8 +61,9 @@ const App = () => {
           <SettingsProvider>
             <NotificationProvider>
               <ChatProvider>
-                <ProductsProvider>
-                  <WishlistProvider>
+                <CategoryProvider>
+                  <ProductsProvider>
+                    <WishlistProvider>
                     <ReviewsProvider>
                       <LoyaltyProvider>
                         <OrdersProvider>
@@ -127,8 +129,9 @@ const App = () => {
                   </ReviewsProvider>
                 </WishlistProvider>
               </ProductsProvider>
-            </ChatProvider>
-          </NotificationProvider>
+            </CategoryProvider>
+          </ChatProvider>
+        </NotificationProvider>
         </SettingsProvider>
       </AuthProvider>
     </LanguageProvider>

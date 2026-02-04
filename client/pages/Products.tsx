@@ -10,7 +10,8 @@ import { useWishlist } from "@/context/WishlistContext";
 import { useReviews } from "@/context/ReviewsContext";
 import { PriceDisplay } from "@/components/CurrencySymbol";
 import { cn } from "@/lib/utils";
-import { PRODUCT_CATEGORIES, getCategoryName } from "@shared/categories";
+import { useCategories } from "@/context/CategoryContext";
+import { getCategoryName } from "@shared/categories";
 
 type SortOption = "default" | "price-low" | "price-high" | "rating" | "name";
 type ViewMode = "grid" | "list";
@@ -22,6 +23,7 @@ export default function ProductsPage() {
   const { t, language } = useLanguage();
   const isRTL = language === 'ar';
   const { products, refreshProducts } = useProducts();
+  const { categories: dynamicCategories } = useCategories();
   const { isInWishlist, toggleWishlist } = useWishlist();
   const { getProductRating } = useReviews();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -96,9 +98,10 @@ export default function ProductsPage() {
   }, [refreshProducts]);
 
   // Categories - use all shared categories
-  const categories = [
+  const categories = useMemo(() => [
     { id: "All", nameEn: "All", nameAr: "الكل" },
-    ...PRODUCT_CATEGORIES
+    ...dynamicCategories
+  ], [dynamicCategories]);
   ];
 
   // Sync category with URL params

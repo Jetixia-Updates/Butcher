@@ -182,6 +182,18 @@ export interface DeliveryZone {
 // PRODUCT & STOCK MANAGEMENT TYPES
 // =====================================================
 
+export interface Category {
+  id: string;
+  nameEn: string;
+  nameAr: string;
+  icon?: string;
+  color?: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Product {
   id: string;
   name: string;

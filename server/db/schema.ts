@@ -249,6 +249,22 @@ export const addresses = pgTable("addresses", {
 });
 
 // =====================================================
+// PRODUCT CATEGORIES TABLE
+// =====================================================
+
+export const productCategories = pgTable("product_categories", {
+  id: text("id").primaryKey(),
+  nameEn: varchar("name_en", { length: 100 }).notNull(),
+  nameAr: varchar("name_ar", { length: 100 }).notNull(),
+  icon: varchar("icon", { length: 50 }),
+  color: varchar("color", { length: 100 }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// =====================================================
 // PRODUCTS TABLE
 // =====================================================
 

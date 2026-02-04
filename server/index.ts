@@ -23,6 +23,7 @@ import loyaltyRouter from "./routes/loyalty";
 import settingsRouter from "./routes/settings";
 import addressesRouter from "./routes/addresses";
 import chatRouter from "./routes/chat";
+import categoriesRouter from "./routes/categories";
 
 export function createServer() {
   const app = express();
@@ -153,6 +154,9 @@ export function createServer() {
   // PUT /api/products/:id - Update product
   // DELETE /api/products/:id - Delete product
   app.use("/api/products", productsRouter);
+
+  // Categories Management
+  app.use("/api/categories", categoriesRouter);
 
   // Supplier Management
   // GET /api/suppliers - Suppliers, contacts, products, purchase orders

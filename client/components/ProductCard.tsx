@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { PriceDisplay } from "@/components/CurrencySymbol";
 import { BasketItem } from "@/context/BasketContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useCategories } from "@/context/CategoryContext";
 import { X, Plus, Minus, ShoppingCart, Check, Star, Eye, ExternalLink } from "lucide-react";
 
 // Product options types
@@ -63,6 +64,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   showDiscount = false,
 }) => {
   const { t, language } = useLanguage();
+  const { getCategoryName: lookupCategoryName } = useCategories();
   const navigate = useNavigate();
   const [quantity, setQuantity] = useState(0.250);
   const [isAdding, setIsAdding] = useState(false);
@@ -227,7 +229,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <div className="p-2 sm:p-4 flex-1 flex flex-col">
           {/* Category */}
           <p className="text-[10px] sm:text-xs font-semibold text-secondary uppercase tracking-wide">
-            {t(`category.${product.category.toLowerCase()}`)}
+            {lookupCategoryName(product.category)}
           </p>
 
           {/* Name */}
