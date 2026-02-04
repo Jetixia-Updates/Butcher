@@ -2179,6 +2179,105 @@ function createApp() {
   });
 
   // =====================================================
+  // CATEGORIES API - DATABASE BACKED
+  // =====================================================
+
+  app.get('/api/categories', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const categories = await pgDb.select().from(productCategoriesTable).orderBy(productCategoriesTable.sortOrder);
+      res.json({ success: true, data: categories });
+    } catch (error) {
+      console.error('[Get Categories Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch categories' });
+    }
+  });
+
+  app.post('/api/categories', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { nameEn, nameAr, icon, color, sortOrder, isActive } = req.body;
+      if (!nameEn || !nameAr) {
+        return res.status(400).json({ success: false, error: 'Name in English and Arabic are required' });
+      }
+
+      const id = nameEn.toLowerCase().replace(/\s+/g, '-');
+      const [newCategory] = await pgDb.insert(productCategoriesTable).values({
+        id,
+        nameEn,
+        nameAr,
+        icon: icon || '🥩',
+        color: color || 'bg-red-100 text-red-600',
+        sortOrder: sortOrder || 0,
+        isActive: isActive !== undefined ? isActive : true,
+      }).returning();
+
+      res.status(201).json({ success: true, data: newCategory, message: 'Category created successfully' });
+    } catch (error) {
+      console.error('[Create Category Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create category' });
+    }
+  });
+
+  app.put('/api/categories/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { nameEn, nameAr, icon, color, sortOrder, isActive } = req.body;
+      const [updated] = await pgDb.update(productCategoriesTable)
+        .set({
+          nameEn,
+          nameAr,
+          icon,
+          color,
+          sortOrder,
+          isActive,
+          updatedAt: new Date(),
+        })
+        .where(eq(productCategoriesTable.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'Category not found' });
+      }
+
+      res.json({ success: true, data: updated, message: 'Category updated successfully' });
+    } catch (error) {
+      console.error('[Update Category Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update category' });
+    }
+  });
+
+  app.delete('/api/categories/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !pgDb) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const [deleted] = await pgDb.delete(productCategoriesTable)
+        .where(eq(productCategoriesTable.id, req.params.id))
+        .returning();
+
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: 'Category not found' });
+      }
+
+      res.json({ success: true, message: 'Category deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Category Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete category' });
+    }
+  });
+
+  // =====================================================
   // ANALYTICS / DASHBOARD API - DATABASE BACKED
   // =====================================================
 
