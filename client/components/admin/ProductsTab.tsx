@@ -44,7 +44,7 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
   const { language } = useLanguage();
   const isRTL = language === "ar";
   const { products, isLoading, refreshProducts, addProduct, updateProduct, deleteProduct, resetToDefaults, exportProducts, importProducts } = useProducts();
-  const { categories, addCategory } = useCategories();
+  const { categories } = useCategories();
   const importInputRef = useRef<HTMLInputElement>(null);
 
   // Translations
@@ -55,12 +55,7 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
     unavailable: isRTL ? "غير متوفر" : "unavailable",
     refresh: isRTL ? "تحديث" : "Refresh",
     addProduct: isRTL ? "إضافة منتج" : "Add Product",
-    addCategory: isRTL ? "إضافة فئة" : "Add Category",
-    addNewCategory: isRTL ? "إضافة فئة جديدة" : "Add New Category",
-    categoryNameEn: isRTL ? "اسم الفئة (إنجليزي)" : "Category Name (English)",
-    categoryNameAr: isRTL ? "اسم الفئة (عربي)" : "Category Name (Arabic)",
-    categoryIcon: isRTL ? "أيقونة الفئة" : "Category Icon",
-    categoryColor: isRTL ? "لون الفئة" : "Category Color",
+
     searchPlaceholder: isRTL ? "البحث عن منتج..." : "Search products...",
     allCategories: isRTL ? "جميع الفئات" : "All Categories",
     noProducts: isRTL ? "لا توجد منتجات" : "No products found",
@@ -119,7 +114,6 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [editModal, setEditModal] = useState<Product | null>(null);
   const [addModal, setAddModal] = useState(false);
-  const [addCategoryModal, setAddCategoryModal] = useState(false);
   const [deleteModal, setDeleteModal] = useState<Product | null>(null);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -258,13 +252,6 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            onClick={() => setAddCategoryModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {t.addCategory}
-          </button>
           <button
             onClick={() => setAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
@@ -476,29 +463,6 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
         )}
       </div>
 
-      {/* Add Category Modal */}
-      {addCategoryModal && (
-        <CategoryFormModal
-          onClose={() => setAddCategoryModal(false)}
-          onSave={async (data) => {
-            try {
-              await addCategory({
-                ...data,
-                sortOrder: categories.length,
-                isActive: true
-              });
-              setAddCategoryModal(false);
-            } catch (err: any) {
-              console.error("Failed to add category:", err);
-              const errorMessage = err?.message || (isRTL ? "فشل إضافة الفئة. يرجى المحاولة مرة أخرى." : "Failed to add category. Please try again.");
-              alert(errorMessage);
-            }
-          }}
-          isRTL={isRTL}
-          t={t}
-        />
-      )}
-
       {/* Add Product Modal */}
       {addModal && (
         <ProductFormModal
@@ -585,28 +549,6 @@ export function ProductsTab({ onNavigate }: AdminTabProps) {
         </div>
       )}
 
-      {/* Add Category Modal */}
-      {addCategoryModal && (
-        <CategoryFormModal
-          onClose={() => setAddCategoryModal(false)}
-          onSave={async (data) => {
-            try {
-              await addCategory({
-                ...data,
-                isActive: true,
-                sortOrder: categories.length // Put it at the end
-              });
-              setAddCategoryModal(false);
-            } catch (err: any) {
-              console.error("Failed to add category:", err);
-              const errorMessage = err?.message || (isRTL ? "فشل إضافة الفئة. يرجى المحاولة مرة أخرى." : "Failed to add category. Please try again.");
-              alert(errorMessage);
-            }
-          }}
-          isRTL={isRTL}
-          t={t}
-        />
-      )}
     </div>
   );
 }
@@ -1005,139 +947,6 @@ function DeleteConfirmModal({ product, onClose, onConfirm, isRTL, t }: DeleteCon
             </button>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-interface CategoryFormModalProps {
-  onClose: () => void;
-  onSave: (data: { nameEn: string; nameAr: string; icon: string; color: string }) => Promise<void>;
-  isRTL: boolean;
-  t: Record<string, string>;
-}
-
-function CategoryFormModal({ onClose, onSave, isRTL, t }: CategoryFormModalProps) {
-  const [nameEn, setNameEn] = useState("");
-  const [nameAr, setNameAr] = useState("");
-  const [icon, setIcon] = useState("🥩");
-  const [color, setColor] = useState("bg-red-100 text-red-600");
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nameEn || !nameAr) return;
-
-    setSubmitting(true);
-    try {
-      await onSave({ nameEn, nameAr, icon, color });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const icons = ["🥩", "🍖", "🐐", "🍗", "🌿", "⭐", "🥓", "🐟"];
-  const colors = [
-    { label: "Red", value: "bg-red-100 text-red-600" },
-    { label: "Orange", value: "bg-orange-100 text-orange-600" },
-    { label: "Amber", value: "bg-amber-100 text-amber-600" },
-    { label: "Yellow", value: "bg-yellow-100 text-yellow-600" },
-    { label: "Green", value: "bg-green-100 text-green-600" },
-    { label: "Purple", value: "bg-purple-100 text-purple-600" },
-    { label: "Blue", value: "bg-blue-100 text-blue-600" },
-    { label: "Slate", value: "bg-slate-100 text-slate-600" },
-  ];
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-900">{t.addNewCategory}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.categoryNameEn}</label>
-            <input
-              type="text"
-              value={nameEn}
-              onChange={(e) => setNameEn(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-              placeholder="e.g. Wagyu Beef"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.categoryNameAr}</label>
-            <input
-              type="text"
-              value={nameAr}
-              onChange={(e) => setNameAr(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-              placeholder="مثلاً: واغيو بقري"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.categoryIcon}</label>
-            <div className="flex flex-wrap gap-2">
-              {icons.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setIcon(item)}
-                  className={cn(
-                    "w-10 h-10 flex items-center justify-center rounded-lg border transition-all",
-                    icon === item ? "border-primary bg-primary/5 text-xl" : "border-slate-200 hover:bg-slate-50 text-lg"
-                  )}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.categoryColor}</label>
-            <div className="grid grid-cols-4 gap-2">
-              {colors.map((c) => (
-                <button
-                  key={c.value}
-                  type="button"
-                  onClick={() => setColor(c.value)}
-                  className={cn(
-                    "px-2 py-1 text-[10px] font-bold rounded-md border transition-all",
-                    color === c.value ? "border-primary ring-2 ring-primary/20" : "border-slate-200"
-                  )}
-                >
-                  <span className={cn("inline-block px-2 py-1 rounded", c.value)}>Aa</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 border border-slate-300 rounded-lg font-medium hover:bg-slate-50 transition-colors"
-            >
-              {t.cancel}
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !nameEn || !nameAr}
-              className="flex-1 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {submitting ? t.creating : t.create}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );
