@@ -18,6 +18,7 @@ import { ReportsTab } from "@/components/admin/ReportsTab";
 import { PromoCodesTab } from "@/components/admin/PromoCodesTab";
 import { BannersTab } from "@/components/admin/BannersTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
+import { CategoriesTab } from "@/components/admin/CategoriesTab";
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
@@ -67,6 +68,8 @@ export default function AdminDashboardPage() {
         return <OrdersTab onNavigate={handleTabNavigate} selectedOrderId={selectedOrderId} onClearSelection={() => setSelectedOrderId(null)} />;
       case "products":
         return <ProductsTab onNavigate={handleTabNavigate} />;
+      case "categories":
+        return <CategoriesTab onNavigate={handleTabNavigate} />;
       case "stock":
         return <StockTab onNavigate={handleTabNavigate} />;
       case "suppliers":
