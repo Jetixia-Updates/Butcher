@@ -34162,22 +34162,27 @@ function createApp() {
         maximumDiscount,
         maxUses,
         usageLimit,
+        userLimit,
         expiresAt,
         validTo,
+        validFrom,
         isActive
       } = req.body;
-      if (!code || !type || !value) {
+      if (!code || !type || value === void 0) {
         return res.status(400).json({ success: false, error: "Code, type and value are required" });
       }
       const codeId = `promo_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       const now = /* @__PURE__ */ new Date();
-      const minOrder = minimumOrder || minOrderAmount || 0;
-      const maxDiscountVal = maximumDiscount || maxDiscount || null;
-      const maxUsesVal = usageLimit || maxUses || 0;
-      const expiresAtVal = validTo || expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3);
+      const valueNum = parseFloat(String(value)) || 0;
+      const minOrder = parseFloat(String(minimumOrder || minOrderAmount || 0)) || 0;
+      const maxDiscountVal = maximumDiscount || maxDiscount ? parseFloat(String(maximumDiscount || maxDiscount)) : null;
+      const maxUsesVal = parseInt(String(usageLimit || maxUses || 0), 10) || 0;
+      const userLimitVal = parseInt(String(userLimit || 1), 10) || 1;
+      const validFromVal = validFrom ? new Date(validFrom) : now;
+      const expiresAtVal = validTo || expiresAt ? new Date(validTo || expiresAt) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3);
       await sql`
         INSERT INTO discount_codes (id, code, type, value, minimum_order, maximum_discount, usage_limit, usage_count, user_limit, valid_from, valid_to, is_active, created_at, updated_at)
-        VALUES (${codeId}, ${code.toUpperCase()}, ${type}, ${value}, ${minOrder}, ${maxDiscountVal}, ${maxUsesVal}, 0, 1, ${now}, ${expiresAtVal}, ${isActive !== false}, ${now}, ${now})
+        VALUES (${codeId}, ${code.toUpperCase()}, ${type}, ${valueNum}, ${minOrder}, ${maxDiscountVal}, ${maxUsesVal}, 0, ${userLimitVal}, ${validFromVal}, ${expiresAtVal}, ${isActive !== false}, ${now}, ${now})
       `;
       res.json({ success: true, data: { id: codeId }, message: "Discount code created successfully" });
     } catch (error) {
