@@ -3711,14 +3711,15 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { userId, type, title, titleAr, message, messageAr, data } = req.body;
+      const { userId, type, title, titleAr, message, messageAr, data, channel } = req.body;
 
       const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       const now = new Date();
 
+      // Table schema: id, user_id, type, channel, title, message, message_ar, status, sent_at, delivered_at, failure_reason, metadata, created_at
       await sql`
-        INSERT INTO notifications (id, user_id, type, title, title_ar, message, message_ar, data, is_read, created_at)
-        VALUES (${notificationId}, ${userId}, ${type || 'general'}, ${title}, ${titleAr || null}, ${message}, ${messageAr || null}, ${JSON.stringify(data || {})}, false, ${now})
+        INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
+        VALUES (${notificationId}, ${userId || null}, ${type || 'general'}, ${channel || 'in_app'}, ${title || titleAr || ''}, ${message || ''}, ${messageAr || null}, 'sent', ${JSON.stringify(data || {})}, ${now})
       `;
 
       res.json({ success: true, data: { id: notificationId }, message: 'Notification created successfully' });
