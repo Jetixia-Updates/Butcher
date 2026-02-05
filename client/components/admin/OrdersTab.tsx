@@ -337,6 +337,23 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
         const updatedOrder = response.data;
         setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
 
+        // Send notification to the customer about the status change
+        const order = orders.find(o => o.id === orderId);
+        if (order?.userId) {
+          const statusToNotifMap: Record<string, "placed" | "confirmed" | "preparing" | "ready" | "outForDelivery" | "delivered" | "cancelled"> = {
+            confirmed: "confirmed",
+            processing: "preparing",
+            ready_for_pickup: "ready",
+            out_for_delivery: "outForDelivery",
+            delivered: "delivered",
+            cancelled: "cancelled",
+          };
+          const notifStatus = statusToNotifMap[newStatus];
+          if (notifStatus) {
+            addUserNotification(order.userId, createUserOrderNotification(order.orderNumber || orderId, notifStatus));
+          }
+        }
+
         // Close modal immediately
         setSelectedOrder(null);
       } else {

@@ -34723,7 +34723,49 @@ function createApp() {
       if (paymentStatus) {
         await sql`UPDATE orders SET payment_status = ${paymentStatus}, updated_at = ${now} WHERE id = ${id}`;
       }
-      res.json({ success: true, message: "Order status updated successfully" });
+      const rows = await sql`SELECT * FROM orders WHERE id = ${id}`;
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+      const o = rows[0];
+      const items = await sql`SELECT * FROM order_items WHERE order_id = ${o.id}`;
+      const order = {
+        id: o.id,
+        orderNumber: o.order_number,
+        userId: o.user_id,
+        customerName: o.customer_name,
+        customerEmail: o.customer_email,
+        customerMobile: o.customer_mobile,
+        status: o.status,
+        paymentStatus: o.payment_status,
+        paymentMethod: o.payment_method,
+        subtotal: parseFloat(String(o.subtotal || "0")),
+        vat: parseFloat(String(o.vat_amount || "0")),
+        vatRate: parseFloat(String(o.vat_rate || "0.05")),
+        deliveryFee: parseFloat(String(o.delivery_fee || "0")),
+        discount: parseFloat(String(o.discount || "0")),
+        discountCode: o.discount_code,
+        total: parseFloat(String(o.total || "0")),
+        addressId: o.address_id,
+        deliveryAddress: o.delivery_address,
+        deliveryNotes: o.delivery_notes,
+        estimatedDeliveryAt: o.estimated_delivery_at ? safeDate(o.estimated_delivery_at) : null,
+        actualDeliveryAt: o.actual_delivery_at ? safeDate(o.actual_delivery_at) : null,
+        items: items.map((i) => ({
+          id: i.id,
+          productId: i.product_id,
+          productName: i.product_name,
+          productNameAr: i.product_name_ar,
+          sku: i.sku,
+          quantity: parseFloat(String(i.quantity || "0")),
+          price: parseFloat(String(i.unit_price || "0")),
+          total: parseFloat(String(i.total_price || "0")),
+          notes: i.notes
+        })),
+        createdAt: safeDate(o.created_at),
+        updatedAt: safeDate(o.updated_at)
+      };
+      res.json({ success: true, data: order, message: "Order status updated successfully" });
     } catch (error) {
       console.error("[Update Order Status Error]", error);
       res.status(500).json({ success: false, error: "Failed to update order status" });
