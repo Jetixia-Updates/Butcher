@@ -92,7 +92,7 @@ router.post("/", async (req: Request, res: Response) => {
     
     const shouldBeDefault = data.isDefault || existingAddresses.length === 0;
 
-    const [newAddress] = await db
+    await db
       .insert(addresses)
       .values({
         id: addressId,
@@ -110,8 +110,8 @@ router.post("/", async (req: Request, res: Response) => {
         latitude: data.latitude || null,
         longitude: data.longitude || null,
         isDefault: shouldBeDefault,
-      })
-      .returning();
+      });
+    const [newAddress] = await db.select().from(addresses).where(eq(addresses.id, addressId));
 
     console.log("[Addresses] Address created successfully:", addressId);
     res.json({ success: true, data: newAddress });
@@ -156,14 +156,14 @@ router.put("/:id", async (req: Request, res: Response) => {
         .where(eq(addresses.userId, userId));
     }
 
-    const [updated] = await db
+    await db
       .update(addresses)
       .set({
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(addresses.id, id))
-      .returning();
+      .where(eq(addresses.id, id));
+    const [updated] = await db.select().from(addresses).where(eq(addresses.id, id));
 
     res.json({ success: true, data: updated });
   } catch (error) {
@@ -246,11 +246,11 @@ router.put("/:id/default", async (req: Request, res: Response) => {
       .where(eq(addresses.userId, userId));
 
     // Set this one as default
-    const [updated] = await db
+    await db
       .update(addresses)
       .set({ isDefault: true, updatedAt: new Date() })
-      .where(eq(addresses.id, id))
-      .returning();
+      .where(eq(addresses.id, id));
+    const [updated] = await db.select().from(addresses).where(eq(addresses.id, id));
 
     res.json({ success: true, data: updated });
   } catch (error) {

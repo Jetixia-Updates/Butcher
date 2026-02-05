@@ -286,7 +286,7 @@ const processPayment: RequestHandler = async (req, res) => {
     let payment;
     if (existingPayment.length > 0) {
       // Update existing payment
-      [payment] = await db.update(payments)
+      await db.update(payments)
         .set({
           status: method === "cod" ? "pending" : "captured",
           gatewayTransactionId,
@@ -296,12 +296,13 @@ const processPayment: RequestHandler = async (req, res) => {
           cardExpiryYear: method === "card" ? 2028 : null,
           updatedAt: new Date(),
         })
-        .where(eq(payments.id, existingPayment[0].id))
-        .returning();
+        .where(eq(payments.id, existingPayment[0].id));
+      [payment] = await db.select().from(payments).where(eq(payments.id, existingPayment[0].id));
     } else {
       // Create new payment
-      [payment] = await db.insert(payments).values({
-        id: generateId("pay"),
+      const paymentId = generateId("pay");
+      await db.insert(payments).values({
+        id: paymentId,
         orderId,
         orderNumber: order.orderNumber,
         amount: String(amount),
@@ -317,7 +318,8 @@ const processPayment: RequestHandler = async (req, res) => {
         refunds: [],
         createdAt: new Date(),
         updatedAt: new Date(),
-      }).returning();
+      });
+      [payment] = await db.select().from(payments).where(eq(payments.id, paymentId));
     }
 
     // Update order
@@ -420,15 +422,15 @@ const refundPayment: RequestHandler = async (req, res) => {
     const newRefundedAmount = Number(payment.refundedAmount || 0) + amount;
     const newStatus = newRefundedAmount >= Number(payment.amount) ? "refunded" : "partially_refunded";
 
-    const [updated] = await db.update(payments)
+    await db.update(payments)
       .set({
         refunds: newRefunds,
         refundedAmount: String(newRefundedAmount),
         status: newStatus,
         updatedAt: new Date(),
       })
-      .where(eq(payments.id, id))
-      .returning();
+      .where(eq(payments.id, id));
+    const [updated] = await db.select().from(payments).where(eq(payments.id, id));
 
     // Update order
     const ordersInDb = await db.select().from(orders).where(eq(orders.id, payment.orderId));
@@ -547,13 +549,13 @@ const capturePayment: RequestHandler = async (req, res) => {
     }
 
     // Update payment status
-    const [updated] = await db.update(payments)
+    await db.update(payments)
       .set({
         status: "captured",
         updatedAt: new Date(),
       })
-      .where(eq(payments.id, id))
-      .returning();
+      .where(eq(payments.id, id));
+    const [updated] = await db.select().from(payments).where(eq(payments.id, id));
 
     // Update order
     const ordersInDb = await db.select().from(orders).where(eq(orders.id, payment.orderId));

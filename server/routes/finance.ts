@@ -245,13 +245,15 @@ const getAccountById: RequestHandler = async (req, res) => {
 };
 
 const createAccount: RequestHandler = async (req, res) => {
-  const [newAccount] = await db.insert(financeAccounts).values({
-    id: generateId("acc"),
+  const accountId = generateId("acc");
+  await db.insert(financeAccounts).values({
+    id: accountId,
     ...req.body,
     balance: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
-  }).returning();
+  });
+  const [newAccount] = await db.select().from(financeAccounts).where(eq(financeAccounts.id, accountId));
   res.status(201).json({ success: true, data: newAccount });
 };
 
@@ -261,10 +263,10 @@ const updateAccount: RequestHandler = async (req, res) => {
     return res.status(404).json({ success: false, error: "Account not found" });
   }
 
-  const [updated] = await db.update(financeAccounts)
+  await db.update(financeAccounts)
     .set({ ...req.body, updatedAt: new Date() })
-    .where(eq(financeAccounts.id, req.params.id))
-    .returning();
+    .where(eq(financeAccounts.id, req.params.id));
+  const [updated] = await db.select().from(financeAccounts).where(eq(financeAccounts.id, req.params.id));
 
   res.json({ success: true, data: updated });
 };
@@ -367,14 +369,14 @@ const reconcileAccount: RequestHandler = async (req, res) => {
     });
   }
 
-  const [updated] = await db.update(financeAccounts)
+  await db.update(financeAccounts)
     .set({
       balance: String(statementBalance),
       lastReconciled: new Date(reconciliationDate),
       updatedAt: new Date(),
     })
-    .where(eq(financeAccounts.id, req.params.id))
-    .returning();
+    .where(eq(financeAccounts.id, req.params.id));
+  const [updated] = await db.select().from(financeAccounts).where(eq(financeAccounts.id, req.params.id));
 
   res.json({ success: true, data: updated });
 };
@@ -415,8 +417,9 @@ const createExpense: RequestHandler = async (req, res) => {
   const vatAmount = data.vatAmount || grossAmount * 0.05;
   const totalAmount = grossAmount + vatAmount;
   
-  const [newExpense] = await db.insert(financeExpenses).values({
-    id: generateId("exp"),
+  const expenseId = generateId("exp");
+  await db.insert(financeExpenses).values({
+    id: expenseId,
     expenseNumber: `EXP-${Date.now()}`,
     category: data.category,
     grossAmount: String(grossAmount),
@@ -438,7 +441,8 @@ const createExpense: RequestHandler = async (req, res) => {
     createdBy: "admin",
     createdAt: new Date(),
     updatedAt: new Date(),
-  }).returning();
+  });
+  const [newExpense] = await db.select().from(financeExpenses).where(eq(financeExpenses.id, expenseId));
   res.status(201).json({ success: true, data: newExpense });
 };
 
@@ -448,10 +452,10 @@ const updateExpense: RequestHandler = async (req, res) => {
     return res.status(404).json({ success: false, error: "Expense not found" });
   }
 
-  const [updated] = await db.update(financeExpenses)
+  await db.update(financeExpenses)
     .set({ ...req.body, updatedAt: new Date() })
-    .where(eq(financeExpenses.id, req.params.id))
-    .returning();
+    .where(eq(financeExpenses.id, req.params.id));
+  const [updated] = await db.select().from(financeExpenses).where(eq(financeExpenses.id, req.params.id));
 
   res.json({ success: true, data: updated });
 };
@@ -483,15 +487,15 @@ const markExpensePaid: RequestHandler = async (req, res) => {
   const account = accounts[0];
 
   // Update expense
-  const [updatedExpense] = await db.update(financeExpenses)
+  await db.update(financeExpenses)
     .set({
       status: "paid",
       paidAt: new Date(),
       accountId,
       updatedAt: new Date(),
     })
-    .where(eq(financeExpenses.id, req.params.id))
-    .returning();
+    .where(eq(financeExpenses.id, req.params.id));
+  const [updatedExpense] = await db.select().from(financeExpenses).where(eq(financeExpenses.id, req.params.id));
 
   // Deduct from account
   await db.update(financeAccounts)
@@ -871,14 +875,14 @@ const approveExpense: RequestHandler = async (req, res) => {
       return res.status(404).json({ success: false, error: "Expense not found" });
     }
 
-    const [updated] = await db.update(financeExpenses)
+    await db.update(financeExpenses)
       .set({
         approvedBy: approverId || "admin",
         status: "approved",
         updatedAt: new Date(),
       })
-      .where(eq(financeExpenses.id, id))
-      .returning();
+      .where(eq(financeExpenses.id, id));
+    const [updated] = await db.select().from(financeExpenses).where(eq(financeExpenses.id, id));
 
     res.json({ success: true, data: updated });
   } catch (error) {
@@ -896,14 +900,14 @@ const rejectExpense: RequestHandler = async (req, res) => {
       return res.status(404).json({ success: false, error: "Expense not found" });
     }
 
-    const [updated] = await db.update(financeExpenses)
+    await db.update(financeExpenses)
       .set({
         status: "cancelled",
         notes: reason ? `Rejected: ${reason}` : "Rejected",
         updatedAt: new Date(),
       })
-      .where(eq(financeExpenses.id, id))
-      .returning();
+      .where(eq(financeExpenses.id, id));
+    const [updated] = await db.select().from(financeExpenses).where(eq(financeExpenses.id, id));
 
     res.json({ success: true, data: updated });
   } catch (error) {
@@ -921,13 +925,13 @@ const submitForApproval: RequestHandler = async (req, res) => {
     }
 
     // In production, would check approval rules and route to correct approver
-    const [updated] = await db.update(financeExpenses)
+    await db.update(financeExpenses)
       .set({
         status: "pending",
         updatedAt: new Date(),
       })
-      .where(eq(financeExpenses.id, id))
-      .returning();
+      .where(eq(financeExpenses.id, id));
+    const [updated] = await db.select().from(financeExpenses).where(eq(financeExpenses.id, id));
 
     res.json({ success: true, data: updated, message: "Submitted for approval" });
   } catch (error) {

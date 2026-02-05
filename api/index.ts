@@ -1,37 +1,54 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import express from 'express';
 import cors from 'cors';
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, or, ilike, desc, and, gte, lte, ne, inArray } from 'drizzle-orm';
+import mysql from 'mysql2/promise';
+import { drizzle } from 'drizzle-orm/mysql2';
+import { eq, or, like, desc, and, gte, lte, ne, inArray } from 'drizzle-orm';
 import {
-  pgTable,
+  mysqlTable,
   text,
   varchar,
   boolean,
   timestamp,
-  jsonb,
-  pgEnum,
+  json,
+  mysqlEnum,
   decimal,
-  integer,
-  real,
-} from 'drizzle-orm/pg-core';
+  int,
+  float,
+} from 'drizzle-orm/mysql-core';
 
 // =====================================================
-// NEON DATABASE CONNECTION
-// Uses Neon serverless driver with connection caching
-// For best performance, use the Neon pooler URL (-pooler suffix)
-// e.g., postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/db
+// MYSQL DATABASE CONNECTION
+// Uses MySQL2 driver with connection pooling for Vercel
 // =====================================================
 
-const databaseUrl = process.env.DATABASE_URL;
-const neonClient = databaseUrl ? neon(databaseUrl) : null;
-const pgDb = neonClient ? drizzle(neonClient) : null;
+const databaseConfig = {
+  host: process.env.DB_HOST || 'mysql.freehostia.com',
+  user: process.env.DB_USER || 'essref3_butcher',
+  password: process.env.DB_PASSWORD || 'Butcher@123',
+  database: process.env.DB_NAME || 'essref3_butcher',
+  waitForConnections: true,
+  connectionLimit: 5,
+  queueLimit: 0,
+};
 
-// User role enum and table definition (inline for Vercel)
-const userRoleEnum = pgEnum("user_role", ["customer", "admin", "staff", "delivery"]);
+// Initialize pool and db instance synchronously for API routes
+let mysqlPool: mysql.Pool | null = null;
+let pgDb: any = null; // Use 'any' to avoid mysql2 Pool type conflicts
 
-const usersTable = pgTable("users", {
+function initDatabase() {
+  if (!mysqlPool) {
+    mysqlPool = mysql.createPool(databaseConfig);
+    pgDb = drizzle(mysqlPool);
+  }
+  return pgDb;
+}
+
+// Initialize database on module load
+initDatabase();
+
+// User table definition (inline for Vercel)
+const usersTable = mysqlTable("users", {
   id: text("id").primaryKey(),
   username: varchar("username", { length: 100 }).notNull().unique(),
   email: varchar("email", { length: 255 }).notNull().unique(),
@@ -39,12 +56,12 @@ const usersTable = pgTable("users", {
   password: text("password").notNull(),
   firstName: varchar("first_name", { length: 100 }).notNull(),
   familyName: varchar("family_name", { length: 100 }).notNull(),
-  role: userRoleEnum("role").notNull().default("customer"),
+  role: mysqlEnum("role", ["customer", "admin", "staff", "delivery"]).notNull().default("customer"),
   isActive: boolean("is_active").notNull().default(true),
   isVerified: boolean("is_verified").notNull().default(false),
   emirate: varchar("emirate", { length: 100 }),
   address: text("address"),
-  preferences: jsonb("preferences").$type<{
+  preferences: json("preferences").$type<{
     language: "en" | "ar";
     currency: "AED" | "USD" | "EUR";
     emailNotifications: boolean;
@@ -56,7 +73,7 @@ const usersTable = pgTable("users", {
   lastLoginAt: timestamp("last_login_at"),
 });
 
-const sessionsTable = pgTable("sessions", {
+const sessionsTable = mysqlTable("sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
   token: text("token").notNull().unique(),
@@ -65,23 +82,23 @@ const sessionsTable = pgTable("sessions", {
 });
 
 // Unit enum for products
-const unitEnum = pgEnum("unit", ["kg", "piece", "gram"]);
+const unitEnum = mysqlEnum("unit", ["kg", "piece", "gram"]);
 
 // Product categories table
-const productCategoriesTable = pgTable("product_categories", {
+const productCategoriesTable = mysqlTable("product_categories", {
   id: text("id").primaryKey(),
   nameEn: varchar("name_en", { length: 100 }).notNull(),
   nameAr: varchar("name_ar", { length: 100 }).notNull(),
   icon: varchar("icon", { length: 50 }).notNull().default("🥩"),
   color: varchar("color", { length: 100 }).notNull().default("bg-red-100 text-red-600"),
-  sortOrder: integer("sort_order").notNull().default(0),
+  sortOrder: int("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Products table - MATCHES ACTUAL DATABASE SCHEMA
-const productsTable = pgTable("products", {
+const productsTable = mysqlTable("products", {
   id: text("id").primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
   nameAr: varchar("name_ar", { length: 200 }),
@@ -94,29 +111,29 @@ const productsTable = pgTable("products", {
   description: text("description"),
   descriptionAr: text("description_ar"),
   image: text("image"),
-  unit: unitEnum("unit").notNull().default("kg"),
+  unit: mysqlEnum("unit", ["kg", "piece", "gram"]).notNull().default("kg"),
   minOrderQuantity: decimal("min_order_quantity", { precision: 10, scale: 2 }).notNull().default("0.25"),
   maxOrderQuantity: decimal("max_order_quantity", { precision: 10, scale: 2 }).notNull().default("10"),
   isActive: boolean("is_active").notNull().default(true),
   isFeatured: boolean("is_featured").notNull().default(false),
   isPremium: boolean("is_premium").notNull().default(false),
   rating: decimal("rating", { precision: 3, scale: 2 }).notNull().default("0"), // Product rating (0-5)
-  tags: jsonb("tags").$type<string[]>().default([]),
-  badges: jsonb("badges").$type<string[]>().default([]),
+  tags: json("tags").$type<string[]>().default([]),
+  badges: json("badges").$type<string[]>().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Stock table - integer thresholds match actual DB
-const stockTable = pgTable("stock", {
+const stockTable = mysqlTable("stock", {
   id: text("id").primaryKey(),
   productId: text("product_id").notNull().unique(),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull().default("0"),
   reservedQuantity: decimal("reserved_quantity", { precision: 10, scale: 2 }).notNull().default("0"),
   availableQuantity: decimal("available_quantity", { precision: 10, scale: 2 }).notNull().default("0"),
-  lowStockThreshold: integer("low_stock_threshold").notNull().default(5),
-  reorderPoint: integer("reorder_point").notNull().default(10),
-  reorderQuantity: integer("reorder_quantity").notNull().default(20),
+  lowStockThreshold: int("low_stock_threshold").notNull().default(5),
+  reorderPoint: int("reorder_point").notNull().default(10),
+  reorderQuantity: int("reorder_quantity").notNull().default(20),
   lastRestockedAt: timestamp("last_restocked_at"),
   expiryDate: timestamp("expiry_date"),
   batchNumber: varchar("batch_number", { length: 100 }),
@@ -124,11 +141,11 @@ const stockTable = pgTable("stock", {
 });
 
 // Stock movements table - MATCHES ACTUAL DATABASE SCHEMA
-const stockMovementTypeEnum = pgEnum("stock_movement_type", ["in", "out", "adjustment", "reserved", "released"]);
-const stockMovementsTable = pgTable("stock_movements", {
+const stockMovementTypeEnum = mysqlEnum("stock_movement_type", ["in", "out", "adjustment", "reserved", "released"]);
+const stockMovementsTable = mysqlTable("stock_movements", {
   id: text("id").primaryKey(),
   productId: text("product_id").notNull(),
-  type: stockMovementTypeEnum("type").notNull(),
+  type: mysqlEnum("type", ["in", "out", "adjustment", "reserved", "released"]).notNull(),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
   previousQuantity: decimal("previous_quantity", { precision: 10, scale: 2 }).notNull(),
   newQuantity: decimal("new_quantity", { precision: 10, scale: 2 }).notNull(),
@@ -140,16 +157,16 @@ const stockMovementsTable = pgTable("stock_movements", {
 });
 
 // Orders table
-const orderStatusEnum = pgEnum("order_status", [
+const orderStatusEnum = mysqlEnum("order_status", [
   "pending", "confirmed", "processing", "ready_for_pickup",
   "out_for_delivery", "delivered", "cancelled", "refunded"
 ]);
-const paymentStatusEnum = pgEnum("payment_status", [
+const paymentStatusEnum = mysqlEnum("payment_status", [
   "pending", "authorized", "captured", "failed", "refunded", "partially_refunded"
 ]);
-const paymentMethodEnum = pgEnum("payment_method", ["card", "cod", "bank_transfer"]);
+const paymentMethodEnum = mysqlEnum("payment_method", ["card", "cod", "bank_transfer"]);
 
-const ordersTable = pgTable("orders", {
+const ordersTable = mysqlTable("orders", {
   id: text("id").primaryKey(),
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
   userId: text("user_id").notNull(),
@@ -163,16 +180,16 @@ const ordersTable = pgTable("orders", {
   vatAmount: decimal("vat_amount", { precision: 10, scale: 2 }).notNull(),
   vatRate: decimal("vat_rate", { precision: 5, scale: 4 }).notNull().default("0.05"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
-  status: orderStatusEnum("status").notNull().default("pending"),
-  paymentStatus: paymentStatusEnum("payment_status").notNull().default("pending"),
-  paymentMethod: paymentMethodEnum("payment_method").notNull(),
+  status: mysqlEnum("status", ["pending", "confirmed", "processing", "ready_for_pickup", "out_for_delivery", "delivered", "cancelled", "refunded"]).notNull().default("pending"),
+  paymentStatus: mysqlEnum("payment_status", ["pending", "authorized", "captured", "failed", "refunded", "partially_refunded"]).notNull().default("pending"),
+  paymentMethod: mysqlEnum("payment_method", ["card", "cod", "bank_transfer"]).notNull(),
   addressId: text("address_id").notNull(),
-  deliveryAddress: jsonb("delivery_address").$type<any>().notNull(),
+  deliveryAddress: json("delivery_address").$type<any>().notNull(),
   deliveryNotes: text("delivery_notes"),
   deliveryZoneId: text("delivery_zone_id"),
   estimatedDeliveryAt: timestamp("estimated_delivery_at"),
   actualDeliveryAt: timestamp("actual_delivery_at"),
-  statusHistory: jsonb("status_history").$type<any[]>().default([]),
+  statusHistory: json("status_history").$type<any[]>().default([]),
   source: varchar("source", { length: 20 }).notNull().default("web"),
   ipAddress: varchar("ip_address", { length: 50 }),
   userAgent: text("user_agent"),
@@ -181,7 +198,7 @@ const ordersTable = pgTable("orders", {
 });
 
 // Order items table
-const orderItemsTable = pgTable("order_items", {
+const orderItemsTable = mysqlTable("order_items", {
   id: text("id").primaryKey(),
   orderId: text("order_id").notNull(),
   productId: text("product_id").notNull(),
@@ -195,29 +212,29 @@ const orderItemsTable = pgTable("order_items", {
 });
 
 // Payments table
-const currencyEnum = pgEnum("currency", ["AED", "USD", "EUR"]);
-const paymentsTable = pgTable("payments", {
+const currencyEnum = mysqlEnum("currency", ["AED", "USD", "EUR"]);
+const paymentsTable = mysqlTable("payments", {
   id: text("id").primaryKey(),
   orderId: text("order_id").notNull(),
   orderNumber: varchar("order_number", { length: 50 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  currency: currencyEnum("currency").notNull().default("AED"),
-  method: paymentMethodEnum("method").notNull(),
-  status: paymentStatusEnum("status").notNull().default("pending"),
+  currency: mysqlEnum("currency", ["AED", "USD", "EUR"]).notNull().default("AED"),
+  method: mysqlEnum("method", ["card", "cod", "bank_transfer"]).notNull(),
+  status: mysqlEnum("status", ["pending", "authorized", "captured", "failed", "refunded", "partially_refunded"]).notNull().default("pending"),
   cardBrand: varchar("card_brand", { length: 50 }),
   cardLast4: varchar("card_last4", { length: 4 }),
-  cardExpiryMonth: integer("card_expiry_month"),
-  cardExpiryYear: integer("card_expiry_year"),
+  cardExpiryMonth: int("card_expiry_month"),
+  cardExpiryYear: int("card_expiry_year"),
   gatewayTransactionId: text("gateway_transaction_id"),
   gatewayResponse: text("gateway_response"),
   refundedAmount: decimal("refunded_amount", { precision: 10, scale: 2 }).notNull().default("0"),
-  refunds: jsonb("refunds").$type<any[]>().default([]),
+  refunds: json("refunds").$type<any[]>().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Addresses table
-const addressesTable = pgTable("addresses", {
+const addressesTable = mysqlTable("addresses", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
   label: varchar("label", { length: 50 }).notNull(),
@@ -230,31 +247,31 @@ const addressesTable = pgTable("addresses", {
   floor: varchar("floor", { length: 20 }),
   apartment: varchar("apartment", { length: 50 }),
   landmark: text("landmark"),
-  latitude: real("latitude"),
-  longitude: real("longitude"),
+  latitude: float("latitude"),
+  longitude: float("longitude"),
   isDefault: boolean("is_default").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Delivery zones table
-const deliveryZonesTable = pgTable("delivery_zones", {
+const deliveryZonesTable = mysqlTable("delivery_zones", {
   id: text("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   nameAr: varchar("name_ar", { length: 100 }),
   emirate: varchar("emirate", { length: 100 }).notNull(),
-  areas: jsonb("areas").$type<string[]>().notNull(),
+  areas: json("areas").$type<string[]>().notNull(),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
   minimumOrder: decimal("minimum_order", { precision: 10, scale: 2 }).notNull(),
-  estimatedMinutes: integer("estimated_minutes").notNull(),
+  estimatedMinutes: int("estimated_minutes").notNull(),
   isActive: boolean("is_active").notNull().default(true),
   expressEnabled: boolean("express_enabled").notNull().default(false),
   expressFee: decimal("express_fee", { precision: 10, scale: 2 }).notNull().default("25"),
-  expressHours: integer("express_hours").notNull().default(1),
+  expressHours: int("express_hours").notNull().default(1),
 });
 
 // In-app notifications table
-const inAppNotificationsTable = pgTable("in_app_notifications", {
+const inAppNotificationsTable = mysqlTable("in_app_notifications", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
   type: varchar("type", { length: 50 }).notNull(),
@@ -270,14 +287,14 @@ const inAppNotificationsTable = pgTable("in_app_notifications", {
 });
 
 // Chat messages table
-const chatMessagesTable = pgTable("chat_messages", {
+const chatMessagesTable = mysqlTable("chat_messages", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
   userName: varchar("user_name", { length: 200 }).notNull(),
   userEmail: varchar("user_email", { length: 255 }).notNull(),
   text: text("text").notNull(),
   sender: varchar("sender", { length: 10 }).notNull(),
-  attachments: jsonb("attachments").$type<{
+  attachments: json("attachments").$type<{
     id: string;
     name: string;
     type: string;
@@ -290,28 +307,28 @@ const chatMessagesTable = pgTable("chat_messages", {
 });
 
 // Delivery tracking table
-const deliveryTrackingStatusEnum = pgEnum("delivery_tracking_status", [
+const deliveryTrackingStatusEnum = mysqlEnum("delivery_tracking_status", [
   "assigned", "picked_up", "in_transit", "nearby", "delivered", "failed"
 ]);
-const deliveryTrackingTable = pgTable("delivery_tracking", {
+const deliveryTrackingTable = mysqlTable("delivery_tracking", {
   id: text("id").primaryKey(),
   orderId: text("order_id").notNull(),
   orderNumber: varchar("order_number", { length: 50 }).notNull(),
   driverId: text("driver_id"),
   driverName: varchar("driver_name", { length: 200 }),
   driverMobile: varchar("driver_mobile", { length: 20 }),
-  status: deliveryTrackingStatusEnum("status").notNull().default("assigned"),
-  currentLocation: jsonb("current_location").$type<any>(),
+  status: mysqlEnum("status", ["assigned", "picked_up", "in_transit", "nearby", "delivered", "failed"]).notNull().default("assigned"),
+  currentLocation: json("current_location").$type<any>(),
   estimatedArrival: timestamp("estimated_arrival"),
   actualArrival: timestamp("actual_arrival"),
-  deliveryProof: jsonb("delivery_proof").$type<any>(),
-  timeline: jsonb("timeline").$type<any[]>().default([]),
+  deliveryProof: json("delivery_proof").$type<any>(),
+  timeline: json("timeline").$type<any[]>().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Banners table
-const bannersTable = pgTable("banners", {
+const bannersTable = mysqlTable("banners", {
   id: text("id").primaryKey(),
   titleEn: varchar("title_en", { length: 200 }).notNull(),
   titleAr: varchar("title_ar", { length: 200 }).notNull(),
@@ -323,20 +340,20 @@ const bannersTable = pgTable("banners", {
   badge: varchar("badge", { length: 50 }),
   badgeAr: varchar("badge_ar", { length: 50 }),
   enabled: boolean("enabled").notNull().default(true),
-  sortOrder: integer("sort_order").notNull().default(0),
+  sortOrder: int("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Supplier status and payment terms enums
-const supplierStatusEnum = pgEnum("supplier_status", ["active", "inactive", "pending", "suspended"]);
-const supplierPaymentTermsEnum = pgEnum("supplier_payment_terms", ["net_7", "net_15", "net_30", "net_60", "cod", "prepaid"]);
-const purchaseOrderStatusEnum = pgEnum("purchase_order_status", [
+const supplierStatusEnum = mysqlEnum("supplier_status", ["active", "inactive", "pending", "suspended"]);
+const supplierPaymentTermsEnum = mysqlEnum("supplier_payment_terms", ["net_7", "net_15", "net_30", "net_60", "cod", "prepaid"]);
+const purchaseOrderStatusEnum = mysqlEnum("purchase_order_status", [
   "draft", "pending", "approved", "ordered", "partially_received", "received", "cancelled"
 ]);
 
 // Suppliers table
-const suppliersTable = pgTable("suppliers", {
+const suppliersTable = mysqlTable("suppliers", {
   id: text("id").primaryKey(),
   code: varchar("code", { length: 20 }).notNull().unique(),
   name: varchar("name", { length: 200 }).notNull(),
@@ -345,14 +362,14 @@ const suppliersTable = pgTable("suppliers", {
   phone: varchar("phone", { length: 20 }).notNull(),
   website: text("website"),
   taxNumber: varchar("tax_number", { length: 50 }),
-  address: jsonb("address").$type<{
+  address: json("address").$type<{
     street: string;
     city: string;
     state: string;
     country: string;
     postalCode: string;
   }>().notNull(),
-  contacts: jsonb("contacts").$type<{
+  contacts: json("contacts").$type<{
     id: string;
     name: string;
     position: string;
@@ -360,17 +377,17 @@ const suppliersTable = pgTable("suppliers", {
     phone: string;
     isPrimary: boolean;
   }[]>().default([]),
-  paymentTerms: supplierPaymentTermsEnum("payment_terms").notNull().default("net_30"),
-  currency: currencyEnum("currency").notNull().default("AED"),
+  paymentTerms: mysqlEnum("payment_terms", ["net_7", "net_15", "net_30", "net_60", "cod", "prepaid"]).notNull().default("net_30"),
+  currency: mysqlEnum("currency", ["AED", "USD", "EUR"]).notNull().default("AED"),
   creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }).notNull().default("0"),
   currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).notNull().default("0"),
-  categories: jsonb("categories").$type<string[]>().default([]),
+  categories: json("categories").$type<string[]>().default([]),
   rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
   onTimeDeliveryRate: decimal("on_time_delivery_rate", { precision: 5, scale: 2 }).default("0"),
   qualityScore: decimal("quality_score", { precision: 5, scale: 2 }).default("0"),
-  totalOrders: integer("total_orders").notNull().default(0),
+  totalOrders: int("total_orders").notNull().default(0),
   totalSpent: decimal("total_spent", { precision: 12, scale: 2 }).notNull().default("0"),
-  status: supplierStatusEnum("status").notNull().default("active"),
+  status: mysqlEnum("status", ["active", "inactive", "pending", "suspended"]).notNull().default("active"),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -378,15 +395,15 @@ const suppliersTable = pgTable("suppliers", {
 });
 
 // Supplier products table
-const supplierProductsTable = pgTable("supplier_products", {
+const supplierProductsTable = mysqlTable("supplier_products", {
   id: text("id").primaryKey(),
   supplierId: text("supplier_id").notNull(),
   productId: text("product_id").notNull(),
   productName: varchar("product_name", { length: 200 }).notNull(),
   supplierSku: varchar("supplier_sku", { length: 100 }),
   unitCost: decimal("unit_cost", { precision: 10, scale: 2 }).notNull(),
-  minimumOrderQuantity: integer("minimum_order_quantity").notNull().default(1),
-  leadTimeDays: integer("lead_time_days").notNull().default(7),
+  minimumOrderQuantity: int("minimum_order_quantity").notNull().default(1),
+  leadTimeDays: int("lead_time_days").notNull().default(7),
   isPreferred: boolean("is_preferred").notNull().default(false),
   lastPurchasePrice: decimal("last_purchase_price", { precision: 10, scale: 2 }),
   lastPurchaseDate: timestamp("last_purchase_date"),
@@ -396,7 +413,7 @@ const supplierProductsTable = pgTable("supplier_products", {
 });
 
 // Purchase orders table
-const purchaseOrdersTable = pgTable("purchase_orders", {
+const purchaseOrdersTable = mysqlTable("purchase_orders", {
   id: text("id").primaryKey(),
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
   supplierId: text("supplier_id").notNull(),
@@ -407,7 +424,7 @@ const purchaseOrdersTable = pgTable("purchase_orders", {
   shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 }).notNull().default("0"),
   discount: decimal("discount", { precision: 10, scale: 2 }).notNull().default("0"),
   total: decimal("total", { precision: 12, scale: 2 }).notNull(),
-  status: purchaseOrderStatusEnum("status").notNull().default("draft"),
+  status: mysqlEnum("status", ["draft", "pending", "approved", "ordered", "partially_received", "received", "cancelled"]).notNull().default("draft"),
   paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"),
   orderDate: timestamp("order_date").notNull().defaultNow(),
   expectedDeliveryDate: timestamp("expected_delivery_date").notNull(),
@@ -420,7 +437,7 @@ const purchaseOrdersTable = pgTable("purchase_orders", {
   approvedAt: timestamp("approved_at"),
   internalNotes: text("internal_notes"),
   supplierNotes: text("supplier_notes"),
-  statusHistory: jsonb("status_history").$type<{
+  statusHistory: json("status_history").$type<{
     status: string;
     changedBy: string;
     changedAt: string;
@@ -431,7 +448,7 @@ const purchaseOrdersTable = pgTable("purchase_orders", {
 });
 
 // Purchase order items table
-const purchaseOrderItemsTable = pgTable("purchase_order_items", {
+const purchaseOrderItemsTable = mysqlTable("purchase_order_items", {
   id: text("id").primaryKey(),
   purchaseOrderId: text("purchase_order_id").notNull(),
   productId: text("product_id").notNull(),
@@ -445,11 +462,11 @@ const purchaseOrderItemsTable = pgTable("purchase_order_items", {
 });
 
 // Transaction type and status enums for finance
-const transactionTypeEnum = pgEnum("transaction_type", [
+const transactionTypeEnum = mysqlEnum("transaction_type", [
   "sale", "refund", "expense", "purchase", "adjustment", "payout"
 ]);
-const transactionStatusEnum = pgEnum("transaction_status", ["pending", "completed", "failed", "cancelled"]);
-const expenseCategoryEnum = pgEnum("expense_category", [
+const transactionStatusEnum = mysqlEnum("transaction_status", ["pending", "completed", "failed", "cancelled"]);
+const expenseCategoryEnum = mysqlEnum("expense_category", [
   "inventory", "direct_labor", "freight_in", "marketing", "delivery", "sales_commission",
   "salaries", "rent", "utilities", "office_supplies", "insurance", "professional_fees",
   "licenses_permits", "bank_charges", "equipment", "maintenance", "depreciation", "amortization",
@@ -458,15 +475,15 @@ const expenseCategoryEnum = pgEnum("expense_category", [
 ]);
 
 // Finance transactions table
-const financeTransactionsTable = pgTable("finance_transactions", {
+const financeTransactionsTable = mysqlTable("finance_transactions", {
   id: text("id").primaryKey(),
-  type: transactionTypeEnum("type").notNull(),
-  status: transactionStatusEnum("status").notNull().default("pending"),
+  type: mysqlEnum("type", ["sale", "refund", "expense", "purchase", "adjustment", "payout"]).notNull(),
+  status: mysqlEnum("status", ["pending", "completed", "failed", "cancelled"]).notNull().default("pending"),
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
-  currency: currencyEnum("currency").notNull().default("AED"),
+  currency: mysqlEnum("currency", ["AED", "USD", "EUR"]).notNull().default("AED"),
   description: text("description").notNull(),
   descriptionAr: text("description_ar"),
-  category: expenseCategoryEnum("category"),
+  category: mysqlEnum("category", ["inventory", "direct_labor", "freight_in", "marketing", "delivery", "sales_commission", "salaries", "rent", "utilities", "office_supplies", "insurance", "professional_fees", "licenses_permits", "bank_charges", "equipment", "maintenance", "depreciation", "amortization", "interest_expense", "finance_charges", "taxes", "government_fees", "employee_benefits", "training", "travel", "meals_entertainment", "other"]),
   reference: varchar("reference", { length: 100 }),
   referenceType: varchar("reference_type", { length: 50 }),
   referenceId: text("reference_id"),
@@ -474,24 +491,24 @@ const financeTransactionsTable = pgTable("finance_transactions", {
   accountName: varchar("account_name", { length: 100 }).notNull(),
   createdBy: text("created_by").notNull(),
   notes: text("notes"),
-  attachments: jsonb("attachments").$type<string[]>(),
-  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  attachments: json("attachments").$type<string[]>(),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Account type enum for finance accounts
-const accountTypeEnum = pgEnum("account_type", ["cash", "bank", "card_payments", "cod_collections", "petty_cash"]);
-const expenseStatusEnum = pgEnum("expense_status", ["pending", "approved", "paid", "overdue", "cancelled", "reimbursed"]);
+const accountTypeEnum = mysqlEnum("account_type", ["cash", "bank", "card_payments", "cod_collections", "petty_cash"]);
+const expenseStatusEnum = mysqlEnum("expense_status", ["pending", "approved", "paid", "overdue", "cancelled", "reimbursed"]);
 
 // Finance accounts table
-const financeAccountsTable = pgTable("finance_accounts", {
+const financeAccountsTable = mysqlTable("finance_accounts", {
   id: text("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   nameAr: varchar("name_ar", { length: 100 }),
-  type: accountTypeEnum("type").notNull(),
+  type: mysqlEnum("type", ["cash", "bank", "card_payments", "cod_collections", "petty_cash"]).notNull(),
   balance: decimal("balance", { precision: 14, scale: 2 }).notNull().default("0"),
-  currency: currencyEnum("currency").notNull().default("AED"),
+  currency: mysqlEnum("currency", ["AED", "USD", "EUR"]).notNull().default("AED"),
   isActive: boolean("is_active").notNull().default(true),
   bankName: varchar("bank_name", { length: 100 }),
   accountNumber: varchar("account_number", { length: 50 }),
@@ -502,10 +519,10 @@ const financeAccountsTable = pgTable("finance_accounts", {
 });
 
 // Finance expenses table (IFRS/GAAP Enhanced)
-const financeExpensesTable = pgTable("finance_expenses", {
+const financeExpensesTable = mysqlTable("finance_expenses", {
   id: text("id").primaryKey(),
   expenseNumber: varchar("expense_number", { length: 50 }).notNull(),
-  category: expenseCategoryEnum("category").notNull(),
+  category: mysqlEnum("category", ["inventory", "direct_labor", "freight_in", "marketing", "delivery", "sales_commission", "salaries", "rent", "utilities", "office_supplies", "insurance", "professional_fees", "licenses_permits", "bank_charges", "equipment", "maintenance", "depreciation", "amortization", "interest_expense", "finance_charges", "taxes", "government_fees", "employee_benefits", "training", "travel", "meals_entertainment", "other"]).notNull(),
   function: varchar("function", { length: 50 }).default("administrative"),
   grossAmount: decimal("gross_amount", { precision: 10, scale: 2 }).notNull(),
   vatAmount: decimal("vat_amount", { precision: 10, scale: 2 }).default("0"),
@@ -513,7 +530,7 @@ const financeExpensesTable = pgTable("finance_expenses", {
   isVatRecoverable: boolean("is_vat_recoverable").default(true),
   withholdingTax: decimal("withholding_tax", { precision: 10, scale: 2 }).default("0"),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  currency: currencyEnum("currency").notNull().default("AED"),
+  currency: mysqlEnum("currency", ["AED", "USD", "EUR"]).notNull().default("AED"),
   exchangeRate: decimal("exchange_rate", { precision: 10, scale: 6 }).default("1"),
   baseCurrencyAmount: decimal("base_currency_amount", { precision: 10, scale: 2 }),
   description: text("description").notNull(),
@@ -527,12 +544,12 @@ const financeExpensesTable = pgTable("finance_expenses", {
   paymentTerms: varchar("payment_terms", { length: 20 }).default("net_30"),
   dueDate: timestamp("due_date"),
   earlyPaymentDiscount: decimal("early_payment_discount", { precision: 5, scale: 2 }).default("0"),
-  earlyPaymentDays: integer("early_payment_days").default(0),
+  earlyPaymentDays: int("early_payment_days").default(0),
   paidAt: timestamp("paid_at"),
   paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default("0"),
   paymentReference: varchar("payment_reference", { length: 100 }),
   paymentMethod: varchar("payment_method", { length: 50 }),
-  status: expenseStatusEnum("status").notNull().default("pending"),
+  status: mysqlEnum("status", ["pending", "approved", "paid", "overdue", "cancelled", "reimbursed"]).notNull().default("pending"),
   approvalStatus: varchar("approval_status", { length: 20 }).default("draft"),
   costCenterId: text("cost_center_id"),
   costCenterName: varchar("cost_center_name", { length: 100 }),
@@ -552,8 +569,8 @@ const financeExpensesTable = pgTable("finance_expenses", {
   rejectedAt: timestamp("rejected_at"),
   rejectionReason: text("rejection_reason"),
   notes: text("notes"),
-  attachments: jsonb("attachments").$type<string[]>().default([]),
-  tags: jsonb("tags").$type<string[]>().default([]),
+  attachments: json("attachments").$type<string[]>().default([]),
+  tags: json("tags").$type<string[]>().default([]),
   isRecurring: boolean("is_recurring").default(false),
   recurringSchedule: varchar("recurring_schedule", { length: 20 }),
   nextRecurrenceDate: timestamp("next_recurrence_date"),
@@ -577,27 +594,27 @@ const generateExpenseNumber = async (): Promise<string> => {
 const generateAccountId = (): string => `acc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // Account class enum for chart of accounts
-const accountClassEnum = pgEnum("account_class", [
+const accountClassEnum = mysqlEnum("account_class", [
   "asset", "liability", "equity", "revenue", "expense"
 ]);
 
 // Journal entry status enum
-const journalEntryStatusEnum = pgEnum("journal_entry_status", [
+const journalEntryStatusEnum = mysqlEnum("journal_entry_status", [
   "draft", "posted", "reversed"
 ]);
 
 // VAT return status enum
-const vatReturnStatusEnum = pgEnum("vat_return_status", [
+const vatReturnStatusEnum = mysqlEnum("vat_return_status", [
   "draft", "submitted", "accepted", "rejected", "amended"
 ]);
 
 // Chart of accounts table
-const chartOfAccountsTable = pgTable("chart_of_accounts", {
+const chartOfAccountsTable = mysqlTable("chart_of_accounts", {
   id: text("id").primaryKey(),
   code: varchar("code", { length: 10 }).notNull().unique(),
   name: varchar("name", { length: 100 }).notNull(),
   nameAr: varchar("name_ar", { length: 100 }),
-  accountClass: accountClassEnum("account_class").notNull(),
+  accountClass: mysqlEnum("account_class", ["asset", "liability", "equity", "revenue", "expense"]).notNull(),
   parentId: text("parent_id"),
   description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
@@ -609,7 +626,7 @@ const chartOfAccountsTable = pgTable("chart_of_accounts", {
 });
 
 // Cost centers table
-const costCentersTable = pgTable("cost_centers", {
+const costCentersTable = mysqlTable("cost_centers", {
   id: text("id").primaryKey(),
   code: varchar("code", { length: 20 }).notNull().unique(),
   name: varchar("name", { length: 100 }).notNull(),
@@ -623,7 +640,7 @@ const costCentersTable = pgTable("cost_centers", {
 });
 
 // Expense budgets table
-const expenseBudgetsTable = pgTable("expense_budgets", {
+const expenseBudgetsTable = mysqlTable("expense_budgets", {
   id: text("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   periodType: varchar("period_type", { length: 20 }).notNull(),
@@ -635,7 +652,7 @@ const expenseBudgetsTable = pgTable("expense_budgets", {
   budgetAmount: decimal("budget_amount", { precision: 12, scale: 2 }).notNull(),
   spentAmount: decimal("spent_amount", { precision: 12, scale: 2 }).default("0"),
   remainingAmount: decimal("remaining_amount", { precision: 12, scale: 2 }),
-  alertThreshold: integer("alert_threshold").default(80),
+  alertThreshold: int("alert_threshold").default(80),
   isAlertSent: boolean("is_alert_sent").default(false),
   isActive: boolean("is_active").default(true),
   createdBy: text("created_by").notNull(),
@@ -644,7 +661,7 @@ const expenseBudgetsTable = pgTable("expense_budgets", {
 });
 
 // Vendors table (for finance, separate from suppliers)
-const vendorsTable = pgTable("vendors", {
+const vendorsTable = mysqlTable("vendors", {
   id: text("id").primaryKey(),
   code: varchar("code", { length: 20 }).notNull().unique(),
   name: varchar("name", { length: 200 }).notNull(),
@@ -666,7 +683,7 @@ const vendorsTable = pgTable("vendors", {
 });
 
 // Journal entries table
-const journalEntriesTable = pgTable("journal_entries", {
+const journalEntriesTable = mysqlTable("journal_entries", {
   id: text("id").primaryKey(),
   entryNumber: varchar("entry_number", { length: 20 }).notNull().unique(),
   entryDate: timestamp("entry_date").notNull(),
@@ -675,7 +692,7 @@ const journalEntriesTable = pgTable("journal_entries", {
   reference: varchar("reference", { length: 100 }),
   referenceType: varchar("reference_type", { length: 50 }),
   referenceId: text("reference_id"),
-  status: journalEntryStatusEnum("status").notNull().default("draft"),
+  status: mysqlEnum("status", ["draft", "posted", "reversed"]).notNull().default("draft"),
   totalDebit: decimal("total_debit", { precision: 14, scale: 2 }).notNull().default("0"),
   totalCredit: decimal("total_credit", { precision: 14, scale: 2 }).notNull().default("0"),
   createdBy: text("created_by").notNull(),
@@ -684,13 +701,13 @@ const journalEntriesTable = pgTable("journal_entries", {
   reversedAt: timestamp("reversed_at"),
   reversalEntryId: text("reversal_entry_id"),
   notes: text("notes"),
-  attachments: jsonb("attachments").$type<string[]>(),
+  attachments: json("attachments").$type<string[]>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Journal entry lines table
-const journalEntryLinesTable = pgTable("journal_entry_lines", {
+const journalEntryLinesTable = mysqlTable("journal_entry_lines", {
   id: text("id").primaryKey(),
   journalEntryId: text("journal_entry_id").notNull(),
   accountId: text("account_id").notNull(),
@@ -703,14 +720,14 @@ const journalEntryLinesTable = pgTable("journal_entry_lines", {
 });
 
 // Audit log table
-const auditLogTable = pgTable("audit_log", {
+const auditLogTable = mysqlTable("audit_log", {
   id: text("id").primaryKey(),
   entityType: varchar("entity_type", { length: 50 }).notNull(),
   entityId: text("entity_id").notNull(),
   action: varchar("action", { length: 20 }).notNull(),
-  previousValue: jsonb("previous_value"),
-  newValue: jsonb("new_value"),
-  changedFields: jsonb("changed_fields").$type<string[]>(),
+  previousValue: json("previous_value"),
+  newValue: json("new_value"),
+  changedFields: json("changed_fields").$type<string[]>(),
   userId: text("user_id").notNull(),
   userName: varchar("user_name", { length: 100 }),
   ipAddress: varchar("ip_address", { length: 45 }),
@@ -720,7 +737,7 @@ const auditLogTable = pgTable("audit_log", {
 });
 
 // VAT returns table
-const vatReturnsTable = pgTable("vat_returns", {
+const vatReturnsTable = mysqlTable("vat_returns", {
   id: text("id").primaryKey(),
   returnNumber: varchar("return_number", { length: 20 }).notNull().unique(),
   periodStart: timestamp("period_start").notNull(),
@@ -738,7 +755,7 @@ const vatReturnsTable = pgTable("vat_returns", {
   box8RecoverableVat: decimal("box8_recoverable_vat", { precision: 14, scale: 2 }).default("0"),
   box9Adjustments: decimal("box9_adjustments", { precision: 14, scale: 2 }).default("0"),
   box10NetVatDue: decimal("box10_net_vat_due", { precision: 14, scale: 2 }).default("0"),
-  status: vatReturnStatusEnum("status").notNull().default("draft"),
+  status: mysqlEnum("status", ["draft", "submitted", "accepted", "rejected", "amended"]).notNull().default("draft"),
   submittedAt: timestamp("submitted_at"),
   submittedBy: text("submitted_by"),
   ftaReferenceNumber: varchar("fta_reference_number", { length: 50 }),
@@ -749,68 +766,68 @@ const vatReturnsTable = pgTable("vat_returns", {
 });
 
 // Expense approval rules table
-const expenseApprovalRulesTable = pgTable("expense_approval_rules", {
+const expenseApprovalRulesTable = mysqlTable("expense_approval_rules", {
   id: text("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   minAmount: decimal("min_amount", { precision: 10, scale: 2 }).default("0"),
   maxAmount: decimal("max_amount", { precision: 10, scale: 2 }),
   category: varchar("category", { length: 50 }),
   costCenterId: text("cost_center_id"),
-  approverLevel: integer("approver_level").notNull().default(1),
+  approverLevel: int("approver_level").notNull().default(1),
   approverId: text("approver_id"),
   approverRole: varchar("approver_role", { length: 50 }),
   requiresAllApprovers: boolean("requires_all_approvers").default(false),
   autoApproveBelow: decimal("auto_approve_below", { precision: 10, scale: 2 }),
   isActive: boolean("is_active").default(true),
-  priority: integer("priority").default(0),
+  priority: int("priority").default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Delivery time slots table
-const deliveryTimeSlotsTable = pgTable("delivery_time_slots", {
+const deliveryTimeSlotsTable = mysqlTable("delivery_time_slots", {
   id: text("id").primaryKey(),
   label: varchar("label", { length: 100 }).notNull(),
   labelAr: varchar("label_ar", { length: 100 }).notNull(),
   startTime: varchar("start_time", { length: 10 }).notNull(),
   endTime: varchar("end_time", { length: 10 }).notNull(),
   isExpressSlot: boolean("is_express_slot").notNull().default(false),
-  maxOrders: integer("max_orders").notNull().default(20),
+  maxOrders: int("max_orders").notNull().default(20),
   enabled: boolean("enabled").notNull().default(true),
-  sortOrder: integer("sort_order").notNull().default(0),
+  sortOrder: int("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // Discount codes / Promo codes table
-const discountCodeTypeEnum = pgEnum("discount_code_type", ["percentage", "fixed"]);
-const discountCodesTable = pgTable("discount_codes", {
+const discountCodeTypeEnum = mysqlEnum("discount_code_type", ["percentage", "fixed"]);
+const discountCodesTable = mysqlTable("discount_codes", {
   id: text("id").primaryKey(),
   code: varchar("code", { length: 50 }).notNull().unique(),
-  type: discountCodeTypeEnum("type").notNull(),
+  type: mysqlEnum("type", ["percentage", "fixed"]).notNull(),
   value: decimal("value", { precision: 10, scale: 2 }).notNull(),
   minimumOrder: decimal("minimum_order", { precision: 10, scale: 2 }).notNull().default("0"),
   maximumDiscount: decimal("maximum_discount", { precision: 10, scale: 2 }),
-  usageLimit: integer("usage_limit").notNull().default(0),
-  usageCount: integer("usage_count").notNull().default(0),
-  userLimit: integer("user_limit").notNull().default(1),
+  usageLimit: int("usage_limit").notNull().default(0),
+  usageCount: int("usage_count").notNull().default(0),
+  userLimit: int("user_limit").notNull().default(1),
   validFrom: timestamp("valid_from").notNull(),
   validTo: timestamp("valid_to").notNull(),
   isActive: boolean("is_active").notNull().default(true),
-  applicableProducts: jsonb("applicable_products").$type<string[]>(),
-  applicableCategories: jsonb("applicable_categories").$type<string[]>(),
+  applicableProducts: json("applicable_products").$type<string[]>(),
+  applicableCategories: json("applicable_categories").$type<string[]>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // App settings table - matches server/db/schema.ts (no createdAt column)
-const appSettingsTable = pgTable("app_settings", {
+const appSettingsTable = mysqlTable("app_settings", {
   id: text("id").primaryKey().default("default"),
   vatRate: decimal("vat_rate", { precision: 5, scale: 4 }).notNull().default("0.05"),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull().default("15"),
   freeDeliveryThreshold: decimal("free_delivery_threshold", { precision: 10, scale: 2 }).notNull().default("200"),
   expressDeliveryFee: decimal("express_delivery_fee", { precision: 10, scale: 2 }).notNull().default("25"),
   minimumOrderAmount: decimal("minimum_order_amount", { precision: 10, scale: 2 }).notNull().default("50"),
-  maxOrdersPerDay: integer("max_orders_per_day").notNull().default(100),
+  maxOrdersPerDay: int("max_orders_per_day").notNull().default(100),
   enableCashOnDelivery: boolean("enable_cash_on_delivery").notNull().default(true),
   enableCardPayment: boolean("enable_card_payment").notNull().default(true),
   enableWallet: boolean("enable_wallet").notNull().default(true),
@@ -1525,7 +1542,7 @@ function createApp() {
         database: {
           configured: dbConnected,
           connected: dbTest,
-          url: databaseUrl ? `${databaseUrl.substring(0, 30)}...` : 'not set',
+          url: `mysql://${databaseConfig.user}@${databaseConfig.host}/${databaseConfig.database}`,
         },
         inMemoryUsers: users.size,
       },
@@ -1548,8 +1565,8 @@ function createApp() {
         try {
           const dbUsers = await pgDb.select().from(usersTable).where(
             or(
-              ilike(usersTable.username, username),
-              ilike(usersTable.email, username)
+              like(usersTable.username, username),
+              like(usersTable.email, username)
             )
           ).limit(1);
 
@@ -1668,8 +1685,8 @@ function createApp() {
           // Find user by username OR email
           const dbUsers = await pgDb.select().from(usersTable).where(
             or(
-              ilike(usersTable.username, username),
-              ilike(usersTable.email, username)
+              like(usersTable.username, username),
+              like(usersTable.email, username)
             )
           ).limit(1);
 
@@ -1789,14 +1806,14 @@ function createApp() {
         try {
           // Check for existing username
           const existingUsername = await pgDb.select().from(usersTable)
-            .where(ilike(usersTable.username, username)).limit(1);
+            .where(like(usersTable.username, username)).limit(1);
           if (existingUsername.length > 0) {
             return res.status(400).json({ success: false, error: 'Username already taken' });
           }
 
           // Check for existing email
           const existingEmail = await pgDb.select().from(usersTable)
-            .where(ilike(usersTable.email, email)).limit(1);
+            .where(like(usersTable.email, email)).limit(1);
           if (existingEmail.length > 0) {
             return res.status(400).json({ success: false, error: 'Email already registered' });
           }
@@ -2221,7 +2238,7 @@ function createApp() {
       }
 
       const id = nameEn.toLowerCase().replace(/\s+/g, '-');
-      const [newCategory] = await pgDb.insert(productCategoriesTable).values({
+      await pgDb.insert(productCategoriesTable).values({
         id,
         nameEn,
         nameAr,
@@ -2229,7 +2246,9 @@ function createApp() {
         color: color || 'bg-red-100 text-red-600',
         sortOrder: sortOrder || 0,
         isActive: isActive !== undefined ? isActive : true,
-      }).returning();
+      });
+      
+      const [newCategory] = await pgDb.select().from(productCategoriesTable).where(eq(productCategoriesTable.id, id));
 
       res.status(201).json({ success: true, data: newCategory, message: 'Category created successfully' });
     } catch (error) {
@@ -2245,7 +2264,7 @@ function createApp() {
       }
 
       const { nameEn, nameAr, icon, color, sortOrder, isActive } = req.body;
-      const [updated] = await pgDb.update(productCategoriesTable)
+      await pgDb.update(productCategoriesTable)
         .set({
           nameEn,
           nameAr,
@@ -2255,8 +2274,8 @@ function createApp() {
           isActive,
           updatedAt: new Date(),
         })
-        .where(eq(productCategoriesTable.id, req.params.id))
-        .returning();
+        .where(eq(productCategoriesTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(productCategoriesTable).where(eq(productCategoriesTable.id, req.params.id));
 
       if (!updated) {
         return res.status(404).json({ success: false, error: 'Category not found' });
@@ -2275,13 +2294,12 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const [deleted] = await pgDb.delete(productCategoriesTable)
-        .where(eq(productCategoriesTable.id, req.params.id))
-        .returning();
-
-      if (!deleted) {
+      const [toDelete] = await pgDb.select().from(productCategoriesTable).where(eq(productCategoriesTable.id, req.params.id));
+      if (!toDelete) {
         return res.status(404).json({ success: false, error: 'Category not found' });
       }
+      await pgDb.delete(productCategoriesTable)
+        .where(eq(productCategoriesTable.id, req.params.id));
 
       res.json({ success: true, message: 'Category deleted successfully' });
     } catch (error) {
@@ -3679,10 +3697,10 @@ function createApp() {
         changedBy: currentUser?.username || 'user',
       }];
 
-      const [updated] = await pgDb.update(ordersTable)
+      await pgDb.update(ordersTable)
         .set({ status: 'cancelled', statusHistory: newHistory, updatedAt: new Date() })
-        .where(eq(ordersTable.id, req.params.id))
-        .returning();
+        .where(eq(ordersTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, req.params.id));
 
       res.json({ success: true, data: updated, message: 'Order cancelled successfully' });
     } catch (error) {
@@ -5281,10 +5299,10 @@ function createApp() {
       const updates = req.body;
       const updateData: Record<string, unknown> = { ...updates, updatedAt: new Date() };
 
-      const [updated] = await pgDb.update(usersTable)
+      await pgDb.update(usersTable)
         .set(updateData)
-        .where(eq(usersTable.id, req.params.id))
-        .returning();
+        .where(eq(usersTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(usersTable).where(eq(usersTable.id, req.params.id));
 
       const { password, ...userWithoutPassword } = updated;
       res.json({ success: true, data: userWithoutPassword });
@@ -5355,10 +5373,10 @@ function createApp() {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
 
-      const [updated] = await pgDb.update(usersTable)
+      await pgDb.update(usersTable)
         .set({ isVerified: true, updatedAt: new Date() })
-        .where(eq(usersTable.id, req.params.id))
-        .returning();
+        .where(eq(usersTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(usersTable).where(eq(usersTable.id, req.params.id));
 
       const { password, ...userWithoutPassword } = updated;
       res.json({ success: true, data: userWithoutPassword, message: 'User verified successfully' });
@@ -5415,8 +5433,9 @@ function createApp() {
 
       const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
 
-      const [zone] = await pgDb.insert(deliveryZonesTable).values({
-        id: `zone_${Date.now()}`,
+      const zoneId = `zone_${Date.now()}`;
+      await pgDb.insert(deliveryZonesTable).values({
+        id: zoneId,
         name,
         nameAr,
         emirate,
@@ -5428,7 +5447,8 @@ function createApp() {
         expressEnabled: expressEnabled ?? false,
         expressFee: String(expressFee || 25),
         expressHours: expressHours || 1,
-      }).returning();
+      });
+      const [zone] = await pgDb.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, zoneId));
 
       res.status(201).json({ success: true, data: zone, message: 'Delivery zone created' });
     } catch (error) {
@@ -5464,10 +5484,10 @@ function createApp() {
       if (expressFee !== undefined) updateData.expressFee = String(expressFee);
       if (expressHours !== undefined) updateData.expressHours = expressHours;
 
-      const [updated] = await pgDb.update(deliveryZonesTable)
+      await pgDb.update(deliveryZonesTable)
         .set(updateData)
-        .where(eq(deliveryZonesTable.id, req.params.id))
-        .returning();
+        .where(eq(deliveryZonesTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, req.params.id));
 
       res.json({ success: true, data: updated, message: 'Delivery zone updated' });
     } catch (error) {
@@ -5570,7 +5590,7 @@ function createApp() {
       }
 
       // Insert new address
-      const [newAddress] = await pgDb.insert(addressesTable).values({
+      await pgDb.insert(addressesTable).values({
         id: addressId,
         userId,
         label: label || 'Home',
@@ -5588,7 +5608,8 @@ function createApp() {
         isDefault: isDefault || false,
         createdAt: now,
         updatedAt: now,
-      }).returning();
+      });
+      const [newAddress] = await pgDb.select().from(addressesTable).where(eq(addressesTable.id, addressId));
 
       res.status(201).json({ success: true, data: newAddress });
     } catch (error) {
@@ -5639,10 +5660,10 @@ function createApp() {
       if (updates.longitude !== undefined) updateData.longitude = updates.longitude;
       if (updates.isDefault !== undefined) updateData.isDefault = updates.isDefault;
 
-      const [updated] = await pgDb.update(addressesTable)
+      await pgDb.update(addressesTable)
         .set(updateData)
-        .where(eq(addressesTable.id, req.params.id))
-        .returning();
+        .where(eq(addressesTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(addressesTable).where(eq(addressesTable.id, req.params.id));
 
       res.json({ success: true, data: updated });
     } catch (error) {
@@ -6347,15 +6368,15 @@ function createApp() {
         createdAt: new Date().toISOString(),
       }];
 
-      const [updated] = await pgDb.update(paymentsTable)
+      await pgDb.update(paymentsTable)
         .set({
           status: newStatus,
           refundedAmount: String(newRefundedAmount),
           refunds: newRefunds,
           updatedAt: new Date(),
         })
-        .where(eq(paymentsTable.id, req.params.id))
-        .returning();
+        .where(eq(paymentsTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(paymentsTable).where(eq(paymentsTable.id, req.params.id));
 
       res.json({
         success: true,
@@ -6539,13 +6560,13 @@ function createApp() {
       const now = new Date();
 
       // Update payment status
-      const [updated] = await pgDb.update(paymentsTable)
+      await pgDb.update(paymentsTable)
         .set({
           status: 'captured',
           updatedAt: now,
         })
-        .where(eq(paymentsTable.id, req.params.id))
-        .returning();
+        .where(eq(paymentsTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(paymentsTable).where(eq(paymentsTable.id, req.params.id));
 
       // Update order payment status
       await pgDb.update(ordersTable)
@@ -6699,10 +6720,10 @@ function createApp() {
       }
 
       const { latitude, longitude } = req.body;
-      const [updated] = await pgDb.update(deliveryTrackingTable)
+      await pgDb.update(deliveryTrackingTable)
         .set({ updatedAt: new Date() })
-        .where(eq(deliveryTrackingTable.id, req.params.id))
-        .returning();
+        .where(eq(deliveryTrackingTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.id, req.params.id));
 
       res.json({ success: true, data: { ...updated, currentLocation: { latitude, longitude } } });
     } catch (error) {
@@ -6731,10 +6752,10 @@ function createApp() {
         notes,
       }];
 
-      const [updated] = await pgDb.update(deliveryTrackingTable)
+      await pgDb.update(deliveryTrackingTable)
         .set({ status, timeline: newTimeline, updatedAt: new Date() })
-        .where(eq(deliveryTrackingTable.id, req.params.id))
-        .returning();
+        .where(eq(deliveryTrackingTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.id, req.params.id));
 
       res.json({ success: true, data: updated });
     } catch (error) {
@@ -6765,10 +6786,10 @@ function createApp() {
       }];
 
       // Update tracking status
-      const [updatedTracking] = await pgDb.update(deliveryTrackingTable)
+      await pgDb.update(deliveryTrackingTable)
         .set({ status: 'delivered', timeline: newTimeline, updatedAt: new Date() })
-        .where(eq(deliveryTrackingTable.id, req.params.id))
-        .returning();
+        .where(eq(deliveryTrackingTable.id, req.params.id));
+      const [updatedTracking] = await pgDb.select().from(deliveryTrackingTable).where(eq(deliveryTrackingTable.id, req.params.id));
 
       // Update order status
       const orderResult = await pgDb.select().from(ordersTable).where(eq(ordersTable.id, tracking.orderId));
@@ -6882,10 +6903,10 @@ function createApp() {
         .set({ isDefault: false })
         .where(eq(addressesTable.userId, address.userId));
 
-      const [updated] = await pgDb.update(addressesTable)
+      await pgDb.update(addressesTable)
         .set({ isDefault: true, updatedAt: new Date() })
-        .where(eq(addressesTable.id, req.params.id))
-        .returning();
+        .where(eq(addressesTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(addressesTable).where(eq(addressesTable.id, req.params.id));
 
       res.json({ success: true, data: updated, message: 'Default address updated' });
     } catch (error) {
@@ -8792,8 +8813,9 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Name and type are required' });
       }
 
-      const [newAccount] = await pgDb.insert(financeAccountsTable).values({
-        id: generateAccountId(),
+      const accountId = generateAccountId();
+      await pgDb.insert(financeAccountsTable).values({
+        id: accountId,
         name,
         nameAr,
         type: type as any,
@@ -8803,7 +8825,8 @@ function createApp() {
         bankName,
         accountNumber,
         iban,
-      }).returning();
+      });
+      const [newAccount] = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.id, accountId));
 
       res.status(201).json({ success: true, data: newAccount, message: 'Account created successfully' });
     } catch (error) {
@@ -8837,10 +8860,10 @@ function createApp() {
       if (iban !== undefined) updateData.iban = iban;
       if (isActive !== undefined) updateData.isActive = isActive;
 
-      const [updated] = await pgDb.update(financeAccountsTable)
+      await pgDb.update(financeAccountsTable)
         .set(updateData)
-        .where(eq(financeAccountsTable.id, req.params.id))
-        .returning();
+        .where(eq(financeAccountsTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.id, req.params.id));
 
       res.json({ success: true, data: updated, message: 'Account updated successfully' });
     } catch (error) {
@@ -8932,10 +8955,10 @@ function createApp() {
         return res.status(404).json({ success: false, error: 'Account not found' });
       }
 
-      const [updated] = await pgDb.update(financeAccountsTable)
+      await pgDb.update(financeAccountsTable)
         .set({ lastReconciled: new Date(), updatedAt: new Date() })
-        .where(eq(financeAccountsTable.id, req.params.id))
-        .returning();
+        .where(eq(financeAccountsTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(financeAccountsTable).where(eq(financeAccountsTable.id, req.params.id));
 
       res.json({ success: true, data: updated, message: 'Account reconciled successfully' });
     } catch (error) {
@@ -9022,8 +9045,9 @@ function createApp() {
 
       const expenseNumber = await generateExpenseNumber();
 
-      const [newExpense] = await pgDb.insert(financeExpensesTable).values({
-        id: `exp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const expenseId = `exp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await pgDb.insert(financeExpensesTable).values({
+        id: expenseId,
         expenseNumber,
         category: category as any,
         grossAmount: String(gross),
@@ -9051,7 +9075,8 @@ function createApp() {
         status: 'pending',
         approvalStatus: 'draft',
         createdBy: 'admin',
-      }).returning();
+      });
+      const [newExpense] = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.id, expenseId));
 
       res.status(201).json({ success: true, data: newExpense, message: 'Expense created successfully' });
     } catch (error) {
@@ -9092,10 +9117,10 @@ function createApp() {
         }
       }
 
-      const [updated] = await pgDb.update(financeExpensesTable)
+      await pgDb.update(financeExpensesTable)
         .set(updateData)
-        .where(eq(financeExpensesTable.id, req.params.id))
-        .returning();
+        .where(eq(financeExpensesTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.id, req.params.id));
 
       res.json({ success: true, data: updated, message: 'Expense updated successfully' });
     } catch (error) {
@@ -9139,7 +9164,7 @@ function createApp() {
 
       const { paymentMethod, paymentReference, accountId } = req.body;
 
-      const [updated] = await pgDb.update(financeExpensesTable)
+      await pgDb.update(financeExpensesTable)
         .set({
           status: 'paid',
           paidAt: new Date(),
@@ -9149,8 +9174,8 @@ function createApp() {
           accountId: accountId || existing.accountId,
           updatedAt: new Date(),
         })
-        .where(eq(financeExpensesTable.id, req.params.id))
-        .returning();
+        .where(eq(financeExpensesTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(financeExpensesTable).where(eq(financeExpensesTable.id, req.params.id));
 
       // Create finance transaction for the payment
       await pgDb.insert(financeTransactionsTable).values({
@@ -9389,8 +9414,9 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Code, name, and accountClass are required' });
       }
 
-      const [newAccount] = await pgDb.insert(chartOfAccountsTable).values({
-        id: `coa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const accountId = `coa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await pgDb.insert(chartOfAccountsTable).values({
+        id: accountId,
         code,
         name,
         nameAr,
@@ -9401,7 +9427,8 @@ function createApp() {
         balance: '0',
         isActive: true,
         isSystemAccount: false,
-      }).returning();
+      });
+      const [newAccount] = await pgDb.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, accountId));
 
       res.status(201).json({ success: true, data: newAccount, message: 'Account created successfully' });
     } catch (error) {
@@ -9456,7 +9483,7 @@ function createApp() {
       const entryNumber = `JE-${year}-${String(seqNum).padStart(4, '0')}`;
 
       const entryId = `je_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const [entry] = await pgDb.insert(journalEntriesTable).values({
+      await pgDb.insert(journalEntriesTable).values({
         id: entryId,
         entryNumber,
         entryDate: new Date(date || Date.now()),
@@ -9471,7 +9498,8 @@ function createApp() {
         notes,
         attachments: attachments || [],
         createdBy: 'admin',
-      }).returning();
+      });
+      const [entry] = await pgDb.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, entryId));
 
       // Insert journal entry lines
       for (const line of lines) {
@@ -9505,10 +9533,10 @@ function createApp() {
         return res.status(404).json({ success: false, error: 'Journal entry not found' });
       }
 
-      const [updated] = await pgDb.update(journalEntriesTable)
+      await pgDb.update(journalEntriesTable)
         .set({ status: 'posted', postedAt: new Date(), updatedAt: new Date() })
-        .where(eq(journalEntriesTable.id, req.params.id))
-        .returning();
+        .where(eq(journalEntriesTable.id, req.params.id));
+      const [updated] = await pgDb.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, req.params.id));
 
       res.json({ success: true, data: updated, message: 'Journal entry posted successfully' });
     } catch (error) {
@@ -9595,8 +9623,9 @@ function createApp() {
       const quarter = Math.ceil((start.getMonth() + 1) / 3);
       const returnNumber = `VAT-${start.getFullYear()}-Q${quarter}`;
 
-      const [vatReturn] = await pgDb.insert(vatReturnsTable).values({
-        id: `vat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const vatReturnId = `vat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await pgDb.insert(vatReturnsTable).values({
+        id: vatReturnId,
         returnNumber,
         periodStart: start,
         periodEnd: end,
@@ -9615,7 +9644,8 @@ function createApp() {
         box10NetVatDue: String(vatOnSales - recoverableVat),
         status: 'draft',
         createdBy: 'admin',
-      }).returning();
+      });
+      const [vatReturn] = await pgDb.select().from(vatReturnsTable).where(eq(vatReturnsTable.id, vatReturnId));
 
       res.status(201).json({ success: true, data: vatReturn, message: 'VAT return created successfully' });
     } catch (error) {
@@ -9697,8 +9727,9 @@ function createApp() {
       }
       const code = `V-${String(seqNum).padStart(3, '0')}`;
 
-      const [newVendor] = await pgDb.insert(vendorsTable).values({
-        id: `vendor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const vendorId = `vendor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await pgDb.insert(vendorsTable).values({
+        id: vendorId,
         code,
         name,
         nameAr,
@@ -9714,7 +9745,8 @@ function createApp() {
         defaultPaymentTerms: defaultPaymentTerms || 'net_30',
         currentBalance: '0',
         isActive: true,
-      }).returning();
+      });
+      const [newVendor] = await pgDb.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId));
 
       res.status(201).json({ success: true, data: newVendor, message: 'Vendor created successfully' });
     } catch (error) {
@@ -9750,8 +9782,9 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Code and name are required' });
       }
 
-      const [newCostCenter] = await pgDb.insert(costCentersTable).values({
-        id: `cc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const costCenterId = `cc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await pgDb.insert(costCentersTable).values({
+        id: costCenterId,
         code,
         name,
         nameAr,
@@ -9759,7 +9792,8 @@ function createApp() {
         parentId,
         managerId,
         isActive: true,
-      }).returning();
+      });
+      const [newCostCenter] = await pgDb.select().from(costCentersTable).where(eq(costCentersTable.id, costCenterId));
 
       res.status(201).json({ success: true, data: newCostCenter, message: 'Cost center created successfully' });
     } catch (error) {
@@ -9804,8 +9838,9 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'Name, periodType, startDate, endDate, and budgetAmount are required' });
       }
 
-      const [newBudget] = await pgDb.insert(expenseBudgetsTable).values({
-        id: `bud_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const budgetId = `bud_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await pgDb.insert(expenseBudgetsTable).values({
+        id: budgetId,
         name,
         periodType,
         startDate: new Date(startDate),
@@ -9820,7 +9855,8 @@ function createApp() {
         isAlertSent: false,
         isActive: true,
         createdBy: 'admin',
-      }).returning();
+      });
+      const [newBudget] = await pgDb.select().from(expenseBudgetsTable).where(eq(expenseBudgetsTable.id, budgetId));
 
       res.status(201).json({ success: true, data: newBudget, message: 'Budget created successfully' });
     } catch (error) {

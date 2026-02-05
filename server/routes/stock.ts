@@ -363,7 +363,7 @@ const restockProduct: RequestHandler = async (req, res) => {
     const newAvailable = newQuantity - toNumber(stockItem.reservedQuantity);
 
     // Update stock
-    const [updatedStock] = await db.update(stock)
+    await db.update(stock)
       .set({
         quantity: String(newQuantity),
         availableQuantity: String(newAvailable),
@@ -372,8 +372,8 @@ const restockProduct: RequestHandler = async (req, res) => {
         batchNumber: batchNumber || stockItem.batchNumber,
         expiryDate: expiryDate ? new Date(expiryDate) : stockItem.expiryDate,
       })
-      .where(eq(stock.id, stockItem.id))
-      .returning();
+      .where(eq(stock.id, stockItem.id));
+    const [updatedStock] = await db.select().from(stock).where(eq(stock.id, stockItem.id));
 
     // Record movement
     await db.insert(stockMovements).values({
@@ -439,10 +439,10 @@ const updateStockThresholds: RequestHandler = async (req, res) => {
     if (reorderPoint !== undefined) updateData.reorderPoint = reorderPoint;
     if (reorderQuantity !== undefined) updateData.reorderQuantity = reorderQuantity;
 
-    const [updatedStock] = await db.update(stock)
+    await db.update(stock)
       .set(updateData)
-      .where(eq(stock.id, stockItem.id))
-      .returning();
+      .where(eq(stock.id, stockItem.id));
+    const [updatedStock] = await db.select().from(stock).where(eq(stock.id, stockItem.id));
 
     const response: ApiResponse<StockItem> = {
       success: true,
@@ -529,15 +529,15 @@ export async function updateStockItem(
   const newAvailable = newQuantity - newReserved;
 
   // Update in database
-  const [updatedStock] = await db.update(stock)
+  await db.update(stock)
     .set({
       quantity: String(newQuantity),
       reservedQuantity: String(newReserved),
       availableQuantity: String(newAvailable),
       updatedAt: new Date(),
     })
-    .where(eq(stock.id, stockItem.id))
-    .returning();
+    .where(eq(stock.id, stockItem.id));
+  const [updatedStock] = await db.select().from(stock).where(eq(stock.id, stockItem.id));
 
   // Record movement
   await db.insert(stockMovements).values({

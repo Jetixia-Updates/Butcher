@@ -1,32 +1,47 @@
 /**
  * Database Connection for Butcher Shop
- * Using Drizzle ORM with Neon PostgreSQL
- * 
- * Performance Optimization:
- * - Uses fetchConnectionCache for connection reuse in serverless
- * - For best performance, use the Neon pooler URL (-pooler suffix)
- *   e.g., postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/db
+ * Using Drizzle ORM with MySQL (FreeHostia)
  */
 
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import mysql from "mysql2/promise";
+import { drizzle } from "drizzle-orm/mysql2";
 import * as schema from "./schema";
 
-// Get database URL from environment
-const databaseUrl = process.env.DATABASE_URL;
+// Get database credentials from environment or use defaults
+const dbConfig = {
+  host: process.env.DB_HOST || "mysql.freehostia.com",
+  user: process.env.DB_USER || "essref3_butcher",
+  password: process.env.DB_PASSWORD || "Butcher@123",
+  database: process.env.DB_NAME || "essref3_butcher",
+  port: parseInt(process.env.DB_PORT || "3306"),
+};
 
-if (!databaseUrl) {
-  console.error("DATABASE_URL environment variable is not set. Database operations will fail.");
-}
-
-// Create Neon serverless connection with connection caching
-const sql = neon(databaseUrl || "postgresql://placeholder:placeholder@localhost/placeholder");
+// Create MySQL connection pool
+const pool = mysql.createPool({
+  ...dbConfig,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
 
 // Create Drizzle instance with schema
-export const db = drizzle(sql, { schema });
+export const db = drizzle(pool, { schema, mode: "default" });
 
 // Check if database is configured
-export const isDatabaseConfigured = () => !!databaseUrl;
+export const isDatabaseConfigured = () => !!dbConfig.host;
+
+// Test database connection
+export const testConnection = async () => {
+  try {
+    const connection = await pool.getConnection();
+    console.log("✅ MySQL database connected successfully!");
+    connection.release();
+    return true;
+  } catch (error) {
+    console.error("❌ MySQL database connection failed:", error);
+    return false;
+  }
+};
 
 // Export schema for use in queries
 export * from "./schema";

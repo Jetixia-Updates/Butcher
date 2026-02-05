@@ -265,8 +265,9 @@ const createAddress: RequestHandler = async (req, res) => {
         .where(eq(addresses.userId, userId));
     }
 
-    const [newAddress] = await db.insert(addresses).values({
-      id: generateId("addr"),
+    const addressId = generateId("addr");
+    await db.insert(addresses).values({
+      id: addressId,
       userId,
       label: data.label,
       fullName: data.fullName,
@@ -283,7 +284,8 @@ const createAddress: RequestHandler = async (req, res) => {
       isDefault: data.isDefault || isFirstAddress,
       createdAt: new Date(),
       updatedAt: new Date(),
-    }).returning();
+    });
+    const [newAddress] = await db.select().from(addresses).where(eq(addresses.id, addressId));
 
     const response: ApiResponse<typeof newAddress> = {
       success: true,
@@ -333,10 +335,10 @@ const updateAddress: RequestHandler = async (req, res) => {
         .where(and(eq(addresses.userId, address.userId), eq(addresses.id, id)));
     }
 
-    const [updated] = await db.update(addresses)
+    await db.update(addresses)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(addresses.id, id))
-      .returning();
+      .where(eq(addresses.id, id));
+    const [updated] = await db.select().from(addresses).where(eq(addresses.id, id));
 
     const response: ApiResponse<typeof updated> = {
       success: true,
@@ -416,10 +418,10 @@ const setDefaultAddress: RequestHandler = async (req, res) => {
       .where(eq(addresses.userId, address.userId));
 
     // Set this one as default
-    const [updated] = await db.update(addresses)
+    await db.update(addresses)
       .set({ isDefault: true })
-      .where(eq(addresses.id, id))
-      .returning();
+      .where(eq(addresses.id, id));
+    const [updated] = await db.select().from(addresses).where(eq(addresses.id, id));
 
     const response: ApiResponse<typeof updated> = {
       success: true,
@@ -501,8 +503,9 @@ const createDeliveryZone: RequestHandler = async (req, res) => {
   try {
     const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
 
-    const [zone] = await db.insert(deliveryZones).values({
-      id: generateId("zone"),
+    const zoneId = generateId("zone");
+    await db.insert(deliveryZones).values({
+      id: zoneId,
       name,
       nameAr,
       emirate,
@@ -514,7 +517,8 @@ const createDeliveryZone: RequestHandler = async (req, res) => {
       expressEnabled: expressEnabled ?? false,
       expressFee: expressFee || 25,
       expressHours: expressHours || 1,
-    }).returning();
+    });
+    const [zone] = await db.select().from(deliveryZones).where(eq(deliveryZones.id, zoneId));
 
     const response: ApiResponse<typeof zone> = {
       success: true,
@@ -560,10 +564,10 @@ const updateDeliveryZone: RequestHandler = async (req, res) => {
     if (expressFee !== undefined) updateData.expressFee = expressFee;
     if (expressHours !== undefined) updateData.expressHours = expressHours;
 
-    const [updated] = await db.update(deliveryZones)
+    await db.update(deliveryZones)
       .set(updateData)
-      .where(eq(deliveryZones.id, id))
-      .returning();
+      .where(eq(deliveryZones.id, id));
+    const [updated] = await db.select().from(deliveryZones).where(eq(deliveryZones.id, id));
 
     const response: ApiResponse<typeof updated> = {
       success: true,
@@ -854,7 +858,7 @@ const assignDelivery: RequestHandler = async (req, res) => {
         notes: `Assigned to driver: ${driver.firstName}`,
       });
 
-      [tracking] = await db.update(deliveryTracking)
+      await db.update(deliveryTracking)
         .set({
           driverId,
           driverName: `${driver.firstName} ${driver.familyName}`,
@@ -864,12 +868,13 @@ const assignDelivery: RequestHandler = async (req, res) => {
           timeline: existingTimeline,
           updatedAt: new Date(),
         })
-        .where(eq(deliveryTracking.id, existingTrackings[0].id))
-        .returning();
+        .where(eq(deliveryTracking.id, existingTrackings[0].id));
+      [tracking] = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, existingTrackings[0].id));
     } else {
       // Create new tracking
-      [tracking] = await db.insert(deliveryTracking).values({
-        id: generateId("track"),
+      const trackingId = generateId("track");
+      await db.insert(deliveryTracking).values({
+        id: trackingId,
         orderId,
         orderNumber: order.orderNumber,
         driverId,
@@ -886,7 +891,8 @@ const assignDelivery: RequestHandler = async (req, res) => {
         ],
         createdAt: new Date(),
         updatedAt: new Date(),
-      }).returning();
+      });
+      [tracking] = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, trackingId));
     }
 
     // Update order status to ready_for_pickup (driver assigned, but hasn't picked up yet)
@@ -941,7 +947,7 @@ const updateDriverLocation: RequestHandler = async (req, res) => {
       return res.status(404).json(response);
     }
 
-    const [updated] = await db.update(deliveryTracking)
+    await db.update(deliveryTracking)
       .set({
         currentLocation: {
           latitude,
@@ -950,8 +956,8 @@ const updateDriverLocation: RequestHandler = async (req, res) => {
         },
         updatedAt: new Date(),
       })
-      .where(eq(deliveryTracking.id, id))
-      .returning();
+      .where(eq(deliveryTracking.id, id));
+    const [updated] = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, id));
 
     const response: ApiResponse<typeof updated> = {
       success: true,
@@ -1001,10 +1007,10 @@ const updateDeliveryStatus: RequestHandler = async (req, res) => {
       updateData.actualArrival = new Date();
     }
 
-    const [updated] = await db.update(deliveryTracking)
+    await db.update(deliveryTracking)
       .set(updateData)
-      .where(eq(deliveryTracking.id, id))
-      .returning();
+      .where(eq(deliveryTracking.id, id));
+    const [updated] = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, id));
 
     // Update order status if delivered
     if (status === "delivered") {
@@ -1078,10 +1084,10 @@ const updateDeliveryStatusByOrderId: RequestHandler = async (req, res) => {
       updateData.actualArrival = new Date();
     }
 
-    const [updated] = await db.update(deliveryTracking)
+    await db.update(deliveryTracking)
       .set(updateData)
-      .where(eq(deliveryTracking.id, tracking.id))
-      .returning();
+      .where(eq(deliveryTracking.id, tracking.id));
+    const [updated] = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, tracking.id));
 
     // Update order status based on delivery status
     // Only change to 'out_for_delivery' when driver starts delivery (in_transit), not when picking up
@@ -1174,7 +1180,7 @@ const completeDelivery: RequestHandler = async (req, res) => {
       notes: notes || "Delivery completed with proof",
     });
 
-    const [updated] = await db.update(deliveryTracking)
+    await db.update(deliveryTracking)
       .set({
         status: "delivered",
         actualArrival: new Date(),
@@ -1182,8 +1188,8 @@ const completeDelivery: RequestHandler = async (req, res) => {
         timeline,
         updatedAt: new Date(),
       })
-      .where(eq(deliveryTracking.id, id))
-      .returning();
+      .where(eq(deliveryTracking.id, id));
+    const [updated] = await db.select().from(deliveryTracking).where(eq(deliveryTracking.id, id));
 
     // Update order
     const currentOrder = await db.select().from(orders).where(eq(orders.id, tracking.orderId));
