@@ -1042,8 +1042,9 @@ export default function CheckoutPage() {
           setError(response.error || "Failed to create address");
         }
       }
-    } catch (err) {
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      console.error("Address save error:", err);
+      setError(err?.message || "Network error. Please try again.");
     }
 
     setIsSavingAddress(false);
@@ -1065,8 +1066,9 @@ export default function CheckoutPage() {
       } else {
         setError(response.error || "Failed to delete address");
       }
-    } catch (err) {
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      console.error("Address delete error:", err);
+      setError(err?.message || "Network error. Please try again.");
     }
   };
 
@@ -1166,22 +1168,23 @@ export default function CheckoutPage() {
             : (selectedAddress
               ? `${selectedAddress.building}, ${selectedAddress.street}, ${selectedAddress.area}, ${selectedAddress.emirate}`
               : ""),
-          items: orderData.items.map((item) => ({
-            name: item.productName,
-            nameAr: item.productNameAr,
+          // Use local basket items since API response doesn't include full item details
+          items: items.map((item) => ({
+            name: item.name,
+            nameAr: item.nameAr,
             quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.totalPrice,
+            unitPrice: item.price,
+            totalPrice: item.price * item.quantity,
           })),
-          subtotal: orderData.subtotal,
-          discount: orderData.discount > 0 ? orderData.discount : undefined,
-          discountCode: orderData.discountCode,
+          subtotal: orderData.subtotal || adjustedSubtotal,
+          discount: (orderData.discount || discountAmount) > 0 ? (orderData.discount || discountAmount) : undefined,
+          discountCode: orderData.discountCode || promoApplied?.code,
           vatRate: 5,
-          vatAmount: orderData.vatAmount,
-          deliveryFee: orderData.deliveryFee > 0 ? orderData.deliveryFee : undefined,
+          vatAmount: orderData.vatAmount || adjustedVat,
+          deliveryFee: (orderData.deliveryFee || deliveryFeeTotal) > 0 ? (orderData.deliveryFee || deliveryFeeTotal) : undefined,
           isExpressDelivery: isExpressDelivery,
           driverTip: driverTip > 0 ? driverTip : undefined,
-          total: orderData.total,
+          total: orderData.total || adjustedTotal,
           paymentMethod: "cod",
         };
 
@@ -1197,8 +1200,9 @@ export default function CheckoutPage() {
       } else {
         setError(response.error || "Failed to create order. Please try again.");
       }
-    } catch (err) {
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      console.error("Order creation error:", err);
+      setError(err?.message || "Network error. Please try again.");
     }
 
     setIsProcessing(false);
