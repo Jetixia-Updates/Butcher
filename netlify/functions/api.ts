@@ -1182,6 +1182,7 @@ function createApp() {
 
       const { userId, unreadOnly } = req.query;
       
+      // Table schema: id, user_id, type, channel, title, message, message_ar, status, sent_at, delivered_at, failure_reason, metadata, created_at
       let rows;
       if (userId) {
         rows = await sql`SELECT * FROM notifications WHERE user_id = ${userId as string} ORDER BY created_at DESC LIMIT 100`;
@@ -1189,22 +1190,28 @@ function createApp() {
         rows = await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100`;
       }
 
+      // status can be 'sent', 'delivered', 'read', 'failed'
       if (unreadOnly === 'true') {
-        rows = rows.filter((n: any) => !n.is_read);
+        rows = rows.filter((n: any) => n.status !== 'read');
       }
 
-      const notifications = rows.map((n: any) => ({
-        id: n.id,
-        userId: n.user_id,
-        type: n.type,
-        title: n.title,
-        titleAr: n.title_ar,
-        message: n.message,
-        messageAr: n.message_ar,
-        data: n.data || {},
-        isRead: n.is_read ?? false,
-        createdAt: safeDate(n.created_at),
-      }));
+      const notifications = rows.map((n: any) => {
+        const metadata = n.metadata || {};
+        return {
+          id: n.id,
+          userId: n.user_id,
+          type: n.type || 'general',
+          title: n.title || '',
+          titleAr: metadata.titleAr || n.title || '',
+          message: n.message || '',
+          messageAr: n.message_ar || n.message || '',
+          link: metadata.link || null,
+          linkTab: metadata.linkTab || null,
+          linkId: metadata.linkId || null,
+          unread: n.status !== 'read',
+          createdAt: safeDate(n.created_at),
+        };
+      });
 
       res.json({ success: true, data: notifications });
     } catch (error) {
@@ -1221,7 +1228,7 @@ function createApp() {
       }
 
       const { id } = req.params;
-      await sql`UPDATE notifications SET is_read = true WHERE id = ${id}`;
+      await sql`UPDATE notifications SET status = 'read' WHERE id = ${id}`;
 
       res.json({ success: true, message: 'Notification marked as read' });
     } catch (error) {
@@ -1239,7 +1246,7 @@ function createApp() {
 
       const { userId } = req.body;
       if (userId) {
-        await sql`UPDATE notifications SET is_read = true WHERE user_id = ${userId}`;
+        await sql`UPDATE notifications SET status = 'read' WHERE user_id = ${userId}`;
       }
 
       res.json({ success: true, message: 'All notifications marked as read' });
@@ -1350,6 +1357,7 @@ function createApp() {
   // =====================================================
 
   // Get Chat Messages
+  // Table schema: id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, created_at
   app.get('/api/chat/:userId', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -1362,9 +1370,13 @@ function createApp() {
       const messages = rows.map((m: any) => ({
         id: m.id,
         userId: m.user_id,
+        userName: m.user_name,
+        userEmail: m.user_email,
+        text: m.text,
         sender: m.sender,
-        message: m.message,
-        isRead: m.is_read ?? false,
+        attachments: m.attachments || [],
+        readByAdmin: m.read_by_admin ?? false,
+        readByUser: m.read_by_user ?? false,
         createdAt: safeDate(m.created_at),
       }));
 
@@ -1383,23 +1395,25 @@ function createApp() {
       }
 
       const { userId } = req.params;
-      const { message, sender } = req.body;
+      const { text, message, sender, userName, userEmail, attachments } = req.body;
+      const messageText = text || message; // Support both 'text' and 'message' fields
 
-      if (!message) {
+      if (!messageText) {
         return res.status(400).json({ success: false, error: 'Message is required' });
       }
 
       const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       const now = new Date();
+      const senderType = sender || 'user';
 
       await sql`
-        INSERT INTO chat_messages (id, user_id, sender, message, is_read, created_at)
-        VALUES (${msgId}, ${userId}, ${sender || 'user'}, ${message}, false, ${now})
+        INSERT INTO chat_messages (id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, created_at)
+        VALUES (${msgId}, ${userId}, ${userName || null}, ${userEmail || null}, ${messageText}, ${senderType}, ${JSON.stringify(attachments || [])}, ${senderType === 'admin'}, ${senderType === 'user'}, ${now})
       `;
 
       res.json({
         success: true,
-        data: { id: msgId, userId, sender: sender || 'user', message, isRead: false, createdAt: now.toISOString() },
+        data: { id: msgId, userId, sender: senderType, text: messageText, readByAdmin: senderType === 'admin', readByUser: senderType === 'user', createdAt: now.toISOString() },
         message: 'Message sent successfully',
       });
     } catch (error) {
@@ -3757,20 +3771,36 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      // Get distinct users with chat messages
-      const rows = await sql`
-        SELECT DISTINCT ON (user_id) user_id, message, sender, created_at, is_read
-        FROM chat_messages
-        ORDER BY user_id, created_at DESC
+      // Get all users with chat messages and their full conversation
+      const usersRows = await sql`
+        SELECT DISTINCT user_id, user_name, user_email FROM chat_messages
       `;
 
-      const chats = rows.map((c: any) => ({
-        userId: c.user_id,
-        lastMessage: c.message,
-        lastSender: c.sender,
-        lastMessageAt: safeDate(c.created_at),
-        hasUnread: !c.is_read && c.sender === 'user',
-      }));
+      const chats = [];
+      for (const user of usersRows) {
+        const messages = await sql`
+          SELECT * FROM chat_messages WHERE user_id = ${user.user_id} ORDER BY created_at ASC
+        `;
+        const unreadCount = messages.filter((m: any) => m.sender === 'user' && !m.read_by_admin).length;
+        const lastMsg = messages[messages.length - 1];
+        
+        chats.push({
+          userId: user.user_id,
+          userName: user.user_name || 'Customer',
+          userEmail: user.user_email || '',
+          messages: messages.map((m: any) => ({
+            id: m.id,
+            text: m.text,
+            sender: m.sender,
+            createdAt: safeDate(m.created_at),
+            readByAdmin: m.read_by_admin ?? false,
+            readByUser: m.read_by_user ?? false,
+            attachments: m.attachments || [],
+          })),
+          lastMessageAt: lastMsg ? safeDate(lastMsg.created_at) : null,
+          unreadCount,
+        });
+      }
 
       res.json({ success: true, data: chats });
     } catch (error) {
@@ -3779,34 +3809,35 @@ function createApp() {
     }
   });
 
-  // Send Chat as Admin
+  // Send Chat as Admin (or User)
   app.post('/api/chat/send', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { userId, message } = req.body;
+      const { userId, userName, userEmail, text, sender, attachments } = req.body;
 
-      if (!userId || !message) {
-        return res.status(400).json({ success: false, error: 'User ID and message are required' });
+      if (!userId || !text) {
+        return res.status(400).json({ success: false, error: 'User ID and text are required' });
       }
 
       const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       const now = new Date();
+      const senderType = sender || 'admin';
 
       await sql`
-        INSERT INTO chat_messages (id, user_id, sender, message, is_read, created_at)
-        VALUES (${msgId}, ${userId}, 'admin', ${message}, false, ${now})
+        INSERT INTO chat_messages (id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, created_at)
+        VALUES (${msgId}, ${userId}, ${userName || null}, ${userEmail || null}, ${text}, ${senderType}, ${JSON.stringify(attachments || [])}, ${senderType === 'admin'}, ${senderType === 'user'}, ${now})
       `;
 
       res.json({
         success: true,
-        data: { id: msgId, userId, sender: 'admin', message, isRead: false, createdAt: now.toISOString() },
+        data: { id: msgId, userId, sender: senderType, text, readByAdmin: senderType === 'admin', readByUser: senderType === 'user', createdAt: now.toISOString() },
         message: 'Message sent successfully',
       });
     } catch (error) {
-      console.error('[Send Admin Chat Error]', error);
+      console.error('[Send Chat Error]', error);
       res.status(500).json({ success: false, error: 'Failed to send message' });
     }
   });
@@ -3819,7 +3850,7 @@ function createApp() {
       }
 
       const { userId } = req.params;
-      await sql`UPDATE chat_messages SET is_read = true WHERE user_id = ${userId} AND sender = 'user'`;
+      await sql`UPDATE chat_messages SET read_by_admin = true WHERE user_id = ${userId} AND sender = 'user'`;
 
       res.json({ success: true, message: 'Messages marked as read' });
     } catch (error) {
@@ -4715,7 +4746,7 @@ function createApp() {
     }
   });
 
-  // Chat: Notify User (from admin)
+  // Chat: Notify User (from admin) - this creates a notification only, message is sent via /api/chat/send
   app.post('/api/chat/notify-user', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -4724,55 +4755,42 @@ function createApp() {
 
       const { userId, message } = req.body;
       const now = new Date();
-      const msgId = `msg_${Date.now()}`;
 
+      // Create a notification for the user about new chat message
+      const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       await sql`
-        INSERT INTO chat_messages (id, user_id, message, sender, is_read, created_at)
-        VALUES (${msgId}, ${userId}, ${message}, 'admin', false, ${now})
+        INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
+        VALUES (${notifId}, ${userId}, 'chat', 'in_app', 'New message from support', ${message}, 'sent', '{}', ${now})
       `;
 
-      // Also create a notification
-      const notifId = `notif_${Date.now()}`;
-      await sql`
-        INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
-        VALUES (${notifId}, ${userId}, 'New message from support', ${message}, 'chat', false, ${now})
-      `;
-
-      res.json({ success: true, data: { messageId: msgId } });
+      res.json({ success: true, data: { notificationId: notifId } });
     } catch (error) {
       console.error('[Notify User Error]', error);
       res.status(500).json({ success: false, error: 'Failed to notify user' });
     }
   });
 
-  // Chat: Notify Admin (from user)
+  // Chat: Notify Admin (from user) - this creates a notification only, message is sent via /api/chat/send
   app.post('/api/chat/notify-admin', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const userId = getUserIdFromHeaders(req);
-      const { message } = req.body;
+      const { userId, userName, message } = req.body;
       const now = new Date();
-      const msgId = `msg_${Date.now()}`;
-
-      await sql`
-        INSERT INTO chat_messages (id, user_id, message, sender, is_read, created_at)
-        VALUES (${msgId}, ${userId}, ${message}, 'user', false, ${now})
-      `;
 
       // Create admin notification
       const admins = await sql`SELECT id FROM users WHERE role = 'admin'`;
       for (const admin of admins) {
-        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
         await sql`
-          INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
-          VALUES (${notifId}, ${admin.id}, 'New customer message', ${message}, 'chat', false, ${now})
+          INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
+          VALUES (${notifId}, ${admin.id}, 'chat', 'in_app', ${userName ? `New message from ${userName}` : 'New customer message'}, ${message}, 'sent', '{}', ${now})
         `;
       }
 
-      res.json({ success: true, data: { messageId: msgId } });
+      res.json({ success: true, message: 'Admin notified' });
     } catch (error) {
       console.error('[Notify Admin Error]', error);
       res.status(500).json({ success: false, error: 'Failed to notify admin' });
@@ -4787,7 +4805,7 @@ function createApp() {
       }
 
       const { userId } = req.params;
-      await sql`UPDATE chat_messages SET is_read = true WHERE user_id = ${userId} AND sender = 'admin'`;
+      await sql`UPDATE chat_messages SET read_by_user = true WHERE user_id = ${userId} AND sender = 'admin'`;
 
       res.json({ success: true, message: 'Messages marked as read' });
     } catch (error) {
