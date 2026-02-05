@@ -32782,6 +32782,161 @@ function createApp() {
       res.status(500).json({ success: false, error: "Failed to add funds" });
     }
   });
+  app.get("/api/chat/all", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const usersRows = await sql`
+        SELECT DISTINCT user_id, user_name, user_email FROM chat_messages
+      `;
+      const chats = [];
+      for (const user of usersRows) {
+        const messages = await sql`
+          SELECT * FROM chat_messages WHERE user_id = ${user.user_id} ORDER BY created_at ASC
+        `;
+        const unreadCount = messages.filter((m2) => m2.sender === "user" && !m2.read_by_admin).length;
+        const lastMsg = messages[messages.length - 1];
+        chats.push({
+          userId: user.user_id,
+          userName: user.user_name || "Customer",
+          userEmail: user.user_email || "",
+          messages: messages.map((m2) => ({
+            id: m2.id,
+            text: m2.text,
+            sender: m2.sender,
+            createdAt: safeDate(m2.created_at),
+            readByAdmin: m2.read_by_admin ?? false,
+            readByUser: m2.read_by_user ?? false,
+            attachments: m2.attachments || []
+          })),
+          lastMessageAt: lastMsg ? safeDate(lastMsg.created_at) : null,
+          unreadCount
+        });
+      }
+      res.json({ success: true, data: chats });
+    } catch (error) {
+      console.error("[Get All Chats Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch chats" });
+    }
+  });
+  app.post("/api/chat/send", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId, userName, userEmail, text, sender, attachments } = req.body;
+      if (!userId || !text) {
+        return res.status(400).json({ success: false, error: "User ID and text are required" });
+      }
+      const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = /* @__PURE__ */ new Date();
+      const senderType = sender || "user";
+      await sql`
+        INSERT INTO chat_messages (id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, created_at)
+        VALUES (${msgId}, ${userId}, ${userName || null}, ${userEmail || null}, ${text}, ${senderType}, ${JSON.stringify(attachments || [])}, ${senderType === "admin"}, ${senderType === "user"}, ${now})
+      `;
+      res.json({
+        success: true,
+        data: { id: msgId, userId, sender: senderType, text, readByAdmin: senderType === "admin", readByUser: senderType === "user", createdAt: now.toISOString() },
+        message: "Message sent successfully"
+      });
+    } catch (error) {
+      console.error("[Send Chat Error]", error);
+      res.status(500).json({ success: false, error: "Failed to send message" });
+    }
+  });
+  app.post("/api/chat/notify-user", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        console.log("[Notify User] Database not available, skipping notification");
+        return res.json({ success: true, message: "Notification skipped (no db)" });
+      }
+      const { userId, message } = req.body || {};
+      if (!userId || !message) {
+        console.log("[Notify User] Missing userId or message, skipping");
+        return res.json({ success: true, message: "Notification skipped (missing data)" });
+      }
+      const now = /* @__PURE__ */ new Date();
+      const safeMessage = String(message).substring(0, 500);
+      const safeUserId = String(userId).substring(0, 100);
+      try {
+        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+        const metadataStr = JSON.stringify({ originalType: "chat" });
+        await sql`
+          INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
+          VALUES (${notifId}, ${safeUserId}, 'promotional', 'push', 'New message from support', ${safeMessage}, 'sent', ${metadataStr}, ${now})
+        `;
+        res.json({ success: true, data: { notificationId: notifId } });
+      } catch (insertError) {
+        console.error("[Notify User Insert Error]", insertError?.message || insertError);
+        res.json({ success: true, message: "Chat sent, notification insert failed" });
+      }
+    } catch (error) {
+      console.error("[Notify User Error]", error?.message || error);
+      res.json({ success: true, message: "Notification error handled gracefully" });
+    }
+  });
+  app.post("/api/chat/notify-admin", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        console.log("[Notify Admin] Database not available, skipping notification");
+        return res.json({ success: true, message: "Notification skipped (no db)" });
+      }
+      const { userId, userName, message } = req.body || {};
+      if (!message) {
+        console.log("[Notify Admin] Missing message, skipping");
+        return res.json({ success: true, message: "Notification skipped (missing data)" });
+      }
+      const now = /* @__PURE__ */ new Date();
+      const safeName = String(userName || "Customer").substring(0, 100);
+      const safeUserId = String(userId || "unknown").substring(0, 100);
+      const safeMessage = String(message).substring(0, 500);
+      const title = safeName ? `New message from ${safeName}` : "New customer message";
+      try {
+        const admins = await sql`SELECT id FROM users WHERE role = 'admin' LIMIT 10`;
+        console.log("[Notify Admin] Found", admins.length, "admin(s)");
+        if (admins.length === 0) {
+          console.log("[Notify Admin] No admins found, creating notification for fallback admin");
+          const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+          const metadataStr = JSON.stringify({ originalType: "chat", fromUserId: safeUserId });
+          await sql`
+            INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
+            VALUES (${notifId}, ${"admin"}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}, ${now})
+          `;
+        } else {
+          for (const admin of admins) {
+            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+            const metadataStr = JSON.stringify({ originalType: "chat", fromUserId: safeUserId });
+            await sql`
+              INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
+              VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}, ${now})
+            `;
+          }
+        }
+        res.json({ success: true, message: "Admin notified" });
+      } catch (insertError) {
+        console.error("[Notify Admin Insert Error]", insertError?.message || insertError);
+        res.json({ success: true, message: "Chat sent, admin notification insert failed" });
+      }
+    } catch (error) {
+      console.error("[Notify Admin Error]", error?.message || error);
+      res.json({ success: true, message: "Notification error handled gracefully" });
+    }
+  });
+  app.post("/api/chat/:userId/read-admin", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId } = req.params;
+      await sql`UPDATE chat_messages SET read_by_admin = true WHERE user_id = ${userId} AND sender = 'user'`;
+      res.json({ success: true, message: "Messages marked as read" });
+    } catch (error) {
+      console.error("[Mark Read Error]", error);
+      res.status(500).json({ success: false, error: "Failed to mark messages as read" });
+    }
+  });
   app.get("/api/chat/:userId", async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -32805,34 +32960,6 @@ function createApp() {
     } catch (error) {
       console.error("[Chat Error]", error);
       res.status(500).json({ success: false, error: "Failed to fetch chat messages" });
-    }
-  });
-  app.post("/api/chat/:userId", async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: "Database not available" });
-      }
-      const { userId } = req.params;
-      const { text, message, sender, userName, userEmail, attachments } = req.body;
-      const messageText = text || message;
-      if (!messageText) {
-        return res.status(400).json({ success: false, error: "Message is required" });
-      }
-      const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-      const now = /* @__PURE__ */ new Date();
-      const senderType = sender || "user";
-      await sql`
-        INSERT INTO chat_messages (id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, created_at)
-        VALUES (${msgId}, ${userId}, ${userName || null}, ${userEmail || null}, ${messageText}, ${senderType}, ${JSON.stringify(attachments || [])}, ${senderType === "admin"}, ${senderType === "user"}, ${now})
-      `;
-      res.json({
-        success: true,
-        data: { id: msgId, userId, sender: senderType, text: messageText, readByAdmin: senderType === "admin", readByUser: senderType === "user", createdAt: now.toISOString() },
-        message: "Message sent successfully"
-      });
-    } catch (error) {
-      console.error("[Send Chat Error]", error);
-      res.status(500).json({ success: false, error: "Failed to send message" });
     }
   });
   app.get("/api/wishlist", async (req, res) => {
@@ -34682,83 +34809,6 @@ function createApp() {
       res.status(500).json({ success: false, error: "Failed to delete notification" });
     }
   });
-  app.get("/api/chat/all", async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: "Database not available" });
-      }
-      const usersRows = await sql`
-        SELECT DISTINCT user_id, user_name, user_email FROM chat_messages
-      `;
-      const chats = [];
-      for (const user of usersRows) {
-        const messages = await sql`
-          SELECT * FROM chat_messages WHERE user_id = ${user.user_id} ORDER BY created_at ASC
-        `;
-        const unreadCount = messages.filter((m2) => m2.sender === "user" && !m2.read_by_admin).length;
-        const lastMsg = messages[messages.length - 1];
-        chats.push({
-          userId: user.user_id,
-          userName: user.user_name || "Customer",
-          userEmail: user.user_email || "",
-          messages: messages.map((m2) => ({
-            id: m2.id,
-            text: m2.text,
-            sender: m2.sender,
-            createdAt: safeDate(m2.created_at),
-            readByAdmin: m2.read_by_admin ?? false,
-            readByUser: m2.read_by_user ?? false,
-            attachments: m2.attachments || []
-          })),
-          lastMessageAt: lastMsg ? safeDate(lastMsg.created_at) : null,
-          unreadCount
-        });
-      }
-      res.json({ success: true, data: chats });
-    } catch (error) {
-      console.error("[Get All Chats Error]", error);
-      res.status(500).json({ success: false, error: "Failed to fetch chats" });
-    }
-  });
-  app.post("/api/chat/send", async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: "Database not available" });
-      }
-      const { userId, userName, userEmail, text, sender, attachments } = req.body;
-      if (!userId || !text) {
-        return res.status(400).json({ success: false, error: "User ID and text are required" });
-      }
-      const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-      const now = /* @__PURE__ */ new Date();
-      const senderType = sender || "admin";
-      await sql`
-        INSERT INTO chat_messages (id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, created_at)
-        VALUES (${msgId}, ${userId}, ${userName || null}, ${userEmail || null}, ${text}, ${senderType}, ${JSON.stringify(attachments || [])}, ${senderType === "admin"}, ${senderType === "user"}, ${now})
-      `;
-      res.json({
-        success: true,
-        data: { id: msgId, userId, sender: senderType, text, readByAdmin: senderType === "admin", readByUser: senderType === "user", createdAt: now.toISOString() },
-        message: "Message sent successfully"
-      });
-    } catch (error) {
-      console.error("[Send Chat Error]", error);
-      res.status(500).json({ success: false, error: "Failed to send message" });
-    }
-  });
-  app.post("/api/chat/:userId/read-admin", async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: "Database not available" });
-      }
-      const { userId } = req.params;
-      await sql`UPDATE chat_messages SET read_by_admin = true WHERE user_id = ${userId} AND sender = 'user'`;
-      res.json({ success: true, message: "Messages marked as read" });
-    } catch (error) {
-      console.error("[Mark Read Error]", error);
-      res.status(500).json({ success: false, error: "Failed to mark messages as read" });
-    }
-  });
   app.get("/api/orders/number/:orderNumber", async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -35489,84 +35539,6 @@ function createApp() {
     } catch (error) {
       console.error("[Clear Wishlist Error]", error);
       res.status(500).json({ success: false, error: "Failed to clear wishlist" });
-    }
-  });
-  app.post("/api/chat/notify-user", async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        console.log("[Notify User] Database not available, skipping notification");
-        return res.json({ success: true, message: "Notification skipped (no db)" });
-      }
-      const { userId, message } = req.body || {};
-      if (!userId || !message) {
-        console.log("[Notify User] Missing userId or message, skipping");
-        return res.json({ success: true, message: "Notification skipped (missing data)" });
-      }
-      const now = /* @__PURE__ */ new Date();
-      const safeMessage = String(message).substring(0, 500);
-      const safeUserId = String(userId).substring(0, 100);
-      try {
-        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-        const metadataStr = JSON.stringify({ originalType: "chat" });
-        await sql`
-          INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-          VALUES (${notifId}, ${safeUserId}, 'promotional', 'push', 'New message from support', ${safeMessage}, 'sent', ${metadataStr}, ${now})
-        `;
-        res.json({ success: true, data: { notificationId: notifId } });
-      } catch (insertError) {
-        console.error("[Notify User Insert Error]", insertError?.message || insertError);
-        res.json({ success: true, message: "Chat sent, notification insert failed" });
-      }
-    } catch (error) {
-      console.error("[Notify User Error]", error?.message || error);
-      res.json({ success: true, message: "Notification error handled gracefully" });
-    }
-  });
-  app.post("/api/chat/notify-admin", async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        console.log("[Notify Admin] Database not available, skipping notification");
-        return res.json({ success: true, message: "Notification skipped (no db)" });
-      }
-      const { userId, userName, message } = req.body || {};
-      if (!message) {
-        console.log("[Notify Admin] Missing message, skipping");
-        return res.json({ success: true, message: "Notification skipped (missing data)" });
-      }
-      const now = /* @__PURE__ */ new Date();
-      const safeName = String(userName || "Customer").substring(0, 100);
-      const safeUserId = String(userId || "unknown").substring(0, 100);
-      const safeMessage = String(message).substring(0, 500);
-      const title = safeName ? `New message from ${safeName}` : "New customer message";
-      try {
-        const admins = await sql`SELECT id FROM users WHERE role = 'admin' LIMIT 10`;
-        console.log("[Notify Admin] Found", admins.length, "admin(s)");
-        if (admins.length === 0) {
-          console.log("[Notify Admin] No admins found, creating notification for fallback admin");
-          const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-          const metadataStr = JSON.stringify({ originalType: "chat", fromUserId: safeUserId });
-          await sql`
-            INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-            VALUES (${notifId}, ${"admin"}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}, ${now})
-          `;
-        } else {
-          for (const admin of admins) {
-            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-            const metadataStr = JSON.stringify({ originalType: "chat", fromUserId: safeUserId });
-            await sql`
-              INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-              VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}, ${now})
-            `;
-          }
-        }
-        res.json({ success: true, message: "Admin notified" });
-      } catch (insertError) {
-        console.error("[Notify Admin Insert Error]", insertError?.message || insertError);
-        res.json({ success: true, message: "Chat sent, admin notification insert failed" });
-      }
-    } catch (error) {
-      console.error("[Notify Admin Error]", error?.message || error);
-      res.json({ success: true, message: "Notification error handled gracefully" });
     }
   });
   app.post("/api/chat/:userId/read-user", async (req, res) => {
