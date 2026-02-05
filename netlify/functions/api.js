@@ -31958,30 +31958,48 @@ function createApp() {
       if (featured === "true") {
         rows = rows.filter((p2) => p2.is_featured);
       }
-      const products = rows.map((p2) => ({
-        id: p2.id,
-        name: p2.name,
-        nameAr: p2.name_ar,
-        sku: p2.sku,
-        price: parseFloat(String(p2.price || "0")),
-        costPrice: parseFloat(String(p2.cost_price || "0")),
-        discount: parseFloat(String(p2.discount || "0")),
-        category: p2.category,
-        description: p2.description,
-        descriptionAr: p2.description_ar,
-        image: p2.image,
-        unit: p2.unit,
-        minOrderQuantity: parseFloat(String(p2.min_order_quantity || "0.25")),
-        maxOrderQuantity: parseFloat(String(p2.max_order_quantity || "10")),
-        isActive: p2.is_active,
-        isFeatured: p2.is_featured,
-        isPremium: p2.is_premium,
-        rating: parseFloat(String(p2.rating || "0")),
-        tags: p2.tags || [],
-        badges: p2.badges || [],
-        createdAt: safeDate(p2.created_at),
-        updatedAt: safeDate(p2.updated_at)
-      }));
+      const products = rows.map((p2) => {
+        let tags = p2.tags || [];
+        let badges = p2.badges || [];
+        if (typeof tags === "string") {
+          try {
+            tags = JSON.parse(tags);
+          } catch {
+            tags = [];
+          }
+        }
+        if (typeof badges === "string") {
+          try {
+            badges = JSON.parse(badges);
+          } catch {
+            badges = [];
+          }
+        }
+        return {
+          id: p2.id,
+          name: p2.name,
+          nameAr: p2.name_ar,
+          sku: p2.sku,
+          price: parseFloat(String(p2.price || "0")),
+          costPrice: parseFloat(String(p2.cost_price || "0")),
+          discount: parseFloat(String(p2.discount || "0")),
+          category: p2.category,
+          description: p2.description,
+          descriptionAr: p2.description_ar,
+          image: p2.image,
+          unit: p2.unit,
+          minOrderQuantity: parseFloat(String(p2.min_order_quantity || "0.25")),
+          maxOrderQuantity: parseFloat(String(p2.max_order_quantity || "10")),
+          isActive: p2.is_active,
+          isFeatured: p2.is_featured,
+          isPremium: p2.is_premium,
+          rating: parseFloat(String(p2.rating || "0")),
+          tags: Array.isArray(tags) ? tags : [],
+          badges: Array.isArray(badges) ? badges : [],
+          createdAt: safeDate(p2.created_at),
+          updatedAt: safeDate(p2.updated_at)
+        };
+      });
       res.json({ success: true, data: products });
     } catch (error) {
       console.error("[Products Error]", error);
@@ -32027,19 +32045,20 @@ function createApp() {
         freeDeliveryThreshold: parseFloat(String(s.free_delivery_threshold || "200")),
         expressDeliveryFee: parseFloat(String(s.express_delivery_fee || "25")),
         minimumOrderAmount: parseFloat(String(s.minimum_order_amount || "50")),
-        enableCashOnDelivery: s.enable_cash_on_delivery,
-        enableCardPayment: s.enable_card_payment,
-        enableWallet: s.enable_wallet,
-        enableLoyalty: s.enable_loyalty,
-        enableReviews: s.enable_reviews,
-        enableWishlist: s.enable_wishlist,
-        enableExpressDelivery: s.enable_express_delivery,
-        enableScheduledDelivery: s.enable_scheduled_delivery,
-        storePhone: s.store_phone,
-        storeEmail: s.store_email,
-        storeAddress: s.store_address,
-        workingHoursStart: s.working_hours_start,
-        workingHoursEnd: s.working_hours_end
+        enableCashOnDelivery: s.enable_cash_on_delivery ?? true,
+        enableCardPayment: s.enable_card_payment ?? true,
+        enableWallet: s.enable_wallet ?? true,
+        enableLoyalty: s.enable_loyalty ?? true,
+        enableReviews: s.enable_reviews ?? true,
+        enableWishlist: s.enable_wishlist ?? true,
+        enableExpressDelivery: s.enable_express_delivery ?? true,
+        enableScheduledDelivery: s.enable_scheduled_delivery ?? true,
+        storePhone: s.store_phone || "+971 4 123 4567",
+        storeEmail: s.store_email || "support@aljazirabutcher.ae",
+        storeAddress: s.store_address || "Dubai, UAE",
+        storeAddressAr: s.store_address_ar || "\u062F\u0628\u064A\u060C \u0627\u0644\u0625\u0645\u0627\u0631\u0627\u062A",
+        workingHoursStart: s.working_hours_start || "08:00",
+        workingHoursEnd: s.working_hours_end || "22:00"
       };
       res.json({ success: true, data: settings });
     } catch (error) {
