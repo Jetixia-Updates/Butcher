@@ -1183,6 +1183,7 @@ function createApp() {
       const { userId, unreadOnly } = req.query;
       
       // Table schema: id, user_id, type, channel, title, message, message_ar, status, sent_at, delivered_at, failure_reason, metadata, created_at
+      // Valid status: pending, sent, delivered, failed - we use 'delivered' as "read"
       let rows;
       if (userId) {
         rows = await sql`SELECT * FROM notifications WHERE user_id = ${userId as string} ORDER BY created_at DESC LIMIT 100`;
@@ -1190,17 +1191,19 @@ function createApp() {
         rows = await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100`;
       }
 
-      // status can be 'sent', 'delivered', 'read', 'failed'
+      // Use 'delivered' status to mean "read"
       if (unreadOnly === 'true') {
-        rows = rows.filter((n: any) => n.status !== 'read');
+        rows = rows.filter((n: any) => n.status !== 'delivered');
       }
 
       const notifications = rows.map((n: any) => {
         const metadata = n.metadata || {};
+        // Map back to original type from metadata if available
+        const originalType = metadata.originalType || n.type || 'general';
         return {
           id: n.id,
           userId: n.user_id,
-          type: n.type || 'general',
+          type: originalType,
           title: n.title || '',
           titleAr: metadata.titleAr || n.title || '',
           message: n.message || '',
@@ -1208,7 +1211,7 @@ function createApp() {
           link: metadata.link || null,
           linkTab: metadata.linkTab || null,
           linkId: metadata.linkId || null,
-          unread: n.status !== 'read',
+          unread: n.status !== 'delivered',
           createdAt: safeDate(n.created_at),
         };
       });
@@ -1220,7 +1223,7 @@ function createApp() {
     }
   });
 
-  // Mark Notification as Read
+  // Mark Notification as Read (uses 'delivered' status since enum doesn't have 'read')
   app.put('/api/notifications/:id/read', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -1228,7 +1231,7 @@ function createApp() {
       }
 
       const { id } = req.params;
-      await sql`UPDATE notifications SET status = 'read' WHERE id = ${id}`;
+      await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${new Date()} WHERE id = ${id}`;
 
       res.json({ success: true, message: 'Notification marked as read' });
     } catch (error) {
@@ -1237,7 +1240,7 @@ function createApp() {
     }
   });
 
-  // Mark All Notifications as Read
+  // Mark All Notifications as Read (uses 'delivered' status)
   app.put('/api/notifications/read-all', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -1246,7 +1249,7 @@ function createApp() {
 
       const { userId } = req.body;
       if (userId) {
-        await sql`UPDATE notifications SET status = 'read' WHERE user_id = ${userId}`;
+        await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${new Date()} WHERE user_id = ${userId}`;
       }
 
       res.json({ success: true, message: 'All notifications marked as read' });
@@ -3719,21 +3722,65 @@ function createApp() {
   // =====================================================
 
   // Create Notification
+  // Valid types: order_placed, order_confirmed, order_processing, order_ready, order_shipped, order_delivered, order_cancelled, payment_received, payment_failed, refund_processed, low_stock, promotional
+  // Valid channels: sms, email, push
+  // Valid statuses: pending, sent, delivered, failed
   app.post('/api/notifications', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { userId, type, title, titleAr, message, messageAr, data, channel } = req.body;
+      const { userId, type, title, titleAr, message, messageAr, data, channel, link, linkTab, linkId } = req.body;
 
       const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       const now = new Date();
 
+      // Map app notification types to valid enum values
+      const typeMapping: Record<string, string> = {
+        'order': 'order_placed',
+        'order_new': 'order_placed',
+        'order_placed': 'order_placed',
+        'order_confirmed': 'order_confirmed',
+        'order_processing': 'order_processing',
+        'order_ready': 'order_ready',
+        'order_shipped': 'order_shipped',
+        'order_delivered': 'order_delivered',
+        'order_cancelled': 'order_cancelled',
+        'payment': 'payment_received',
+        'payment_received': 'payment_received',
+        'payment_failed': 'payment_failed',
+        'refund': 'refund_processed',
+        'refund_processed': 'refund_processed',
+        'stock': 'low_stock',
+        'low_stock': 'low_stock',
+        'promo': 'promotional',
+        'promotional': 'promotional',
+        'system': 'promotional',
+        'general': 'promotional',
+        'chat': 'promotional',
+        'delivery': 'order_shipped',
+      };
+      const mappedType = typeMapping[type] || 'promotional';
+
+      // Valid channels: sms, email, push - default to push for in-app style notifications
+      const validChannels = ['sms', 'email', 'push'];
+      const mappedChannel = validChannels.includes(channel) ? channel : 'push';
+
+      // Store extra data in metadata including original type and in-app specific fields
+      const metadata = {
+        ...(data || {}),
+        originalType: type,
+        titleAr: titleAr || null,
+        link: link || null,
+        linkTab: linkTab || null,
+        linkId: linkId || null,
+      };
+
       // Table schema: id, user_id, type, channel, title, message, message_ar, status, sent_at, delivered_at, failure_reason, metadata, created_at
       await sql`
         INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
-        VALUES (${notificationId}, ${userId || null}, ${type || 'general'}, ${channel || 'in_app'}, ${title || titleAr || ''}, ${message || ''}, ${messageAr || null}, 'sent', ${JSON.stringify(data || {})}, ${now})
+        VALUES (${notificationId}, ${userId || null}, ${mappedType}, ${mappedChannel}, ${title || titleAr || ''}, ${message || ''}, ${messageAr || null}, 'sent', ${JSON.stringify(metadata)}, ${now})
       `;
 
       res.json({ success: true, data: { id: notificationId }, message: 'Notification created successfully' });
@@ -4757,10 +4804,11 @@ function createApp() {
       const now = new Date();
 
       // Create a notification for the user about new chat message
+      // Valid types: promotional (for general/chat), valid channels: push
       const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       await sql`
         INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-        VALUES (${notifId}, ${userId}, 'chat', 'in_app', 'New message from support', ${message}, 'sent', '{}', ${now})
+        VALUES (${notifId}, ${userId}, 'promotional', 'push', 'New message from support', ${message}, 'sent', ${JSON.stringify({ originalType: 'chat' })}, ${now})
       `;
 
       res.json({ success: true, data: { notificationId: notifId } });
@@ -4781,12 +4829,13 @@ function createApp() {
       const now = new Date();
 
       // Create admin notification
+      // Valid types: promotional (for general/chat), valid channels: push
       const admins = await sql`SELECT id FROM users WHERE role = 'admin'`;
       for (const admin of admins) {
         const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
         await sql`
           INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-          VALUES (${notifId}, ${admin.id}, 'chat', 'in_app', ${userName ? `New message from ${userName}` : 'New customer message'}, ${message}, 'sent', '{}', ${now})
+          VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${userName ? `New message from ${userName}` : 'New customer message'}, ${message}, 'sent', ${JSON.stringify({ originalType: 'chat', fromUserId: userId })}, ${now})
         `;
       }
 

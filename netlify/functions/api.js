@@ -32656,14 +32656,15 @@ function createApp() {
         rows = await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100`;
       }
       if (unreadOnly === "true") {
-        rows = rows.filter((n) => n.status !== "read");
+        rows = rows.filter((n) => n.status !== "delivered");
       }
       const notifications = rows.map((n) => {
         const metadata = n.metadata || {};
+        const originalType = metadata.originalType || n.type || "general";
         return {
           id: n.id,
           userId: n.user_id,
-          type: n.type || "general",
+          type: originalType,
           title: n.title || "",
           titleAr: metadata.titleAr || n.title || "",
           message: n.message || "",
@@ -32671,7 +32672,7 @@ function createApp() {
           link: metadata.link || null,
           linkTab: metadata.linkTab || null,
           linkId: metadata.linkId || null,
-          unread: n.status !== "read",
+          unread: n.status !== "delivered",
           createdAt: safeDate(n.created_at)
         };
       });
@@ -32687,7 +32688,7 @@ function createApp() {
         return res.status(500).json({ success: false, error: "Database not available" });
       }
       const { id } = req.params;
-      await sql`UPDATE notifications SET status = 'read' WHERE id = ${id}`;
+      await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${/* @__PURE__ */ new Date()} WHERE id = ${id}`;
       res.json({ success: true, message: "Notification marked as read" });
     } catch (error) {
       console.error("[Mark Notification Read Error]", error);
@@ -32701,7 +32702,7 @@ function createApp() {
       }
       const { userId } = req.body;
       if (userId) {
-        await sql`UPDATE notifications SET status = 'read' WHERE user_id = ${userId}`;
+        await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${/* @__PURE__ */ new Date()} WHERE user_id = ${userId}`;
       }
       res.json({ success: true, message: "All notifications marked as read" });
     } catch (error) {
@@ -34620,12 +34621,47 @@ function createApp() {
       if (!isDatabaseAvailable() || !sql) {
         return res.status(500).json({ success: false, error: "Database not available" });
       }
-      const { userId, type, title, titleAr, message, messageAr, data, channel } = req.body;
+      const { userId, type, title, titleAr, message, messageAr, data, channel, link, linkTab, linkId } = req.body;
       const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       const now = /* @__PURE__ */ new Date();
+      const typeMapping = {
+        "order": "order_placed",
+        "order_new": "order_placed",
+        "order_placed": "order_placed",
+        "order_confirmed": "order_confirmed",
+        "order_processing": "order_processing",
+        "order_ready": "order_ready",
+        "order_shipped": "order_shipped",
+        "order_delivered": "order_delivered",
+        "order_cancelled": "order_cancelled",
+        "payment": "payment_received",
+        "payment_received": "payment_received",
+        "payment_failed": "payment_failed",
+        "refund": "refund_processed",
+        "refund_processed": "refund_processed",
+        "stock": "low_stock",
+        "low_stock": "low_stock",
+        "promo": "promotional",
+        "promotional": "promotional",
+        "system": "promotional",
+        "general": "promotional",
+        "chat": "promotional",
+        "delivery": "order_shipped"
+      };
+      const mappedType = typeMapping[type] || "promotional";
+      const validChannels = ["sms", "email", "push"];
+      const mappedChannel = validChannels.includes(channel) ? channel : "push";
+      const metadata = {
+        ...data || {},
+        originalType: type,
+        titleAr: titleAr || null,
+        link: link || null,
+        linkTab: linkTab || null,
+        linkId: linkId || null
+      };
       await sql`
         INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
-        VALUES (${notificationId}, ${userId || null}, ${type || "general"}, ${channel || "in_app"}, ${title || titleAr || ""}, ${message || ""}, ${messageAr || null}, 'sent', ${JSON.stringify(data || {})}, ${now})
+        VALUES (${notificationId}, ${userId || null}, ${mappedType}, ${mappedChannel}, ${title || titleAr || ""}, ${message || ""}, ${messageAr || null}, 'sent', ${JSON.stringify(metadata)}, ${now})
       `;
       res.json({ success: true, data: { id: notificationId }, message: "Notification created successfully" });
     } catch (error) {
@@ -35465,7 +35501,7 @@ function createApp() {
       const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       await sql`
         INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-        VALUES (${notifId}, ${userId}, 'chat', 'in_app', 'New message from support', ${message}, 'sent', '{}', ${now})
+        VALUES (${notifId}, ${userId}, 'promotional', 'push', 'New message from support', ${message}, 'sent', ${JSON.stringify({ originalType: "chat" })}, ${now})
       `;
       res.json({ success: true, data: { notificationId: notifId } });
     } catch (error) {
@@ -35485,7 +35521,7 @@ function createApp() {
         const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
         await sql`
           INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-          VALUES (${notifId}, ${admin.id}, 'chat', 'in_app', ${userName ? `New message from ${userName}` : "New customer message"}, ${message}, 'sent', '{}', ${now})
+          VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${userName ? `New message from ${userName}` : "New customer message"}, ${message}, 'sent', ${JSON.stringify({ originalType: "chat", fromUserId: userId })}, ${now})
         `;
       }
       res.json({ success: true, message: "Admin notified" });
