@@ -3081,11 +3081,12 @@ function createApp() {
         code: c.code,
         type: c.type,
         value: parseFloat(String(c.value || '0')),
-        minOrderAmount: parseFloat(String(c.min_order_amount || '0')),
-        maxDiscount: parseFloat(String(c.max_discount || '0')),
-        maxUses: c.max_uses,
-        currentUses: c.current_uses || 0,
-        expiresAt: c.expires_at ? safeDate(c.expires_at) : null,
+        minOrderAmount: parseFloat(String(c.minimum_order || '0')),
+        maxDiscount: parseFloat(String(c.maximum_discount || '0')),
+        maxUses: c.usage_limit,
+        currentUses: c.usage_count || 0,
+        expiresAt: c.valid_to ? safeDate(c.valid_to) : null,
+        validFrom: c.valid_from ? safeDate(c.valid_from) : null,
         isActive: c.is_active,
         createdAt: safeDate(c.created_at),
       }));
@@ -3104,7 +3105,15 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { code, type, value, minOrderAmount, maxDiscount, maxUses, expiresAt, isActive } = req.body;
+      // Accept both frontend field names and backend field names
+      const { 
+        code, type, value, 
+        minOrderAmount, minimumOrder,
+        maxDiscount, maximumDiscount,
+        maxUses, usageLimit,
+        expiresAt, validTo,
+        isActive 
+      } = req.body;
 
       if (!code || !type || !value) {
         return res.status(400).json({ success: false, error: 'Code, type and value are required' });
@@ -3112,16 +3121,23 @@ function createApp() {
 
       const codeId = `promo_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       const now = new Date();
+      
+      // Use frontend field names with fallback to backend field names
+      const minOrder = minimumOrder || minOrderAmount || 0;
+      const maxDiscountVal = maximumDiscount || maxDiscount || null;
+      const maxUsesVal = usageLimit || maxUses || 0;
+      const expiresAtVal = validTo || expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // Default to 1 year from now
 
       await sql`
-        INSERT INTO discount_codes (id, code, type, value, min_order_amount, max_discount, max_uses, current_uses, expires_at, is_active, created_at)
-        VALUES (${codeId}, ${code.toUpperCase()}, ${type}, ${value}, ${minOrderAmount || 0}, ${maxDiscount || null}, ${maxUses || null}, 0, ${expiresAt || null}, ${isActive !== false}, ${now})
+        INSERT INTO discount_codes (id, code, type, value, minimum_order, maximum_discount, usage_limit, usage_count, user_limit, valid_from, valid_to, is_active, created_at, updated_at)
+        VALUES (${codeId}, ${code.toUpperCase()}, ${type}, ${value}, ${minOrder}, ${maxDiscountVal}, ${maxUsesVal}, 0, 1, ${now}, ${expiresAtVal}, ${isActive !== false}, ${now}, ${now})
       `;
 
       res.json({ success: true, data: { id: codeId }, message: 'Discount code created successfully' });
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Create Discount Code Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to create discount code' });
+      const errMsg = error?.message || String(error);
+      res.status(500).json({ success: false, error: `Failed to create discount code: ${errMsg}` });
     }
   });
 
@@ -3133,18 +3149,33 @@ function createApp() {
       }
 
       const { id } = req.params;
-      const { code, type, value, minOrderAmount, maxDiscount, maxUses, expiresAt, isActive } = req.body;
+      // Accept both frontend field names and backend field names
+      const { 
+        code, type, value, 
+        minOrderAmount, minimumOrder,
+        maxDiscount, maximumDiscount,
+        maxUses, usageLimit,
+        expiresAt, validTo,
+        isActive 
+      } = req.body;
+
+      // Use frontend field names with fallback to backend field names
+      const minOrder = minimumOrder !== undefined ? minimumOrder : minOrderAmount;
+      const maxDiscountVal = maximumDiscount !== undefined ? maximumDiscount : maxDiscount;
+      const maxUsesVal = usageLimit !== undefined ? usageLimit : maxUses;
+      const expiresAtVal = validTo !== undefined ? validTo : expiresAt;
 
       await sql`
         UPDATE discount_codes SET
           code = COALESCE(${code?.toUpperCase()}, code),
           type = COALESCE(${type}, type),
           value = COALESCE(${value}, value),
-          min_order_amount = COALESCE(${minOrderAmount}, min_order_amount),
-          max_discount = COALESCE(${maxDiscount}, max_discount),
-          max_uses = COALESCE(${maxUses}, max_uses),
-          expires_at = COALESCE(${expiresAt}, expires_at),
-          is_active = COALESCE(${isActive}, is_active)
+          minimum_order = COALESCE(${minOrder}, minimum_order),
+          maximum_discount = COALESCE(${maxDiscountVal}, maximum_discount),
+          usage_limit = COALESCE(${maxUsesVal}, usage_limit),
+          valid_to = COALESCE(${expiresAtVal}, valid_to),
+          is_active = COALESCE(${isActive}, is_active),
+          updated_at = ${new Date()}
         WHERE id = ${id}
       `;
 
@@ -3328,6 +3359,106 @@ function createApp() {
       console.error('[Update Settings Error]', error);
       res.status(500).json({ success: false, error: 'Failed to update settings' });
     }
+  });
+
+  // =====================================================
+  // SUPPLIERS API (Stub endpoints - feature not yet implemented)
+  // =====================================================
+
+  // Get all suppliers
+  app.get('/api/suppliers', async (req, res) => {
+    // Return empty array - suppliers feature not yet implemented
+    res.json({ success: true, data: [] });
+  });
+
+  // Get supplier stats
+  app.get('/api/suppliers/stats', async (req, res) => {
+    // Return default stats - suppliers feature not yet implemented
+    res.json({ 
+      success: true, 
+      data: {
+        totalSuppliers: 0,
+        activeSuppliers: 0,
+        inactiveSuppliers: 0,
+        pendingOrders: 0,
+        totalPurchaseOrders: 0,
+        totalSpent: 0,
+        avgLeadTime: 0,
+        avgRating: 0
+      }
+    });
+  });
+
+  // Get supplier by ID
+  app.get('/api/suppliers/:id', async (req, res) => {
+    res.status(404).json({ success: false, error: 'Supplier not found' });
+  });
+
+  // Create supplier
+  app.post('/api/suppliers', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  // Update supplier
+  app.put('/api/suppliers/:id', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  // Delete supplier
+  app.delete('/api/suppliers/:id', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  // Update supplier status
+  app.patch('/api/suppliers/:id/status', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  // Supplier contacts
+  app.post('/api/suppliers/:id/contacts', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  app.delete('/api/suppliers/:supplierId/contacts/:contactId', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  // Supplier products
+  app.get('/api/suppliers/:id/products', async (req, res) => {
+    res.json({ success: true, data: [] });
+  });
+
+  app.post('/api/suppliers/:id/products', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  app.delete('/api/suppliers/products/:id', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  // Purchase orders
+  app.get('/api/suppliers/purchase-orders/list', async (req, res) => {
+    res.json({ success: true, data: [] });
+  });
+
+  app.get('/api/suppliers/purchase-orders/:id', async (req, res) => {
+    res.status(404).json({ success: false, error: 'Purchase order not found' });
+  });
+
+  app.post('/api/suppliers/purchase-orders', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  app.patch('/api/suppliers/purchase-orders/:id/status', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  app.put('/api/suppliers/purchase-orders/:id/receive', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
+  });
+
+  app.delete('/api/suppliers/purchase-orders/:id', async (req, res) => {
+    res.status(501).json({ success: false, error: 'Suppliers feature not yet implemented' });
   });
 
   // =====================================================
