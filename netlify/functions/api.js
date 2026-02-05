@@ -34331,27 +34331,110 @@ function createApp() {
       if (!isDatabaseAvailable() || !sql) {
         return res.status(500).json({ success: false, error: "Database not available" });
       }
-      const today = /* @__PURE__ */ new Date();
+      const now = /* @__PURE__ */ new Date();
+      const today = new Date(now);
       today.setHours(0, 0, 0, 0);
-      const totalOrders = await sql`SELECT COUNT(*) as cnt FROM orders`;
-      const totalRevenue = await sql`SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE payment_status = 'captured'`;
-      const todayOrders = await sql`SELECT COUNT(*) as cnt FROM orders WHERE created_at >= ${today}`;
-      const todayRevenue = await sql`SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE created_at >= ${today} AND payment_status = 'captured'`;
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const weekStart = new Date(today);
+      weekStart.setDate(weekStart.getDate() - 7);
+      const lastWeekStart = new Date(weekStart);
+      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+      const monthStart = new Date(today);
+      monthStart.setDate(monthStart.getDate() - 30);
+      const lastMonthStart = new Date(monthStart);
+      lastMonthStart.setDate(lastMonthStart.getDate() - 30);
+      const todayStats = await sql`SELECT COUNT(*) as cnt, COALESCE(SUM(total), 0) as total FROM orders WHERE created_at >= ${today}`;
+      const todayOrdersCount = parseInt(todayStats[0].cnt);
+      const todayRevenueAmount = parseFloat(String(todayStats[0].total || "0"));
+      const yesterdayStats = await sql`SELECT COUNT(*) as cnt, COALESCE(SUM(total), 0) as total FROM orders WHERE created_at >= ${yesterday} AND created_at < ${today}`;
+      const yesterdayOrdersCount = parseInt(yesterdayStats[0].cnt);
+      const yesterdayRevenueAmount = parseFloat(String(yesterdayStats[0].total || "0"));
+      const weekStats = await sql`SELECT COUNT(*) as cnt, COALESCE(SUM(total), 0) as total FROM orders WHERE created_at >= ${weekStart}`;
+      const weekOrdersCount = parseInt(weekStats[0].cnt);
+      const weekRevenueAmount = parseFloat(String(weekStats[0].total || "0"));
+      const lastWeekStats = await sql`SELECT COUNT(*) as cnt, COALESCE(SUM(total), 0) as total FROM orders WHERE created_at >= ${lastWeekStart} AND created_at < ${weekStart}`;
+      const lastWeekOrdersCount = parseInt(lastWeekStats[0].cnt);
+      const lastWeekRevenueAmount = parseFloat(String(lastWeekStats[0].total || "0"));
+      const monthStats = await sql`SELECT COUNT(*) as cnt, COALESCE(SUM(total), 0) as total FROM orders WHERE created_at >= ${monthStart}`;
+      const monthOrdersCount = parseInt(monthStats[0].cnt);
+      const monthRevenueAmount = parseFloat(String(monthStats[0].total || "0"));
+      const lastMonthStats = await sql`SELECT COUNT(*) as cnt, COALESCE(SUM(total), 0) as total FROM orders WHERE created_at >= ${lastMonthStart} AND created_at < ${monthStart}`;
+      const lastMonthOrdersCount = parseInt(lastMonthStats[0].cnt);
+      const lastMonthRevenueAmount = parseFloat(String(lastMonthStats[0].total || "0"));
       const pendingOrders = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status IN ('pending', 'confirmed', 'processing')`;
       const totalCustomers = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'customer'`;
-      const totalProducts = await sql`SELECT COUNT(*) as cnt FROM products WHERE is_active = true`;
-      const lowStock = await sql`SELECT COUNT(*) as cnt FROM stock WHERE quantity <= low_stock_threshold`;
+      const newCustomers = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'customer' AND created_at >= ${weekStart}`;
+      const avgOrderValue = await sql`SELECT COALESCE(AVG(total), 0) as avg FROM orders`;
+      const averageOrderValue = parseFloat(String(avgOrderValue[0].avg || "0"));
+      const prevAvgOrderValue = await sql`SELECT COALESCE(AVG(total), 0) as avg FROM orders WHERE created_at < ${weekStart}`;
+      const prevAverageOrderValue = parseFloat(String(prevAvgOrderValue[0].avg || "0"));
+      const lowStockResult = await sql`
+        SELECT p.id, p.name as name_en, p.name_ar, s.quantity, s.low_stock_threshold, p.image
+        FROM stock s
+        JOIN products p ON s.product_id = p.id
+        WHERE s.quantity <= s.low_stock_threshold
+        LIMIT 10
+      `;
+      const recentOrdersResult = await sql`
+        SELECT id, order_number, customer_name, total, status, payment_status, created_at
+        FROM orders
+        ORDER BY created_at DESC
+        LIMIT 5
+      `;
+      const calcChange = (current, previous) => {
+        if (previous === 0) return current > 0 ? 100 : 0;
+        return Math.round((current - previous) / previous * 100);
+      };
       res.json({
         success: true,
         data: {
-          totalOrders: parseInt(totalOrders[0].cnt),
-          totalRevenue: parseFloat(String(totalRevenue[0].total || "0")),
-          todayOrders: parseInt(todayOrders[0].cnt),
-          todayRevenue: parseFloat(String(todayRevenue[0].total || "0")),
+          // Revenue
+          todayRevenue: todayRevenueAmount,
+          weekRevenue: weekRevenueAmount,
+          monthRevenue: monthRevenueAmount,
+          // Orders
+          todayOrders: todayOrdersCount,
+          weekOrders: weekOrdersCount,
+          monthOrders: monthOrdersCount,
           pendingOrders: parseInt(pendingOrders[0].cnt),
+          // Customers
           totalCustomers: parseInt(totalCustomers[0].cnt),
-          totalProducts: parseInt(totalProducts[0].cnt),
-          lowStockItems: parseInt(lowStock[0].cnt)
+          newCustomers: parseInt(newCustomers[0].cnt),
+          // Metrics
+          averageOrderValue,
+          lowStockCount: lowStockResult.length,
+          // Change percentages
+          revenueChange: {
+            daily: calcChange(todayRevenueAmount, yesterdayRevenueAmount),
+            weekly: calcChange(weekRevenueAmount, lastWeekRevenueAmount),
+            monthly: calcChange(monthRevenueAmount, lastMonthRevenueAmount)
+          },
+          ordersChange: {
+            daily: calcChange(todayOrdersCount, yesterdayOrdersCount),
+            weekly: calcChange(weekOrdersCount, lastWeekOrdersCount),
+            monthly: calcChange(monthOrdersCount, lastMonthOrdersCount)
+          },
+          averageOrderValueChange: calcChange(averageOrderValue, prevAverageOrderValue),
+          // Recent data
+          recentOrders: recentOrdersResult.map((o) => ({
+            id: o.id,
+            orderNumber: o.order_number,
+            customerName: o.customer_name,
+            total: parseFloat(String(o.total)),
+            status: o.status,
+            paymentStatus: o.payment_status,
+            createdAt: o.created_at
+          })),
+          lowStockItems: lowStockResult.map((item) => ({
+            productId: item.id,
+            productName: item.name_en,
+            productNameAr: item.name_ar,
+            currentStock: parseInt(item.quantity),
+            lowStockThreshold: parseInt(item.low_stock_threshold),
+            image: item.image,
+            suggestedReorderQuantity: parseInt(item.low_stock_threshold) * 2
+          }))
         }
       });
     } catch (error) {
