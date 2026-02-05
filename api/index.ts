@@ -8465,28 +8465,37 @@ function createApp() {
       }
 
       const safeUserId = String(userId).substring(0, 100);
-      const safeMessage = String(message || '').substring(0, 100);
+      const safeMessage = String(message).substring(0, 200);
 
-      // Create notification for the user
-      await pgDb.insert(inAppNotificationsTable).values({
+      const notificationData = {
         id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         userId: safeUserId,
         type: 'chat',
         title: 'New Message from Support',
         titleAr: 'رسالة جديدة من الدعم',
-        message: safeMessage.length > 97 ? safeMessage.substring(0, 97) + '...' : safeMessage,
-        messageAr: safeMessage.length > 97 ? safeMessage.substring(0, 97) + '...' : safeMessage,
+        message: safeMessage,
+        messageAr: safeMessage,
         link: '/profile',
         linkTab: 'chat',
         linkId: null,
         unread: true,
-        createdAt: new Date(),
-      });
+      };
+
+      try {
+        await pgDb.insert(inAppNotificationsTable).values(notificationData);
+      } catch (insertError: any) {
+        console.error('[Chat User Notification Insert Error]', insertError?.message || insertError);
+        return res.json({ 
+          success: true, 
+          message: 'Message sent, but user notification failed',
+          debug: insertError?.message 
+        });
+      }
 
       res.json({ success: true, message: 'User notified' });
     } catch (error: any) {
-      console.error('[Chat User Notification Error]', error?.message || error, error?.code);
-      res.status(500).json({ success: false, error: 'Failed to notify user', details: error?.message });
+      console.error('[Chat User Notification Main Error]', error?.message || error);
+      res.status(500).json({ success: false, error: 'Internal server error', details: error?.message });
     }
   });
 
@@ -8503,31 +8512,42 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'userId and message are required' });
       }
 
-      // Truncate userName to prevent title exceeding 200 chars
-      const safeName = (userName || 'Customer').substring(0, 150);
+      // Truncate strings to prevent column overflow
+      const safeName = String(userName || 'Customer').substring(0, 100);
       const safeUserId = String(userId).substring(0, 100);
-      const safeMessage = String(message || '').substring(0, 100);
+      const safeMessage = String(message).substring(0, 200);
 
-      // Create notification for the admin
-      await pgDb.insert(inAppNotificationsTable).values({
+      const notificationData = {
         id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         userId: 'admin',
         type: 'chat',
         title: `New Message from ${safeName}`,
         titleAr: `رسالة جديدة من ${safeName}`,
-        message: safeMessage.length > 97 ? safeMessage.substring(0, 97) + '...' : safeMessage,
-        messageAr: safeMessage.length > 97 ? safeMessage.substring(0, 97) + '...' : safeMessage,
+        message: safeMessage,
+        messageAr: safeMessage,
         link: '/admin/support',
         linkTab: 'support',
         linkId: safeUserId,
         unread: true,
-        createdAt: new Date(),
-      });
+      };
+
+      try {
+        await pgDb.insert(inAppNotificationsTable).values(notificationData);
+        console.log('[Chat Admin Notification] Success');
+      } catch (insertError: any) {
+        console.error('[Chat Admin Notification Insert Error]', insertError?.message || insertError);
+        // Do not fail the request if just the notification fails
+        return res.json({ 
+          success: true, 
+          message: 'Chat sent, but admin notification failed',
+          debug: insertError?.message 
+        });
+      }
 
       res.json({ success: true, message: 'Admin notified' });
     } catch (error: any) {
-      console.error('[Chat Admin Notification Error]', error?.message || error, error?.code);
-      res.status(500).json({ success: false, error: 'Failed to notify admin', details: error?.message });
+      console.error('[Chat Admin Notification Main Error]', error?.message || error);
+      res.status(500).json({ success: false, error: 'Internal server error', details: error?.message });
     }
   });
 
