@@ -32292,6 +32292,775 @@ function createApp() {
       res.json({ success: true, message: "Logged out" });
     }
   });
+  app.get("/api/orders", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId, status } = req.query;
+      let rows;
+      if (userId) {
+        rows = await sql`SELECT * FROM orders WHERE user_id = ${userId} ORDER BY created_at DESC`;
+      } else {
+        rows = await sql`SELECT * FROM orders ORDER BY created_at DESC`;
+      }
+      if (status && status !== "all") {
+        rows = rows.filter((o) => o.status === status);
+      }
+      const orders = await Promise.all(rows.map(async (o) => {
+        const items = await sql`SELECT * FROM order_items WHERE order_id = ${o.id}`;
+        return {
+          id: o.id,
+          userId: o.user_id,
+          status: o.status,
+          paymentStatus: o.payment_status,
+          paymentMethod: o.payment_method,
+          subtotal: parseFloat(String(o.subtotal || "0")),
+          vat: parseFloat(String(o.vat || "0")),
+          deliveryFee: parseFloat(String(o.delivery_fee || "0")),
+          discount: parseFloat(String(o.discount || "0")),
+          total: parseFloat(String(o.total || "0")),
+          deliveryAddress: o.delivery_address,
+          deliveryDate: o.delivery_date,
+          deliverySlot: o.delivery_slot,
+          specialInstructions: o.special_instructions,
+          items: items.map((i) => ({
+            id: i.id,
+            productId: i.product_id,
+            productName: i.product_name,
+            productNameAr: i.product_name_ar,
+            quantity: parseFloat(String(i.quantity || "0")),
+            unit: i.unit,
+            price: parseFloat(String(i.price || "0")),
+            total: parseFloat(String(i.total || "0"))
+          })),
+          createdAt: safeDate(o.created_at),
+          updatedAt: safeDate(o.updated_at)
+        };
+      }));
+      res.json({ success: true, data: orders });
+    } catch (error) {
+      console.error("[Orders Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch orders" });
+    }
+  });
+  app.get("/api/orders/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { id } = req.params;
+      const rows = await sql`SELECT * FROM orders WHERE id = ${id}`;
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+      const o = rows[0];
+      const items = await sql`SELECT * FROM order_items WHERE order_id = ${o.id}`;
+      const order = {
+        id: o.id,
+        userId: o.user_id,
+        status: o.status,
+        paymentStatus: o.payment_status,
+        paymentMethod: o.payment_method,
+        subtotal: parseFloat(String(o.subtotal || "0")),
+        vat: parseFloat(String(o.vat || "0")),
+        deliveryFee: parseFloat(String(o.delivery_fee || "0")),
+        discount: parseFloat(String(o.discount || "0")),
+        total: parseFloat(String(o.total || "0")),
+        deliveryAddress: o.delivery_address,
+        deliveryDate: o.delivery_date,
+        deliverySlot: o.delivery_slot,
+        specialInstructions: o.special_instructions,
+        items: items.map((i) => ({
+          id: i.id,
+          productId: i.product_id,
+          productName: i.product_name,
+          productNameAr: i.product_name_ar,
+          quantity: parseFloat(String(i.quantity || "0")),
+          unit: i.unit,
+          price: parseFloat(String(i.price || "0")),
+          total: parseFloat(String(i.total || "0"))
+        })),
+        createdAt: safeDate(o.created_at),
+        updatedAt: safeDate(o.updated_at)
+      };
+      res.json({ success: true, data: order });
+    } catch (error) {
+      console.error("[Get Order Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch order" });
+    }
+  });
+  app.post("/api/orders", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId, items, deliveryAddress, deliveryDate, deliverySlot, paymentMethod, specialInstructions, subtotal, vat, deliveryFee, discount, total } = req.body;
+      if (!userId || !items || items.length === 0) {
+        return res.status(400).json({ success: false, error: "Missing required fields" });
+      }
+      const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = /* @__PURE__ */ new Date();
+      await sql`
+        INSERT INTO orders (id, user_id, status, payment_status, payment_method, subtotal, vat, delivery_fee, discount, total, delivery_address, delivery_date, delivery_slot, special_instructions, created_at, updated_at)
+        VALUES (${orderId}, ${userId}, 'pending', 'pending', ${paymentMethod || "cash"}, ${subtotal || 0}, ${vat || 0}, ${deliveryFee || 0}, ${discount || 0}, ${total || 0}, ${deliveryAddress || null}, ${deliveryDate || null}, ${deliverySlot || null}, ${specialInstructions || null}, ${now}, ${now})
+      `;
+      for (const item of items) {
+        const itemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+        await sql`
+          INSERT INTO order_items (id, order_id, product_id, product_name, product_name_ar, quantity, unit, price, total, created_at)
+          VALUES (${itemId}, ${orderId}, ${item.productId}, ${item.productName}, ${item.productNameAr || null}, ${item.quantity}, ${item.unit || "kg"}, ${item.price}, ${item.total || item.price * item.quantity}, ${now})
+        `;
+      }
+      res.json({
+        success: true,
+        data: { id: orderId, status: "pending", createdAt: now.toISOString() },
+        message: "Order created successfully"
+      });
+    } catch (error) {
+      console.error("[Create Order Error]", error);
+      res.status(500).json({ success: false, error: "Failed to create order" });
+    }
+  });
+  app.put("/api/orders/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { id } = req.params;
+      const { status, paymentStatus } = req.body;
+      const now = /* @__PURE__ */ new Date();
+      if (status) {
+        await sql`UPDATE orders SET status = ${status}, updated_at = ${now} WHERE id = ${id}`;
+      }
+      if (paymentStatus) {
+        await sql`UPDATE orders SET payment_status = ${paymentStatus}, updated_at = ${now} WHERE id = ${id}`;
+      }
+      res.json({ success: true, message: "Order updated successfully" });
+    } catch (error) {
+      console.error("[Update Order Error]", error);
+      res.status(500).json({ success: false, error: "Failed to update order" });
+    }
+  });
+  app.get("/api/notifications", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId, unreadOnly } = req.query;
+      let rows;
+      if (userId) {
+        rows = await sql`SELECT * FROM notifications WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 100`;
+      } else {
+        rows = await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100`;
+      }
+      if (unreadOnly === "true") {
+        rows = rows.filter((n) => !n.is_read);
+      }
+      const notifications = rows.map((n) => ({
+        id: n.id,
+        userId: n.user_id,
+        type: n.type,
+        title: n.title,
+        titleAr: n.title_ar,
+        message: n.message,
+        messageAr: n.message_ar,
+        data: n.data || {},
+        isRead: n.is_read ?? false,
+        createdAt: safeDate(n.created_at)
+      }));
+      res.json({ success: true, data: notifications });
+    } catch (error) {
+      console.error("[Notifications Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch notifications" });
+    }
+  });
+  app.put("/api/notifications/:id/read", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { id } = req.params;
+      await sql`UPDATE notifications SET is_read = true WHERE id = ${id}`;
+      res.json({ success: true, message: "Notification marked as read" });
+    } catch (error) {
+      console.error("[Mark Notification Read Error]", error);
+      res.status(500).json({ success: false, error: "Failed to mark notification as read" });
+    }
+  });
+  app.put("/api/notifications/read-all", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId } = req.body;
+      if (userId) {
+        await sql`UPDATE notifications SET is_read = true WHERE user_id = ${userId}`;
+      }
+      res.json({ success: true, message: "All notifications marked as read" });
+    } catch (error) {
+      console.error("[Mark All Notifications Read Error]", error);
+      res.status(500).json({ success: false, error: "Failed to mark notifications as read" });
+    }
+  });
+  app.get("/api/wallet", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const authHeader = req.headers.authorization;
+      let userId = req.query.userId;
+      if (!userId && authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.substring(7);
+        const sessions = await sql`SELECT user_id FROM sessions WHERE token = ${token} AND expires_at > ${/* @__PURE__ */ new Date()}`;
+        if (sessions.length > 0) {
+          userId = sessions[0].user_id;
+        }
+      }
+      if (!userId) {
+        return res.json({ success: true, data: { balance: 0, transactions: [] } });
+      }
+      const wallets = await sql`SELECT * FROM wallets WHERE user_id = ${userId}`;
+      if (wallets.length === 0) {
+        return res.json({ success: true, data: { balance: 0, transactions: [] } });
+      }
+      const wallet = wallets[0];
+      const transactions = await sql`SELECT * FROM wallet_transactions WHERE wallet_id = ${wallet.id} ORDER BY created_at DESC LIMIT 50`;
+      res.json({
+        success: true,
+        data: {
+          id: wallet.id,
+          userId: wallet.user_id,
+          balance: parseFloat(String(wallet.balance || "0")),
+          transactions: transactions.map((t) => ({
+            id: t.id,
+            type: t.type,
+            amount: parseFloat(String(t.amount || "0")),
+            description: t.description,
+            orderId: t.order_id,
+            createdAt: safeDate(t.created_at)
+          }))
+        }
+      });
+    } catch (error) {
+      console.error("[Wallet Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch wallet" });
+    }
+  });
+  app.post("/api/wallet/add-funds", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId, amount, description } = req.body;
+      if (!userId || !amount || amount <= 0) {
+        return res.status(400).json({ success: false, error: "Invalid request" });
+      }
+      const wallets = await sql`SELECT * FROM wallets WHERE user_id = ${userId}`;
+      if (wallets.length === 0) {
+        return res.status(404).json({ success: false, error: "Wallet not found" });
+      }
+      const wallet = wallets[0];
+      const newBalance = parseFloat(String(wallet.balance || "0")) + amount;
+      const now = /* @__PURE__ */ new Date();
+      await sql`UPDATE wallets SET balance = ${newBalance}, updated_at = ${now} WHERE id = ${wallet.id}`;
+      const txId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      await sql`
+        INSERT INTO wallet_transactions (id, wallet_id, type, amount, description, created_at)
+        VALUES (${txId}, ${wallet.id}, 'credit', ${amount}, ${description || "Funds added"}, ${now})
+      `;
+      res.json({ success: true, data: { balance: newBalance }, message: "Funds added successfully" });
+    } catch (error) {
+      console.error("[Add Funds Error]", error);
+      res.status(500).json({ success: false, error: "Failed to add funds" });
+    }
+  });
+  app.get("/api/chat/:userId", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId } = req.params;
+      const rows = await sql`SELECT * FROM chat_messages WHERE user_id = ${userId} ORDER BY created_at ASC`;
+      const messages = rows.map((m2) => ({
+        id: m2.id,
+        userId: m2.user_id,
+        sender: m2.sender,
+        message: m2.message,
+        isRead: m2.is_read ?? false,
+        createdAt: safeDate(m2.created_at)
+      }));
+      res.json({ success: true, data: messages });
+    } catch (error) {
+      console.error("[Chat Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch chat messages" });
+    }
+  });
+  app.post("/api/chat/:userId", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId } = req.params;
+      const { message, sender } = req.body;
+      if (!message) {
+        return res.status(400).json({ success: false, error: "Message is required" });
+      }
+      const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = /* @__PURE__ */ new Date();
+      await sql`
+        INSERT INTO chat_messages (id, user_id, sender, message, is_read, created_at)
+        VALUES (${msgId}, ${userId}, ${sender || "user"}, ${message}, false, ${now})
+      `;
+      res.json({
+        success: true,
+        data: { id: msgId, userId, sender: sender || "user", message, isRead: false, createdAt: now.toISOString() },
+        message: "Message sent successfully"
+      });
+    } catch (error) {
+      console.error("[Send Chat Error]", error);
+      res.status(500).json({ success: false, error: "Failed to send message" });
+    }
+  });
+  app.get("/api/wishlist", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId } = req.query;
+      if (!userId) {
+        return res.json({ success: true, data: [] });
+      }
+      const rows = await sql`SELECT * FROM wishlist WHERE user_id = ${userId}`;
+      const wishlist = rows.map((w) => ({
+        id: w.id,
+        userId: w.user_id,
+        productId: w.product_id,
+        createdAt: safeDate(w.created_at)
+      }));
+      res.json({ success: true, data: wishlist });
+    } catch (error) {
+      console.error("[Wishlist Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch wishlist" });
+    }
+  });
+  app.post("/api/wishlist", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId, productId } = req.body;
+      if (!userId || !productId) {
+        return res.status(400).json({ success: false, error: "Missing required fields" });
+      }
+      const existing = await sql`SELECT id FROM wishlist WHERE user_id = ${userId} AND product_id = ${productId}`;
+      if (existing.length > 0) {
+        return res.json({ success: true, message: "Already in wishlist" });
+      }
+      const wishlistId = `wish_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = /* @__PURE__ */ new Date();
+      await sql`
+        INSERT INTO wishlist (id, user_id, product_id, created_at)
+        VALUES (${wishlistId}, ${userId}, ${productId}, ${now})
+      `;
+      res.json({ success: true, data: { id: wishlistId }, message: "Added to wishlist" });
+    } catch (error) {
+      console.error("[Add Wishlist Error]", error);
+      res.status(500).json({ success: false, error: "Failed to add to wishlist" });
+    }
+  });
+  app.delete("/api/wishlist/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { id } = req.params;
+      await sql`DELETE FROM wishlist WHERE id = ${id}`;
+      res.json({ success: true, message: "Removed from wishlist" });
+    } catch (error) {
+      console.error("[Remove Wishlist Error]", error);
+      res.status(500).json({ success: false, error: "Failed to remove from wishlist" });
+    }
+  });
+  app.get("/api/reviews", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { productId } = req.query;
+      let rows;
+      if (productId) {
+        rows = await sql`SELECT * FROM product_reviews WHERE product_id = ${productId} AND is_approved = true ORDER BY created_at DESC`;
+      } else {
+        rows = await sql`SELECT * FROM product_reviews ORDER BY created_at DESC`;
+      }
+      const reviews = rows.map((r) => ({
+        id: r.id,
+        productId: r.product_id,
+        userId: r.user_id,
+        userName: r.user_name,
+        rating: r.rating,
+        comment: r.comment,
+        isApproved: r.is_approved,
+        createdAt: safeDate(r.created_at)
+      }));
+      res.json({ success: true, data: reviews });
+    } catch (error) {
+      console.error("[Reviews Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch reviews" });
+    }
+  });
+  app.post("/api/reviews", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { productId, userId, userName, rating, comment } = req.body;
+      if (!productId || !userId || !rating) {
+        return res.status(400).json({ success: false, error: "Missing required fields" });
+      }
+      const reviewId = `review_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = /* @__PURE__ */ new Date();
+      await sql`
+        INSERT INTO product_reviews (id, product_id, user_id, user_name, rating, comment, is_approved, created_at)
+        VALUES (${reviewId}, ${productId}, ${userId}, ${userName || "Anonymous"}, ${rating}, ${comment || ""}, false, ${now})
+      `;
+      res.json({ success: true, data: { id: reviewId }, message: "Review submitted for approval" });
+    } catch (error) {
+      console.error("[Add Review Error]", error);
+      res.status(500).json({ success: false, error: "Failed to add review" });
+    }
+  });
+  app.get("/api/loyalty", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { userId } = req.query;
+      if (!userId) {
+        return res.json({ success: true, data: { points: 0, totalEarned: 0, tier: "Bronze" } });
+      }
+      const rows = await sql`SELECT * FROM loyalty_points WHERE user_id = ${userId}`;
+      if (rows.length === 0) {
+        return res.json({ success: true, data: { points: 0, totalEarned: 0, tier: "Bronze" } });
+      }
+      const loyalty = rows[0];
+      const transactions = await sql`SELECT * FROM loyalty_transactions WHERE loyalty_id = ${loyalty.id} ORDER BY created_at DESC LIMIT 50`;
+      res.json({
+        success: true,
+        data: {
+          id: loyalty.id,
+          userId: loyalty.user_id,
+          points: loyalty.points || 0,
+          totalEarned: loyalty.total_earned || 0,
+          tier: loyalty.tier || "Bronze",
+          referralCode: loyalty.referral_code,
+          transactions: transactions.map((t) => ({
+            id: t.id,
+            type: t.type,
+            points: t.points,
+            description: t.description,
+            orderId: t.order_id,
+            createdAt: safeDate(t.created_at)
+          }))
+        }
+      });
+    } catch (error) {
+      console.error("[Loyalty Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch loyalty points" });
+    }
+  });
+  const getUserIdFromHeaders = (req) => {
+    return req.headers["x-user-id"] || req.headers["x-customer-id"] || null;
+  };
+  app.get("/api/addresses", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      let userId = req.query.userId || getUserIdFromHeaders(req);
+      if (!userId) {
+        return res.json({ success: true, data: [] });
+      }
+      const rows = await sql`SELECT * FROM addresses WHERE user_id = ${userId}`;
+      const addresses = rows.map((a2) => ({
+        id: a2.id,
+        userId: a2.user_id,
+        label: a2.label,
+        fullName: a2.full_name,
+        mobile: a2.mobile,
+        emirate: a2.emirate,
+        area: a2.area,
+        street: a2.street,
+        building: a2.building,
+        floor: a2.floor,
+        apartment: a2.apartment,
+        landmark: a2.landmark,
+        latitude: a2.latitude ? parseFloat(String(a2.latitude)) : null,
+        longitude: a2.longitude ? parseFloat(String(a2.longitude)) : null,
+        instructions: a2.instructions,
+        isDefault: a2.is_default ?? false,
+        createdAt: safeDate(a2.created_at),
+        updatedAt: safeDate(a2.updated_at)
+      }));
+      res.json({ success: true, data: addresses });
+    } catch (error) {
+      console.error("[Addresses Error]", error);
+      res.status(500).json({ success: false, error: "Failed to fetch addresses" });
+    }
+  });
+  app.post("/api/addresses", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const userId = getUserIdFromHeaders(req) || req.body.userId;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: "Authentication required" });
+      }
+      const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, instructions, isDefault } = req.body;
+      if (!label || !fullName || !mobile || !emirate || !area || !street || !building) {
+        const missing = [];
+        if (!label) missing.push("label");
+        if (!fullName) missing.push("fullName");
+        if (!mobile) missing.push("mobile");
+        if (!emirate) missing.push("emirate");
+        if (!area) missing.push("area");
+        if (!street) missing.push("street");
+        if (!building) missing.push("building");
+        return res.status(400).json({ success: false, error: `Missing required fields: ${missing.join(", ")}` });
+      }
+      const addressId = `addr_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = /* @__PURE__ */ new Date();
+      const existingAddresses = await sql`SELECT id FROM addresses WHERE user_id = ${userId}`;
+      const shouldBeDefault = isDefault || existingAddresses.length === 0;
+      if (shouldBeDefault) {
+        await sql`UPDATE addresses SET is_default = false WHERE user_id = ${userId}`;
+      }
+      await sql`
+        INSERT INTO addresses (id, user_id, label, full_name, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, instructions, is_default, created_at, updated_at)
+        VALUES (${addressId}, ${userId}, ${label}, ${fullName}, ${mobile}, ${emirate}, ${area}, ${street}, ${building}, ${floor || null}, ${apartment || null}, ${landmark || null}, ${latitude || null}, ${longitude || null}, ${instructions || null}, ${shouldBeDefault}, ${now}, ${now})
+      `;
+      const newAddress = {
+        id: addressId,
+        userId,
+        label,
+        fullName,
+        mobile,
+        emirate,
+        area,
+        street,
+        building,
+        floor: floor || null,
+        apartment: apartment || null,
+        landmark: landmark || null,
+        latitude: latitude || null,
+        longitude: longitude || null,
+        instructions: instructions || null,
+        isDefault: shouldBeDefault,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      };
+      res.json({ success: true, data: newAddress });
+    } catch (error) {
+      console.error("[Add Address Error]", error);
+      res.status(500).json({ success: false, error: "Failed to add address" });
+    }
+  });
+  app.put("/api/addresses/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const userId = getUserIdFromHeaders(req) || req.body.userId;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: "Authentication required" });
+      }
+      const { id } = req.params;
+      const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, instructions, isDefault } = req.body;
+      const now = /* @__PURE__ */ new Date();
+      const existing = await sql`SELECT id FROM addresses WHERE id = ${id} AND user_id = ${userId}`;
+      if (existing.length === 0) {
+        return res.status(404).json({ success: false, error: "Address not found" });
+      }
+      if (isDefault) {
+        await sql`UPDATE addresses SET is_default = false WHERE user_id = ${userId}`;
+      }
+      await sql`
+        UPDATE addresses SET 
+          label = COALESCE(${label}, label),
+          full_name = COALESCE(${fullName}, full_name),
+          mobile = COALESCE(${mobile}, mobile),
+          emirate = COALESCE(${emirate}, emirate),
+          area = COALESCE(${area}, area),
+          street = COALESCE(${street}, street),
+          building = COALESCE(${building}, building),
+          floor = COALESCE(${floor}, floor),
+          apartment = COALESCE(${apartment}, apartment),
+          landmark = COALESCE(${landmark}, landmark),
+          latitude = COALESCE(${latitude}, latitude),
+          longitude = COALESCE(${longitude}, longitude),
+          instructions = COALESCE(${instructions}, instructions),
+          is_default = COALESCE(${isDefault}, is_default),
+          updated_at = ${now}
+        WHERE id = ${id}
+      `;
+      const updated = await sql`SELECT * FROM addresses WHERE id = ${id}`;
+      if (updated.length > 0) {
+        const a2 = updated[0];
+        res.json({
+          success: true,
+          data: {
+            id: a2.id,
+            userId: a2.user_id,
+            label: a2.label,
+            fullName: a2.full_name,
+            mobile: a2.mobile,
+            emirate: a2.emirate,
+            area: a2.area,
+            street: a2.street,
+            building: a2.building,
+            floor: a2.floor,
+            apartment: a2.apartment,
+            landmark: a2.landmark,
+            latitude: a2.latitude ? parseFloat(String(a2.latitude)) : null,
+            longitude: a2.longitude ? parseFloat(String(a2.longitude)) : null,
+            instructions: a2.instructions,
+            isDefault: a2.is_default ?? false,
+            createdAt: safeDate(a2.created_at),
+            updatedAt: safeDate(a2.updated_at)
+          }
+        });
+      } else {
+        res.json({ success: true, message: "Address updated successfully" });
+      }
+    } catch (error) {
+      console.error("[Update Address Error]", error);
+      res.status(500).json({ success: false, error: "Failed to update address" });
+    }
+  });
+  app.put("/api/addresses/:id/default", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const userId = getUserIdFromHeaders(req);
+      if (!userId) {
+        return res.status(401).json({ success: false, error: "Authentication required" });
+      }
+      const { id } = req.params;
+      const existing = await sql`SELECT id FROM addresses WHERE id = ${id} AND user_id = ${userId}`;
+      if (existing.length === 0) {
+        return res.status(404).json({ success: false, error: "Address not found" });
+      }
+      await sql`UPDATE addresses SET is_default = false WHERE user_id = ${userId}`;
+      await sql`UPDATE addresses SET is_default = true, updated_at = ${/* @__PURE__ */ new Date()} WHERE id = ${id}`;
+      const updated = await sql`SELECT * FROM addresses WHERE id = ${id}`;
+      if (updated.length > 0) {
+        const a2 = updated[0];
+        res.json({
+          success: true,
+          data: {
+            id: a2.id,
+            userId: a2.user_id,
+            label: a2.label,
+            fullName: a2.full_name,
+            mobile: a2.mobile,
+            emirate: a2.emirate,
+            area: a2.area,
+            street: a2.street,
+            building: a2.building,
+            floor: a2.floor,
+            apartment: a2.apartment,
+            landmark: a2.landmark,
+            latitude: a2.latitude ? parseFloat(String(a2.latitude)) : null,
+            longitude: a2.longitude ? parseFloat(String(a2.longitude)) : null,
+            instructions: a2.instructions,
+            isDefault: true,
+            createdAt: safeDate(a2.created_at),
+            updatedAt: safeDate(a2.updated_at)
+          }
+        });
+      } else {
+        res.json({ success: true, message: "Address set as default" });
+      }
+    } catch (error) {
+      console.error("[Set Default Address Error]", error);
+      res.status(500).json({ success: false, error: "Failed to set default address" });
+    }
+  });
+  app.delete("/api/addresses/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const userId = getUserIdFromHeaders(req);
+      if (!userId) {
+        return res.status(401).json({ success: false, error: "Authentication required" });
+      }
+      const { id } = req.params;
+      const existing = await sql`SELECT id FROM addresses WHERE id = ${id} AND user_id = ${userId}`;
+      if (existing.length === 0) {
+        return res.status(404).json({ success: false, error: "Address not found" });
+      }
+      await sql`DELETE FROM addresses WHERE id = ${id}`;
+      res.json({ success: true, message: "Address deleted successfully" });
+    } catch (error) {
+      console.error("[Delete Address Error]", error);
+      res.status(500).json({ success: false, error: "Failed to delete address" });
+    }
+  });
+  app.post("/api/discount-codes/validate", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { code, subtotal } = req.body;
+      if (!code) {
+        return res.status(400).json({ success: false, error: "Code is required" });
+      }
+      const rows = await sql`SELECT * FROM discount_codes WHERE code = ${code.toUpperCase()} AND is_active = true`;
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: "Invalid or expired discount code" });
+      }
+      const discount = rows[0];
+      const now = /* @__PURE__ */ new Date();
+      if (discount.expires_at && new Date(discount.expires_at) < now) {
+        return res.status(400).json({ success: false, error: "Discount code has expired" });
+      }
+      if (discount.max_uses && discount.current_uses >= discount.max_uses) {
+        return res.status(400).json({ success: false, error: "Discount code usage limit reached" });
+      }
+      if (discount.min_order_amount && subtotal && subtotal < discount.min_order_amount) {
+        return res.status(400).json({ success: false, error: `Minimum order amount is ${discount.min_order_amount} AED` });
+      }
+      let discountAmount = 0;
+      if (discount.type === "percentage") {
+        discountAmount = (subtotal || 0) * (parseFloat(String(discount.value || "0")) / 100);
+        if (discount.max_discount) {
+          discountAmount = Math.min(discountAmount, parseFloat(String(discount.max_discount)));
+        }
+      } else {
+        discountAmount = parseFloat(String(discount.value || "0"));
+      }
+      res.json({
+        success: true,
+        data: {
+          id: discount.id,
+          code: discount.code,
+          type: discount.type,
+          value: parseFloat(String(discount.value || "0")),
+          discountAmount,
+          minOrderAmount: parseFloat(String(discount.min_order_amount || "0")),
+          maxDiscount: parseFloat(String(discount.max_discount || "0"))
+        },
+        message: "Discount code is valid"
+      });
+    } catch (error) {
+      console.error("[Validate Discount Error]", error);
+      res.status(500).json({ success: false, error: "Failed to validate discount code" });
+    }
+  });
   app.use((req, res) => {
     console.log("[Netlify] Unhandled route:", req.method, req.url);
     res.status(404).json({ success: false, error: `Route not found: ${req.method} ${req.url}` });
