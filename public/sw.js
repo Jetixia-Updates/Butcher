@@ -1,7 +1,7 @@
 // Service Worker for Butcher PWA
-const CACHE_NAME = 'aljazira-butcher-v3';
-const STATIC_CACHE = 'aljazira-static-v3';
-const DYNAMIC_CACHE = 'aljazira-dynamic-v3';
+const CACHE_NAME = 'aljazira-butcher-v4';
+const STATIC_CACHE = 'aljazira-static-v4';
+const DYNAMIC_CACHE = 'aljazira-dynamic-v4';
 
 // Assets to cache immediately
 const STATIC_ASSETS = [
