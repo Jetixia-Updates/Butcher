@@ -1600,6 +1600,12 @@ function createApp() {
 
           if (dbUsers.length > 0) {
             const dbUser = dbUsers[0];
+            // Safely handle timestamps that may be invalid
+            const safeDate = (d: any) => {
+              if (!d) return new Date().toISOString();
+              const date = d instanceof Date ? d : new Date(d);
+              return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+            };
             user = {
               id: dbUser.id,
               username: dbUser.username,
@@ -1613,9 +1619,9 @@ function createApp() {
               isVerified: dbUser.isVerified ?? false,
               emirate: dbUser.emirate || '',
               address: dbUser.address || undefined,
-              createdAt: dbUser.createdAt ? dbUser.createdAt.toISOString() : new Date().toISOString(),
-              updatedAt: dbUser.updatedAt ? dbUser.updatedAt.toISOString() : new Date().toISOString(),
-              lastLoginAt: dbUser.lastLoginAt?.toISOString(),
+              createdAt: safeDate(dbUser.createdAt),
+              updatedAt: safeDate(dbUser.updatedAt),
+              lastLoginAt: dbUser.lastLoginAt ? safeDate(dbUser.lastLoginAt) : undefined,
               preferences: typeof dbUser.preferences === 'string' 
                 ? JSON.parse(dbUser.preferences) 
                 : (dbUser.preferences || {
@@ -1728,6 +1734,12 @@ function createApp() {
               return res.status(401).json({ success: false, error: 'Account is deactivated' });
             }
 
+            // Safely handle timestamps that may be invalid
+            const safeDate = (d: any) => {
+              if (!d) return new Date().toISOString();
+              const date = d instanceof Date ? d : new Date(d);
+              return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+            };
             user = {
               id: dbUser.id,
               username: dbUser.username,
@@ -1737,23 +1749,25 @@ function createApp() {
               firstName: dbUser.firstName,
               familyName: dbUser.familyName,
               role: dbUser.role as User['role'],
-              isActive: dbUser.isActive,
-              isVerified: dbUser.isVerified,
+              isActive: dbUser.isActive ?? true,
+              isVerified: dbUser.isVerified ?? false,
               emirate: dbUser.emirate || '',
-              createdAt: dbUser.createdAt.toISOString(),
-              updatedAt: dbUser.updatedAt.toISOString(),
-              preferences: dbUser.preferences || {
-                language: 'en',
-                currency: 'AED',
-                emailNotifications: true,
-                smsNotifications: true,
-                marketingEmails: false,
-              },
+              createdAt: safeDate(dbUser.createdAt),
+              updatedAt: safeDate(dbUser.updatedAt),
+              preferences: typeof dbUser.preferences === 'string' 
+                ? JSON.parse(dbUser.preferences) 
+                : (dbUser.preferences || {
+                    language: 'en',
+                    currency: 'AED',
+                    emailNotifications: true,
+                    smsNotifications: true,
+                    marketingEmails: false,
+                  }),
             };
           }
-        } catch (dbError) {
-          console.error('[Admin Login DB Error]', dbError);
-          return res.status(500).json({ success: false, error: 'Database error during login' });
+        } catch (dbError: any) {
+          console.error('[Admin Login DB Error]', dbError?.message || dbError);
+          return res.status(500).json({ success: false, error: 'Database error during login', details: dbError?.message });
         }
       } else {
         return res.status(500).json({ success: false, error: 'Database not available' });
