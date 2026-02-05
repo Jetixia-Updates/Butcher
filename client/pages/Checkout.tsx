@@ -788,46 +788,67 @@ export default function CheckoutPage() {
 
   // Calculate zone-based delivery fee when address changes
   useEffect(() => {
-    const currentAddress = addresses.find(a => a.id === selectedAddressId);
-    if (!currentAddress) {
-      setZoneDeliveryFee(settings?.defaultDeliveryFee || 15);
-      setMatchedZone(null);
-      return;
-    }
-
-    // If no zones available, use default fee from settings
-    if (zones.length === 0) {
-      setZoneDeliveryFee(settings?.defaultDeliveryFee || 15);
-      setMatchedZone(null);
-      return;
-    }
-
-    // Find matching zone based on emirate and area
-    const zone = zones.find((z) => {
-      const emirateMatch = z.emirate.toLowerCase() === currentAddress.emirate.toLowerCase();
-      const areaMatch = z.areas.some((a) =>
-        a.toLowerCase().includes(currentAddress.area.toLowerCase()) ||
-        currentAddress.area.toLowerCase().includes(a.toLowerCase())
-      );
-      return emirateMatch && areaMatch;
-    });
-
-    if (zone) {
-      setZoneDeliveryFee(Number(zone.deliveryFee) || (settings?.defaultDeliveryFee || 15));
-      setMatchedZone(zone);
-    } else {
-      // Fallback: try to match just by emirate
-      const emirateZone = zones.find((z) =>
-        z.emirate.toLowerCase() === currentAddress.emirate.toLowerCase()
-      );
-      if (emirateZone) {
-        setZoneDeliveryFee(Number(emirateZone.deliveryFee) || (settings?.defaultDeliveryFee || 15));
-        setMatchedZone(emirateZone);
-      } else {
-        // No matching zone found - use default delivery fee from settings
+    try {
+      const currentAddress = addresses.find(a => a.id === selectedAddressId);
+      if (!currentAddress) {
         setZoneDeliveryFee(settings?.defaultDeliveryFee || 15);
         setMatchedZone(null);
+        return;
       }
+
+      // If no zones available, use default fee from settings
+      if (zones.length === 0) {
+        setZoneDeliveryFee(settings?.defaultDeliveryFee || 15);
+        setMatchedZone(null);
+        return;
+      }
+
+      // Find matching zone based on emirate and area
+      const zone = zones.find((z) => {
+        try {
+          const emirateMatch = z.emirate?.toLowerCase() === currentAddress.emirate?.toLowerCase();
+          // Handle both array and string (JSON) formats for areas
+          let areasArray: string[] = [];
+          if (Array.isArray(z.areas)) {
+            areasArray = z.areas;
+          } else if (typeof z.areas === 'string') {
+            try {
+              areasArray = JSON.parse(z.areas);
+            } catch {
+              areasArray = [];
+            }
+          }
+          const areaMatch = areasArray.some((a: string) =>
+            a?.toLowerCase()?.includes(currentAddress.area?.toLowerCase() || '') ||
+            (currentAddress.area?.toLowerCase() || '').includes(a?.toLowerCase() || '')
+          );
+          return emirateMatch && areaMatch;
+        } catch {
+          return false;
+        }
+      });
+
+      if (zone) {
+        setZoneDeliveryFee(Number(zone.deliveryFee) || (settings?.defaultDeliveryFee || 15));
+        setMatchedZone(zone);
+      } else {
+        // Fallback: try to match just by emirate
+        const emirateZone = zones.find((z) =>
+          z.emirate?.toLowerCase() === currentAddress.emirate?.toLowerCase()
+        );
+        if (emirateZone) {
+          setZoneDeliveryFee(Number(emirateZone.deliveryFee) || (settings?.defaultDeliveryFee || 15));
+          setMatchedZone(emirateZone);
+        } else {
+          // No matching zone found - use default delivery fee from settings
+          setZoneDeliveryFee(settings?.defaultDeliveryFee || 15);
+          setMatchedZone(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error calculating delivery zone:', err);
+      setZoneDeliveryFee(settings?.defaultDeliveryFee || 15);
+      setMatchedZone(null);
     }
   }, [selectedAddressId, addresses, zones, settings]);
 

@@ -443,26 +443,23 @@ function createApp() {
     }
   });
 
-  // Settings
+  // Settings - Returns full settings data including banners, time slots, promo codes
   app.get('/api/settings', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const rows = await sql`SELECT * FROM app_settings LIMIT 1`;
+      // Fetch settings
+      const settingsRows = await sql`SELECT * FROM app_settings LIMIT 1`;
+      const s = settingsRows.length > 0 ? settingsRows[0] : {};
       
-      if (rows.length === 0) {
-        return res.json({ success: true, data: {} });
-      }
-
-      const s = rows[0];
       const settings = {
-        vatRate: parseFloat(String(s.vat_rate || '0.05')),
-        deliveryFee: parseFloat(String(s.delivery_fee || '15')),
-        freeDeliveryThreshold: parseFloat(String(s.free_delivery_threshold || '200')),
-        expressDeliveryFee: parseFloat(String(s.express_delivery_fee || '25')),
-        minimumOrderAmount: parseFloat(String(s.minimum_order_amount || '50')),
+        vatRate: String(parseFloat(String(s.vat_rate || '0.05'))),
+        deliveryFee: String(parseFloat(String(s.delivery_fee || '15'))),
+        freeDeliveryThreshold: String(parseFloat(String(s.free_delivery_threshold || '200'))),
+        expressDeliveryFee: String(parseFloat(String(s.express_delivery_fee || '25'))),
+        minimumOrderAmount: String(parseFloat(String(s.minimum_order_amount || '50'))),
         enableCashOnDelivery: s.enable_cash_on_delivery ?? true,
         enableCardPayment: s.enable_card_payment ?? true,
         enableWallet: s.enable_wallet ?? true,
@@ -477,9 +474,84 @@ function createApp() {
         storeAddressAr: s.store_address_ar || 'دبي، الإمارات',
         workingHoursStart: s.working_hours_start || '08:00',
         workingHoursEnd: s.working_hours_end || '22:00',
+        welcomeBonus: String(parseFloat(String(s.welcome_bonus || '50'))),
+        enableWelcomeBonus: s.enable_welcome_bonus ?? true,
+        loyaltyPointsPerAed: String(parseFloat(String(s.loyalty_points_per_aed || '1'))),
+        loyaltyPointValue: String(parseFloat(String(s.loyalty_point_value || '0.1'))),
       };
 
-      res.json({ success: true, data: settings });
+      // Fetch banners (with error handling if table doesn't exist)
+      let banners: any[] = [];
+      try {
+        const bannersRows = await sql`SELECT * FROM banners WHERE enabled = true ORDER BY sort_order`;
+        banners = bannersRows.map((b: any) => ({
+          id: b.id,
+          titleEn: b.title_en,
+          titleAr: b.title_ar,
+          subtitleEn: b.subtitle_en,
+          subtitleAr: b.subtitle_ar,
+          image: b.image,
+          bgColor: b.bg_color,
+          link: b.link,
+          badge: b.badge,
+          badgeAr: b.badge_ar,
+          enabled: b.enabled,
+          sortOrder: b.sort_order,
+        }));
+      } catch (e) {
+        console.log('[Settings] Banners table not available');
+      }
+
+      // Fetch time slots (with error handling if table doesn't exist)
+      let timeSlots: any[] = [];
+      try {
+        const timeSlotsRows = await sql`SELECT * FROM delivery_time_slots WHERE enabled = true ORDER BY sort_order`;
+        timeSlots = timeSlotsRows.map((t: any) => ({
+          id: t.id,
+          label: t.label,
+          labelAr: t.label_ar,
+          startTime: t.start_time,
+          endTime: t.end_time,
+          isExpressSlot: t.is_express_slot || false,
+          maxOrders: t.max_orders || 20,
+          enabled: t.enabled,
+          sortOrder: t.sort_order,
+        }));
+      } catch (e) {
+        console.log('[Settings] Time slots table not available');
+      }
+
+      // Fetch promo codes (with error handling if table doesn't exist)
+      let promoCodes: any[] = [];
+      try {
+        const promoCodesRows = await sql`SELECT * FROM promo_codes WHERE is_active = true`;
+        promoCodes = promoCodesRows.map((p: any) => ({
+          id: p.id,
+          code: p.code,
+          type: p.type,
+          value: String(parseFloat(String(p.value || '0'))),
+          minimumOrder: String(parseFloat(String(p.minimum_order || '0'))),
+          maximumDiscount: p.maximum_discount ? String(parseFloat(String(p.maximum_discount))) : null,
+          usageLimit: p.usage_limit || 0,
+          usageCount: p.usage_count || 0,
+          userLimit: p.user_limit || 1,
+          validFrom: p.valid_from,
+          validTo: p.valid_to,
+          isActive: p.is_active,
+        }));
+      } catch (e) {
+        console.log('[Settings] Promo codes table not available');
+      }
+
+      res.json({ 
+        success: true, 
+        data: {
+          settings,
+          banners,
+          timeSlots,
+          promoCodes,
+        }
+      });
     } catch (error) {
       console.error('[Settings Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch settings' });
@@ -526,20 +598,26 @@ function createApp() {
 
       const rows = await sql`SELECT * FROM delivery_zones WHERE is_active = true`;
       
-      const zones = rows.map((z: any) => ({
-        id: z.id,
-        name: z.name,
-        nameAr: z.name_ar,
-        emirate: z.emirate,
-        areas: z.areas || [],
-        deliveryFee: parseFloat(String(z.delivery_fee || '0')),
-        minimumOrder: parseFloat(String(z.minimum_order || '0')),
-        estimatedMinutes: z.estimated_minutes,
-        isActive: z.is_active,
-        expressEnabled: z.express_enabled,
-        expressFee: parseFloat(String(z.express_fee || '25')),
-        expressHours: z.express_hours,
-      }));
+      const zones = rows.map((z: any) => {
+        let parsedAreas: string[] = [];
+        if (z.areas) {
+          parsedAreas = typeof z.areas === 'string' ? JSON.parse(z.areas) : z.areas;
+        }
+        return {
+          id: z.id,
+          name: z.name,
+          nameAr: z.name_ar,
+          emirate: z.emirate,
+          areas: parsedAreas,
+          deliveryFee: parseFloat(String(z.delivery_fee || '0')),
+          minimumOrder: parseFloat(String(z.minimum_order || '0')),
+          estimatedMinutes: z.estimated_minutes,
+          isActive: z.is_active,
+          expressEnabled: z.express_enabled,
+          expressFee: parseFloat(String(z.express_fee || '25')),
+          expressHours: z.express_hours,
+        };
+      });
 
       res.json({ success: true, data: zones });
     } catch (error) {
@@ -2572,20 +2650,26 @@ function createApp() {
 
       const rows = await sql`SELECT * FROM delivery_zones ORDER BY name`;
       
-      const zones = rows.map((z: any) => ({
-        id: z.id,
-        name: z.name,
-        nameAr: z.name_ar,
-        emirate: z.emirate,
-        areas: z.areas || [],
-        deliveryFee: parseFloat(String(z.delivery_fee || '0')),
-        minimumOrder: parseFloat(String(z.minimum_order || '0')),
-        estimatedMinutes: z.estimated_minutes,
-        isActive: z.is_active,
-        expressEnabled: z.express_enabled,
-        expressFee: parseFloat(String(z.express_fee || '25')),
-        expressHours: z.express_hours,
-      }));
+      const zones = rows.map((z: any) => {
+        let parsedAreas: string[] = [];
+        if (z.areas) {
+          parsedAreas = typeof z.areas === 'string' ? JSON.parse(z.areas) : z.areas;
+        }
+        return {
+          id: z.id,
+          name: z.name,
+          nameAr: z.name_ar,
+          emirate: z.emirate,
+          areas: parsedAreas,
+          deliveryFee: parseFloat(String(z.delivery_fee || '0')),
+          minimumOrder: parseFloat(String(z.minimum_order || '0')),
+          estimatedMinutes: z.estimated_minutes,
+          isActive: z.is_active,
+          expressEnabled: z.express_enabled,
+          expressFee: parseFloat(String(z.express_fee || '25')),
+          expressHours: z.express_hours,
+        };
+      });
 
       res.json({ success: true, data: zones });
     } catch (error) {
@@ -3477,6 +3561,10 @@ function createApp() {
       }
 
       const z = rows[0];
+      let parsedAreas: string[] = [];
+      if (z.areas) {
+        parsedAreas = typeof z.areas === 'string' ? JSON.parse(z.areas) : z.areas;
+      }
       res.json({
         success: true,
         data: {
@@ -3484,7 +3572,7 @@ function createApp() {
           name: z.name,
           nameAr: z.name_ar,
           emirate: z.emirate,
-          areas: z.areas,
+          areas: parsedAreas,
           deliveryFee: parseFloat(String(z.delivery_fee || '0')),
           minimumOrder: parseFloat(String(z.minimum_order || '0')),
           estimatedTime: z.estimated_time,
