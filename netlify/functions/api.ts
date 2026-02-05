@@ -1027,15 +1027,15 @@ function createApp() {
         driverTip
       } = req.body;
 
-      if (!userId || !items || items.length === 0) {
+      if (!items || items.length === 0) {
         return res.status(400).json({ success: false, error: 'Missing required fields' });
       }
 
-      // Fetch user info for customer details
-      const userRows = await sql`SELECT * FROM users WHERE id = ${userId}`;
-      const user = userRows[0];
-      if (!user) {
-        return res.status(400).json({ success: false, error: 'User not found' });
+      // Fetch user info for customer details (optional - allow guest orders)
+      let user: any = null;
+      if (userId) {
+        const userRows = await sql`SELECT * FROM users WHERE id = ${userId}`;
+        user = userRows[0];
       }
 
       // Fetch address if addressId provided
@@ -1059,6 +1059,11 @@ function createApp() {
         }
       }
 
+      // Get customer details from user or delivery address
+      const customerName = user ? (user.first_name + ' ' + (user.family_name || '')) : (address?.fullName || 'Guest Customer');
+      const customerEmail = user?.email || '';
+      const customerMobile = user?.mobile || address?.mobile || '';
+
       const orderId = `order_${Date.now()}`;
       const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
       const now = new Date();
@@ -1072,9 +1077,9 @@ function createApp() {
           source, created_at, updated_at
         )
         VALUES (
-          ${orderId}, ${orderNumber}, ${userId}, 
-          ${user.first_name + ' ' + (user.family_name || '')}, 
-          ${user.email}, ${user.mobile},
+          ${orderId}, ${orderNumber}, ${userId || 'guest'}, 
+          ${customerName}, 
+          ${customerEmail}, ${customerMobile},
           ${subtotal || 0}, ${discount || 0}, ${discountCode || null}, ${deliveryFee || 0}, 
           ${vatAmount || 0}, ${vatRate}, ${total || 0},
           'pending', 'pending', ${paymentMethod || 'cod'}, 
