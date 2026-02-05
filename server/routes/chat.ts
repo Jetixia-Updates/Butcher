@@ -131,16 +131,22 @@ const notifyAdmin: RequestHandler = async (req, res) => {
     try {
         const { userId, userName, message } = req.body;
 
+        // Truncate to prevent column overflow
+        const safeName = (userName || 'Customer').substring(0, 150);
+        const safeUserId = String(userId || '').substring(0, 100);
+        const safeMessage = String(message || '').substring(0, 100);
+
         await db.insert(inAppNotifications).values({
             id: generateId("notif"),
             userId: "admin", // Target admin
             type: "chat",
-            title: `New Message from ${userName || "Customer"}`,
-            titleAr: `رسالة جديدة من ${userName || "عميل"}`,
-            message: message,
-            messageAr: message,
+            title: `New Message from ${safeName}`,
+            titleAr: `رسالة جديدة من ${safeName}`,
+            message: safeMessage,
+            messageAr: safeMessage,
             link: "/admin/chat",
-            linkId: userId,
+            linkTab: "support",
+            linkId: safeUserId,
             unread: true,
             createdAt: new Date(),
         });
@@ -157,15 +163,21 @@ const notifyUser: RequestHandler = async (req, res) => {
     try {
         const { userId, message } = req.body;
 
+        // Truncate to prevent column overflow
+        const safeUserId = String(userId || '').substring(0, 100);
+        const safeMessage = String(message || '').substring(0, 100);
+
         await db.insert(inAppNotifications).values({
             id: generateId("notif"),
-            userId: userId, // Target user
+            userId: safeUserId, // Target user
             type: "chat",
             title: "New Message from Support",
             titleAr: "رسالة جديدة من الدعم",
-            message: message,
-            messageAr: message,
+            message: safeMessage,
+            messageAr: safeMessage,
             link: "/support",
+            linkTab: "chat",
+            linkId: null,
             unread: true,
             createdAt: new Date(),
         });

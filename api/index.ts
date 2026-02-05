@@ -8379,21 +8379,28 @@ function createApp() {
   // Mark a notification as read
   app.patch('/api/notifications/:id/read', async (req, res) => {
     try {
+      console.log('[Notifications] Mark as read - ID:', req.params.id);
+      
       if (!isDatabaseAvailable() || !pgDb) {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
       const { id } = req.params;
+      
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'Notification ID is required' });
+      }
 
-      await pgDb
+      const result = await pgDb
         .update(inAppNotificationsTable)
         .set({ unread: false })
         .where(eq(inAppNotificationsTable.id, id));
 
-      res.json({ success: true, data: { id, isRead: true } });
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      res.status(500).json({ success: false, error: 'Failed to mark notification as read' });
+      console.log('[Notifications] Mark as read result:', result);
+      res.json({ success: true, data: { id, isRead: true }, message: 'Notification marked as read' });
+    } catch (error: any) {
+      console.error('Error marking notification as read:', error?.message || error, error?.code);
+      res.status(500).json({ success: false, error: 'Failed to mark notification as read', details: error?.message });
     }
   });
 
@@ -8457,25 +8464,29 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'userId and message are required' });
       }
 
+      const safeUserId = String(userId).substring(0, 100);
+      const safeMessage = String(message || '').substring(0, 100);
+
       // Create notification for the user
       await pgDb.insert(inAppNotificationsTable).values({
         id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        userId: String(userId),
+        userId: safeUserId,
         type: 'chat',
         title: 'New Message from Support',
         titleAr: 'رسالة جديدة من الدعم',
-        message: message.length > 100 ? message.substring(0, 100) + '...' : message,
-        messageAr: message.length > 100 ? message.substring(0, 100) + '...' : message,
+        message: safeMessage.length > 97 ? safeMessage.substring(0, 97) + '...' : safeMessage,
+        messageAr: safeMessage.length > 97 ? safeMessage.substring(0, 97) + '...' : safeMessage,
         link: '/profile',
         linkTab: 'chat',
         linkId: null,
         unread: true,
+        createdAt: new Date(),
       });
 
       res.json({ success: true, message: 'User notified' });
-    } catch (error) {
-      console.error('[Chat User Notification Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to notify user' });
+    } catch (error: any) {
+      console.error('[Chat User Notification Error]', error?.message || error, error?.code);
+      res.status(500).json({ success: false, error: 'Failed to notify user', details: error?.message });
     }
   });
 
@@ -8492,25 +8503,31 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'userId and message are required' });
       }
 
+      // Truncate userName to prevent title exceeding 200 chars
+      const safeName = (userName || 'Customer').substring(0, 150);
+      const safeUserId = String(userId).substring(0, 100);
+      const safeMessage = String(message || '').substring(0, 100);
+
       // Create notification for the admin
       await pgDb.insert(inAppNotificationsTable).values({
         id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         userId: 'admin',
         type: 'chat',
-        title: `New Message from ${userName || 'Customer'}`,
-        titleAr: `رسالة جديدة من ${userName || 'عميل'}`,
-        message: message.length > 100 ? message.substring(0, 100) + '...' : message,
-        messageAr: message.length > 100 ? message.substring(0, 100) + '...' : message,
+        title: `New Message from ${safeName}`,
+        titleAr: `رسالة جديدة من ${safeName}`,
+        message: safeMessage.length > 97 ? safeMessage.substring(0, 97) + '...' : safeMessage,
+        messageAr: safeMessage.length > 97 ? safeMessage.substring(0, 97) + '...' : safeMessage,
         link: '/admin/support',
         linkTab: 'support',
-        linkId: userId,
+        linkId: safeUserId,
         unread: true,
+        createdAt: new Date(),
       });
 
       res.json({ success: true, message: 'Admin notified' });
-    } catch (error) {
-      console.error('[Chat Admin Notification Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to notify admin' });
+    } catch (error: any) {
+      console.error('[Chat Admin Notification Error]', error?.message || error, error?.code);
+      res.status(500).json({ success: false, error: 'Failed to notify admin', details: error?.message });
     }
   });
 
@@ -10118,6 +10135,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
 
     // Get the path from query parameter (Vercel passes it as 'path' from the rewrite)
     const pathParam = req.query.path;
+    const originalUrl = req.url;
 
     if (pathParam) {
       const pathArray = Array.isArray(pathParam) ? pathParam : [pathParam];
@@ -10127,6 +10145,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         ? '?' + new URLSearchParams(req.query as Record<string, string>).toString()
         : '';
       req.url = '/api/' + pathArray.join('/') + queryString;
+      console.log('[Vercel Handler] Path rewrite:', { originalUrl, pathParam, pathArray, newUrl: req.url });
     } else if (req.url && !req.url.startsWith('/api')) {
       req.url = '/api' + req.url;
     }
