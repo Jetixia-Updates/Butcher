@@ -790,28 +790,36 @@ function createApp() {
         
         return {
           id: o.id,
+          orderNumber: o.order_number,
           userId: o.user_id,
+          customerName: o.customer_name,
+          customerEmail: o.customer_email,
+          customerMobile: o.customer_mobile,
           status: o.status,
           paymentStatus: o.payment_status,
           paymentMethod: o.payment_method,
           subtotal: parseFloat(String(o.subtotal || '0')),
-          vat: parseFloat(String(o.vat || '0')),
+          vat: parseFloat(String(o.vat_amount || '0')),
+          vatRate: parseFloat(String(o.vat_rate || '0.05')),
           deliveryFee: parseFloat(String(o.delivery_fee || '0')),
           discount: parseFloat(String(o.discount || '0')),
+          discountCode: o.discount_code,
           total: parseFloat(String(o.total || '0')),
+          addressId: o.address_id,
           deliveryAddress: o.delivery_address,
-          deliveryDate: o.delivery_date,
-          deliverySlot: o.delivery_slot,
-          specialInstructions: o.special_instructions,
+          deliveryNotes: o.delivery_notes,
+          estimatedDeliveryAt: o.estimated_delivery_at ? safeDate(o.estimated_delivery_at) : null,
+          actualDeliveryAt: o.actual_delivery_at ? safeDate(o.actual_delivery_at) : null,
           items: items.map((i: any) => ({
             id: i.id,
             productId: i.product_id,
             productName: i.product_name,
             productNameAr: i.product_name_ar,
+            sku: i.sku,
             quantity: parseFloat(String(i.quantity || '0')),
-            unit: i.unit,
-            price: parseFloat(String(i.price || '0')),
-            total: parseFloat(String(i.total || '0')),
+            price: parseFloat(String(i.unit_price || '0')),
+            total: parseFloat(String(i.total_price || '0')),
+            notes: i.notes,
           })),
           createdAt: safeDate(o.created_at),
           updatedAt: safeDate(o.updated_at),
@@ -875,28 +883,36 @@ function createApp() {
 
       const order = {
         id: o.id,
+        orderNumber: o.order_number,
         userId: o.user_id,
+        customerName: o.customer_name,
+        customerEmail: o.customer_email,
+        customerMobile: o.customer_mobile,
         status: o.status,
         paymentStatus: o.payment_status,
         paymentMethod: o.payment_method,
         subtotal: parseFloat(String(o.subtotal || '0')),
-        vat: parseFloat(String(o.vat || '0')),
+        vat: parseFloat(String(o.vat_amount || '0')),
+        vatRate: parseFloat(String(o.vat_rate || '0.05')),
         deliveryFee: parseFloat(String(o.delivery_fee || '0')),
         discount: parseFloat(String(o.discount || '0')),
+        discountCode: o.discount_code,
         total: parseFloat(String(o.total || '0')),
+        addressId: o.address_id,
         deliveryAddress: o.delivery_address,
-        deliveryDate: o.delivery_date,
-        deliverySlot: o.delivery_slot,
-        specialInstructions: o.special_instructions,
+        deliveryNotes: o.delivery_notes,
+        estimatedDeliveryAt: o.estimated_delivery_at ? safeDate(o.estimated_delivery_at) : null,
+        actualDeliveryAt: o.actual_delivery_at ? safeDate(o.actual_delivery_at) : null,
         items: items.map((i: any) => ({
           id: i.id,
           productId: i.product_id,
           productName: i.product_name,
           productNameAr: i.product_name_ar,
+          sku: i.sku,
           quantity: parseFloat(String(i.quantity || '0')),
-          unit: i.unit,
-          price: parseFloat(String(i.price || '0')),
-          total: parseFloat(String(i.total || '0')),
+          price: parseFloat(String(i.unit_price || '0')),
+          total: parseFloat(String(i.total_price || '0')),
+          notes: i.notes,
         })),
         createdAt: safeDate(o.created_at),
         updatedAt: safeDate(o.updated_at),
@@ -916,32 +932,123 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { userId, items, deliveryAddress, deliveryDate, deliverySlot, paymentMethod, specialInstructions, subtotal, vat, deliveryFee, discount, total } = req.body;
+      const { 
+        userId, 
+        items, 
+        addressId,
+        deliveryAddress, 
+        deliveryNotes,
+        paymentMethod, 
+        subtotal, 
+        vatAmount, 
+        deliveryFee, 
+        discount,
+        discountCode,
+        total,
+        isExpressDelivery,
+        driverTip
+      } = req.body;
 
       if (!userId || !items || items.length === 0) {
         return res.status(400).json({ success: false, error: 'Missing required fields' });
       }
 
-      const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      // Fetch user info for customer details
+      const userRows = await sql`SELECT * FROM users WHERE id = ${userId}`;
+      const user = userRows[0];
+      if (!user) {
+        return res.status(400).json({ success: false, error: 'User not found' });
+      }
+
+      // Fetch address if addressId provided
+      let address = deliveryAddress;
+      if (addressId && !deliveryAddress) {
+        const addrRows = await sql`SELECT * FROM addresses WHERE id = ${addressId}`;
+        if (addrRows[0]) {
+          const a = addrRows[0];
+          address = {
+            fullName: a.full_name,
+            mobile: a.mobile,
+            emirate: a.emirate,
+            area: a.area,
+            street: a.street,
+            building: a.building,
+            floor: a.floor,
+            apartment: a.apartment,
+            latitude: a.latitude,
+            longitude: a.longitude
+          };
+        }
+      }
+
+      const orderId = `order_${Date.now()}`;
+      const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
       const now = new Date();
+      const vatRate = 0.05; // 5% VAT
 
       await sql`
-        INSERT INTO orders (id, user_id, status, payment_status, payment_method, subtotal, vat, delivery_fee, discount, total, delivery_address, delivery_date, delivery_slot, special_instructions, created_at, updated_at)
-        VALUES (${orderId}, ${userId}, 'pending', 'pending', ${paymentMethod || 'cash'}, ${subtotal || 0}, ${vat || 0}, ${deliveryFee || 0}, ${discount || 0}, ${total || 0}, ${deliveryAddress || null}, ${deliveryDate || null}, ${deliverySlot || null}, ${specialInstructions || null}, ${now}, ${now})
+        INSERT INTO orders (
+          id, order_number, user_id, customer_name, customer_email, customer_mobile,
+          subtotal, discount, discount_code, delivery_fee, vat_amount, vat_rate, total,
+          status, payment_status, payment_method, address_id, delivery_address, delivery_notes,
+          source, created_at, updated_at
+        )
+        VALUES (
+          ${orderId}, ${orderNumber}, ${userId}, 
+          ${user.first_name + ' ' + (user.family_name || '')}, 
+          ${user.email}, ${user.mobile},
+          ${subtotal || 0}, ${discount || 0}, ${discountCode || null}, ${deliveryFee || 0}, 
+          ${vatAmount || 0}, ${vatRate}, ${total || 0},
+          'pending', 'pending', ${paymentMethod || 'cod'}, 
+          ${addressId || ''}, ${JSON.stringify(address || {})}, ${deliveryNotes || null},
+          'web', ${now}, ${now}
+        )
       `;
 
       // Insert order items
       for (const item of items) {
         const itemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+        
+        // Fetch product info if needed
+        let productName = item.productName || '';
+        let productNameAr = item.productNameAr || '';
+        let sku = item.sku || '';
+        
+        if (!productName || !sku) {
+          const prodRows = await sql`SELECT name, name_ar, sku FROM products WHERE id = ${item.productId}`;
+          if (prodRows[0]) {
+            productName = productName || prodRows[0].name;
+            productNameAr = productNameAr || prodRows[0].name_ar;
+            sku = sku || prodRows[0].sku;
+          }
+        }
+
+        const unitPrice = item.unitPrice || item.price || 0;
+        const totalPrice = item.total || item.totalPrice || (unitPrice * item.quantity);
+
         await sql`
-          INSERT INTO order_items (id, order_id, product_id, product_name, product_name_ar, quantity, unit, price, total, created_at)
-          VALUES (${itemId}, ${orderId}, ${item.productId}, ${item.productName}, ${item.productNameAr || null}, ${item.quantity}, ${item.unit || 'kg'}, ${item.price}, ${item.total || item.price * item.quantity}, ${now})
+          INSERT INTO order_items (id, order_id, product_id, product_name, product_name_ar, sku, quantity, unit_price, total_price, notes)
+          VALUES (${itemId}, ${orderId}, ${item.productId}, ${productName}, ${productNameAr || null}, ${sku || 'N/A'}, ${item.quantity}, ${unitPrice}, ${totalPrice}, ${item.notes || null})
+        `;
+
+        // Update stock - decrease quantity
+        await sql`
+          UPDATE stock 
+          SET quantity = quantity - ${item.quantity}, 
+              reserved_quantity = reserved_quantity + ${item.quantity},
+              updated_at = ${now}
+          WHERE product_id = ${item.productId}
         `;
       }
 
       res.json({
         success: true,
-        data: { id: orderId, status: 'pending', createdAt: now.toISOString() },
+        data: { 
+          id: orderId, 
+          orderNumber: orderNumber,
+          status: 'pending', 
+          createdAt: now.toISOString() 
+        },
         message: 'Order created successfully',
       });
     } catch (error) {
@@ -2282,7 +2389,99 @@ function createApp() {
     }
   });
 
-  // Get Stock by Product
+  // Stock Valuation (must be before :productId route)
+  app.get('/api/stock/valuation', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT s.*, p.name, p.cost_price, p.price
+        FROM stock s
+        JOIN products p ON s.product_id = p.id
+      `;
+
+      let totalCostValue = 0;
+      let totalRetailValue = 0;
+
+      const items = rows.map((r: any) => {
+        const qty = parseFloat(String(r.quantity || '0'));
+        const cost = parseFloat(String(r.cost_price || '0'));
+        const retail = parseFloat(String(r.price || '0'));
+        totalCostValue += qty * cost;
+        totalRetailValue += qty * retail;
+
+        return {
+          productId: r.product_id,
+          productName: r.name,
+          quantity: qty,
+          costPrice: cost,
+          retailPrice: retail,
+          costValue: qty * cost,
+          retailValue: qty * retail,
+        };
+      });
+
+      res.json({
+        success: true,
+        data: {
+          items,
+          totalCostValue,
+          totalRetailValue,
+          potentialProfit: totalRetailValue - totalCostValue,
+        },
+      });
+    } catch (error) {
+      console.error('[Stock Valuation Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch stock valuation' });
+    }
+  });
+
+  // Get Low Stock Alerts (must be before :productId route)
+  app.get('/api/stock/alerts', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT s.*, p.name as product_name, p.sku
+        FROM stock s
+        LEFT JOIN products p ON s.product_id = p.id
+        WHERE s.quantity <= s.low_stock_threshold
+      `;
+
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('[Low Stock Alerts Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch alerts' });
+    }
+  });
+
+  // Get Stock Movements (must be before :productId route)
+  app.get('/api/stock/movements', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT sm.*, p.name as product_name
+        FROM stock_movements sm
+        LEFT JOIN products p ON sm.product_id = p.id
+        ORDER BY sm.created_at DESC
+        LIMIT 100
+      `;
+
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('[Stock Movements Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch stock movements' });
+    }
+  });
+
+  // Get Stock by Product (dynamic route - must be after static routes)
   app.get('/api/stock/:productId', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -2311,27 +2510,6 @@ function createApp() {
     } catch (error) {
       console.error('[Get Stock Error]', error);
       res.status(500).json({ success: false, error: 'Failed to fetch stock' });
-    }
-  });
-
-  // Get Low Stock Alerts
-  app.get('/api/stock/alerts', async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: 'Database not available' });
-      }
-
-      const rows = await sql`
-        SELECT s.*, p.name as product_name, p.sku
-        FROM stock s
-        LEFT JOIN products p ON s.product_id = p.id
-        WHERE s.quantity <= s.low_stock_threshold
-      `;
-
-      res.json({ success: true, data: rows });
-    } catch (error) {
-      console.error('[Stock Alerts Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to fetch stock alerts' });
     }
   });
 
@@ -2378,29 +2556,6 @@ function createApp() {
     } catch (error) {
       console.error('[Update Stock Error]', error);
       res.status(500).json({ success: false, error: 'Failed to update stock' });
-    }
-  });
-
-  // Get Stock Movements
-  app.get('/api/stock/movements', async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: 'Database not available' });
-      }
-
-      const { productId } = req.query;
-      let rows;
-      
-      if (productId) {
-        rows = await sql`SELECT * FROM stock_movements WHERE product_id = ${productId as string} ORDER BY created_at DESC LIMIT 100`;
-      } else {
-        rows = await sql`SELECT * FROM stock_movements ORDER BY created_at DESC LIMIT 100`;
-      }
-
-      res.json({ success: true, data: rows });
-    } catch (error) {
-      console.error('[Stock Movements Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to fetch stock movements' });
     }
   });
 
@@ -3210,6 +3365,970 @@ function createApp() {
       res.json({ success: true, message: 'Messages marked as read' });
     } catch (error) {
       console.error('[Mark Read Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to mark messages as read' });
+    }
+  });
+
+  // =====================================================
+  // ADDITIONAL HIGH-PRIORITY ROUTES
+  // =====================================================
+
+  // Get Order by Order Number
+  app.get('/api/orders/number/:orderNumber', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderNumber } = req.params;
+      const rows = await sql`SELECT * FROM orders WHERE order_number = ${orderNumber}`;
+
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Order not found' });
+      }
+
+      const o = rows[0];
+      const items = await sql`SELECT * FROM order_items WHERE order_id = ${o.id}`;
+
+      const order = {
+        id: o.id,
+        orderNumber: o.order_number,
+        userId: o.user_id,
+        customerName: o.customer_name,
+        customerEmail: o.customer_email,
+        customerMobile: o.customer_mobile,
+        status: o.status,
+        paymentStatus: o.payment_status,
+        paymentMethod: o.payment_method,
+        subtotal: parseFloat(String(o.subtotal || '0')),
+        vat: parseFloat(String(o.vat_amount || '0')),
+        vatRate: parseFloat(String(o.vat_rate || '0.05')),
+        deliveryFee: parseFloat(String(o.delivery_fee || '0')),
+        discount: parseFloat(String(o.discount || '0')),
+        total: parseFloat(String(o.total || '0')),
+        addressId: o.address_id,
+        deliveryAddress: o.delivery_address,
+        deliveryNotes: o.delivery_notes,
+        items: items.map((i: any) => ({
+          id: i.id,
+          productId: i.product_id,
+          productName: i.product_name,
+          productNameAr: i.product_name_ar,
+          sku: i.sku,
+          quantity: parseFloat(String(i.quantity || '0')),
+          price: parseFloat(String(i.unit_price || '0')),
+          total: parseFloat(String(i.total_price || '0')),
+        })),
+        createdAt: safeDate(o.created_at),
+        updatedAt: safeDate(o.updated_at),
+      };
+
+      res.json({ success: true, data: order });
+    } catch (error) {
+      console.error('[Get Order By Number Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch order' });
+    }
+  });
+
+  // Process Order Payment
+  app.post('/api/orders/:id/payment', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { paymentMethod, amount, transactionId } = req.body;
+      const now = new Date();
+
+      // Update order payment status
+      await sql`
+        UPDATE orders 
+        SET payment_status = 'captured', payment_method = ${paymentMethod || 'cod'}, updated_at = ${now}
+        WHERE id = ${id}
+      `;
+
+      // Create payment record
+      const paymentId = `pay_${Date.now()}`;
+      await sql`
+        INSERT INTO payments (id, order_id, amount, method, status, gateway_response, created_at, updated_at)
+        VALUES (${paymentId}, ${id}, ${amount || 0}, ${paymentMethod || 'cod'}, 'captured', ${JSON.stringify({ transactionId })}, ${now}, ${now})
+      `;
+
+      res.json({ success: true, data: { paymentId, status: 'captured' } });
+    } catch (error) {
+      console.error('[Order Payment Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to process payment' });
+    }
+  });
+
+  // Get Single Delivery Zone
+  app.get('/api/delivery/zones/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const rows = await sql`SELECT * FROM delivery_zones WHERE id = ${id}`;
+
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Delivery zone not found' });
+      }
+
+      const z = rows[0];
+      res.json({
+        success: true,
+        data: {
+          id: z.id,
+          name: z.name,
+          nameAr: z.name_ar,
+          emirate: z.emirate,
+          areas: z.areas,
+          deliveryFee: parseFloat(String(z.delivery_fee || '0')),
+          minimumOrder: parseFloat(String(z.minimum_order || '0')),
+          estimatedTime: z.estimated_time,
+          isActive: z.is_active,
+        },
+      });
+    } catch (error) {
+      console.error('[Get Zone Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch delivery zone' });
+    }
+  });
+
+  // Get Reviews by Product
+  app.get('/api/reviews/product/:productId', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { productId } = req.params;
+      const rows = await sql`
+        SELECT r.*, u.first_name, u.family_name 
+        FROM reviews r 
+        LEFT JOIN users u ON r.user_id = u.id 
+        WHERE r.product_id = ${productId}
+        ORDER BY r.created_at DESC
+      `;
+
+      res.json({
+        success: true,
+        data: rows.map((r: any) => ({
+          id: r.id,
+          productId: r.product_id,
+          userId: r.user_id,
+          userName: r.first_name ? `${r.first_name} ${r.family_name || ''}`.trim() : 'Anonymous',
+          rating: r.rating,
+          comment: r.comment,
+          createdAt: safeDate(r.created_at),
+        })),
+      });
+    } catch (error) {
+      console.error('[Get Product Reviews Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch reviews' });
+    }
+  });
+
+  // Update Review
+  app.put('/api/reviews/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { rating, comment } = req.body;
+      const now = new Date();
+
+      await sql`
+        UPDATE reviews SET rating = ${rating}, comment = ${comment}, updated_at = ${now}
+        WHERE id = ${id}
+      `;
+
+      res.json({ success: true, message: 'Review updated' });
+    } catch (error) {
+      console.error('[Update Review Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update review' });
+    }
+  });
+
+  // Delete Review
+  app.delete('/api/reviews/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await sql`DELETE FROM reviews WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Review deleted' });
+    } catch (error) {
+      console.error('[Delete Review Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete review' });
+    }
+  });
+
+  // Analytics: Revenue Chart
+  app.get('/api/analytics/charts/revenue', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { period = '7d' } = req.query;
+      let days = 7;
+      if (period === '30d') days = 30;
+      if (period === '90d') days = 90;
+
+      const rows = await sql`
+        SELECT DATE(created_at) as date, SUM(total) as revenue, COUNT(*) as orders
+        FROM orders
+        WHERE created_at >= NOW() - INTERVAL '${days} days'
+        GROUP BY DATE(created_at)
+        ORDER BY date ASC
+      `;
+
+      res.json({
+        success: true,
+        data: rows.map((r: any) => ({
+          date: r.date,
+          revenue: parseFloat(String(r.revenue || '0')),
+          orders: parseInt(r.orders),
+        })),
+      });
+    } catch (error) {
+      console.error('[Revenue Chart Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch revenue data' });
+    }
+  });
+
+  // Analytics: Orders by Status Chart
+  app.get('/api/analytics/charts/orders-by-status', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT status, COUNT(*) as count
+        FROM orders
+        GROUP BY status
+      `;
+
+      res.json({
+        success: true,
+        data: rows.map((r: any) => ({
+          status: r.status,
+          count: parseInt(r.count),
+        })),
+      });
+    } catch (error) {
+      console.error('[Orders By Status Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch order stats' });
+    }
+  });
+
+  // Analytics: Top Products Chart
+  app.get('/api/analytics/charts/top-products', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT oi.product_name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as total_revenue
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.status NOT IN ('cancelled', 'refunded')
+        GROUP BY oi.product_name
+        ORDER BY total_revenue DESC
+        LIMIT 10
+      `;
+
+      res.json({
+        success: true,
+        data: rows.map((r: any) => ({
+          name: r.product_name,
+          quantity: parseFloat(String(r.total_qty || '0')),
+          revenue: parseFloat(String(r.total_revenue || '0')),
+        })),
+      });
+    } catch (error) {
+      console.error('[Top Products Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch top products' });
+    }
+  });
+
+  // Analytics: Sales by Emirate
+  app.get('/api/analytics/charts/sales-by-emirate', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT 
+          delivery_address->>'emirate' as emirate, 
+          COUNT(*) as orders, 
+          SUM(total) as revenue
+        FROM orders
+        WHERE status NOT IN ('cancelled', 'refunded')
+        GROUP BY delivery_address->>'emirate'
+        ORDER BY revenue DESC
+      `;
+
+      res.json({
+        success: true,
+        data: rows.map((r: any) => ({
+          emirate: r.emirate || 'Unknown',
+          orders: parseInt(r.orders),
+          revenue: parseFloat(String(r.revenue || '0')),
+        })),
+      });
+    } catch (error) {
+      console.error('[Sales By Emirate Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch sales by emirate' });
+    }
+  });
+
+  // Analytics: Payment Methods Chart
+  app.get('/api/analytics/charts/payment-methods', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT payment_method, COUNT(*) as count, SUM(total) as total
+        FROM orders
+        GROUP BY payment_method
+      `;
+
+      res.json({
+        success: true,
+        data: rows.map((r: any) => ({
+          method: r.payment_method,
+          count: parseInt(r.count),
+          total: parseFloat(String(r.total || '0')),
+        })),
+      });
+    } catch (error) {
+      console.error('[Payment Methods Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch payment methods' });
+    }
+  });
+
+  // Analytics: Hourly Orders Chart
+  app.get('/api/analytics/charts/hourly-orders', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as orders
+        FROM orders
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY EXTRACT(HOUR FROM created_at)
+        ORDER BY hour
+      `;
+
+      res.json({
+        success: true,
+        data: rows.map((r: any) => ({
+          hour: parseInt(r.hour),
+          orders: parseInt(r.orders),
+        })),
+      });
+    } catch (error) {
+      console.error('[Hourly Orders Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch hourly orders' });
+    }
+  });
+
+  // Analytics: Real-time Stats
+  app.get('/api/analytics/real-time', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const todayOrders = await sql`SELECT COUNT(*) as cnt FROM orders WHERE created_at >= ${todayStart}`;
+      const todayRevenue = await sql`SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE created_at >= ${todayStart} AND status NOT IN ('cancelled', 'refunded')`;
+      const pendingOrders = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status = 'pending'`;
+      const processingOrders = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status IN ('confirmed', 'processing')`;
+      const outForDelivery = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status = 'out_for_delivery'`;
+
+      res.json({
+        success: true,
+        data: {
+          todayOrders: parseInt(todayOrders[0].cnt),
+          todayRevenue: parseFloat(String(todayRevenue[0].total || '0')),
+          pendingOrders: parseInt(pendingOrders[0].cnt),
+          processingOrders: parseInt(processingOrders[0].cnt),
+          outForDelivery: parseInt(outForDelivery[0].cnt),
+        },
+      });
+    } catch (error) {
+      console.error('[Real-time Stats Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch real-time stats' });
+    }
+  });
+
+  // User Verify
+  app.post('/api/users/:id/verify', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const now = new Date();
+
+      await sql`UPDATE users SET is_verified = true, updated_at = ${now} WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'User verified successfully' });
+    } catch (error) {
+      console.error('[Verify User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to verify user' });
+    }
+  });
+
+  // Get Single Payment
+  app.get('/api/payments/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const rows = await sql`SELECT * FROM payments WHERE id = ${id}`;
+
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Payment not found' });
+      }
+
+      const p = rows[0];
+      res.json({
+        success: true,
+        data: {
+          id: p.id,
+          orderId: p.order_id,
+          amount: parseFloat(String(p.amount || '0')),
+          method: p.method,
+          status: p.status,
+          gatewayResponse: p.gateway_response,
+          createdAt: safeDate(p.created_at),
+        },
+      });
+    } catch (error) {
+      console.error('[Get Payment Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch payment' });
+    }
+  });
+
+  // Get Payments by Order
+  app.get('/api/payments/order/:orderId', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderId } = req.params;
+      const rows = await sql`SELECT * FROM payments WHERE order_id = ${orderId} ORDER BY created_at DESC`;
+
+      res.json({
+        success: true,
+        data: rows.map((p: any) => ({
+          id: p.id,
+          orderId: p.order_id,
+          amount: parseFloat(String(p.amount || '0')),
+          method: p.method,
+          status: p.status,
+          gatewayResponse: p.gateway_response,
+          createdAt: safeDate(p.created_at),
+        })),
+      });
+    } catch (error) {
+      console.error('[Get Order Payments Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch payments' });
+    }
+  });
+
+  // Stock Bulk Update
+  app.post('/api/stock/bulk-update', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { updates } = req.body; // Array of { productId, quantity, reason }
+      const now = new Date();
+
+      for (const update of updates) {
+        await sql`
+          UPDATE stock 
+          SET quantity = ${update.quantity}, updated_at = ${now}
+          WHERE product_id = ${update.productId}
+        `;
+      }
+
+      res.json({ success: true, message: `Updated ${updates.length} stock items` });
+    } catch (error) {
+      console.error('[Bulk Stock Update Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update stock' });
+    }
+  });
+
+  // Reports: Sales Summary
+  app.get('/api/reports/sales', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { startDate, endDate, period = 'today' } = req.query;
+      
+      let dateFilter = `created_at >= NOW() - INTERVAL '1 day'`;
+      if (period === 'week') dateFilter = `created_at >= NOW() - INTERVAL '7 days'`;
+      if (period === 'month') dateFilter = `created_at >= NOW() - INTERVAL '30 days'`;
+      if (period === 'year') dateFilter = `created_at >= NOW() - INTERVAL '365 days'`;
+
+      const summary = await sql`
+        SELECT 
+          COUNT(*) as total_orders,
+          COALESCE(SUM(total), 0) as total_revenue,
+          COALESCE(SUM(vat_amount), 0) as total_vat,
+          COALESCE(SUM(delivery_fee), 0) as total_delivery_fees,
+          COALESCE(SUM(discount), 0) as total_discounts,
+          COALESCE(AVG(total), 0) as avg_order_value
+        FROM orders
+        WHERE status NOT IN ('cancelled', 'refunded')
+      `;
+
+      res.json({
+        success: true,
+        data: {
+          totalOrders: parseInt(summary[0].total_orders),
+          totalRevenue: parseFloat(String(summary[0].total_revenue || '0')),
+          totalVat: parseFloat(String(summary[0].total_vat || '0')),
+          totalDeliveryFees: parseFloat(String(summary[0].total_delivery_fees || '0')),
+          totalDiscounts: parseFloat(String(summary[0].total_discounts || '0')),
+          avgOrderValue: parseFloat(String(summary[0].avg_order_value || '0')),
+        },
+      });
+    } catch (error) {
+      console.error('[Sales Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch sales report' });
+    }
+  });
+
+  // Reports: Sales by Category
+  app.get('/api/reports/sales-by-category', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT p.category, SUM(oi.total_price) as revenue, SUM(oi.quantity) as quantity
+        FROM order_items oi
+        JOIN products p ON oi.product_id = p.id
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.status NOT IN ('cancelled', 'refunded')
+        GROUP BY p.category
+        ORDER BY revenue DESC
+      `;
+
+      res.json({
+        success: true,
+        data: rows.map((r: any) => ({
+          category: r.category,
+          revenue: parseFloat(String(r.revenue || '0')),
+          quantity: parseFloat(String(r.quantity || '0')),
+        })),
+      });
+    } catch (error) {
+      console.error('[Sales By Category Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch category sales' });
+    }
+  });
+
+  // Reports: Sales by Product
+  app.get('/api/reports/sales-by-product', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT 
+          oi.product_id, oi.product_name, 
+          SUM(oi.total_price) as revenue, 
+          SUM(oi.quantity) as quantity,
+          COUNT(DISTINCT oi.order_id) as order_count
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.status NOT IN ('cancelled', 'refunded')
+        GROUP BY oi.product_id, oi.product_name
+        ORDER BY revenue DESC
+      `;
+
+      res.json({
+        success: true,
+        data: rows.map((r: any) => ({
+          productId: r.product_id,
+          productName: r.product_name,
+          revenue: parseFloat(String(r.revenue || '0')),
+          quantity: parseFloat(String(r.quantity || '0')),
+          orderCount: parseInt(r.order_count),
+        })),
+      });
+    } catch (error) {
+      console.error('[Sales By Product Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch product sales' });
+    }
+  });
+
+  // Reports: Customer Analytics
+  app.get('/api/reports/customers', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const totalCustomers = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'customer'`;
+      const newCustomers = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'customer' AND created_at >= NOW() - INTERVAL '30 days'`;
+      const repeatCustomers = await sql`
+        SELECT COUNT(DISTINCT user_id) as cnt 
+        FROM orders 
+        WHERE user_id IN (
+          SELECT user_id FROM orders GROUP BY user_id HAVING COUNT(*) > 1
+        )
+      `;
+
+      res.json({
+        success: true,
+        data: {
+          totalCustomers: parseInt(totalCustomers[0].cnt),
+          newCustomers: parseInt(newCustomers[0].cnt),
+          repeatCustomers: parseInt(repeatCustomers[0].cnt),
+        },
+      });
+    } catch (error) {
+      console.error('[Customer Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch customer report' });
+    }
+  });
+
+  // Reports: Inventory
+  app.get('/api/reports/inventory', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT s.*, p.name, p.category, p.cost_price, p.price
+        FROM stock s
+        JOIN products p ON s.product_id = p.id
+        ORDER BY s.quantity ASC
+      `;
+
+      const lowStock = rows.filter((r: any) => parseFloat(String(r.quantity || '0')) <= parseFloat(String(r.low_stock_threshold || '5')));
+      const outOfStock = rows.filter((r: any) => parseFloat(String(r.quantity || '0')) <= 0);
+
+      res.json({
+        success: true,
+        data: {
+          totalProducts: rows.length,
+          lowStockCount: lowStock.length,
+          outOfStockCount: outOfStock.length,
+          items: rows.map((r: any) => ({
+            productId: r.product_id,
+            productName: r.name,
+            category: r.category,
+            quantity: parseFloat(String(r.quantity || '0')),
+            lowStockThreshold: parseFloat(String(r.low_stock_threshold || '5')),
+            isLowStock: parseFloat(String(r.quantity || '0')) <= parseFloat(String(r.low_stock_threshold || '5')),
+          })),
+        },
+      });
+    } catch (error) {
+      console.error('[Inventory Report Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch inventory report' });
+    }
+  });
+
+  // Wallet: Topup
+  app.post('/api/wallet/topup', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userId = getUserIdFromHeaders(req);
+      const { amount, paymentMethod } = req.body;
+
+      if (!userId || !amount) {
+        return res.status(400).json({ success: false, error: 'Missing userId or amount' });
+      }
+
+      const now = new Date();
+      const txnId = `wtxn_${Date.now()}`;
+
+      // Create wallet transaction
+      await sql`
+        INSERT INTO wallet_transactions (id, user_id, type, amount, description, reference_type, created_at)
+        VALUES (${txnId}, ${userId}, 'credit', ${amount}, 'Wallet top-up', 'topup', ${now})
+      `;
+
+      // Update wallet balance
+      await sql`
+        UPDATE wallets SET balance = balance + ${amount}, updated_at = ${now}
+        WHERE user_id = ${userId}
+      `;
+
+      res.json({ success: true, data: { transactionId: txnId, amount } });
+    } catch (error) {
+      console.error('[Wallet Topup Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to top up wallet' });
+    }
+  });
+
+  // Wallet: Deduct
+  app.post('/api/wallet/deduct', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userId = getUserIdFromHeaders(req);
+      const { amount, orderId, description } = req.body;
+
+      if (!userId || !amount) {
+        return res.status(400).json({ success: false, error: 'Missing userId or amount' });
+      }
+
+      const now = new Date();
+      const txnId = `wtxn_${Date.now()}`;
+
+      await sql`
+        INSERT INTO wallet_transactions (id, user_id, type, amount, description, reference_type, reference_id, created_at)
+        VALUES (${txnId}, ${userId}, 'debit', ${amount}, ${description || 'Payment'}, 'order', ${orderId || null}, ${now})
+      `;
+
+      await sql`
+        UPDATE wallets SET balance = balance - ${amount}, updated_at = ${now}
+        WHERE user_id = ${userId}
+      `;
+
+      res.json({ success: true, data: { transactionId: txnId, amount } });
+    } catch (error) {
+      console.error('[Wallet Deduct Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to deduct from wallet' });
+    }
+  });
+
+  // Loyalty: Earn Points
+  app.post('/api/loyalty/earn', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userId = getUserIdFromHeaders(req);
+      const { points, orderId, description } = req.body;
+
+      if (!userId || !points) {
+        return res.status(400).json({ success: false, error: 'Missing userId or points' });
+      }
+
+      const now = new Date();
+      const txnId = `ltxn_${Date.now()}`;
+
+      await sql`
+        INSERT INTO loyalty_transactions (id, user_id, type, points, description, reference_type, reference_id, created_at)
+        VALUES (${txnId}, ${userId}, 'earn', ${points}, ${description || 'Points earned'}, 'order', ${orderId || null}, ${now})
+      `;
+
+      await sql`
+        UPDATE loyalty SET points = points + ${points}, total_earned = total_earned + ${points}, updated_at = ${now}
+        WHERE user_id = ${userId}
+      `;
+
+      res.json({ success: true, data: { transactionId: txnId, points } });
+    } catch (error) {
+      console.error('[Loyalty Earn Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to earn points' });
+    }
+  });
+
+  // Loyalty: Redeem Points
+  app.post('/api/loyalty/redeem', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userId = getUserIdFromHeaders(req);
+      const { points, description } = req.body;
+
+      if (!userId || !points) {
+        return res.status(400).json({ success: false, error: 'Missing userId or points' });
+      }
+
+      // Check balance
+      const wallet = await sql`SELECT points FROM loyalty WHERE user_id = ${userId}`;
+      if (wallet.length === 0 || wallet[0].points < points) {
+        return res.status(400).json({ success: false, error: 'Insufficient points' });
+      }
+
+      const now = new Date();
+      const txnId = `ltxn_${Date.now()}`;
+
+      await sql`
+        INSERT INTO loyalty_transactions (id, user_id, type, points, description, created_at)
+        VALUES (${txnId}, ${userId}, 'redeem', ${points}, ${description || 'Points redeemed'}, ${now})
+      `;
+
+      await sql`
+        UPDATE loyalty SET points = points - ${points}, total_redeemed = total_redeemed + ${points}, updated_at = ${now}
+        WHERE user_id = ${userId}
+      `;
+
+      res.json({ success: true, data: { transactionId: txnId, points } });
+    } catch (error) {
+      console.error('[Loyalty Redeem Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to redeem points' });
+    }
+  });
+
+  // Delete All Notifications for User
+  app.delete('/api/notifications', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userId = getUserIdFromHeaders(req);
+      if (!userId) {
+        return res.status(400).json({ success: false, error: 'User ID required' });
+      }
+
+      await sql`DELETE FROM notifications WHERE user_id = ${userId}`;
+
+      res.json({ success: true, message: 'All notifications deleted' });
+    } catch (error) {
+      console.error('[Delete All Notifications Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete notifications' });
+    }
+  });
+
+  // Delete All Wishlist Items
+  app.delete('/api/wishlist', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userId = getUserIdFromHeaders(req);
+      if (!userId) {
+        return res.status(400).json({ success: false, error: 'User ID required' });
+      }
+
+      await sql`DELETE FROM wishlist WHERE user_id = ${userId}`;
+
+      res.json({ success: true, message: 'Wishlist cleared' });
+    } catch (error) {
+      console.error('[Clear Wishlist Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to clear wishlist' });
+    }
+  });
+
+  // Chat: Notify User (from admin)
+  app.post('/api/chat/notify-user', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId, message } = req.body;
+      const now = new Date();
+      const msgId = `msg_${Date.now()}`;
+
+      await sql`
+        INSERT INTO chat_messages (id, user_id, message, sender, is_read, created_at)
+        VALUES (${msgId}, ${userId}, ${message}, 'admin', false, ${now})
+      `;
+
+      // Also create a notification
+      const notifId = `notif_${Date.now()}`;
+      await sql`
+        INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
+        VALUES (${notifId}, ${userId}, 'New message from support', ${message}, 'chat', false, ${now})
+      `;
+
+      res.json({ success: true, data: { messageId: msgId } });
+    } catch (error) {
+      console.error('[Notify User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to notify user' });
+    }
+  });
+
+  // Chat: Notify Admin (from user)
+  app.post('/api/chat/notify-admin', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const userId = getUserIdFromHeaders(req);
+      const { message } = req.body;
+      const now = new Date();
+      const msgId = `msg_${Date.now()}`;
+
+      await sql`
+        INSERT INTO chat_messages (id, user_id, message, sender, is_read, created_at)
+        VALUES (${msgId}, ${userId}, ${message}, 'user', false, ${now})
+      `;
+
+      // Create admin notification
+      const admins = await sql`SELECT id FROM users WHERE role = 'admin'`;
+      for (const admin of admins) {
+        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+        await sql`
+          INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
+          VALUES (${notifId}, ${admin.id}, 'New customer message', ${message}, 'chat', false, ${now})
+        `;
+      }
+
+      res.json({ success: true, data: { messageId: msgId } });
+    } catch (error) {
+      console.error('[Notify Admin Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to notify admin' });
+    }
+  });
+
+  // Mark Chat as Read (User)
+  app.post('/api/chat/:userId/read-user', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId } = req.params;
+      await sql`UPDATE chat_messages SET is_read = true WHERE user_id = ${userId} AND sender = 'admin'`;
+
+      res.json({ success: true, message: 'Messages marked as read' });
+    } catch (error) {
+      console.error('[Mark Read User Error]', error);
       res.status(500).json({ success: false, error: 'Failed to mark messages as read' });
     }
   });
