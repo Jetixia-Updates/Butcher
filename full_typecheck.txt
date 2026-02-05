@@ -1,5 +1,0 @@
-client/pages/Checkout.tsx(783,36): error TS2339: Property 'deliveryFee' does not exist on type 'StoreSettings'.
-client/pages/Checkout.tsx(790,36): error TS2339: Property 'deliveryFee' does not exist on type 'StoreSettings'.
-client/pages/Checkout.tsx(806,65): error TS2339: Property 'deliveryFee' does not exist on type 'StoreSettings'.
-client/pages/Checkout.tsx(814,74): error TS2339: Property 'deliveryFee' does not exist on type 'StoreSettings'.
-client/pages/Checkout.tsx(818,38): error TS2339: Property 'deliveryFee' does not exist on type 'StoreSettings'.

@@ -152,7 +152,7 @@ const data: MyRouteResponse = await response.json();
 
 - **Standard**: `pnpm build`
 - **Binary**: Self-contained executables (Linux, macOS, Windows)
-- **Cloud Deployment**: Use Vercel via their MCP integration for easy deployment.
+- **Cloud Deployment**: Deployed on Netlify with serverless functions (Neon PostgreSQL backend).
 
 ## Architecture Notes
 

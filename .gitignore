@@ -25,7 +25,6 @@ dist-ssr
 
 .config/
 .env
-.vercel
 .env*.local
 
 # Capacitor - Native build outputs (keep project files, ignore build artifacts)
