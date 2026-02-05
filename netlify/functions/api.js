@@ -32100,7 +32100,7 @@ function createApp() {
       }
       let promoCodes = [];
       try {
-        const promoCodesRows = await sql`SELECT * FROM promo_codes WHERE is_active = true`;
+        const promoCodesRows = await sql`SELECT * FROM discount_codes WHERE is_active = true`;
         promoCodes = promoCodesRows.map((p2) => ({
           id: p2.id,
           code: p2.code,
@@ -32116,7 +32116,7 @@ function createApp() {
           isActive: p2.is_active
         }));
       } catch (e) {
-        console.log("[Settings] Promo codes table not available");
+        console.log("[Settings] Discount codes table not available");
       }
       res.json({
         success: true,
