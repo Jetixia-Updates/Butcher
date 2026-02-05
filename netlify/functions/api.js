@@ -34205,6 +34205,83 @@ function createApp() {
       res.status(500).json({ success: false, error: "Failed to delete discount code" });
     }
   });
+  app.post("/api/settings/promo-codes/validate", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { code, orderTotal } = req.body;
+      if (!code) {
+        return res.status(400).json({ success: false, error: "Promo code is required" });
+      }
+      let promoCode = null;
+      try {
+        const promoRows = await sql`
+          SELECT * FROM promo_codes 
+          WHERE UPPER(code) = UPPER(${code}) 
+          AND is_active = true
+          LIMIT 1
+        `;
+        if (promoRows.length > 0) {
+          promoCode = promoRows[0];
+        }
+      } catch (e) {
+      }
+      if (!promoCode) {
+        try {
+          const discountRows = await sql`
+            SELECT * FROM discount_codes 
+            WHERE UPPER(code) = UPPER(${code}) 
+            AND is_active = true
+            LIMIT 1
+          `;
+          if (discountRows.length > 0) {
+            promoCode = discountRows[0];
+          }
+        } catch (e) {
+        }
+      }
+      if (!promoCode) {
+        return res.json({ success: false, error: "Invalid promo code" });
+      }
+      if (promoCode.valid_to && new Date(promoCode.valid_to) < /* @__PURE__ */ new Date()) {
+        return res.json({ success: false, error: "Promo code has expired" });
+      }
+      if (promoCode.usage_limit && promoCode.usage_count >= promoCode.usage_limit) {
+        return res.json({ success: false, error: "Promo code usage limit reached" });
+      }
+      const minOrder = parseFloat(String(promoCode.minimum_order || "0"));
+      if (orderTotal && orderTotal < minOrder) {
+        return res.json({ success: false, error: `Minimum order amount is ${minOrder} AED` });
+      }
+      const value = parseFloat(String(promoCode.value || "0"));
+      const type = promoCode.type || "percentage";
+      let discount = 0;
+      if (type === "percentage") {
+        discount = (orderTotal || 0) * (value / 100);
+        const maxDiscount = promoCode.maximum_discount ? parseFloat(String(promoCode.maximum_discount)) : null;
+        if (maxDiscount && discount > maxDiscount) {
+          discount = maxDiscount;
+        }
+      } else {
+        discount = value;
+      }
+      discount = Math.round(discount * 100) / 100;
+      res.json({
+        success: true,
+        data: {
+          valid: true,
+          code: promoCode.code,
+          type,
+          value,
+          discount
+        }
+      });
+    } catch (error) {
+      console.error("[Validate Promo Code Error]", error);
+      res.status(500).json({ success: false, error: "Failed to validate promo code" });
+    }
+  });
   app.put("/api/settings", async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
