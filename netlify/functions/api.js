@@ -31741,6 +31741,17 @@ var safeDate = (d2) => {
   const date = d2 instanceof Date ? d2 : new Date(d2);
   return isNaN(date.getTime()) ? (/* @__PURE__ */ new Date()).toISOString() : date.toISOString();
 };
+var safeJson = (val, fallback = null) => {
+  if (val === null || val === void 0) return fallback;
+  if (typeof val === "string") {
+    try {
+      return JSON.parse(val);
+    } catch {
+      return fallback;
+    }
+  }
+  return val;
+};
 var app = null;
 function createApp() {
   if (app) return app;
@@ -32399,8 +32410,9 @@ function createApp() {
           discountCode: o.discount_code,
           total: parseFloat(String(o.total || "0")),
           addressId: o.address_id,
-          deliveryAddress: o.delivery_address,
+          deliveryAddress: safeJson(o.delivery_address),
           deliveryNotes: o.delivery_notes,
+          statusHistory: safeJson(o.status_history, []),
           estimatedDeliveryAt: o.estimated_delivery_at ? safeDate(o.estimated_delivery_at) : null,
           actualDeliveryAt: o.actual_delivery_at ? safeDate(o.actual_delivery_at) : null,
           items: items.map((i) => ({
@@ -32481,8 +32493,9 @@ function createApp() {
         discountCode: o.discount_code,
         total: parseFloat(String(o.total || "0")),
         addressId: o.address_id,
-        deliveryAddress: o.delivery_address,
+        deliveryAddress: safeJson(o.delivery_address),
         deliveryNotes: o.delivery_notes,
+        statusHistory: safeJson(o.status_history, []),
         estimatedDeliveryAt: o.estimated_delivery_at ? safeDate(o.estimated_delivery_at) : null,
         actualDeliveryAt: o.actual_delivery_at ? safeDate(o.actual_delivery_at) : null,
         items: items.map((i) => ({
@@ -34072,18 +34085,18 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at),
           ...order ? {
             customerName: order.customer_name,
             customerMobile: order.customer_mobile,
             userId: order.user_id,
-            deliveryAddress: order.delivery_address,
+            deliveryAddress: safeJson(order.delivery_address),
             total: Number(order.total || 0),
             items
           } : {}
@@ -34119,7 +34132,7 @@ function createApp() {
       const existing = await sql`SELECT * FROM delivery_tracking WHERE order_id = ${orderId}`;
       let tracking;
       if (existing.length > 0) {
-        const existingTimeline = existing[0].timeline || [];
+        const existingTimeline = safeJson(existing[0].timeline, []);
         existingTimeline.push({ status: "assigned", timestamp: (/* @__PURE__ */ new Date()).toISOString(), notes: `Assigned to driver: ${driver.first_name}` });
         await sql`UPDATE delivery_tracking SET 
           driver_id = ${driverId},
@@ -34148,7 +34161,8 @@ function createApp() {
         console.log("[ASSIGN DELIVERY] User notification created");
       }
       const driverNotifId = genId("notif");
-      const addressStr = order.delivery_address ? `${order.delivery_address.building || ""}, ${order.delivery_address.street || ""}, ${order.delivery_address.area || ""}` : "Address not available";
+      const parsedAddr = safeJson(order.delivery_address);
+      const addressStr = parsedAddr ? `${parsedAddr.building || ""}, ${parsedAddr.street || ""}, ${parsedAddr.area || ""}` : "Address not available";
       await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, unread, created_at)
         VALUES (${driverNotifId}, ${driverId}, 'delivery', 'New Delivery Assigned', 'تم تعيين توصيل جديد', ${`Order ${order.order_number} assigned to you. Customer: ${order.customer_name}. Address: ${addressStr}`}, ${`\u062A\u0645 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0637\u0644\u0628 ${order.order_number} \u0644\u0643. \u0627\u0644\u0639\u0645\u064A\u0644: ${order.customer_name}. \u0627\u0644\u0639\u0646\u0648\u0627\u0646: ${addressStr}`}, true, NOW())`;
       console.log("[ASSIGN DELIVERY] Success! Tracking ID:", tracking.id);
@@ -34160,11 +34174,11 @@ function createApp() {
         driverName: tracking.driver_name,
         driverMobile: tracking.driver_mobile,
         status: tracking.status,
-        currentLocation: tracking.current_location,
+        currentLocation: safeJson(tracking.current_location),
         estimatedArrival: tracking.estimated_arrival ? safeDate(tracking.estimated_arrival) : null,
         actualArrival: tracking.actual_arrival ? safeDate(tracking.actual_arrival) : null,
-        deliveryProof: tracking.delivery_proof,
-        timeline: tracking.timeline || [],
+        deliveryProof: safeJson(tracking.delivery_proof),
+        timeline: safeJson(tracking.timeline, []),
         createdAt: safeDate(tracking.created_at),
         updatedAt: safeDate(tracking.updated_at)
       };
@@ -34195,11 +34209,11 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at)
         }
@@ -34230,11 +34244,11 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at)
         }
@@ -34256,7 +34270,7 @@ function createApp() {
         return res.status(404).json({ success: false, error: "Tracking not found for this order" });
       }
       const tracking = rows[0];
-      const timeline = tracking.timeline || [];
+      const timeline = safeJson(tracking.timeline, []);
       timeline.push({ status, timestamp: (/* @__PURE__ */ new Date()).toISOString(), location, notes });
       const updateFields = { status, timeline, updated_at: /* @__PURE__ */ new Date() };
       if (status === "delivered") {
@@ -34272,7 +34286,7 @@ function createApp() {
         const orderStatus = status === "delivered" ? "delivered" : "out_for_delivery";
         const currentOrder = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
         if (currentOrder.length > 0) {
-          let statusHistory = currentOrder[0].status_history || [];
+          let statusHistory = safeJson(currentOrder[0].status_history, []);
           statusHistory.push({ status: orderStatus, changedBy: tracking.driver_id || "driver", changedAt: (/* @__PURE__ */ new Date()).toISOString(), notes: `Updated via delivery tracking: ${status}` });
           if (status === "delivered") {
             await sql`UPDATE orders SET status = 'delivered', status_history = ${JSON.stringify(statusHistory)}::jsonb, actual_delivery_at = NOW(), payment_status = 'captured', updated_at = NOW() WHERE id = ${tracking.order_id}`;
@@ -34318,11 +34332,11 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at)
         },
@@ -34345,7 +34359,7 @@ function createApp() {
         return res.status(404).json({ success: false, error: "Tracking not found" });
       }
       const tracking = rows[0];
-      const timeline = tracking.timeline || [];
+      const timeline = safeJson(tracking.timeline, []);
       timeline.push({ status: "delivered", timestamp: (/* @__PURE__ */ new Date()).toISOString(), notes: notes || "Delivery completed with proof" });
       const deliveryProof = JSON.stringify({ signature, photo, notes });
       await sql`UPDATE delivery_tracking SET 
@@ -34355,7 +34369,7 @@ function createApp() {
         WHERE id = ${id}`;
       const currentOrder = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
       if (currentOrder.length > 0) {
-        let statusHistory = currentOrder[0].status_history || [];
+        let statusHistory = safeJson(currentOrder[0].status_history, []);
         statusHistory.push({ status: "delivered", changedBy: tracking.driver_id || "driver", changedAt: (/* @__PURE__ */ new Date()).toISOString(), notes: notes || "Delivery completed with proof" });
         await sql`UPDATE orders SET status = 'delivered', status_history = ${JSON.stringify(statusHistory)}::jsonb, actual_delivery_at = NOW(), payment_status = 'captured', updated_at = NOW() WHERE id = ${tracking.order_id}`;
       }
@@ -34380,11 +34394,11 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at)
         },
@@ -34420,11 +34434,11 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at)
         }
@@ -34446,7 +34460,7 @@ function createApp() {
         return res.status(404).json({ success: false, error: "Tracking not found" });
       }
       const tracking = rows[0];
-      const timeline = tracking.timeline || [];
+      const timeline = safeJson(tracking.timeline, []);
       timeline.push({ status, timestamp: (/* @__PURE__ */ new Date()).toISOString(), location, notes });
       await sql`UPDATE delivery_tracking SET 
         status = ${status}, 
@@ -34478,11 +34492,11 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at)
         },
@@ -34514,11 +34528,11 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at)
         }
@@ -35264,8 +35278,9 @@ function createApp() {
         discountCode: o.discount_code,
         total: parseFloat(String(o.total || "0")),
         addressId: o.address_id,
-        deliveryAddress: o.delivery_address,
+        deliveryAddress: safeJson(o.delivery_address),
         deliveryNotes: o.delivery_notes,
+        statusHistory: safeJson(o.status_history, []),
         estimatedDeliveryAt: o.estimated_delivery_at ? safeDate(o.estimated_delivery_at) : null,
         actualDeliveryAt: o.actual_delivery_at ? safeDate(o.actual_delivery_at) : null,
         items: items.map((i) => ({
@@ -35397,8 +35412,9 @@ function createApp() {
         discount: parseFloat(String(o.discount || "0")),
         total: parseFloat(String(o.total || "0")),
         addressId: o.address_id,
-        deliveryAddress: o.delivery_address,
+        deliveryAddress: safeJson(o.delivery_address),
         deliveryNotes: o.delivery_notes,
+        statusHistory: safeJson(o.status_history, []),
         items: items.map((i) => ({
           id: i.id,
           productId: i.product_id,

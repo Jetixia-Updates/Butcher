@@ -82,6 +82,15 @@ const safeDate = (d: any) => {
   return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 };
 
+// Parse JSON fields that Neon may return as strings
+const safeJson = (val: any, fallback: any = null) => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') {
+    try { return JSON.parse(val); } catch { return fallback; }
+  }
+  return val;
+};
+
 // =====================================================
 // EXPRESS APP
 // =====================================================
@@ -884,8 +893,9 @@ function createApp() {
           discountCode: o.discount_code,
           total: parseFloat(String(o.total || '0')),
           addressId: o.address_id,
-          deliveryAddress: o.delivery_address,
+          deliveryAddress: safeJson(o.delivery_address),
           deliveryNotes: o.delivery_notes,
+          statusHistory: safeJson(o.status_history, []),
           estimatedDeliveryAt: o.estimated_delivery_at ? safeDate(o.estimated_delivery_at) : null,
           actualDeliveryAt: o.actual_delivery_at ? safeDate(o.actual_delivery_at) : null,
           items: items.map((i: any) => ({
@@ -977,8 +987,9 @@ function createApp() {
         discountCode: o.discount_code,
         total: parseFloat(String(o.total || '0')),
         addressId: o.address_id,
-        deliveryAddress: o.delivery_address,
+        deliveryAddress: safeJson(o.delivery_address),
         deliveryNotes: o.delivery_notes,
+        statusHistory: safeJson(o.status_history, []),
         estimatedDeliveryAt: o.estimated_delivery_at ? safeDate(o.estimated_delivery_at) : null,
         actualDeliveryAt: o.actual_delivery_at ? safeDate(o.actual_delivery_at) : null,
         items: items.map((i: any) => ({
@@ -2995,18 +3006,18 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at),
           ...(order ? {
             customerName: order.customer_name,
             customerMobile: order.customer_mobile,
             userId: order.user_id,
-            deliveryAddress: order.delivery_address,
+            deliveryAddress: safeJson(order.delivery_address),
             total: Number(order.total || 0),
             items,
           } : {}),
@@ -3054,7 +3065,7 @@ function createApp() {
       let tracking;
       if (existing.length > 0) {
         // Update existing
-        const existingTimeline = (existing[0].timeline as any[]) || [];
+        const existingTimeline = safeJson(existing[0].timeline, []);
         existingTimeline.push({ status: 'assigned', timestamp: new Date().toISOString(), notes: `Assigned to driver: ${driver.first_name}` });
 
         await sql`UPDATE delivery_tracking SET 
@@ -3092,7 +3103,8 @@ function createApp() {
 
       // Create notification for driver
       const driverNotifId = genId('notif');
-      const addressStr = order.delivery_address ? `${(order.delivery_address as any).building || ''}, ${(order.delivery_address as any).street || ''}, ${(order.delivery_address as any).area || ''}` : 'Address not available';
+      const parsedAddr = safeJson(order.delivery_address);
+      const addressStr = parsedAddr ? `${parsedAddr.building || ''}, ${parsedAddr.street || ''}, ${parsedAddr.area || ''}` : 'Address not available';
       await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, unread, created_at)
         VALUES (${driverNotifId}, ${driverId}, 'delivery', 'New Delivery Assigned', 'تم تعيين توصيل جديد', ${`Order ${order.order_number} assigned to you. Customer: ${order.customer_name}. Address: ${addressStr}`}, ${`تم تعيين الطلب ${order.order_number} لك. العميل: ${order.customer_name}. العنوان: ${addressStr}`}, true, NOW())`;
 
@@ -3105,11 +3117,11 @@ function createApp() {
         driverName: tracking.driver_name,
         driverMobile: tracking.driver_mobile,
         status: tracking.status,
-        currentLocation: tracking.current_location,
+        currentLocation: safeJson(tracking.current_location),
         estimatedArrival: tracking.estimated_arrival ? safeDate(tracking.estimated_arrival) : null,
         actualArrival: tracking.actual_arrival ? safeDate(tracking.actual_arrival) : null,
-        deliveryProof: tracking.delivery_proof,
-        timeline: tracking.timeline || [],
+        deliveryProof: safeJson(tracking.delivery_proof),
+        timeline: safeJson(tracking.timeline, []),
         createdAt: safeDate(tracking.created_at),
         updatedAt: safeDate(tracking.updated_at),
       };
@@ -3145,11 +3157,11 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at),
         },
@@ -3185,11 +3197,11 @@ function createApp() {
           driverName: t.driver_name,
           driverMobile: t.driver_mobile,
           status: t.status,
-          currentLocation: t.current_location,
+          currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof,
-          timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof),
+          timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at),
           updatedAt: safeDate(t.updated_at),
         },
@@ -3216,7 +3228,7 @@ function createApp() {
       }
 
       const tracking = rows[0];
-      const timeline = (tracking.timeline as any[]) || [];
+      const timeline = safeJson(tracking.timeline, []);
       timeline.push({ status, timestamp: new Date().toISOString(), location, notes });
 
       const updateFields: any = { status, timeline, updated_at: new Date() };
@@ -3236,7 +3248,7 @@ function createApp() {
         const orderStatus = status === 'delivered' ? 'delivered' : 'out_for_delivery';
         const currentOrder = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
         if (currentOrder.length > 0) {
-          let statusHistory = (currentOrder[0].status_history as any[]) || [];
+          let statusHistory = safeJson(currentOrder[0].status_history, []);
           statusHistory.push({ status: orderStatus, changedBy: tracking.driver_id || 'driver', changedAt: new Date().toISOString(), notes: `Updated via delivery tracking: ${status}` });
 
           if (status === 'delivered') {
@@ -3281,10 +3293,10 @@ function createApp() {
         data: {
           id: t.id, orderId: t.order_id, orderNumber: t.order_number,
           driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
-          status: t.status, currentLocation: t.current_location,
+          status: t.status, currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof), timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
         },
         message: `Delivery status updated to ${status}`,
@@ -3311,7 +3323,7 @@ function createApp() {
       }
 
       const tracking = rows[0];
-      const timeline = (tracking.timeline as any[]) || [];
+      const timeline = safeJson(tracking.timeline, []);
       timeline.push({ status: 'delivered', timestamp: new Date().toISOString(), notes: notes || 'Delivery completed with proof' });
       const deliveryProof = JSON.stringify({ signature, photo, notes });
 
@@ -3324,7 +3336,7 @@ function createApp() {
       // Update order
       const currentOrder = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
       if (currentOrder.length > 0) {
-        let statusHistory = (currentOrder[0].status_history as any[]) || [];
+        let statusHistory = safeJson(currentOrder[0].status_history, []);
         statusHistory.push({ status: 'delivered', changedBy: tracking.driver_id || 'driver', changedAt: new Date().toISOString(), notes: notes || 'Delivery completed with proof' });
         await sql`UPDATE orders SET status = 'delivered', status_history = ${JSON.stringify(statusHistory)}::jsonb, actual_delivery_at = NOW(), payment_status = 'captured', updated_at = NOW() WHERE id = ${tracking.order_id}`;
       }
@@ -3347,10 +3359,10 @@ function createApp() {
         data: {
           id: t.id, orderId: t.order_id, orderNumber: t.order_number,
           driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
-          status: t.status, currentLocation: t.current_location,
+          status: t.status, currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof), timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
         },
         message: 'Delivery completed successfully',
@@ -3386,10 +3398,10 @@ function createApp() {
         data: {
           id: t.id, orderId: t.order_id, orderNumber: t.order_number,
           driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
-          status: t.status, currentLocation: t.current_location,
+          status: t.status, currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof), timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
         },
       });
@@ -3415,7 +3427,7 @@ function createApp() {
       }
 
       const tracking = rows[0];
-      const timeline = (tracking.timeline as any[]) || [];
+      const timeline = safeJson(tracking.timeline, []);
       timeline.push({ status, timestamp: new Date().toISOString(), location, notes });
 
       await sql`UPDATE delivery_tracking SET 
@@ -3447,10 +3459,10 @@ function createApp() {
         data: {
           id: t.id, orderId: t.order_id, orderNumber: t.order_number,
           driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
-          status: t.status, currentLocation: t.current_location,
+          status: t.status, currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof), timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
         },
         message: `Delivery status updated to ${status}`,
@@ -3481,10 +3493,10 @@ function createApp() {
         data: {
           id: t.id, orderId: t.order_id, orderNumber: t.order_number,
           driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
-          status: t.status, currentLocation: t.current_location,
+          status: t.status, currentLocation: safeJson(t.current_location),
           estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
           actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
-          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          deliveryProof: safeJson(t.delivery_proof), timeline: safeJson(t.timeline, []),
           createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
         },
       });
@@ -4452,8 +4464,9 @@ function createApp() {
         discountCode: o.discount_code,
         total: parseFloat(String(o.total || '0')),
         addressId: o.address_id,
-        deliveryAddress: o.delivery_address,
+        deliveryAddress: safeJson(o.delivery_address),
         deliveryNotes: o.delivery_notes,
+        statusHistory: safeJson(o.status_history, []),
         estimatedDeliveryAt: o.estimated_delivery_at ? safeDate(o.estimated_delivery_at) : null,
         actualDeliveryAt: o.actual_delivery_at ? safeDate(o.actual_delivery_at) : null,
         items: items.map((i: any) => ({
@@ -4627,8 +4640,9 @@ function createApp() {
         discount: parseFloat(String(o.discount || '0')),
         total: parseFloat(String(o.total || '0')),
         addressId: o.address_id,
-        deliveryAddress: o.delivery_address,
+        deliveryAddress: safeJson(o.delivery_address),
         deliveryNotes: o.delivery_notes,
+        statusHistory: safeJson(o.status_history, []),
         items: items.map((i: any) => ({
           id: i.id,
           productId: i.product_id,
