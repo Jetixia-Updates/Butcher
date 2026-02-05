@@ -2938,6 +2938,588 @@ function createApp() {
   });
 
   // =====================================================
+  // DELIVERY TRACKING API
+  // =====================================================
+
+  // Helper: get notification content for order status
+  function getNotificationContent(orderNumber: string, status: string) {
+    const notifications: Record<string, { title: string; titleAr: string; message: string; messageAr: string }> = {
+      confirmed: { title: "Order Confirmed", titleAr: "تم تأكيد الطلب", message: `Great news! Your order ${orderNumber} has been confirmed`, messageAr: `أخبار سارة! تم تأكيد طلبك ${orderNumber}` },
+      processing: { title: "Order Being Prepared", titleAr: "جاري تحضير الطلب", message: `Your order ${orderNumber} is now being prepared`, messageAr: `جاري تحضير طلبك ${orderNumber} الآن` },
+      ready_for_pickup: { title: "Order Ready", titleAr: "الطلب جاهز", message: `Your order ${orderNumber} is ready for pickup/delivery`, messageAr: `طلبك ${orderNumber} جاهز للاستلام/التوصيل` },
+      out_for_delivery: { title: "Out for Delivery", titleAr: "في الطريق إليك", message: `Your order ${orderNumber} is on its way to you!`, messageAr: `طلبك ${orderNumber} في الطريق إليك!` },
+      delivered: { title: "Order Delivered", titleAr: "تم تسليم الطلب", message: `Your order ${orderNumber} has been delivered. Enjoy!`, messageAr: `تم تسليم طلبك ${orderNumber}. بالهناء والشفاء!` },
+      cancelled: { title: "Order Cancelled", titleAr: "تم إلغاء الطلب", message: `Your order ${orderNumber} has been cancelled`, messageAr: `تم إلغاء طلبك ${orderNumber}` },
+    };
+    return notifications[status] || null;
+  }
+
+  // Helper: generate unique id
+  const genId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  // GET /api/delivery/tracking - Get all trackings (admin) or filter by query
+  app.get('/api/delivery/tracking', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderId, driverId, status } = req.query;
+      let rows = await sql`SELECT * FROM delivery_tracking ORDER BY created_at DESC`;
+
+      if (orderId) rows = rows.filter((t: any) => t.order_id === orderId);
+      if (driverId) rows = rows.filter((t: any) => t.driver_id === driverId);
+      if (status) rows = rows.filter((t: any) => t.status === status);
+
+      // Enrich with order details
+      const allOrders = await sql`SELECT * FROM orders`;
+      const allOrderItems = await sql`SELECT * FROM order_items`;
+
+      const trackings = rows.map((t: any) => {
+        const order = allOrders.find((o: any) => o.id === t.order_id);
+        const items = allOrderItems
+          .filter((item: any) => item.order_id === t.order_id)
+          .map((item: any) => ({
+            name: item.product_name,
+            nameAr: item.product_name_ar,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unit_price),
+            totalPrice: Number(item.total_price),
+          }));
+
+        return {
+          id: t.id,
+          orderId: t.order_id,
+          orderNumber: t.order_number,
+          driverId: t.driver_id,
+          driverName: t.driver_name,
+          driverMobile: t.driver_mobile,
+          status: t.status,
+          currentLocation: t.current_location,
+          estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
+          actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
+          deliveryProof: t.delivery_proof,
+          timeline: t.timeline || [],
+          createdAt: safeDate(t.created_at),
+          updatedAt: safeDate(t.updated_at),
+          ...(order ? {
+            customerName: order.customer_name,
+            customerMobile: order.customer_mobile,
+            userId: order.user_id,
+            deliveryAddress: order.delivery_address,
+            total: Number(order.total || 0),
+            items,
+          } : {}),
+        };
+      });
+
+      res.json({ success: true, data: trackings });
+    } catch (error) {
+      console.error('[Delivery Tracking Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch trackings' });
+    }
+  });
+
+  // POST /api/delivery/tracking/assign - Assign delivery to driver (MUST be before /:id routes)
+  app.post('/api/delivery/tracking/assign', async (req, res) => {
+    console.log('[ASSIGN DELIVERY] Request received:', JSON.stringify(req.body));
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderId, driverId, estimatedArrival } = req.body;
+      if (!orderId || !driverId) {
+        return res.status(400).json({ success: false, error: 'orderId and driverId are required' });
+      }
+
+      // Validate order
+      const orderRows = await sql`SELECT * FROM orders WHERE id = ${orderId}`;
+      if (orderRows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Order not found' });
+      }
+      const order = orderRows[0];
+
+      // Validate driver
+      const driverRows = await sql`SELECT * FROM users WHERE id = ${driverId} AND role = 'delivery'`;
+      if (driverRows.length === 0) {
+        return res.status(400).json({ success: false, error: 'Invalid delivery driver' });
+      }
+      const driver = driverRows[0];
+      const driverFullName = `${driver.first_name} ${driver.family_name}`;
+
+      // Check if tracking already exists
+      const existing = await sql`SELECT * FROM delivery_tracking WHERE order_id = ${orderId}`;
+
+      let tracking;
+      if (existing.length > 0) {
+        // Update existing
+        const existingTimeline = (existing[0].timeline as any[]) || [];
+        existingTimeline.push({ status: 'assigned', timestamp: new Date().toISOString(), notes: `Assigned to driver: ${driver.first_name}` });
+
+        await sql`UPDATE delivery_tracking SET 
+          driver_id = ${driverId},
+          driver_name = ${driverFullName},
+          driver_mobile = ${driver.mobile},
+          status = 'assigned',
+          estimated_arrival = ${estimatedArrival ? new Date(estimatedArrival).toISOString() : existing[0].estimated_arrival},
+          timeline = ${JSON.stringify(existingTimeline)}::jsonb,
+          updated_at = NOW()
+          WHERE id = ${existing[0].id}`;
+        const updated = await sql`SELECT * FROM delivery_tracking WHERE id = ${existing[0].id}`;
+        tracking = updated[0];
+      } else {
+        // Create new
+        const trackingId = genId('track');
+        const timeline = [{ status: 'assigned', timestamp: new Date().toISOString(), notes: `Order assigned to driver: ${driver.first_name}` }];
+
+        await sql`INSERT INTO delivery_tracking (id, order_id, order_number, driver_id, driver_name, driver_mobile, status, estimated_arrival, timeline, created_at, updated_at)
+          VALUES (${trackingId}, ${orderId}, ${order.order_number}, ${driverId}, ${driverFullName}, ${driver.mobile}, 'assigned', ${estimatedArrival ? new Date(estimatedArrival).toISOString() : order.estimated_delivery_at}, ${JSON.stringify(timeline)}::jsonb, NOW(), NOW())`;
+        const inserted = await sql`SELECT * FROM delivery_tracking WHERE id = ${trackingId}`;
+        tracking = inserted[0];
+      }
+
+      // Update order status to ready_for_pickup
+      await sql`UPDATE orders SET status = 'ready_for_pickup', updated_at = NOW() WHERE id = ${orderId}`;
+
+      // Create notification for user: driver assigned
+      if (order.user_id) {
+        const notifId = genId('notif');
+        await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
+          VALUES (${notifId}, ${order.user_id}, 'driver_assigned', 'Driver Assigned to Your Order', 'تم تعيين سائق لطلبك', ${`Driver: ${driverFullName} | Mobile: ${driver.mobile}`}, ${`السائق: ${driverFullName} | الهاتف: ${driver.mobile}`}, '/orders', true, NOW())`;
+        console.log('[ASSIGN DELIVERY] User notification created');
+      }
+
+      // Create notification for driver
+      const driverNotifId = genId('notif');
+      const addressStr = order.delivery_address ? `${(order.delivery_address as any).building || ''}, ${(order.delivery_address as any).street || ''}, ${(order.delivery_address as any).area || ''}` : 'Address not available';
+      await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, unread, created_at)
+        VALUES (${driverNotifId}, ${driverId}, 'delivery', 'New Delivery Assigned', 'تم تعيين توصيل جديد', ${`Order ${order.order_number} assigned to you. Customer: ${order.customer_name}. Address: ${addressStr}`}, ${`تم تعيين الطلب ${order.order_number} لك. العميل: ${order.customer_name}. العنوان: ${addressStr}`}, true, NOW())`;
+
+      console.log('[ASSIGN DELIVERY] Success! Tracking ID:', tracking.id);
+      const result = {
+        id: tracking.id,
+        orderId: tracking.order_id,
+        orderNumber: tracking.order_number,
+        driverId: tracking.driver_id,
+        driverName: tracking.driver_name,
+        driverMobile: tracking.driver_mobile,
+        status: tracking.status,
+        currentLocation: tracking.current_location,
+        estimatedArrival: tracking.estimated_arrival ? safeDate(tracking.estimated_arrival) : null,
+        actualArrival: tracking.actual_arrival ? safeDate(tracking.actual_arrival) : null,
+        deliveryProof: tracking.delivery_proof,
+        timeline: tracking.timeline || [],
+        createdAt: safeDate(tracking.created_at),
+        updatedAt: safeDate(tracking.updated_at),
+      };
+      res.json({ success: true, data: result, message: 'Delivery assigned successfully' });
+    } catch (error) {
+      console.error('[ASSIGN DELIVERY] Error:', error);
+      res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Failed to assign delivery' });
+    }
+  });
+
+  // GET /api/delivery/tracking/by-order/:orderId - Get tracking by order ID (MUST be before /:id)
+  app.get('/api/delivery/tracking/by-order/:orderId', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderId } = req.params;
+      const rows = await sql`SELECT * FROM delivery_tracking WHERE order_id = ${orderId}`;
+
+      if (rows.length === 0) {
+        return res.json({ success: true, data: null });
+      }
+
+      const t = rows[0];
+      res.json({
+        success: true,
+        data: {
+          id: t.id,
+          orderId: t.order_id,
+          orderNumber: t.order_number,
+          driverId: t.driver_id,
+          driverName: t.driver_name,
+          driverMobile: t.driver_mobile,
+          status: t.status,
+          currentLocation: t.current_location,
+          estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
+          actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
+          deliveryProof: t.delivery_proof,
+          timeline: t.timeline || [],
+          createdAt: safeDate(t.created_at),
+          updatedAt: safeDate(t.updated_at),
+        },
+      });
+    } catch (error) {
+      console.error('[Tracking By OrderId Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch tracking' });
+    }
+  });
+
+  // GET /api/delivery/tracking/order/:orderNumber - Get tracking by order number (MUST be before /:id)
+  app.get('/api/delivery/tracking/order/:orderNumber', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderNumber } = req.params;
+      const rows = await sql`SELECT * FROM delivery_tracking WHERE order_number = ${orderNumber}`;
+
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found for this order' });
+      }
+
+      const t = rows[0];
+      res.json({
+        success: true,
+        data: {
+          id: t.id,
+          orderId: t.order_id,
+          orderNumber: t.order_number,
+          driverId: t.driver_id,
+          driverName: t.driver_name,
+          driverMobile: t.driver_mobile,
+          status: t.status,
+          currentLocation: t.current_location,
+          estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
+          actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
+          deliveryProof: t.delivery_proof,
+          timeline: t.timeline || [],
+          createdAt: safeDate(t.created_at),
+          updatedAt: safeDate(t.updated_at),
+        },
+      });
+    } catch (error) {
+      console.error('[Tracking By OrderNumber Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch tracking' });
+    }
+  });
+
+  // POST /api/delivery/tracking/:orderId/update - Update delivery status by order ID (MUST be before /:id)
+  app.post('/api/delivery/tracking/:orderId/update', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderId } = req.params;
+      const { status, notes, location } = req.body;
+
+      const rows = await sql`SELECT * FROM delivery_tracking WHERE order_id = ${orderId}`;
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found for this order' });
+      }
+
+      const tracking = rows[0];
+      const timeline = (tracking.timeline as any[]) || [];
+      timeline.push({ status, timestamp: new Date().toISOString(), location, notes });
+
+      const updateFields: any = { status, timeline, updated_at: new Date() };
+      if (status === 'delivered') {
+        updateFields.actual_arrival = new Date();
+      }
+
+      await sql`UPDATE delivery_tracking SET 
+        status = ${status}, 
+        timeline = ${JSON.stringify(timeline)}::jsonb, 
+        actual_arrival = ${status === 'delivered' ? new Date().toISOString() : tracking.actual_arrival},
+        updated_at = NOW() 
+        WHERE id = ${tracking.id}`;
+
+      // Update order status
+      if (status === 'delivered' || status === 'in_transit' || status === 'nearby') {
+        const orderStatus = status === 'delivered' ? 'delivered' : 'out_for_delivery';
+        const currentOrder = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
+        if (currentOrder.length > 0) {
+          let statusHistory = (currentOrder[0].status_history as any[]) || [];
+          statusHistory.push({ status: orderStatus, changedBy: tracking.driver_id || 'driver', changedAt: new Date().toISOString(), notes: `Updated via delivery tracking: ${status}` });
+
+          if (status === 'delivered') {
+            await sql`UPDATE orders SET status = 'delivered', status_history = ${JSON.stringify(statusHistory)}::jsonb, actual_delivery_at = NOW(), payment_status = 'captured', updated_at = NOW() WHERE id = ${tracking.order_id}`;
+          } else {
+            await sql`UPDATE orders SET status = ${orderStatus}, status_history = ${JSON.stringify(statusHistory)}::jsonb, updated_at = NOW() WHERE id = ${tracking.order_id}`;
+          }
+        }
+      }
+
+      // Create notification for user
+      const orderResult = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
+      if (orderResult.length > 0 && orderResult[0].user_id) {
+        const order = orderResult[0];
+        if (status === 'assigned') {
+          const driverName = tracking.driver_name || 'Driver';
+          const driverMobile = tracking.driver_mobile || 'N/A';
+          const notifId = genId('notif');
+          await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
+            VALUES (${notifId}, ${order.user_id}, 'driver_assigned', 'Driver Assigned to Your Order', 'تم تعيين سائق لطلبك', ${`Driver: ${driverName} | Mobile: ${driverMobile}`}, ${`السائق: ${driverName} | الهاتف: ${driverMobile}`}, '/orders', true, NOW())`;
+        } else if (status === 'in_transit' || status === 'picked_up') {
+          const content = getNotificationContent(order.order_number, 'out_for_delivery');
+          if (content) {
+            const notifId = genId('notif');
+            await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
+              VALUES (${notifId}, ${order.user_id}, 'order', ${content.title}, ${content.titleAr}, ${content.message}, ${content.messageAr}, '/orders', true, NOW())`;
+          }
+        } else if (status === 'delivered') {
+          const content = getNotificationContent(order.order_number, 'delivered');
+          if (content) {
+            const notifId = genId('notif');
+            await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
+              VALUES (${notifId}, ${order.user_id}, 'order', ${content.title}, ${content.titleAr}, ${content.message}, ${content.messageAr}, '/orders', true, NOW())`;
+          }
+        }
+      }
+
+      const updated = await sql`SELECT * FROM delivery_tracking WHERE id = ${tracking.id}`;
+      const t = updated[0];
+      res.json({
+        success: true,
+        data: {
+          id: t.id, orderId: t.order_id, orderNumber: t.order_number,
+          driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
+          status: t.status, currentLocation: t.current_location,
+          estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
+          actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
+          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
+        },
+        message: `Delivery status updated to ${status}`,
+      });
+    } catch (error) {
+      console.error('[Delivery Status Update Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update delivery status' });
+    }
+  });
+
+  // POST /api/delivery/tracking/:id/complete - Complete delivery with proof (MUST be before /:id GET)
+  app.post('/api/delivery/tracking/:id/complete', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { signature, photo, notes } = req.body;
+
+      const rows = await sql`SELECT * FROM delivery_tracking WHERE id = ${id}`;
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
+      }
+
+      const tracking = rows[0];
+      const timeline = (tracking.timeline as any[]) || [];
+      timeline.push({ status: 'delivered', timestamp: new Date().toISOString(), notes: notes || 'Delivery completed with proof' });
+      const deliveryProof = JSON.stringify({ signature, photo, notes });
+
+      await sql`UPDATE delivery_tracking SET 
+        status = 'delivered', actual_arrival = NOW(), 
+        delivery_proof = ${deliveryProof}::jsonb,
+        timeline = ${JSON.stringify(timeline)}::jsonb, updated_at = NOW() 
+        WHERE id = ${id}`;
+
+      // Update order
+      const currentOrder = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
+      if (currentOrder.length > 0) {
+        let statusHistory = (currentOrder[0].status_history as any[]) || [];
+        statusHistory.push({ status: 'delivered', changedBy: tracking.driver_id || 'driver', changedAt: new Date().toISOString(), notes: notes || 'Delivery completed with proof' });
+        await sql`UPDATE orders SET status = 'delivered', status_history = ${JSON.stringify(statusHistory)}::jsonb, actual_delivery_at = NOW(), payment_status = 'captured', updated_at = NOW() WHERE id = ${tracking.order_id}`;
+      }
+
+      // Notification for user
+      const orderResult = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
+      if (orderResult.length > 0 && orderResult[0].user_id) {
+        const order = orderResult[0];
+        const notifId = genId('notif');
+        const notifMsg = notes ? `Your order ${order.order_number} has been delivered. Driver note: ${notes}` : `Your order ${order.order_number} has been delivered. Enjoy!`;
+        const notifMsgAr = notes ? `تم تسليم طلبك ${order.order_number}. ملاحظة السائق: ${notes}` : `تم تسليم طلبك ${order.order_number}. بالهناء والشفاء!`;
+        await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
+          VALUES (${notifId}, ${order.user_id}, 'order', 'Order Delivered', 'تم تسليم الطلب', ${notifMsg}, ${notifMsgAr}, '/orders', true, NOW())`;
+      }
+
+      const updated = await sql`SELECT * FROM delivery_tracking WHERE id = ${id}`;
+      const t = updated[0];
+      res.json({
+        success: true,
+        data: {
+          id: t.id, orderId: t.order_id, orderNumber: t.order_number,
+          driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
+          status: t.status, currentLocation: t.current_location,
+          estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
+          actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
+          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
+        },
+        message: 'Delivery completed successfully',
+      });
+    } catch (error) {
+      console.error('[Complete Delivery Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to complete delivery' });
+    }
+  });
+
+  // PATCH /api/delivery/tracking/:id/location - Update driver location
+  app.patch('/api/delivery/tracking/:id/location', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { latitude, longitude } = req.body;
+
+      const rows = await sql`SELECT * FROM delivery_tracking WHERE id = ${id}`;
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
+      }
+
+      const location = JSON.stringify({ latitude, longitude, updatedAt: new Date().toISOString() });
+      await sql`UPDATE delivery_tracking SET current_location = ${location}::jsonb, updated_at = NOW() WHERE id = ${id}`;
+
+      const updated = await sql`SELECT * FROM delivery_tracking WHERE id = ${id}`;
+      const t = updated[0];
+      res.json({
+        success: true,
+        data: {
+          id: t.id, orderId: t.order_id, orderNumber: t.order_number,
+          driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
+          status: t.status, currentLocation: t.current_location,
+          estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
+          actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
+          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
+        },
+      });
+    } catch (error) {
+      console.error('[Update Location Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update location' });
+    }
+  });
+
+  // PATCH /api/delivery/tracking/:id/status - Update delivery status by tracking ID
+  app.patch('/api/delivery/tracking/:id/status', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { status, notes, location } = req.body;
+
+      const rows = await sql`SELECT * FROM delivery_tracking WHERE id = ${id}`;
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
+      }
+
+      const tracking = rows[0];
+      const timeline = (tracking.timeline as any[]) || [];
+      timeline.push({ status, timestamp: new Date().toISOString(), location, notes });
+
+      await sql`UPDATE delivery_tracking SET 
+        status = ${status}, 
+        timeline = ${JSON.stringify(timeline)}::jsonb,
+        actual_arrival = ${status === 'delivered' ? new Date().toISOString() : tracking.actual_arrival},
+        updated_at = NOW() 
+        WHERE id = ${id}`;
+
+      // Update order status if delivered
+      if (status === 'delivered') {
+        await sql`UPDATE orders SET status = 'delivered', actual_delivery_at = NOW(), payment_status = 'captured', updated_at = NOW() WHERE id = ${tracking.order_id}`;
+
+        const orderRes = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
+        if (orderRes.length > 0 && orderRes[0].user_id) {
+          const content = getNotificationContent(orderRes[0].order_number, 'delivered');
+          if (content) {
+            const notifId = genId('notif');
+            await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
+              VALUES (${notifId}, ${orderRes[0].user_id}, 'order', ${content.title}, ${content.titleAr}, ${content.message}, ${content.messageAr}, '/orders', true, NOW())`;
+          }
+        }
+      }
+
+      const updated = await sql`SELECT * FROM delivery_tracking WHERE id = ${id}`;
+      const t = updated[0];
+      res.json({
+        success: true,
+        data: {
+          id: t.id, orderId: t.order_id, orderNumber: t.order_number,
+          driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
+          status: t.status, currentLocation: t.current_location,
+          estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
+          actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
+          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
+        },
+        message: `Delivery status updated to ${status}`,
+      });
+    } catch (error) {
+      console.error('[Delivery Status Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update delivery status' });
+    }
+  });
+
+  // GET /api/delivery/tracking/:id - Get tracking by ID (MUST be LAST among tracking routes)
+  app.get('/api/delivery/tracking/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const rows = await sql`SELECT * FROM delivery_tracking WHERE id = ${id}`;
+
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Tracking not found' });
+      }
+
+      const t = rows[0];
+      res.json({
+        success: true,
+        data: {
+          id: t.id, orderId: t.order_id, orderNumber: t.order_number,
+          driverId: t.driver_id, driverName: t.driver_name, driverMobile: t.driver_mobile,
+          status: t.status, currentLocation: t.current_location,
+          estimatedArrival: t.estimated_arrival ? safeDate(t.estimated_arrival) : null,
+          actualArrival: t.actual_arrival ? safeDate(t.actual_arrival) : null,
+          deliveryProof: t.delivery_proof, timeline: t.timeline || [],
+          createdAt: safeDate(t.created_at), updatedAt: safeDate(t.updated_at),
+        },
+      });
+    } catch (error) {
+      console.error('[Get Tracking Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch tracking' });
+    }
+  });
+
+  // GET /api/delivery/drivers - Get all delivery drivers
+  app.get('/api/delivery/drivers', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const driverRows = await sql`SELECT * FROM users WHERE role = 'delivery' AND is_active = true`;
+      const trackingRows = await sql`SELECT * FROM delivery_tracking WHERE status NOT IN ('delivered', 'failed')`;
+
+      const drivers = driverRows.map((d: any) => ({
+        id: d.id,
+        name: `${d.first_name} ${d.family_name}`,
+        mobile: d.mobile,
+        email: d.email,
+        activeDeliveries: trackingRows.filter((t: any) => t.driver_id === d.id).length,
+      }));
+
+      res.json({ success: true, data: drivers });
+    } catch (error) {
+      console.error('[Delivery Drivers Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch drivers' });
+    }
+  });
+
+  // =====================================================
   // PAYMENTS API
   // =====================================================
 
