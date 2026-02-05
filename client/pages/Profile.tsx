@@ -349,24 +349,7 @@ export default function ProfilePage() {
     }
   };
 
-  useEffect(() => {
-    if (!isAuthLoading && !isLoggedIn) {
-      navigate("/login");
-    }
-  }, [isLoggedIn, isAuthLoading, navigate]);
-
-  if (isAuthLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!isLoggedIn) {
-    return null;
-  }
-
+  // Sync edit form with user data
   useEffect(() => {
     if (user) {
       setEditForm({
@@ -377,6 +360,27 @@ export default function ProfilePage() {
       });
     }
   }, [user]);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthLoading && !isLoggedIn) {
+      navigate("/login");
+    }
+  }, [isLoggedIn, isAuthLoading, navigate]);
+
+  // Show loading spinner while checking auth
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Don't render anything if not logged in (redirect will happen)
+  if (!isLoggedIn) {
+    return null;
+  }
 
   const translations = {
     en: {

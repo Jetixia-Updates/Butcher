@@ -1,14 +1,10 @@
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
-  schema: "./server/db/schema.ts",
+  schema: "./server/db/schema-neon.ts",
   out: "./drizzle",
-  dialect: "mysql",
+  dialect: "postgresql",
   dbCredentials: {
-    host: process.env.DB_HOST || "mysql.freehostia.com",
-    user: process.env.DB_USER || "essref3_butcher",
-    password: process.env.DB_PASSWORD || "Butcher@123",
-    database: process.env.DB_NAME || "essref3_butcher",
-    port: parseInt(process.env.DB_PORT || "3306"),
+    url: process.env.DATABASE_URL || "postgresql://neondb_owner:npg_GHrRQzwk9E4n@ep-hidden-paper-ajua0bg2-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require",
   },
 });

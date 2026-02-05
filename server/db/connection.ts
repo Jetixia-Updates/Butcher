@@ -1,50 +1,42 @@
 /**
  * Database Connection for Butcher Shop
- * Using Drizzle ORM with MySQL (FreeHostia)
+ * Using Neon PostgreSQL Serverless
  */
 
-import mysql from "mysql2/promise";
-import { drizzle } from "drizzle-orm/mysql2";
-import * as schema from "./schema";
+import { neon, neonConfig } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
+import * as schema from "./schema-neon";
 
-// Get database credentials from environment or use defaults
-const dbConfig = {
-  host: process.env.DB_HOST || "mysql.freehostia.com",
-  user: process.env.DB_USER || "essref3_butcher",
-  password: process.env.DB_PASSWORD || "Butcher@123",
-  database: process.env.DB_NAME || "essref3_butcher",
-  port: parseInt(process.env.DB_PORT || "3306"),
-};
+// Configure Neon for serverless
+neonConfig.fetchConnectionCache = true;
 
-// Create MySQL connection pool
-const pool = mysql.createPool({
-  ...dbConfig,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+// Get database URL from environment
+const DATABASE_URL = process.env.DATABASE_URL || 
+  'postgresql://neondb_owner:npg_GHrRQzwk9E4n@ep-hidden-paper-ajua0bg2-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require';
+
+// Create Neon SQL client
+const sql = neon(DATABASE_URL);
 
 // Create Drizzle instance with schema
-export const db = drizzle(pool, { schema, mode: "default" });
+export const db = drizzle(sql, { schema });
 
 // Check if database is configured
-export const isDatabaseConfigured = () => !!dbConfig.host;
+export const isDatabaseConfigured = () => !!DATABASE_URL;
 
 // Test database connection
 export const testConnection = async () => {
   try {
-    const connection = await pool.getConnection();
-    console.log("✅ MySQL database connected successfully!");
-    connection.release();
+    const result = await sql`SELECT 1 as test`;
+    console.log("✅ Neon PostgreSQL connected successfully!");
     return true;
   } catch (error) {
-    console.error("❌ MySQL database connection failed:", error);
+    console.error("❌ Neon PostgreSQL connection failed:", error);
     return false;
   }
 };
 
 // Export schema for use in queries
-export * from "./schema";
+export * from "./schema-neon";
 
 // Type exports for use throughout the app
 export type Database = typeof db;

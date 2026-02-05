@@ -1,0 +1,60 @@
+# Netlify Configuration for Butcher App
+# =====================================
+
+[build]
+  # Build command
+  command = "pnpm run build:netlify"
+  
+  # Directory with the production-ready static files
+  publish = "dist/spa"
+  
+  # Functions directory
+  functions = "netlify/functions"
+
+[build.environment]
+  # Node version
+  NODE_VERSION = "22"
+
+# Redirects for SPA and API
+[[redirects]]
+  # API routes go to Netlify Functions
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+[[redirects]]
+  # All other routes go to index.html (SPA routing)
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers for security and caching
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/photos/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# Environment variables hint (set these in Netlify dashboard)
+# DATABASE_URL = "postgresql://neondb_owner:xxx@ep-hidden-paper-ajua0bg2-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require"
