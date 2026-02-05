@@ -174,7 +174,8 @@ export default function DealsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-8">
-        {/* Promo Codes Section */}
+        {/* Promo Codes Section - Hidden from users */}
+        {/* 
         <section>
           <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
             <Gift className="w-5 h-5 text-primary" />
@@ -223,6 +224,7 @@ export default function DealsPage() {
             ))}
           </div>
         </section>
+        */}
 
         {/* Category Filters */}
         <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0">

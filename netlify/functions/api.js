@@ -34247,6 +34247,18 @@ function createApp() {
       res.status(500).json({ success: false, error: "Failed to delete discount code" });
     }
   });
+  app.post("/api/settings/promo-codes/reset-limits", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      await sql`UPDATE discount_codes SET usage_limit = 0, usage_count = 0, updated_at = NOW()`;
+      res.json({ success: true, message: "All promo code limits reset successfully" });
+    } catch (error) {
+      console.error("[Reset Promo Limits Error]", error);
+      res.status(500).json({ success: false, error: "Failed to reset promo code limits" });
+    }
+  });
   app.post("/api/settings/promo-codes/validate", async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -34289,7 +34301,9 @@ function createApp() {
       if (promoCode.valid_to && new Date(promoCode.valid_to) < /* @__PURE__ */ new Date()) {
         return res.json({ success: false, error: "Promo code has expired" });
       }
-      if (promoCode.usage_limit && promoCode.usage_count >= promoCode.usage_limit) {
+      const usageLimit = parseInt(String(promoCode.usage_limit || "0"), 10);
+      const usageCount = parseInt(String(promoCode.usage_count || "0"), 10);
+      if (usageLimit > 0 && usageCount >= usageLimit) {
         return res.json({ success: false, error: "Promo code usage limit reached" });
       }
       const minOrder = parseFloat(String(promoCode.minimum_order || "0"));
