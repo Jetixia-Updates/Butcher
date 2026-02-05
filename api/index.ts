@@ -1593,8 +1593,8 @@ function createApp() {
         try {
           const dbUsers = await pgDb.select().from(usersTable).where(
             or(
-              like(usersTable.username, username),
-              like(usersTable.email, username)
+              eq(usersTable.username, username),
+              eq(usersTable.email, username)
             )
           ).limit(1);
 
@@ -1713,8 +1713,8 @@ function createApp() {
           // Find user by username OR email
           const dbUsers = await pgDb.select().from(usersTable).where(
             or(
-              like(usersTable.username, username),
-              like(usersTable.email, username)
+              eq(usersTable.username, username),
+              eq(usersTable.email, username)
             )
           ).limit(1);
 
@@ -1834,14 +1834,14 @@ function createApp() {
         try {
           // Check for existing username
           const existingUsername = await pgDb.select().from(usersTable)
-            .where(like(usersTable.username, username)).limit(1);
+            .where(eq(usersTable.username, username)).limit(1);
           if (existingUsername.length > 0) {
             return res.status(400).json({ success: false, error: 'Username already taken' });
           }
 
           // Check for existing email
           const existingEmail = await pgDb.select().from(usersTable)
-            .where(like(usersTable.email, email)).limit(1);
+            .where(eq(usersTable.email, email)).limit(1);
           if (existingEmail.length > 0) {
             return res.status(400).json({ success: false, error: 'Email already registered' });
           }
