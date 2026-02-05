@@ -32521,11 +32521,14 @@ function createApp() {
         vatAmount,
         deliveryFee,
         discount,
+        discountAmount,
+        // Frontend sends this
         discountCode,
         total,
         isExpressDelivery,
         driverTip
       } = req.body;
+      const actualDiscount = discount ?? discountAmount ?? 0;
       if (!items || items.length === 0) {
         return res.status(400).json({ success: false, error: "Missing required fields" });
       }
@@ -32571,7 +32574,7 @@ function createApp() {
           ${orderId}, ${orderNumber}, ${userId || "guest"}, 
           ${customerName}, 
           ${customerEmail}, ${customerMobile},
-          ${subtotal || 0}, ${discount || 0}, ${discountCode || null}, ${deliveryFee || 0}, 
+          ${subtotal || 0}, ${actualDiscount}, ${discountCode || null}, ${deliveryFee || 0}, 
           ${vatAmount || 0}, ${vatRate}, ${total || 0},
           'pending', 'pending', ${paymentMethod || "cod"}, 
           ${addressId || ""}, ${JSON.stringify(address || {})}, ${deliveryNotes || null},
@@ -32617,7 +32620,7 @@ function createApp() {
       });
     } catch (error) {
       console.error("[Create Order Error]", error);
-      res.status(500).json({ success: false, error: "Failed to create order" });
+      res.status(500).json({ success: false, error: `Failed to create order: ${error?.message || String(error)}` });
     }
   });
   app.put("/api/orders/:id", async (req, res) => {
