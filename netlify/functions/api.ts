@@ -4819,7 +4819,7 @@ function createApp() {
         const metadataStr = JSON.stringify({ originalType: 'chat' });
         await sql`
           INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-          VALUES (${notifId}, ${safeUserId}, 'promotional', 'push', 'New message from support', ${safeMessage}, 'sent', ${metadataStr}::jsonb, ${now})
+          VALUES (${notifId}, ${safeUserId}, 'promotional', 'push', 'New message from support', ${safeMessage}, 'sent', ${metadataStr}, ${now})
         `;
         res.json({ success: true, data: { notificationId: notifId } });
       } catch (insertError: any) {
@@ -4869,7 +4869,7 @@ function createApp() {
           const metadataStr = JSON.stringify({ originalType: 'chat', fromUserId: safeUserId });
           await sql`
             INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-            VALUES (${notifId}, ${'admin'}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}::jsonb, ${now})
+            VALUES (${notifId}, ${'admin'}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}, ${now})
           `;
         } else {
           for (const admin of admins) {
@@ -4877,7 +4877,7 @@ function createApp() {
             const metadataStr = JSON.stringify({ originalType: 'chat', fromUserId: safeUserId });
             await sql`
               INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-              VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}::jsonb, ${now})
+              VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}, ${now})
             `;
           }
         }
