@@ -1609,25 +1609,27 @@ function createApp() {
               firstName: dbUser.firstName,
               familyName: dbUser.familyName,
               role: dbUser.role as User['role'],
-              isActive: dbUser.isActive,
-              isVerified: dbUser.isVerified,
+              isActive: dbUser.isActive ?? true,
+              isVerified: dbUser.isVerified ?? false,
               emirate: dbUser.emirate || '',
               address: dbUser.address || undefined,
-              createdAt: dbUser.createdAt.toISOString(),
-              updatedAt: dbUser.updatedAt.toISOString(),
+              createdAt: dbUser.createdAt ? dbUser.createdAt.toISOString() : new Date().toISOString(),
+              updatedAt: dbUser.updatedAt ? dbUser.updatedAt.toISOString() : new Date().toISOString(),
               lastLoginAt: dbUser.lastLoginAt?.toISOString(),
-              preferences: dbUser.preferences || {
-                language: 'en',
-                currency: 'AED',
-                emailNotifications: true,
-                smsNotifications: true,
-                marketingEmails: true,
-              },
+              preferences: typeof dbUser.preferences === 'string' 
+                ? JSON.parse(dbUser.preferences) 
+                : (dbUser.preferences || {
+                    language: 'en',
+                    currency: 'AED',
+                    emailNotifications: true,
+                    smsNotifications: true,
+                    marketingEmails: true,
+                  }),
             };
           }
-        } catch (dbError) {
-          console.error('[Login DB Error]', dbError);
-          return res.status(500).json({ success: false, error: 'Database error during login' });
+        } catch (dbError: any) {
+          console.error('[Login DB Error]', dbError?.message || dbError);
+          return res.status(500).json({ success: false, error: 'Database error during login', details: dbError?.message });
         }
       } else {
         return res.status(500).json({ success: false, error: 'Database not available' });
