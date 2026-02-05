@@ -825,6 +825,37 @@ function createApp() {
     }
   });
 
+  // Orders Stats (must be before :id route)
+  app.get('/api/orders/stats', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const pending = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status = 'pending'`;
+      const confirmed = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status = 'confirmed'`;
+      const processing = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status = 'processing'`;
+      const outForDelivery = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status = 'out_for_delivery'`;
+      const delivered = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status = 'delivered'`;
+      const cancelled = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status = 'cancelled'`;
+
+      res.json({
+        success: true,
+        data: {
+          pending: parseInt(pending[0].cnt),
+          confirmed: parseInt(confirmed[0].cnt),
+          processing: parseInt(processing[0].cnt),
+          outForDelivery: parseInt(outForDelivery[0].cnt),
+          delivered: parseInt(delivered[0].cnt),
+          cancelled: parseInt(cancelled[0].cnt),
+        },
+      });
+    } catch (error) {
+      console.error('[Orders Stats Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch orders stats' });
+    }
+  });
+
   // Get Single Order
   app.get('/api/orders/:id', async (req, res) => {
     try {
@@ -1421,7 +1452,6 @@ function createApp() {
         landmark: a.landmark,
         latitude: a.latitude ? parseFloat(String(a.latitude)) : null,
         longitude: a.longitude ? parseFloat(String(a.longitude)) : null,
-        instructions: a.instructions,
         isDefault: a.is_default ?? false,
         createdAt: safeDate(a.created_at),
         updatedAt: safeDate(a.updated_at),
@@ -1448,7 +1478,7 @@ function createApp() {
         return res.status(401).json({ success: false, error: 'Authentication required' });
       }
 
-      const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, instructions, isDefault } = req.body;
+      const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, isDefault } = req.body;
 
       // Validate required fields
       if (!label || !fullName || !mobile || !emirate || !area || !street || !building) {
@@ -1476,8 +1506,8 @@ function createApp() {
       }
 
       await sql`
-        INSERT INTO addresses (id, user_id, label, full_name, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, instructions, is_default, created_at, updated_at)
-        VALUES (${addressId}, ${userId}, ${label}, ${fullName}, ${mobile}, ${emirate}, ${area}, ${street}, ${building}, ${floor || null}, ${apartment || null}, ${landmark || null}, ${latitude || null}, ${longitude || null}, ${instructions || null}, ${shouldBeDefault}, ${now}, ${now})
+        INSERT INTO addresses (id, user_id, label, full_name, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, is_default, created_at, updated_at)
+        VALUES (${addressId}, ${userId}, ${label}, ${fullName}, ${mobile}, ${emirate}, ${area}, ${street}, ${building}, ${floor || null}, ${apartment || null}, ${landmark || null}, ${latitude || null}, ${longitude || null}, ${shouldBeDefault}, ${now}, ${now})
       `;
 
       // Return the created address
@@ -1496,7 +1526,6 @@ function createApp() {
         landmark: landmark || null,
         latitude: latitude || null,
         longitude: longitude || null,
-        instructions: instructions || null,
         isDefault: shouldBeDefault,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
@@ -1522,7 +1551,7 @@ function createApp() {
       }
 
       const { id } = req.params;
-      const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, instructions, isDefault } = req.body;
+      const { label, fullName, mobile, emirate, area, street, building, floor, apartment, landmark, latitude, longitude, isDefault } = req.body;
       const now = new Date();
 
       // Verify ownership
@@ -1550,7 +1579,6 @@ function createApp() {
           landmark = COALESCE(${landmark}, landmark),
           latitude = COALESCE(${latitude}, latitude),
           longitude = COALESCE(${longitude}, longitude),
-          instructions = COALESCE(${instructions}, instructions),
           is_default = COALESCE(${isDefault}, is_default),
           updated_at = ${now}
         WHERE id = ${id}
@@ -1577,7 +1605,6 @@ function createApp() {
             landmark: a.landmark,
             latitude: a.latitude ? parseFloat(String(a.latitude)) : null,
             longitude: a.longitude ? parseFloat(String(a.longitude)) : null,
-            instructions: a.instructions,
             isDefault: a.is_default ?? false,
             createdAt: safeDate(a.created_at),
             updatedAt: safeDate(a.updated_at),
@@ -1639,7 +1666,6 @@ function createApp() {
             landmark: a.landmark,
             latitude: a.latitude ? parseFloat(String(a.latitude)) : null,
             longitude: a.longitude ? parseFloat(String(a.longitude)) : null,
-            instructions: a.instructions,
             isDefault: true,
             createdAt: safeDate(a.created_at),
             updatedAt: safeDate(a.updated_at),
@@ -1750,6 +1776,1441 @@ function createApp() {
     } catch (error) {
       console.error('[Validate Discount Error]', error);
       res.status(500).json({ success: false, error: 'Failed to validate discount code' });
+    }
+  });
+
+  // =====================================================
+  // PRODUCTS ADMIN API (CRUD)
+  // =====================================================
+
+  // Get Single Product
+  app.get('/api/products/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const rows = await sql`SELECT * FROM products WHERE id = ${id}`;
+
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Product not found' });
+      }
+
+      const p = rows[0];
+      let tags = p.tags || [];
+      let badges = p.badges || [];
+      if (typeof tags === 'string') try { tags = JSON.parse(tags); } catch { tags = []; }
+      if (typeof badges === 'string') try { badges = JSON.parse(badges); } catch { badges = []; }
+
+      const product = {
+        id: p.id,
+        name: p.name,
+        nameAr: p.name_ar,
+        sku: p.sku,
+        price: parseFloat(String(p.price || '0')),
+        costPrice: parseFloat(String(p.cost_price || '0')),
+        discount: parseFloat(String(p.discount || '0')),
+        category: p.category,
+        description: p.description,
+        descriptionAr: p.description_ar,
+        image: p.image,
+        unit: p.unit,
+        minOrderQuantity: parseFloat(String(p.min_order_quantity || '0.25')),
+        maxOrderQuantity: parseFloat(String(p.max_order_quantity || '10')),
+        isActive: p.is_active,
+        isFeatured: p.is_featured,
+        isPremium: p.is_premium,
+        rating: parseFloat(String(p.rating || '0')),
+        tags: Array.isArray(tags) ? tags : [],
+        badges: Array.isArray(badges) ? badges : [],
+        createdAt: safeDate(p.created_at),
+        updatedAt: safeDate(p.updated_at),
+      };
+
+      res.json({ success: true, data: product });
+    } catch (error) {
+      console.error('[Get Product Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch product' });
+    }
+  });
+
+  // Create Product
+  app.post('/api/products', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { name, nameAr, sku, price, costPrice, discount, category, description, descriptionAr, image, unit, minOrderQuantity, maxOrderQuantity, isActive, isFeatured, isPremium, tags, badges } = req.body;
+
+      if (!name || !price || !category) {
+        return res.status(400).json({ success: false, error: 'Name, price and category are required' });
+      }
+
+      const productId = `prod_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const productSku = sku || `SKU${Date.now()}`;
+      const now = new Date();
+
+      await sql`
+        INSERT INTO products (id, name, name_ar, sku, price, cost_price, discount, category, description, description_ar, image, unit, min_order_quantity, max_order_quantity, is_active, is_featured, is_premium, tags, badges, created_at, updated_at)
+        VALUES (${productId}, ${name}, ${nameAr || null}, ${productSku}, ${price}, ${costPrice || 0}, ${discount || 0}, ${category}, ${description || null}, ${descriptionAr || null}, ${image || null}, ${unit || 'kg'}, ${minOrderQuantity || 0.25}, ${maxOrderQuantity || 10}, ${isActive !== false}, ${isFeatured || false}, ${isPremium || false}, ${JSON.stringify(tags || [])}, ${JSON.stringify(badges || [])}, ${now}, ${now})
+      `;
+
+      // Create stock entry
+      await sql`
+        INSERT INTO stock (id, product_id, quantity, reserved_quantity, low_stock_threshold, reorder_quantity, created_at, updated_at)
+        VALUES (${`stock_${productId}`}, ${productId}, 0, 0, 10, 50, ${now}, ${now})
+      `;
+
+      res.json({ success: true, data: { id: productId }, message: 'Product created successfully' });
+    } catch (error) {
+      console.error('[Create Product Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create product' });
+    }
+  });
+
+  // Update Product
+  app.put('/api/products/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { name, nameAr, sku, price, costPrice, discount, category, description, descriptionAr, image, unit, minOrderQuantity, maxOrderQuantity, isActive, isFeatured, isPremium, tags, badges } = req.body;
+      const now = new Date();
+
+      await sql`
+        UPDATE products SET
+          name = COALESCE(${name}, name),
+          name_ar = COALESCE(${nameAr}, name_ar),
+          sku = COALESCE(${sku}, sku),
+          price = COALESCE(${price}, price),
+          cost_price = COALESCE(${costPrice}, cost_price),
+          discount = COALESCE(${discount}, discount),
+          category = COALESCE(${category}, category),
+          description = COALESCE(${description}, description),
+          description_ar = COALESCE(${descriptionAr}, description_ar),
+          image = COALESCE(${image}, image),
+          unit = COALESCE(${unit}, unit),
+          min_order_quantity = COALESCE(${minOrderQuantity}, min_order_quantity),
+          max_order_quantity = COALESCE(${maxOrderQuantity}, max_order_quantity),
+          is_active = COALESCE(${isActive}, is_active),
+          is_featured = COALESCE(${isFeatured}, is_featured),
+          is_premium = COALESCE(${isPremium}, is_premium),
+          tags = COALESCE(${tags ? JSON.stringify(tags) : null}, tags),
+          badges = COALESCE(${badges ? JSON.stringify(badges) : null}, badges),
+          updated_at = ${now}
+        WHERE id = ${id}
+      `;
+
+      res.json({ success: true, message: 'Product updated successfully' });
+    } catch (error) {
+      console.error('[Update Product Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update product' });
+    }
+  });
+
+  // Delete Product
+  app.delete('/api/products/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      
+      // Soft delete - set is_active to false
+      await sql`UPDATE products SET is_active = false, updated_at = ${new Date()} WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Product deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Product Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete product' });
+    }
+  });
+
+  // =====================================================
+  // CATEGORIES ADMIN API (CRUD)
+  // =====================================================
+
+  // Create Category
+  app.post('/api/categories', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { nameEn, nameAr, icon, color, sortOrder, isActive } = req.body;
+
+      if (!nameEn) {
+        return res.status(400).json({ success: false, error: 'Category name is required' });
+      }
+
+      const categoryId = `cat_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = new Date();
+
+      await sql`
+        INSERT INTO product_categories (id, name_en, name_ar, icon, color, sort_order, is_active, created_at, updated_at)
+        VALUES (${categoryId}, ${nameEn}, ${nameAr || null}, ${icon || 'Package'}, ${color || '#3B82F6'}, ${sortOrder || 0}, ${isActive !== false}, ${now}, ${now})
+      `;
+
+      res.json({ success: true, data: { id: categoryId }, message: 'Category created successfully' });
+    } catch (error) {
+      console.error('[Create Category Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create category' });
+    }
+  });
+
+  // Update Category
+  app.put('/api/categories/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { nameEn, nameAr, icon, color, sortOrder, isActive } = req.body;
+      const now = new Date();
+
+      await sql`
+        UPDATE product_categories SET
+          name_en = COALESCE(${nameEn}, name_en),
+          name_ar = COALESCE(${nameAr}, name_ar),
+          icon = COALESCE(${icon}, icon),
+          color = COALESCE(${color}, color),
+          sort_order = COALESCE(${sortOrder}, sort_order),
+          is_active = COALESCE(${isActive}, is_active),
+          updated_at = ${now}
+        WHERE id = ${id}
+      `;
+
+      res.json({ success: true, message: 'Category updated successfully' });
+    } catch (error) {
+      console.error('[Update Category Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update category' });
+    }
+  });
+
+  // Delete Category
+  app.delete('/api/categories/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await sql`DELETE FROM product_categories WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Category deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Category Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete category' });
+    }
+  });
+
+  // =====================================================
+  // USERS ADMIN API
+  // =====================================================
+
+  // Get All Users
+  app.get('/api/users', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { role, search } = req.query;
+      let rows = await sql`SELECT * FROM users ORDER BY created_at DESC`;
+
+      if (role && role !== 'all') {
+        rows = rows.filter((u: any) => u.role === role);
+      }
+
+      if (search) {
+        const q = (search as string).toLowerCase();
+        rows = rows.filter((u: any) =>
+          u.email?.toLowerCase().includes(q) ||
+          u.first_name?.toLowerCase().includes(q) ||
+          u.family_name?.toLowerCase().includes(q) ||
+          u.mobile?.includes(q)
+        );
+      }
+
+      const users = rows.map((u: any) => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        mobile: u.mobile,
+        firstName: u.first_name,
+        familyName: u.family_name,
+        role: u.role,
+        isActive: u.is_active,
+        isVerified: u.is_verified,
+        emirate: u.emirate,
+        createdAt: safeDate(u.created_at),
+        updatedAt: safeDate(u.updated_at),
+      }));
+
+      res.json({ success: true, data: users });
+    } catch (error) {
+      console.error('[Get Users Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+  });
+
+  // Get User Stats
+  app.get('/api/users/stats', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const total = await sql`SELECT COUNT(*) as cnt FROM users`;
+      const customers = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'customer'`;
+      const staff = await sql`SELECT COUNT(*) as cnt FROM users WHERE role IN ('admin', 'staff', 'delivery')`;
+      const active = await sql`SELECT COUNT(*) as cnt FROM users WHERE is_active = true`;
+
+      res.json({
+        success: true,
+        data: {
+          total: parseInt(total[0].cnt),
+          customers: parseInt(customers[0].cnt),
+          staff: parseInt(staff[0].cnt),
+          active: parseInt(active[0].cnt),
+        },
+      });
+    } catch (error) {
+      console.error('[User Stats Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch user stats' });
+    }
+  });
+
+  // Get Single User
+  app.get('/api/users/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const rows = await sql`SELECT * FROM users WHERE id = ${id}`;
+
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      const u = rows[0];
+      res.json({
+        success: true,
+        data: {
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          mobile: u.mobile,
+          firstName: u.first_name,
+          familyName: u.family_name,
+          role: u.role,
+          isActive: u.is_active,
+          isVerified: u.is_verified,
+          emirate: u.emirate,
+          createdAt: safeDate(u.created_at),
+          updatedAt: safeDate(u.updated_at),
+        },
+      });
+    } catch (error) {
+      console.error('[Get User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch user' });
+    }
+  });
+
+  // Create User (Admin)
+  app.post('/api/users', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { email, password, firstName, familyName, mobile, username, role, isActive, emirate } = req.body;
+
+      if (!email || !password || !firstName) {
+        return res.status(400).json({ success: false, error: 'Email, password and first name are required' });
+      }
+
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const now = new Date();
+
+      await sql`
+        INSERT INTO users (id, username, email, mobile, password, first_name, family_name, role, is_active, is_verified, emirate, created_at, updated_at)
+        VALUES (${userId}, ${username || email.split('@')[0]}, ${email}, ${mobile || null}, ${hashedPassword}, ${firstName}, ${familyName || null}, ${role || 'customer'}, ${isActive !== false}, false, ${emirate || null}, ${now}, ${now})
+      `;
+
+      res.json({ success: true, data: { id: userId }, message: 'User created successfully' });
+    } catch (error) {
+      console.error('[Create User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+  });
+
+  // Update User
+  app.put('/api/users/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { email, firstName, familyName, mobile, role, isActive, isVerified, emirate } = req.body;
+      const now = new Date();
+
+      await sql`
+        UPDATE users SET
+          email = COALESCE(${email}, email),
+          first_name = COALESCE(${firstName}, first_name),
+          family_name = COALESCE(${familyName}, family_name),
+          mobile = COALESCE(${mobile}, mobile),
+          role = COALESCE(${role}, role),
+          is_active = COALESCE(${isActive}, is_active),
+          is_verified = COALESCE(${isVerified}, is_verified),
+          emirate = COALESCE(${emirate}, emirate),
+          updated_at = ${now}
+        WHERE id = ${id}
+      `;
+
+      res.json({ success: true, message: 'User updated successfully' });
+    } catch (error) {
+      console.error('[Update User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+  });
+
+  // Delete User
+  app.delete('/api/users/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await sql`UPDATE users SET is_active = false, updated_at = ${new Date()} WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'User deactivated successfully' });
+    } catch (error) {
+      console.error('[Delete User Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+  });
+
+  // Change Password
+  app.post('/api/users/:id/change-password', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { currentPassword, newPassword } = req.body;
+
+      if (!newPassword) {
+        return res.status(400).json({ success: false, error: 'New password is required' });
+      }
+
+      const users = await sql`SELECT password FROM users WHERE id = ${id}`;
+      if (users.length === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      // Verify current password if provided
+      if (currentPassword) {
+        const isValid = users[0].password.startsWith('$2')
+          ? await bcrypt.compare(currentPassword, users[0].password)
+          : currentPassword === users[0].password;
+        if (!isValid) {
+          return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+        }
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await sql`UPDATE users SET password = ${hashedPassword}, updated_at = ${new Date()} WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+      console.error('[Change Password Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to change password' });
+    }
+  });
+
+  // =====================================================
+  // STOCK MANAGEMENT API
+  // =====================================================
+
+  // Get All Stock
+  app.get('/api/stock', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT s.*, p.name as product_name, p.name_ar as product_name_ar, p.sku, p.category
+        FROM stock s
+        LEFT JOIN products p ON s.product_id = p.id
+      `;
+
+      const stock = rows.map((s: any) => ({
+        id: s.id,
+        productId: s.product_id,
+        productName: s.product_name,
+        productNameAr: s.product_name_ar,
+        sku: s.sku,
+        category: s.category,
+        quantity: parseFloat(String(s.quantity || '0')),
+        reservedQuantity: parseFloat(String(s.reserved_quantity || '0')),
+        availableQuantity: parseFloat(String(s.quantity || '0')) - parseFloat(String(s.reserved_quantity || '0')),
+        reorderLevel: parseFloat(String(s.low_stock_threshold || '10')),
+        reorderQuantity: parseFloat(String(s.reorder_quantity || '50')),
+        lastRestocked: s.last_restocked_at ? safeDate(s.last_restocked_at) : null,
+        updatedAt: safeDate(s.updated_at),
+      }));
+
+      res.json({ success: true, data: stock });
+    } catch (error) {
+      console.error('[Stock Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch stock' });
+    }
+  });
+
+  // Get Stock by Product
+  app.get('/api/stock/:productId', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { productId } = req.params;
+      const rows = await sql`SELECT * FROM stock WHERE product_id = ${productId}`;
+
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Stock not found' });
+      }
+
+      const s = rows[0];
+      res.json({
+        success: true,
+        data: {
+          id: s.id,
+          productId: s.product_id,
+          quantity: parseFloat(String(s.quantity || '0')),
+          reservedQuantity: parseFloat(String(s.reserved_quantity || '0')),
+          reorderLevel: parseFloat(String(s.low_stock_threshold || '10')),
+          reorderQuantity: parseFloat(String(s.reorder_quantity || '50')),
+        },
+      });
+    } catch (error) {
+      console.error('[Get Stock Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch stock' });
+    }
+  });
+
+  // Get Low Stock Alerts
+  app.get('/api/stock/alerts', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`
+        SELECT s.*, p.name as product_name, p.sku
+        FROM stock s
+        LEFT JOIN products p ON s.product_id = p.id
+        WHERE s.quantity <= s.low_stock_threshold
+      `;
+
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('[Stock Alerts Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch stock alerts' });
+    }
+  });
+
+  // Update Stock
+  app.post('/api/stock/update', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { productId, quantity, type, reason, reference } = req.body;
+
+      if (!productId || quantity === undefined) {
+        return res.status(400).json({ success: false, error: 'Product ID and quantity are required' });
+      }
+
+      const now = new Date();
+      const stocks = await sql`SELECT * FROM stock WHERE product_id = ${productId}`;
+      
+      let currentQty = 0;
+      if (stocks.length > 0) {
+        currentQty = parseFloat(String(stocks[0].quantity || '0'));
+      }
+
+      const newQty = type === 'set' ? quantity : currentQty + quantity;
+
+      if (stocks.length === 0) {
+        await sql`
+          INSERT INTO stock (id, product_id, quantity, reserved_quantity, low_stock_threshold, reorder_quantity, created_at, updated_at)
+          VALUES (${`stock_${productId}`}, ${productId}, ${newQty}, 0, 10, 50, ${now}, ${now})
+        `;
+      } else {
+        await sql`UPDATE stock SET quantity = ${newQty}, updated_at = ${now} WHERE product_id = ${productId}`;
+      }
+
+      // Log movement
+      const movementId = `mov_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      await sql`
+        INSERT INTO stock_movements (id, product_id, type, quantity, previous_quantity, new_quantity, reason, reference, created_at)
+        VALUES (${movementId}, ${productId}, ${type || 'adjustment'}, ${quantity}, ${currentQty}, ${newQty}, ${reason || null}, ${reference || null}, ${now})
+      `;
+
+      res.json({ success: true, data: { quantity: newQty }, message: 'Stock updated successfully' });
+    } catch (error) {
+      console.error('[Update Stock Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update stock' });
+    }
+  });
+
+  // Get Stock Movements
+  app.get('/api/stock/movements', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { productId } = req.query;
+      let rows;
+      
+      if (productId) {
+        rows = await sql`SELECT * FROM stock_movements WHERE product_id = ${productId as string} ORDER BY created_at DESC LIMIT 100`;
+      } else {
+        rows = await sql`SELECT * FROM stock_movements ORDER BY created_at DESC LIMIT 100`;
+      }
+
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('[Stock Movements Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch stock movements' });
+    }
+  });
+
+  // =====================================================
+  // DELIVERY ZONES API
+  // =====================================================
+
+  // Get Delivery Zones (including inactive for admin)
+  app.get('/api/delivery/zones', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`SELECT * FROM delivery_zones ORDER BY name`;
+      
+      const zones = rows.map((z: any) => ({
+        id: z.id,
+        name: z.name,
+        nameAr: z.name_ar,
+        emirate: z.emirate,
+        areas: z.areas || [],
+        deliveryFee: parseFloat(String(z.delivery_fee || '0')),
+        minimumOrder: parseFloat(String(z.minimum_order || '0')),
+        estimatedMinutes: z.estimated_minutes,
+        isActive: z.is_active,
+        expressEnabled: z.express_enabled,
+        expressFee: parseFloat(String(z.express_fee || '25')),
+        expressHours: z.express_hours,
+      }));
+
+      res.json({ success: true, data: zones });
+    } catch (error) {
+      console.error('[Delivery Zones Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch delivery zones' });
+    }
+  });
+
+  // Create Delivery Zone
+  app.post('/api/delivery/zones', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee } = req.body;
+
+      if (!name || !emirate) {
+        return res.status(400).json({ success: false, error: 'Name and emirate are required' });
+      }
+
+      const zoneId = `zone_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = new Date();
+
+      await sql`
+        INSERT INTO delivery_zones (id, name, name_ar, emirate, areas, delivery_fee, minimum_order, estimated_minutes, is_active, express_enabled, express_fee, created_at, updated_at)
+        VALUES (${zoneId}, ${name}, ${nameAr || null}, ${emirate}, ${JSON.stringify(areas || [])}, ${deliveryFee || 15}, ${minimumOrder || 50}, ${estimatedMinutes || 60}, ${isActive !== false}, ${expressEnabled || false}, ${expressFee || 25}, ${now}, ${now})
+      `;
+
+      res.json({ success: true, data: { id: zoneId }, message: 'Delivery zone created successfully' });
+    } catch (error) {
+      console.error('[Create Zone Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create delivery zone' });
+    }
+  });
+
+  // Update Delivery Zone
+  app.put('/api/delivery/zones/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee } = req.body;
+      const now = new Date();
+
+      await sql`
+        UPDATE delivery_zones SET
+          name = COALESCE(${name}, name),
+          name_ar = COALESCE(${nameAr}, name_ar),
+          emirate = COALESCE(${emirate}, emirate),
+          areas = COALESCE(${areas ? JSON.stringify(areas) : null}, areas),
+          delivery_fee = COALESCE(${deliveryFee}, delivery_fee),
+          minimum_order = COALESCE(${minimumOrder}, minimum_order),
+          estimated_minutes = COALESCE(${estimatedMinutes}, estimated_minutes),
+          is_active = COALESCE(${isActive}, is_active),
+          express_enabled = COALESCE(${expressEnabled}, express_enabled),
+          express_fee = COALESCE(${expressFee}, express_fee),
+          updated_at = ${now}
+        WHERE id = ${id}
+      `;
+
+      res.json({ success: true, message: 'Delivery zone updated successfully' });
+    } catch (error) {
+      console.error('[Update Zone Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update delivery zone' });
+    }
+  });
+
+  // Delete Delivery Zone
+  app.delete('/api/delivery/zones/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await sql`DELETE FROM delivery_zones WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Delivery zone deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Zone Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete delivery zone' });
+    }
+  });
+
+  // =====================================================
+  // PAYMENTS API
+  // =====================================================
+
+  // Get Payments
+  app.get('/api/payments', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderId, status } = req.query;
+      let rows = await sql`SELECT * FROM payments ORDER BY created_at DESC`;
+
+      if (orderId) {
+        rows = rows.filter((p: any) => p.order_id === orderId);
+      }
+      if (status) {
+        rows = rows.filter((p: any) => p.status === status);
+      }
+
+      const payments = rows.map((p: any) => ({
+        id: p.id,
+        orderId: p.order_id,
+        userId: p.user_id,
+        amount: parseFloat(String(p.amount || '0')),
+        method: p.method,
+        status: p.status,
+        transactionId: p.transaction_id,
+        gatewayResponse: p.gateway_response,
+        createdAt: safeDate(p.created_at),
+        updatedAt: safeDate(p.updated_at),
+      }));
+
+      res.json({ success: true, data: payments });
+    } catch (error) {
+      console.error('[Payments Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch payments' });
+    }
+  });
+
+  // Get Payment Stats
+  app.get('/api/payments/stats', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const total = await sql`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'completed'`;
+      const pending = await sql`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'pending'`;
+      const refunded = await sql`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'refunded'`;
+
+      res.json({
+        success: true,
+        data: {
+          totalCompleted: parseFloat(String(total[0].total || '0')),
+          totalPending: parseFloat(String(pending[0].total || '0')),
+          totalRefunded: parseFloat(String(refunded[0].total || '0')),
+        },
+      });
+    } catch (error) {
+      console.error('[Payment Stats Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch payment stats' });
+    }
+  });
+
+  // Process Payment
+  app.post('/api/payments/process', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { orderId, userId, amount, method } = req.body;
+
+      if (!orderId || !amount || !method) {
+        return res.status(400).json({ success: false, error: 'Order ID, amount and method are required' });
+      }
+
+      const paymentId = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const transactionId = `txn_${Date.now()}`;
+      const now = new Date();
+
+      await sql`
+        INSERT INTO payments (id, order_id, user_id, amount, method, status, transaction_id, created_at, updated_at)
+        VALUES (${paymentId}, ${orderId}, ${userId || null}, ${amount}, ${method}, 'completed', ${transactionId}, ${now}, ${now})
+      `;
+
+      // Update order payment status
+      await sql`UPDATE orders SET payment_status = 'captured', updated_at = ${now} WHERE id = ${orderId}`;
+
+      res.json({ success: true, data: { id: paymentId, transactionId }, message: 'Payment processed successfully' });
+    } catch (error) {
+      console.error('[Process Payment Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to process payment' });
+    }
+  });
+
+  // Refund Payment
+  app.post('/api/payments/:id/refund', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { reason } = req.body;
+      const now = new Date();
+
+      await sql`UPDATE payments SET status = 'refunded', updated_at = ${now} WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Payment refunded successfully' });
+    } catch (error) {
+      console.error('[Refund Payment Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to refund payment' });
+    }
+  });
+
+  // =====================================================
+  // BANNERS API (Admin)
+  // =====================================================
+
+  // Get All Banners (including disabled)
+  app.get('/api/settings/banners', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`SELECT * FROM banners ORDER BY sort_order`;
+      
+      const banners = rows.map((b: any) => ({
+        id: b.id,
+        titleEn: b.title_en,
+        titleAr: b.title_ar,
+        subtitleEn: b.subtitle_en,
+        subtitleAr: b.subtitle_ar,
+        image: b.image,
+        bgColor: b.bg_color,
+        link: b.link,
+        badge: b.badge,
+        badgeAr: b.badge_ar,
+        enabled: b.enabled,
+        sortOrder: b.sort_order,
+      }));
+
+      res.json({ success: true, data: banners });
+    } catch (error) {
+      console.error('[Banners Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch banners' });
+    }
+  });
+
+  // Create Banner
+  app.post('/api/settings/banners', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { titleEn, titleAr, subtitleEn, subtitleAr, image, bgColor, link, badge, badgeAr, enabled, sortOrder } = req.body;
+
+      const bannerId = `banner_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = new Date();
+
+      await sql`
+        INSERT INTO banners (id, title_en, title_ar, subtitle_en, subtitle_ar, image, bg_color, link, badge, badge_ar, enabled, sort_order, created_at, updated_at)
+        VALUES (${bannerId}, ${titleEn || null}, ${titleAr || null}, ${subtitleEn || null}, ${subtitleAr || null}, ${image || null}, ${bgColor || '#FFFFFF'}, ${link || null}, ${badge || null}, ${badgeAr || null}, ${enabled !== false}, ${sortOrder || 0}, ${now}, ${now})
+      `;
+
+      res.json({ success: true, data: { id: bannerId }, message: 'Banner created successfully' });
+    } catch (error) {
+      console.error('[Create Banner Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create banner' });
+    }
+  });
+
+  // Update Banner
+  app.put('/api/settings/banners/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { titleEn, titleAr, subtitleEn, subtitleAr, image, bgColor, link, badge, badgeAr, enabled, sortOrder } = req.body;
+      const now = new Date();
+
+      await sql`
+        UPDATE banners SET
+          title_en = COALESCE(${titleEn}, title_en),
+          title_ar = COALESCE(${titleAr}, title_ar),
+          subtitle_en = COALESCE(${subtitleEn}, subtitle_en),
+          subtitle_ar = COALESCE(${subtitleAr}, subtitle_ar),
+          image = COALESCE(${image}, image),
+          bg_color = COALESCE(${bgColor}, bg_color),
+          link = COALESCE(${link}, link),
+          badge = COALESCE(${badge}, badge),
+          badge_ar = COALESCE(${badgeAr}, badge_ar),
+          enabled = COALESCE(${enabled}, enabled),
+          sort_order = COALESCE(${sortOrder}, sort_order),
+          updated_at = ${now}
+        WHERE id = ${id}
+      `;
+
+      res.json({ success: true, message: 'Banner updated successfully' });
+    } catch (error) {
+      console.error('[Update Banner Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update banner' });
+    }
+  });
+
+  // Delete Banner
+  app.delete('/api/settings/banners/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await sql`DELETE FROM banners WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Banner deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Banner Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete banner' });
+    }
+  });
+
+  // =====================================================
+  // TIME SLOTS API (Admin)
+  // =====================================================
+
+  // Create Time Slot
+  app.post('/api/settings/time-slots', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { label, labelAr, startTime, endTime, isExpressSlot, maxOrders, enabled, sortOrder } = req.body;
+
+      const slotId = `slot_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = new Date();
+
+      await sql`
+        INSERT INTO delivery_time_slots (id, label, label_ar, start_time, end_time, is_express_slot, max_orders, enabled, sort_order, created_at, updated_at)
+        VALUES (${slotId}, ${label}, ${labelAr || null}, ${startTime}, ${endTime}, ${isExpressSlot || false}, ${maxOrders || 50}, ${enabled !== false}, ${sortOrder || 0}, ${now}, ${now})
+      `;
+
+      res.json({ success: true, data: { id: slotId }, message: 'Time slot created successfully' });
+    } catch (error) {
+      console.error('[Create Time Slot Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create time slot' });
+    }
+  });
+
+  // Update Time Slot
+  app.put('/api/settings/time-slots/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { label, labelAr, startTime, endTime, isExpressSlot, maxOrders, enabled, sortOrder } = req.body;
+      const now = new Date();
+
+      await sql`
+        UPDATE delivery_time_slots SET
+          label = COALESCE(${label}, label),
+          label_ar = COALESCE(${labelAr}, label_ar),
+          start_time = COALESCE(${startTime}, start_time),
+          end_time = COALESCE(${endTime}, end_time),
+          is_express_slot = COALESCE(${isExpressSlot}, is_express_slot),
+          max_orders = COALESCE(${maxOrders}, max_orders),
+          enabled = COALESCE(${enabled}, enabled),
+          sort_order = COALESCE(${sortOrder}, sort_order),
+          updated_at = ${now}
+        WHERE id = ${id}
+      `;
+
+      res.json({ success: true, message: 'Time slot updated successfully' });
+    } catch (error) {
+      console.error('[Update Time Slot Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update time slot' });
+    }
+  });
+
+  // Delete Time Slot
+  app.delete('/api/settings/time-slots/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await sql`DELETE FROM delivery_time_slots WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Time slot deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Time Slot Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete time slot' });
+    }
+  });
+
+  // =====================================================
+  // PROMO/DISCOUNT CODES API (Admin)
+  // =====================================================
+
+  // Get All Discount Codes
+  app.get('/api/settings/promo-codes', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const rows = await sql`SELECT * FROM discount_codes ORDER BY created_at DESC`;
+      
+      const codes = rows.map((c: any) => ({
+        id: c.id,
+        code: c.code,
+        type: c.type,
+        value: parseFloat(String(c.value || '0')),
+        minOrderAmount: parseFloat(String(c.min_order_amount || '0')),
+        maxDiscount: parseFloat(String(c.max_discount || '0')),
+        maxUses: c.max_uses,
+        currentUses: c.current_uses || 0,
+        expiresAt: c.expires_at ? safeDate(c.expires_at) : null,
+        isActive: c.is_active,
+        createdAt: safeDate(c.created_at),
+      }));
+
+      res.json({ success: true, data: codes });
+    } catch (error) {
+      console.error('[Discount Codes Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch discount codes' });
+    }
+  });
+
+  // Create Discount Code
+  app.post('/api/settings/promo-codes', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { code, type, value, minOrderAmount, maxDiscount, maxUses, expiresAt, isActive } = req.body;
+
+      if (!code || !type || !value) {
+        return res.status(400).json({ success: false, error: 'Code, type and value are required' });
+      }
+
+      const codeId = `promo_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = new Date();
+
+      await sql`
+        INSERT INTO discount_codes (id, code, type, value, min_order_amount, max_discount, max_uses, current_uses, expires_at, is_active, created_at)
+        VALUES (${codeId}, ${code.toUpperCase()}, ${type}, ${value}, ${minOrderAmount || 0}, ${maxDiscount || null}, ${maxUses || null}, 0, ${expiresAt || null}, ${isActive !== false}, ${now})
+      `;
+
+      res.json({ success: true, data: { id: codeId }, message: 'Discount code created successfully' });
+    } catch (error) {
+      console.error('[Create Discount Code Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create discount code' });
+    }
+  });
+
+  // Update Discount Code
+  app.put('/api/settings/promo-codes/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { code, type, value, minOrderAmount, maxDiscount, maxUses, expiresAt, isActive } = req.body;
+
+      await sql`
+        UPDATE discount_codes SET
+          code = COALESCE(${code?.toUpperCase()}, code),
+          type = COALESCE(${type}, type),
+          value = COALESCE(${value}, value),
+          min_order_amount = COALESCE(${minOrderAmount}, min_order_amount),
+          max_discount = COALESCE(${maxDiscount}, max_discount),
+          max_uses = COALESCE(${maxUses}, max_uses),
+          expires_at = COALESCE(${expiresAt}, expires_at),
+          is_active = COALESCE(${isActive}, is_active)
+        WHERE id = ${id}
+      `;
+
+      res.json({ success: true, message: 'Discount code updated successfully' });
+    } catch (error) {
+      console.error('[Update Discount Code Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update discount code' });
+    }
+  });
+
+  // Delete Discount Code
+  app.delete('/api/settings/promo-codes/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await sql`DELETE FROM discount_codes WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Discount code deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Discount Code Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete discount code' });
+    }
+  });
+
+  // =====================================================
+  // SETTINGS API (Admin)
+  // =====================================================
+
+  // Update Settings
+  app.put('/api/settings', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { vatRate, deliveryFee, freeDeliveryThreshold, expressDeliveryFee, minimumOrderAmount, enableCashOnDelivery, enableCardPayment, enableWallet, enableLoyalty, enableReviews, enableWishlist, enableExpressDelivery, enableScheduledDelivery, storePhone, storeEmail, storeAddress, storeAddressAr, workingHoursStart, workingHoursEnd } = req.body;
+      const now = new Date();
+
+      // Check if settings exist
+      const existing = await sql`SELECT id FROM app_settings LIMIT 1`;
+
+      if (existing.length === 0) {
+        await sql`
+          INSERT INTO app_settings (id, vat_rate, delivery_fee, free_delivery_threshold, express_delivery_fee, minimum_order_amount, enable_cash_on_delivery, enable_card_payment, enable_wallet, enable_loyalty, enable_reviews, enable_wishlist, enable_express_delivery, enable_scheduled_delivery, store_phone, store_email, store_address, store_address_ar, working_hours_start, working_hours_end, created_at, updated_at)
+          VALUES ('settings_1', ${vatRate || 0.05}, ${deliveryFee || 15}, ${freeDeliveryThreshold || 200}, ${expressDeliveryFee || 25}, ${minimumOrderAmount || 50}, ${enableCashOnDelivery !== false}, ${enableCardPayment !== false}, ${enableWallet !== false}, ${enableLoyalty !== false}, ${enableReviews !== false}, ${enableWishlist !== false}, ${enableExpressDelivery !== false}, ${enableScheduledDelivery !== false}, ${storePhone || null}, ${storeEmail || null}, ${storeAddress || null}, ${storeAddressAr || null}, ${workingHoursStart || '08:00'}, ${workingHoursEnd || '22:00'}, ${now}, ${now})
+        `;
+      } else {
+        await sql`
+          UPDATE app_settings SET
+            vat_rate = COALESCE(${vatRate}, vat_rate),
+            delivery_fee = COALESCE(${deliveryFee}, delivery_fee),
+            free_delivery_threshold = COALESCE(${freeDeliveryThreshold}, free_delivery_threshold),
+            express_delivery_fee = COALESCE(${expressDeliveryFee}, express_delivery_fee),
+            minimum_order_amount = COALESCE(${minimumOrderAmount}, minimum_order_amount),
+            enable_cash_on_delivery = COALESCE(${enableCashOnDelivery}, enable_cash_on_delivery),
+            enable_card_payment = COALESCE(${enableCardPayment}, enable_card_payment),
+            enable_wallet = COALESCE(${enableWallet}, enable_wallet),
+            enable_loyalty = COALESCE(${enableLoyalty}, enable_loyalty),
+            enable_reviews = COALESCE(${enableReviews}, enable_reviews),
+            enable_wishlist = COALESCE(${enableWishlist}, enable_wishlist),
+            enable_express_delivery = COALESCE(${enableExpressDelivery}, enable_express_delivery),
+            enable_scheduled_delivery = COALESCE(${enableScheduledDelivery}, enable_scheduled_delivery),
+            store_phone = COALESCE(${storePhone}, store_phone),
+            store_email = COALESCE(${storeEmail}, store_email),
+            store_address = COALESCE(${storeAddress}, store_address),
+            store_address_ar = COALESCE(${storeAddressAr}, store_address_ar),
+            working_hours_start = COALESCE(${workingHoursStart}, working_hours_start),
+            working_hours_end = COALESCE(${workingHoursEnd}, working_hours_end),
+            updated_at = ${now}
+        `;
+      }
+
+      res.json({ success: true, message: 'Settings updated successfully' });
+    } catch (error) {
+      console.error('[Update Settings Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update settings' });
+    }
+  });
+
+  // =====================================================
+  // ANALYTICS/DASHBOARD API
+  // =====================================================
+
+  // Dashboard Stats
+  app.get('/api/analytics/dashboard', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Total orders and revenue
+      const totalOrders = await sql`SELECT COUNT(*) as cnt FROM orders`;
+      const totalRevenue = await sql`SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE payment_status = 'captured'`;
+      
+      // Today's stats
+      const todayOrders = await sql`SELECT COUNT(*) as cnt FROM orders WHERE created_at >= ${today}`;
+      const todayRevenue = await sql`SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE created_at >= ${today} AND payment_status = 'captured'`;
+
+      // Pending orders
+      const pendingOrders = await sql`SELECT COUNT(*) as cnt FROM orders WHERE status IN ('pending', 'confirmed', 'processing')`;
+
+      // Total customers
+      const totalCustomers = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'customer'`;
+
+      // Total products
+      const totalProducts = await sql`SELECT COUNT(*) as cnt FROM products WHERE is_active = true`;
+
+      // Low stock items
+      const lowStock = await sql`SELECT COUNT(*) as cnt FROM stock WHERE quantity <= low_stock_threshold`;
+
+      res.json({
+        success: true,
+        data: {
+          totalOrders: parseInt(totalOrders[0].cnt),
+          totalRevenue: parseFloat(String(totalRevenue[0].total || '0')),
+          todayOrders: parseInt(todayOrders[0].cnt),
+          todayRevenue: parseFloat(String(todayRevenue[0].total || '0')),
+          pendingOrders: parseInt(pendingOrders[0].cnt),
+          totalCustomers: parseInt(totalCustomers[0].cnt),
+          totalProducts: parseInt(totalProducts[0].cnt),
+          lowStockItems: parseInt(lowStock[0].cnt),
+        },
+      });
+    } catch (error) {
+      console.error('[Dashboard Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch dashboard stats' });
+    }
+  });
+
+  // Order Status Update (PATCH)
+  app.patch('/api/orders/:id/status', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      const { status, paymentStatus } = req.body;
+      const now = new Date();
+
+      if (status) {
+        await sql`UPDATE orders SET status = ${status}, updated_at = ${now} WHERE id = ${id}`;
+      }
+      if (paymentStatus) {
+        await sql`UPDATE orders SET payment_status = ${paymentStatus}, updated_at = ${now} WHERE id = ${id}`;
+      }
+
+      res.json({ success: true, message: 'Order status updated successfully' });
+    } catch (error) {
+      console.error('[Update Order Status Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to update order status' });
+    }
+  });
+
+  // Delete Order
+  app.delete('/api/orders/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      
+      // Delete order items first
+      await sql`DELETE FROM order_items WHERE order_id = ${id}`;
+      // Delete order
+      await sql`DELETE FROM orders WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Order deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Order Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete order' });
+    }
+  });
+
+  // =====================================================
+  // NOTIFICATIONS ADMIN API
+  // =====================================================
+
+  // Create Notification
+  app.post('/api/notifications', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId, type, title, titleAr, message, messageAr, data } = req.body;
+
+      const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = new Date();
+
+      await sql`
+        INSERT INTO notifications (id, user_id, type, title, title_ar, message, message_ar, data, is_read, created_at)
+        VALUES (${notificationId}, ${userId}, ${type || 'general'}, ${title}, ${titleAr || null}, ${message}, ${messageAr || null}, ${JSON.stringify(data || {})}, false, ${now})
+      `;
+
+      res.json({ success: true, data: { id: notificationId }, message: 'Notification created successfully' });
+    } catch (error) {
+      console.error('[Create Notification Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to create notification' });
+    }
+  });
+
+  // Delete Notification
+  app.delete('/api/notifications/:id', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await sql`DELETE FROM notifications WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Notification deleted successfully' });
+    } catch (error) {
+      console.error('[Delete Notification Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to delete notification' });
+    }
+  });
+
+  // =====================================================
+  // CHAT ADMIN API
+  // =====================================================
+
+  // Get All Chats (Admin)
+  app.get('/api/chat/all', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      // Get distinct users with chat messages
+      const rows = await sql`
+        SELECT DISTINCT ON (user_id) user_id, message, sender, created_at, is_read
+        FROM chat_messages
+        ORDER BY user_id, created_at DESC
+      `;
+
+      const chats = rows.map((c: any) => ({
+        userId: c.user_id,
+        lastMessage: c.message,
+        lastSender: c.sender,
+        lastMessageAt: safeDate(c.created_at),
+        hasUnread: !c.is_read && c.sender === 'user',
+      }));
+
+      res.json({ success: true, data: chats });
+    } catch (error) {
+      console.error('[Get All Chats Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch chats' });
+    }
+  });
+
+  // Send Chat as Admin
+  app.post('/api/chat/send', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId, message } = req.body;
+
+      if (!userId || !message) {
+        return res.status(400).json({ success: false, error: 'User ID and message are required' });
+      }
+
+      const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const now = new Date();
+
+      await sql`
+        INSERT INTO chat_messages (id, user_id, sender, message, is_read, created_at)
+        VALUES (${msgId}, ${userId}, 'admin', ${message}, false, ${now})
+      `;
+
+      res.json({
+        success: true,
+        data: { id: msgId, userId, sender: 'admin', message, isRead: false, createdAt: now.toISOString() },
+        message: 'Message sent successfully',
+      });
+    } catch (error) {
+      console.error('[Send Admin Chat Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to send message' });
+    }
+  });
+
+  // Mark Chat as Read (Admin)
+  app.post('/api/chat/:userId/read-admin', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { userId } = req.params;
+      await sql`UPDATE chat_messages SET is_read = true WHERE user_id = ${userId} AND sender = 'user'`;
+
+      res.json({ success: true, message: 'Messages marked as read' });
+    } catch (error) {
+      console.error('[Mark Read Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to mark messages as read' });
     }
   });
 
