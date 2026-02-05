@@ -28,20 +28,35 @@ const databaseConfig = {
   password: process.env.DB_PASSWORD || 'Butcher@123',
   database: process.env.DB_NAME || 'essref3_butcher',
   waitForConnections: true,
-  connectionLimit: 5,
-  queueLimit: 0,
+  connectionLimit: 1, // Minimal connections for FreeHostia limit
+  queueLimit: 100, // Queue requests instead of failing
+  connectTimeout: 30000,
+  idleTimeout: 5000, // Close idle connections after 5 seconds
+  enableKeepAlive: false, // Disable keep-alive to free connections faster
 };
 
-// Initialize pool and db instance synchronously for API routes
+// Initialize pool and db instance
 let mysqlPool: mysql.Pool | null = null;
-let pgDb: any = null; // Use 'any' to avoid mysql2 Pool type conflicts
+let pgDb: any = null;
 
 function initDatabase() {
-  if (!mysqlPool) {
-    mysqlPool = mysql.createPool(databaseConfig);
-    pgDb = drizzle(mysqlPool);
+  try {
+    if (!mysqlPool) {
+      console.log('[DB] Initializing MySQL pool with config:', {
+        host: databaseConfig.host,
+        user: databaseConfig.user,
+        database: databaseConfig.database,
+        connectionLimit: databaseConfig.connectionLimit,
+      });
+      mysqlPool = mysql.createPool(databaseConfig);
+      pgDb = drizzle(mysqlPool);
+      console.log('[DB] MySQL pool initialized successfully');
+    }
+    return pgDb;
+  } catch (err) {
+    console.error('[DB] Failed to initialize MySQL pool:', err);
+    return null;
   }
-  return pgDb;
 }
 
 // Initialize database on module load
@@ -1523,14 +1538,18 @@ function createApp() {
   app.get('/api/health', async (req, res) => {
     const dbConnected = isDatabaseAvailable();
     let dbTest = false;
+    let dbError = null;
+    let errorCode = null;
 
     if (dbConnected && pgDb) {
       try {
         // Test query
         await pgDb.select().from(usersTable).limit(1);
         dbTest = true;
-      } catch (e) {
+      } catch (e: any) {
         console.error('[Health Check DB Error]', e);
+        dbError = e.message || 'Unknown error';
+        errorCode = e.code || e.errno || null;
       }
     }
 
@@ -1542,7 +1561,16 @@ function createApp() {
         database: {
           configured: dbConnected,
           connected: dbTest,
+          error: dbError,
+          errorCode: errorCode,
           url: `mysql://${databaseConfig.user}@${databaseConfig.host}/${databaseConfig.database}`,
+          connectionLimit: databaseConfig.connectionLimit,
+          envVars: {
+            DB_HOST: process.env.DB_HOST ? 'set' : 'not set',
+            DB_USER: process.env.DB_USER ? 'set' : 'not set',
+            DB_PASSWORD: process.env.DB_PASSWORD ? 'set' : 'not set',
+            DB_NAME: process.env.DB_NAME ? 'set' : 'not set',
+          }
         },
         inMemoryUsers: users.size,
       },
@@ -1931,7 +1959,14 @@ function createApp() {
       }
 
       const { category, search, featured } = req.query;
-      let result = await pgDb.select().from(productsTable);
+      let result;
+      try {
+        result = await pgDb.select().from(productsTable);
+        console.log('[Products] Fetched', result.length, 'products from DB');
+      } catch (dbErr: any) {
+        console.error('[Products DB Error]', dbErr.message, dbErr.code);
+        return res.status(500).json({ success: false, error: 'Database query failed', details: dbErr.message });
+      }
 
       // Filter by category
       if (category && category !== 'all') {
@@ -1953,36 +1988,36 @@ function createApp() {
         result = result.filter(p => p.isFeatured);
       }
 
-      // Convert to API format
+      // Convert to API format with safe parsing
       const products = result.map(p => ({
         id: p.id,
         name: p.name,
         nameAr: p.nameAr,
         sku: p.sku,
-        price: parseFloat(p.price),
-        costPrice: parseFloat(p.costPrice),
-        discount: parseFloat(p.discount || '0'),
+        price: parseFloat(String(p.price || '0')),
+        costPrice: parseFloat(String(p.costPrice || '0')),
+        discount: parseFloat(String(p.discount || '0')),
         category: p.category,
         description: p.description,
         descriptionAr: p.descriptionAr,
         image: p.image,
         unit: p.unit,
-        minOrderQuantity: parseFloat(p.minOrderQuantity),
-        maxOrderQuantity: parseFloat(p.maxOrderQuantity),
+        minOrderQuantity: parseFloat(String(p.minOrderQuantity || '0.25')),
+        maxOrderQuantity: parseFloat(String(p.maxOrderQuantity || '10')),
         isActive: p.isActive,
         isFeatured: p.isFeatured,
         isPremium: p.isPremium,
-        rating: parseFloat(p.rating || '0'),
+        rating: parseFloat(String(p.rating || '0')),
         tags: p.tags || [],
         badges: p.badges || [],
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString(),
+        createdAt: p.createdAt ? (p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt)) : new Date().toISOString(),
+        updatedAt: p.updatedAt ? (p.updatedAt instanceof Date ? p.updatedAt.toISOString() : String(p.updatedAt)) : new Date().toISOString(),
       }));
 
       res.json({ success: true, data: products });
-    } catch (error) {
-      console.error('[Products Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to fetch products' });
+    } catch (error: any) {
+      console.error('[Products Error]', error.message, error.stack);
+      res.status(500).json({ success: false, error: 'Failed to fetch products', details: error.message });
     }
   });
 
