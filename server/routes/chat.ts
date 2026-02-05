@@ -129,63 +129,81 @@ const sendMessage: RequestHandler = async (req, res) => {
 // POST /api/chat/notify-admin - Notify admin of new message
 const notifyAdmin: RequestHandler = async (req, res) => {
     try {
-        const { userId, userName, message } = req.body;
+        const { userId, userName, message } = req.body || {};
+
+        if (!message) {
+            return res.json({ success: true, message: 'Notification skipped (missing data)' });
+        }
 
         // Truncate to prevent column overflow
-        const safeName = (userName || 'Customer').substring(0, 150);
-        const safeUserId = String(userId || '').substring(0, 100);
-        const safeMessage = String(message || '').substring(0, 100);
+        const safeName = String(userName || 'Customer').substring(0, 150);
+        const safeUserId = String(userId || 'unknown').substring(0, 100);
+        const safeMessage = String(message).substring(0, 100);
 
-        await db.insert(inAppNotifications).values({
-            id: generateId("notif"),
-            userId: "admin", // Target admin
-            type: "chat",
-            title: `New Message from ${safeName}`,
-            titleAr: `رسالة جديدة من ${safeName}`,
-            message: safeMessage,
-            messageAr: safeMessage,
-            link: "/admin/chat",
-            linkTab: "support",
-            linkId: safeUserId,
-            unread: true,
-            createdAt: new Date(),
-        });
+        try {
+            await db.insert(inAppNotifications).values({
+                id: generateId("notif"),
+                userId: "admin", // Target admin
+                type: "chat",
+                title: `New Message from ${safeName}`,
+                titleAr: `رسالة جديدة من ${safeName}`,
+                message: safeMessage,
+                messageAr: safeMessage,
+                link: "/admin/chat",
+                linkTab: "support",
+                linkId: safeUserId,
+                unread: true,
+                createdAt: new Date(),
+            });
+        } catch (insertError) {
+            console.error("Error inserting admin notification:", insertError);
+        }
 
         res.json({ success: true });
     } catch (error) {
         console.error("Error notifying admin:", error);
-        res.status(500).json({ success: false });
+        // Never return 500 for notification endpoints
+        res.json({ success: true, message: 'Notification error handled gracefully' });
     }
 };
 
 // POST /api/chat/notify-user - Notify user of new message
 const notifyUser: RequestHandler = async (req, res) => {
     try {
-        const { userId, message } = req.body;
+        const { userId, message } = req.body || {};
+
+        if (!userId || !message) {
+            return res.json({ success: true, message: 'Notification skipped (missing data)' });
+        }
 
         // Truncate to prevent column overflow
-        const safeUserId = String(userId || '').substring(0, 100);
-        const safeMessage = String(message || '').substring(0, 100);
+        const safeUserId = String(userId).substring(0, 100);
+        const safeMessage = String(message).substring(0, 100);
 
-        await db.insert(inAppNotifications).values({
-            id: generateId("notif"),
-            userId: safeUserId, // Target user
-            type: "chat",
-            title: "New Message from Support",
-            titleAr: "رسالة جديدة من الدعم",
-            message: safeMessage,
-            messageAr: safeMessage,
-            link: "/support",
-            linkTab: "chat",
-            linkId: null,
-            unread: true,
-            createdAt: new Date(),
-        });
+        try {
+            await db.insert(inAppNotifications).values({
+                id: generateId("notif"),
+                userId: safeUserId, // Target user
+                type: "chat",
+                title: "New Message from Support",
+                titleAr: "رسالة جديدة من الدعم",
+                message: safeMessage,
+                messageAr: safeMessage,
+                link: "/support",
+                linkTab: "chat",
+                linkId: null,
+                unread: true,
+                createdAt: new Date(),
+            });
+        } catch (insertError) {
+            console.error("Error inserting user notification:", insertError);
+        }
 
         res.json({ success: true });
     } catch (error) {
         console.error("Error notifying user:", error);
-        res.status(500).json({ success: false });
+        // Never return 500 for notification endpoints
+        res.json({ success: true, message: 'Notification error handled gracefully' });
     }
 };
 

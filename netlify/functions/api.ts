@@ -4796,53 +4796,102 @@ function createApp() {
   // Chat: Notify User (from admin) - this creates a notification only, message is sent via /api/chat/send
   app.post('/api/chat/notify-user', async (req, res) => {
     try {
+      // Always return 200 - notification failures should never block the chat flow
       if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: 'Database not available' });
+        console.log('[Notify User] Database not available, skipping notification');
+        return res.json({ success: true, message: 'Notification skipped (no db)' });
       }
 
-      const { userId, message } = req.body;
+      const { userId, message } = req.body || {};
+      
+      // Validate inputs - return success even if invalid (don't block chat)
+      if (!userId || !message) {
+        console.log('[Notify User] Missing userId or message, skipping');
+        return res.json({ success: true, message: 'Notification skipped (missing data)' });
+      }
+
       const now = new Date();
+      const safeMessage = String(message).substring(0, 500);
+      const safeUserId = String(userId).substring(0, 100);
 
-      // Create a notification for the user about new chat message
-      // Valid types: promotional (for general/chat), valid channels: push
-      const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-      await sql`
-        INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-        VALUES (${notifId}, ${userId}, 'promotional', 'push', 'New message from support', ${message}, 'sent', ${JSON.stringify({ originalType: 'chat' })}, ${now})
-      `;
-
-      res.json({ success: true, data: { notificationId: notifId } });
-    } catch (error) {
-      console.error('[Notify User Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to notify user' });
+      try {
+        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+        const metadataStr = JSON.stringify({ originalType: 'chat' });
+        await sql`
+          INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
+          VALUES (${notifId}, ${safeUserId}, 'promotional', 'push', 'New message from support', ${safeMessage}, 'sent', ${metadataStr}::jsonb, ${now})
+        `;
+        res.json({ success: true, data: { notificationId: notifId } });
+      } catch (insertError: any) {
+        console.error('[Notify User Insert Error]', insertError?.message || insertError);
+        // Return success anyway - notification is non-critical
+        res.json({ success: true, message: 'Chat sent, notification insert failed' });
+      }
+    } catch (error: any) {
+      console.error('[Notify User Error]', error?.message || error);
+      // Never return 500 for notification endpoints
+      res.json({ success: true, message: 'Notification error handled gracefully' });
     }
   });
 
   // Chat: Notify Admin (from user) - this creates a notification only, message is sent via /api/chat/send
   app.post('/api/chat/notify-admin', async (req, res) => {
     try {
+      // Always return 200 - notification failures should never block the chat flow
       if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: 'Database not available' });
+        console.log('[Notify Admin] Database not available, skipping notification');
+        return res.json({ success: true, message: 'Notification skipped (no db)' });
       }
 
-      const { userId, userName, message } = req.body;
+      const { userId, userName, message } = req.body || {};
+
+      // Validate inputs - return success even if invalid (don't block chat)
+      if (!message) {
+        console.log('[Notify Admin] Missing message, skipping');
+        return res.json({ success: true, message: 'Notification skipped (missing data)' });
+      }
+
       const now = new Date();
+      const safeName = String(userName || 'Customer').substring(0, 100);
+      const safeUserId = String(userId || 'unknown').substring(0, 100);
+      const safeMessage = String(message).substring(0, 500);
+      const title = safeName ? `New message from ${safeName}` : 'New customer message';
 
-      // Create admin notification
-      // Valid types: promotional (for general/chat), valid channels: push
-      const admins = await sql`SELECT id FROM users WHERE role = 'admin'`;
-      for (const admin of admins) {
-        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-        await sql`
-          INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-          VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${userName ? `New message from ${userName}` : 'New customer message'}, ${message}, 'sent', ${JSON.stringify({ originalType: 'chat', fromUserId: userId })}, ${now})
-        `;
+      try {
+        // Find admin users
+        const admins = await sql`SELECT id FROM users WHERE role = 'admin' LIMIT 10`;
+        console.log('[Notify Admin] Found', admins.length, 'admin(s)');
+        
+        if (admins.length === 0) {
+          // No admins found - create notification for a fallback admin ID
+          console.log('[Notify Admin] No admins found, creating notification for fallback admin');
+          const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+          const metadataStr = JSON.stringify({ originalType: 'chat', fromUserId: safeUserId });
+          await sql`
+            INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
+            VALUES (${notifId}, ${'admin'}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}::jsonb, ${now})
+          `;
+        } else {
+          for (const admin of admins) {
+            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+            const metadataStr = JSON.stringify({ originalType: 'chat', fromUserId: safeUserId });
+            await sql`
+              INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
+              VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}::jsonb, ${now})
+            `;
+          }
+        }
+
+        res.json({ success: true, message: 'Admin notified' });
+      } catch (insertError: any) {
+        console.error('[Notify Admin Insert Error]', insertError?.message || insertError);
+        // Return success anyway - notification is non-critical
+        res.json({ success: true, message: 'Chat sent, admin notification insert failed' });
       }
-
-      res.json({ success: true, message: 'Admin notified' });
-    } catch (error) {
-      console.error('[Notify Admin Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to notify admin' });
+    } catch (error: any) {
+      console.error('[Notify Admin Error]', error?.message || error);
+      // Never return 500 for notification endpoints
+      res.json({ success: true, message: 'Notification error handled gracefully' });
     }
   });
 
