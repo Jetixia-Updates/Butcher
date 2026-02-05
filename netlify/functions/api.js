@@ -32682,20 +32682,7 @@ function createApp() {
       res.status(500).json({ success: false, error: "Failed to fetch notifications" });
     }
   });
-  app.put("/api/notifications/:id/read", async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: "Database not available" });
-      }
-      const { id } = req.params;
-      await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${/* @__PURE__ */ new Date()} WHERE id = ${id}`;
-      res.json({ success: true, message: "Notification marked as read" });
-    } catch (error) {
-      console.error("[Mark Notification Read Error]", error);
-      res.status(500).json({ success: false, error: "Failed to mark notification as read" });
-    }
-  });
-  app.put("/api/notifications/read-all", async (req, res) => {
+  app.patch("/api/notifications/read-all", async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
         return res.status(500).json({ success: false, error: "Database not available" });
@@ -32708,6 +32695,19 @@ function createApp() {
     } catch (error) {
       console.error("[Mark All Notifications Read Error]", error);
       res.status(500).json({ success: false, error: "Failed to mark notifications as read" });
+    }
+  });
+  app.patch("/api/notifications/:id/read", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { id } = req.params;
+      await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${/* @__PURE__ */ new Date()} WHERE id = ${id}`;
+      res.json({ success: true, message: "Notification marked as read" });
+    } catch (error) {
+      console.error("[Mark Notification Read Error]", error);
+      res.status(500).json({ success: false, error: "Failed to mark notification as read" });
     }
   });
   app.get("/api/wallet", async (req, res) => {

@@ -1223,25 +1223,9 @@ function createApp() {
     }
   });
 
-  // Mark Notification as Read (uses 'delivered' status since enum doesn't have 'read')
-  app.put('/api/notifications/:id/read', async (req, res) => {
-    try {
-      if (!isDatabaseAvailable() || !sql) {
-        return res.status(500).json({ success: false, error: 'Database not available' });
-      }
-
-      const { id } = req.params;
-      await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${new Date()} WHERE id = ${id}`;
-
-      res.json({ success: true, message: 'Notification marked as read' });
-    } catch (error) {
-      console.error('[Mark Notification Read Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to mark notification as read' });
-    }
-  });
-
   // Mark All Notifications as Read (uses 'delivered' status)
-  app.put('/api/notifications/read-all', async (req, res) => {
+  // IMPORTANT: This must be registered BEFORE :id/read to avoid Express matching "read-all" as :id
+  app.patch('/api/notifications/read-all', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
         return res.status(500).json({ success: false, error: 'Database not available' });
@@ -1256,6 +1240,23 @@ function createApp() {
     } catch (error) {
       console.error('[Mark All Notifications Read Error]', error);
       res.status(500).json({ success: false, error: 'Failed to mark notifications as read' });
+    }
+  });
+
+  // Mark Notification as Read (uses 'delivered' status since enum doesn't have 'read')
+  app.patch('/api/notifications/:id/read', async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: 'Database not available' });
+      }
+
+      const { id } = req.params;
+      await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${new Date()} WHERE id = ${id}`;
+
+      res.json({ success: true, message: 'Notification marked as read' });
+    } catch (error) {
+      console.error('[Mark Notification Read Error]', error);
+      res.status(500).json({ success: false, error: 'Failed to mark notification as read' });
     }
   });
 
