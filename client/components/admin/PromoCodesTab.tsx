@@ -301,9 +301,13 @@ export function PromoCodesTab({ onNavigate }: AdminTabProps) {
       {addModal && (
         <PromoCodeFormModal
           onClose={() => setAddModal(false)}
-          onSave={(data) => {
-            addPromoCode(data);
-            setAddModal(false);
+          onSave={async (data) => {
+            const result = await addPromoCode(data);
+            if (result.success) {
+              setAddModal(false);
+            } else {
+              alert(result.error || "Failed to create promo code. The code may already exist.");
+            }
           }}
           isRTL={isRTL}
           t={t}

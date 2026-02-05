@@ -120,8 +120,8 @@ interface SettingsContextType {
   
   // Promo Codes
   promoCodes: PromoCode[];
-  addPromoCode: (code: Omit<PromoCode, "id" | "usedCount">) => Promise<void>;
-  updatePromoCode: (id: string, updates: Partial<PromoCode>) => Promise<void>;
+  addPromoCode: (code: Omit<PromoCode, "id" | "usedCount">) => Promise<{ success: boolean; error?: string }>;
+  updatePromoCode: (id: string, updates: Partial<PromoCode>) => Promise<{ success: boolean; error?: string }>;
   deletePromoCode: (id: string) => Promise<void>;
   validatePromoCode: (code: string, orderTotal: number) => Promise<{ valid: boolean; error?: string; promo?: PromoCode; discount?: number }>;
   
@@ -373,7 +373,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   // Promo Code functions
-  const addPromoCode = async (code: Omit<PromoCode, "id" | "usedCount">) => {
+  const addPromoCode = async (code: Omit<PromoCode, "id" | "usedCount">): Promise<{ success: boolean; error?: string }> => {
     try {
       const response = await settingsApi.createPromoCode({
         code: code.code,
@@ -389,9 +389,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       });
       if (response.success) {
         await fetchSettings();
+        return { success: true };
       }
-    } catch (error) {
+      return { success: false, error: response.error || "Failed to create promo code" };
+    } catch (error: any) {
       console.error("Error adding promo code:", error);
+      return { success: false, error: error?.message || "Failed to create promo code" };
     }
   };
 
