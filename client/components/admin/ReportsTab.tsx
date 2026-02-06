@@ -326,7 +326,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
           csvContent += "=== TOP SELLING PRODUCTS ===\n";
           csvContent += "Product Name,Quantity Sold,Sales (AED)\n";
           topProducts.forEach(p => {
-            csvContent += `"${p.productName}",${p.quantity},${p.sales.toFixed(2)}\n`;
+            csvContent += `"${p.productName}",${p.quantity},${(p.sales || 0).toFixed(2)}\n`;
           });
           csvContent += "\n";
         }
@@ -336,7 +336,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
           csvContent += "=== SALES BY CATEGORY ===\n";
           csvContent += "Category,Quantity,Revenue (AED)\n";
           categorySales.forEach(c => {
-            csvContent += `"${c.category}",${c.totalQuantity},${c.totalSales.toFixed(2)}\n`;
+            csvContent += `"${c.category}",${c.totalQuantity},${(c.totalSales || 0).toFixed(2)}\n`;
           });
           csvContent += "\n";
         }
@@ -346,7 +346,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
           csvContent += "=== DAILY SALES ===\n";
           csvContent += "Date,Orders,Revenue (AED)\n";
           salesReport.dailySales.forEach(d => {
-            csvContent += `${d.date},${d.orders},${d.revenue.toFixed(2)}\n`;
+            csvContent += `${d.date},${d.orders},${(d.revenue || 0).toFixed(2)}\n`;
           });
         }
         
@@ -418,7 +418,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
               <h2>Top Selling Products</h2>
               <table>
                 <tr><th>Product</th><th class="text-right">Quantity Sold</th><th class="text-right">Revenue (AED)</th></tr>
-                ${topProducts.map(p => `<tr><td>${p.productName}</td><td class="text-right">${p.quantity}</td><td class="text-right">${p.sales.toFixed(2)}</td></tr>`).join('')}
+                ${topProducts.map(p => `<tr><td>${p.productName}</td><td class="text-right">${p.quantity}</td><td class="text-right">${(p.sales || 0).toFixed(2)}</td></tr>`).join('')}
               </table>
             ` : ''}
             
@@ -426,7 +426,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
               <h2>Sales by Category</h2>
               <table>
                 <tr><th>Category</th><th class="text-right">Quantity</th><th class="text-right">Revenue (AED)</th></tr>
-                ${categorySales.map(c => `<tr><td>${c.category}</td><td class="text-right">${c.totalQuantity}</td><td class="text-right">${c.totalSales.toFixed(2)}</td></tr>`).join('')}
+                ${categorySales.map(c => `<tr><td>${c.category}</td><td class="text-right">${c.totalQuantity}</td><td class="text-right">${(c.totalSales || 0).toFixed(2)}</td></tr>`).join('')}
               </table>
             ` : ''}
             
@@ -434,7 +434,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
               <h2>Daily Sales</h2>
               <table>
                 <tr><th>Date</th><th class="text-right">Orders</th><th class="text-right">Revenue (AED)</th></tr>
-                ${salesReport.dailySales.slice(0, 30).map(d => `<tr><td>${d.date}</td><td class="text-right">${d.orders}</td><td class="text-right">${d.revenue.toFixed(2)}</td></tr>`).join('')}
+                ${salesReport.dailySales.slice(0, 30).map(d => `<tr><td>${d.date}</td><td class="text-right">${d.orders}</td><td class="text-right">${(d.revenue || 0).toFixed(2)}</td></tr>`).join('')}
               </table>
             ` : ''}
             
@@ -463,7 +463,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
         
         csvContent += "Customer Name,Email,Total Orders,Completed,Canceled,Pending,Total Spent (AED)\n";
         customerStats.forEach(c => {
-          csvContent += `"${c.customerName}","${c.customerEmail}",${c.totalOrders},${c.completedOrders},${c.canceledOrders},${c.pendingOrders},${c.totalSpent.toFixed(2)}\n`;
+          csvContent += `"${c.customerName}","${c.customerEmail}",${c.totalOrders},${c.completedOrders},${c.canceledOrders},${c.pendingOrders},${(c.totalSpent || 0).toFixed(2)}\n`;
         });
         
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -516,7 +516,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
               </div>
               <div class="summary-card">
                 <h3>Total Revenue</h3>
-                <p>AED ${totalSpentAll.toFixed(2)}</p>
+                <p>AED ${(totalSpentAll || 0).toFixed(2)}</p>
               </div>
             </div>
             
@@ -537,7 +537,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                   <td class="text-center">${c.totalOrders}</td>
                   <td class="text-center">${c.completedOrders}</td>
                   <td class="text-center">${c.canceledOrders}</td>
-                  <td class="text-right">AED ${c.totalSpent.toFixed(2)}</td>
+                  <td class="text-right">AED ${(c.totalSpent || 0).toFixed(2)}</td>
                 </tr>
               `).join('')}
             </table>
@@ -852,16 +852,16 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
             <div className="h-64 flex items-end justify-between gap-2">
               {(salesReport?.dailySales || []).slice(-14).map((day, index) => {
                 const maxRevenue = Math.max(
-                  ...(salesReport?.dailySales || []).map((d) => d.revenue)
+                  ...(salesReport?.dailySales || []).map((d) => d.revenue || 0)
                 );
-                const height = maxRevenue ? (day.revenue / maxRevenue) * 100 : 0;
+                const height = maxRevenue ? ((day.revenue || 0) / maxRevenue) * 100 : 0;
 
                 return (
                   <div key={index} className="flex-1 flex flex-col items-center gap-2">
                     <div
                       className="w-full bg-primary/80 rounded-t-lg transition-all hover:bg-primary"
                       style={{ height: `${Math.max(height, 4)}%` }}
-                      title={`${day.date}: AED ${day.revenue.toFixed(2)}`}
+                      title={`${day.date}: AED ${(day.revenue || 0).toFixed(2)}`}
                     />
                     <span className="text-xs text-slate-500 truncate w-full text-center">
                       {new Date(day.date).toLocaleDateString(isRTL ? "ar-AE" : "en-US", {

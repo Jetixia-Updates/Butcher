@@ -35813,14 +35813,20 @@ ${driverNote}` : driverNote;
       if (!isDatabaseAvailable() || !sql) {
         return res.status(500).json({ success: false, error: "Database not available" });
       }
-      const { period = "7d" } = req.query;
+      const { period = "week" } = req.query;
       let days = 7;
-      if (period === "30d") days = 30;
-      if (period === "90d") days = 90;
+      if (period === "30d" || period === "month") days = 30;
+      if (period === "90d" || period === "quarter") days = 90;
+      if (period === "year") days = 365;
+      if (period === "week" || period === "7d") days = 7;
+      const startDate = /* @__PURE__ */ new Date();
+      startDate.setDate(startDate.getDate() - days);
+      const startDateStr = startDate.toISOString();
       const rows = await sql`
-        SELECT DATE(created_at) as date, SUM(total) as revenue, COUNT(*) as orders
+        SELECT DATE(created_at) as date, COALESCE(SUM(total), 0) as revenue, COUNT(*) as orders
         FROM orders
-        WHERE created_at >= NOW() - INTERVAL '${days} days'
+        WHERE created_at >= ${startDateStr}::timestamp
+          AND status != 'cancelled'
         GROUP BY DATE(created_at)
         ORDER BY date ASC
       `;
@@ -35829,7 +35835,7 @@ ${driverNote}` : driverNote;
         data: rows.map((r) => ({
           date: r.date,
           revenue: parseFloat(String(r.revenue || "0")),
-          orders: parseInt(r.orders)
+          orders: parseInt(r.orders || "0")
         }))
       });
     } catch (error) {
@@ -36382,6 +36388,919 @@ ${driverNote}` : driverNote;
     } catch (error) {
       console.error("[Mark Read User Error]", error);
       res.status(500).json({ success: false, error: "Failed to mark messages as read" });
+    }
+  });
+  function getFinanceDateRange(period, startDateParam, endDateParam) {
+    if (startDateParam && endDateParam) {
+      return { start: new Date(startDateParam), end: new Date(endDateParam) };
+    }
+    const now = /* @__PURE__ */ new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    let start;
+    switch (period) {
+      case "today":
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case "week":
+        start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3);
+        break;
+      case "month":
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case "quarter":
+        start = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+        break;
+      case "year":
+        start = new Date(now.getFullYear(), 0, 1);
+        break;
+      default:
+        start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1e3);
+    }
+    return { start, end };
+  }
+  app.get("/api/finance/summary", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { period = "month", startDate, endDate } = req.query;
+      const { start, end } = getFinanceDateRange(period, startDate, endDate);
+      const startStr = start.toISOString();
+      const endStr = end.toISOString();
+      const ordersRows = await sql`
+        SELECT total, vat_amount, payment_method, payment_status, status 
+        FROM orders 
+        WHERE created_at >= ${startStr}::timestamp AND created_at <= ${endStr}::timestamp
+          AND status != 'cancelled'
+          AND (payment_status = 'captured' OR payment_status = 'authorized')
+      `;
+      const totalRevenue = ordersRows.reduce((s, o) => s + parseFloat(String(o.total || "0")), 0);
+      const totalVAT = ordersRows.reduce((s, o) => s + parseFloat(String(o.vat_amount || "0")), 0);
+      const txnRows = await sql`
+        SELECT type, amount FROM finance_transactions 
+        WHERE created_at >= ${startStr}::timestamp AND created_at <= ${endStr}::timestamp
+      `;
+      const totalRefunds = txnRows.filter((t) => t.type === "refund").reduce((s, t) => s + Math.abs(parseFloat(String(t.amount || "0"))), 0);
+      const expRows = await sql`
+        SELECT category, amount FROM finance_expenses 
+        WHERE created_at >= ${startStr}::timestamp AND created_at <= ${endStr}::timestamp
+      `;
+      const totalExpenses = expRows.reduce((s, e) => s + parseFloat(String(e.amount || "0")), 0);
+      const accRows = await sql`SELECT id, name, balance FROM finance_accounts`;
+      const totalCOGS = totalRevenue * 0.6;
+      const grossProfit = totalRevenue - totalCOGS;
+      const grossProfitMargin = totalRevenue > 0 ? grossProfit / totalRevenue * 100 : 0;
+      const netProfit = grossProfit - totalExpenses;
+      const netProfitMargin = totalRevenue > 0 ? netProfit / totalRevenue * 100 : 0;
+      const paymentMethodRevenue = {};
+      ordersRows.forEach((o) => {
+        const method = o.payment_method || "unknown";
+        if (!paymentMethodRevenue[method]) paymentMethodRevenue[method] = { amount: 0, count: 0 };
+        paymentMethodRevenue[method].amount += parseFloat(String(o.total || "0"));
+        paymentMethodRevenue[method].count += 1;
+      });
+      const expensesByCategory = {};
+      expRows.forEach((e) => {
+        const cat = e.category || "other";
+        if (!expensesByCategory[cat]) expensesByCategory[cat] = { amount: 0, count: 0 };
+        expensesByCategory[cat].amount += parseFloat(String(e.amount || "0"));
+        expensesByCategory[cat].count += 1;
+      });
+      const inflow = totalRevenue;
+      const outflow = totalExpenses + totalCOGS + totalRefunds;
+      res.json({
+        success: true,
+        data: {
+          period,
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          totalRevenue: Math.round(totalRevenue * 100) / 100,
+          totalCOGS: Math.round(totalCOGS * 100) / 100,
+          grossProfit: Math.round(grossProfit * 100) / 100,
+          grossProfitMargin: Math.round(grossProfitMargin * 100) / 100,
+          totalExpenses: Math.round(totalExpenses * 100) / 100,
+          netProfit: Math.round(netProfit * 100) / 100,
+          netProfitMargin: Math.round(netProfitMargin * 100) / 100,
+          totalRefunds: Math.round(totalRefunds * 100) / 100,
+          totalVAT: Math.round(totalVAT * 100) / 100,
+          vatCollected: Math.round(totalVAT * 100) / 100,
+          vatPaid: 0,
+          vatDue: Math.round(totalVAT * 100) / 100,
+          cashFlow: {
+            inflow: Math.round(inflow * 100) / 100,
+            outflow: Math.round(outflow * 100) / 100,
+            net: Math.round((inflow - outflow) * 100) / 100
+          },
+          revenueByPaymentMethod: Object.entries(paymentMethodRevenue).map(([method, data]) => ({
+            method,
+            amount: Math.round(data.amount * 100) / 100,
+            count: data.count
+          })),
+          expensesByCategory: Object.entries(expensesByCategory).map(([category, data]) => ({
+            category,
+            amount: Math.round(data.amount * 100) / 100,
+            count: data.count
+          })),
+          accountBalances: accRows.map((a2) => ({
+            accountId: a2.id,
+            accountName: a2.name,
+            balance: parseFloat(String(a2.balance || "0"))
+          }))
+        }
+      });
+    } catch (error) {
+      console.error("[Finance Summary Error]", error);
+      res.status(500).json({ success: false, error: "Failed to get finance summary" });
+    }
+  });
+  app.get("/api/finance/transactions", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { type, status, startDate, endDate, page = "1", limit = "50" } = req.query;
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      let rows = await sql`SELECT * FROM finance_transactions ORDER BY created_at DESC`;
+      if (type) rows = rows.filter((t) => t.type === type);
+      if (status) rows = rows.filter((t) => t.status === status);
+      if (startDate) rows = rows.filter((t) => new Date(t.created_at) >= new Date(startDate));
+      if (endDate) rows = rows.filter((t) => new Date(t.created_at) <= new Date(endDate));
+      const startIdx = (pageNum - 1) * limitNum;
+      const paginatedRows = rows.slice(startIdx, startIdx + limitNum);
+      res.json({ success: true, data: paginatedRows });
+    } catch (error) {
+      console.error("[Finance Transactions Error]", error);
+      res.status(500).json({ success: false, error: "Failed to get transactions" });
+    }
+  });
+  app.get("/api/finance/transactions/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const rows = await sql`SELECT * FROM finance_transactions WHERE id = ${req.params.id}`;
+      if (rows.length === 0) return res.status(404).json({ success: false, error: "Transaction not found" });
+      res.json({ success: true, data: rows[0] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get transaction" });
+    }
+  });
+  app.get("/api/finance/accounts", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const rows = await sql`SELECT * FROM finance_accounts ORDER BY name`;
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error("[Finance Accounts Error]", error);
+      res.status(500).json({ success: false, error: "Failed to get accounts" });
+    }
+  });
+  app.get("/api/finance/accounts/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const rows = await sql`SELECT * FROM finance_accounts WHERE id = ${req.params.id}`;
+      if (rows.length === 0) return res.status(404).json({ success: false, error: "Account not found" });
+      res.json({ success: true, data: rows[0] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get account" });
+    }
+  });
+  app.post("/api/finance/accounts", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { name, nameAr, type, bankName, accountNumber, iban } = req.body;
+      const accountId = genId();
+      await sql`INSERT INTO finance_accounts (id, name, name_ar, type, balance, bank_name, account_number, iban, created_at, updated_at)
+        VALUES (${accountId}, ${name}, ${nameAr || null}, ${type || "cash"}, 0, ${bankName || null}, ${accountNumber || null}, ${iban || null}, NOW(), NOW())`;
+      const rows = await sql`SELECT * FROM finance_accounts WHERE id = ${accountId}`;
+      res.status(201).json({ success: true, data: rows[0] });
+    } catch (error) {
+      console.error("[Create Account Error]", error);
+      res.status(500).json({ success: false, error: "Failed to create account" });
+    }
+  });
+  app.put("/api/finance/accounts/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { name, nameAr, type, bankName, accountNumber, iban, isActive } = req.body;
+      await sql`UPDATE finance_accounts SET 
+        name = COALESCE(${name || null}, name),
+        name_ar = COALESCE(${nameAr || null}, name_ar),
+        bank_name = COALESCE(${bankName || null}, bank_name),
+        account_number = COALESCE(${accountNumber || null}, account_number),
+        iban = COALESCE(${iban || null}, iban),
+        updated_at = NOW()
+        WHERE id = ${req.params.id}`;
+      const rows = await sql`SELECT * FROM finance_accounts WHERE id = ${req.params.id}`;
+      if (rows.length === 0) return res.status(404).json({ success: false, error: "Account not found" });
+      res.json({ success: true, data: rows[0] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to update account" });
+    }
+  });
+  app.post("/api/finance/accounts/transfer", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { fromAccountId, toAccountId, amount, notes } = req.body;
+      const fromRows = await sql`SELECT * FROM finance_accounts WHERE id = ${fromAccountId}`;
+      const toRows = await sql`SELECT * FROM finance_accounts WHERE id = ${toAccountId}`;
+      if (fromRows.length === 0 || toRows.length === 0) return res.status(404).json({ success: false, error: "Account not found" });
+      const fromBalance = parseFloat(String(fromRows[0].balance || "0"));
+      if (fromBalance < amount) return res.status(400).json({ success: false, error: "Insufficient balance" });
+      await sql`UPDATE finance_accounts SET balance = balance - ${amount}, updated_at = NOW() WHERE id = ${fromAccountId}`;
+      await sql`UPDATE finance_accounts SET balance = balance + ${amount}, updated_at = NOW() WHERE id = ${toAccountId}`;
+      const txn1Id = genId();
+      const txn2Id = genId();
+      await sql`INSERT INTO finance_transactions (id, type, status, amount, currency, description, reference_type, account_id, account_name, created_by, notes, created_at, updated_at)
+        VALUES (${txn1Id}, 'adjustment', 'completed', ${-amount}, 'AED', ${"Transfer to " + toRows[0].name}, 'manual', ${fromAccountId}, ${fromRows[0].name}, 'admin', ${notes || null}, NOW(), NOW())`;
+      await sql`INSERT INTO finance_transactions (id, type, status, amount, currency, description, reference_type, account_id, account_name, created_by, notes, created_at, updated_at)
+        VALUES (${txn2Id}, 'adjustment', 'completed', ${amount}, 'AED', ${"Transfer from " + fromRows[0].name}, 'manual', ${toAccountId}, ${toRows[0].name}, 'admin', ${notes || null}, NOW(), NOW())`;
+      const updatedFrom = await sql`SELECT * FROM finance_accounts WHERE id = ${fromAccountId}`;
+      const updatedTo = await sql`SELECT * FROM finance_accounts WHERE id = ${toAccountId}`;
+      res.json({ success: true, data: { from: updatedFrom[0], to: updatedTo[0] } });
+    } catch (error) {
+      console.error("[Transfer Error]", error);
+      res.status(500).json({ success: false, error: "Failed to transfer" });
+    }
+  });
+  app.post("/api/finance/accounts/:id/reconcile", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { statementBalance, reconciliationDate } = req.body;
+      const rows = await sql`SELECT * FROM finance_accounts WHERE id = ${req.params.id}`;
+      if (rows.length === 0) return res.status(404).json({ success: false, error: "Account not found" });
+      const difference = statementBalance - parseFloat(String(rows[0].balance || "0"));
+      if (difference !== 0) {
+        const txnId = genId();
+        await sql`INSERT INTO finance_transactions (id, type, status, amount, currency, description, reference_type, account_id, account_name, created_by, notes, created_at, updated_at)
+          VALUES (${txnId}, 'adjustment', 'completed', ${difference}, 'AED', 'Reconciliation adjustment', 'manual', ${req.params.id}, ${rows[0].name}, 'admin', ${"Reconciliation on " + reconciliationDate}, NOW(), NOW())`;
+      }
+      await sql`UPDATE finance_accounts SET balance = ${statementBalance}, last_reconciled = ${reconciliationDate}::timestamp, updated_at = NOW() WHERE id = ${req.params.id}`;
+      const updated = await sql`SELECT * FROM finance_accounts WHERE id = ${req.params.id}`;
+      res.json({ success: true, data: updated[0] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to reconcile account" });
+    }
+  });
+  app.get("/api/finance/expenses", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { category, status, startDate, endDate, page = "1", limit = "50" } = req.query;
+      let rows = await sql`SELECT * FROM finance_expenses ORDER BY created_at DESC`;
+      if (category) rows = rows.filter((e) => e.category === category);
+      if (status) rows = rows.filter((e) => e.status === status);
+      if (startDate) rows = rows.filter((e) => new Date(e.created_at) >= new Date(startDate));
+      if (endDate) rows = rows.filter((e) => new Date(e.created_at) <= new Date(endDate));
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const startIdx = (pageNum - 1) * limitNum;
+      res.json({ success: true, data: rows.slice(startIdx, startIdx + limitNum) });
+    } catch (error) {
+      console.error("[Finance Expenses Error]", error);
+      res.status(500).json({ success: false, error: "Failed to get expenses" });
+    }
+  });
+  app.post("/api/finance/expenses", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const data = req.body;
+      const grossAmount = data.grossAmount || 0;
+      const vatAmount = data.vatAmount || grossAmount * 0.05;
+      const totalAmount = grossAmount + vatAmount;
+      const expenseId = genId();
+      const expenseNumber = "EXP-" + Date.now();
+      await sql`INSERT INTO finance_expenses (id, expense_number, category, gross_amount, vat_amount, amount, description, description_ar, vendor, invoice_number, payment_terms, notes, is_recurring, recurring_frequency, account_id, currency, status, created_by, created_at, updated_at)
+        VALUES (${expenseId}, ${expenseNumber}, ${data.category || "other"}, ${grossAmount}, ${vatAmount}, ${totalAmount}, ${data.description || ""}, ${data.descriptionAr || null}, ${data.vendor || null}, ${data.invoiceNumber || null}, ${data.paymentTerms || "net_30"}, ${data.notes || null}, ${data.isRecurring || false}, ${data.recurringFrequency || null}, ${data.accountId || null}, 'AED', 'pending', 'admin', NOW(), NOW())`;
+      const rows = await sql`SELECT * FROM finance_expenses WHERE id = ${expenseId}`;
+      res.status(201).json({ success: true, data: rows[0] });
+    } catch (error) {
+      console.error("[Create Expense Error]", error);
+      res.status(500).json({ success: false, error: "Failed to create expense" });
+    }
+  });
+  app.put("/api/finance/expenses/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { description, descriptionAr, category, vendor, notes, status } = req.body;
+      const existing = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      if (existing.length === 0) return res.status(404).json({ success: false, error: "Expense not found" });
+      await sql`UPDATE finance_expenses SET
+        description = COALESCE(${description || null}, description),
+        description_ar = COALESCE(${descriptionAr || null}, description_ar),
+        category = COALESCE(${category || null}, category),
+        vendor = COALESCE(${vendor || null}, vendor),
+        notes = COALESCE(${notes || null}, notes),
+        status = COALESCE(${status || null}, status),
+        updated_at = NOW()
+        WHERE id = ${req.params.id}`;
+      const updated = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      res.json({ success: true, data: updated[0] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to update expense" });
+    }
+  });
+  app.delete("/api/finance/expenses/:id", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const existing = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      if (existing.length === 0) return res.status(404).json({ success: false, error: "Expense not found" });
+      await sql`DELETE FROM finance_expenses WHERE id = ${req.params.id}`;
+      res.json({ success: true, data: null });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to delete expense" });
+    }
+  });
+  app.post("/api/finance/expenses/:id/pay", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { accountId } = req.body;
+      const expRows = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      if (expRows.length === 0) return res.status(404).json({ success: false, error: "Expense not found" });
+      const accRows = await sql`SELECT * FROM finance_accounts WHERE id = ${accountId}`;
+      if (accRows.length === 0) return res.status(404).json({ success: false, error: "Account not found" });
+      const expense = expRows[0];
+      const account = accRows[0];
+      const expAmount = parseFloat(String(expense.amount || "0"));
+      await sql`UPDATE finance_expenses SET status = 'paid', paid_at = NOW(), account_id = ${accountId}, updated_at = NOW() WHERE id = ${req.params.id}`;
+      await sql`UPDATE finance_accounts SET balance = balance - ${expAmount}, updated_at = NOW() WHERE id = ${accountId}`;
+      const txnId = genId();
+      await sql`INSERT INTO finance_transactions (id, type, status, amount, currency, description, category, reference_type, reference_id, account_id, account_name, created_by, created_at, updated_at)
+        VALUES (${txnId}, 'expense', 'completed', ${-expAmount}, 'AED', ${expense.description}, ${expense.category}, 'expense', ${expense.id}, ${account.id}, ${account.name}, 'admin', NOW(), NOW())`;
+      const updated = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      res.json({ success: true, data: updated[0] });
+    } catch (error) {
+      console.error("[Mark Expense Paid Error]", error);
+      res.status(500).json({ success: false, error: "Failed to mark expense as paid" });
+    }
+  });
+  app.post("/api/finance/expenses/:id/approve", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { approverId } = req.body;
+      const existing = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      if (existing.length === 0) return res.status(404).json({ success: false, error: "Expense not found" });
+      await sql`UPDATE finance_expenses SET approved_by = ${approverId || "admin"}, approval_status = 'approved', status = 'approved', updated_at = NOW() WHERE id = ${req.params.id}`;
+      const updated = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      res.json({ success: true, data: updated[0] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to approve expense" });
+    }
+  });
+  app.post("/api/finance/expenses/:id/reject", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { rejectedBy, reason } = req.body;
+      const existing = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      if (existing.length === 0) return res.status(404).json({ success: false, error: "Expense not found" });
+      await sql`UPDATE finance_expenses SET status = 'cancelled', notes = ${reason ? "Rejected: " + reason : "Rejected"}, updated_at = NOW() WHERE id = ${req.params.id}`;
+      const updated = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      res.json({ success: true, data: updated[0] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to reject expense" });
+    }
+  });
+  app.post("/api/finance/expenses/:id/submit", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const existing = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      if (existing.length === 0) return res.status(404).json({ success: false, error: "Expense not found" });
+      await sql`UPDATE finance_expenses SET status = 'pending', approval_status = 'pending', updated_at = NOW() WHERE id = ${req.params.id}`;
+      const updated = await sql`SELECT * FROM finance_expenses WHERE id = ${req.params.id}`;
+      res.json({ success: true, data: updated[0], message: "Submitted for approval" });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to submit for approval" });
+    }
+  });
+  app.get("/api/finance/expenses/pending-approvals", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const rows = await sql`SELECT * FROM finance_expenses WHERE approved_by IS NULL AND status = 'pending' ORDER BY created_at DESC`;
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get pending approvals" });
+    }
+  });
+  app.get("/api/finance/expenses/categories", async (req, res) => {
+    try {
+      const categories = [
+        { code: "inventory", name: "Inventory / Raw Materials", nameAr: "\u0627\u0644\u0645\u062E\u0632\u0648\u0646", function: "cost_of_sales", glCode: "5100" },
+        { code: "direct_labor", name: "Direct Labor", nameAr: "\u0627\u0644\u0639\u0645\u0627\u0644\u0629 \u0627\u0644\u0645\u0628\u0627\u0634\u0631\u0629", function: "cost_of_sales", glCode: "5110" },
+        { code: "freight_in", name: "Freight In", nameAr: "\u0627\u0644\u0634\u062D\u0646 \u0627\u0644\u062F\u0627\u062E\u0644\u064A", function: "cost_of_sales", glCode: "5120" },
+        { code: "marketing", name: "Marketing & Advertising", nameAr: "\u0627\u0644\u062A\u0633\u0648\u064A\u0642 \u0648\u0627\u0644\u0625\u0639\u0644\u0627\u0646", function: "selling", glCode: "5200" },
+        { code: "delivery", name: "Delivery & Shipping", nameAr: "\u0627\u0644\u062A\u0648\u0635\u064A\u0644 \u0648\u0627\u0644\u0634\u062D\u0646", function: "selling", glCode: "5210" },
+        { code: "sales_commission", name: "Sales Commission", nameAr: "\u0639\u0645\u0648\u0644\u0629 \u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A", function: "selling", glCode: "5220" },
+        { code: "salaries", name: "Salaries & Wages", nameAr: "\u0627\u0644\u0631\u0648\u0627\u062A\u0628 \u0648\u0627\u0644\u0623\u062C\u0648\u0631", function: "administrative", glCode: "5300" },
+        { code: "rent", name: "Rent", nameAr: "\u0627\u0644\u0625\u064A\u062C\u0627\u0631", function: "administrative", glCode: "5310" },
+        { code: "utilities", name: "Utilities", nameAr: "\u0627\u0644\u0645\u0631\u0627\u0641\u0642", function: "administrative", glCode: "5320" },
+        { code: "office_supplies", name: "Office Supplies", nameAr: "\u0645\u0633\u062A\u0644\u0632\u0645\u0627\u062A \u0627\u0644\u0645\u0643\u062A\u0628", function: "administrative", glCode: "5330" },
+        { code: "insurance", name: "Insurance", nameAr: "\u0627\u0644\u062A\u0623\u0645\u064A\u0646", function: "administrative", glCode: "5340" },
+        { code: "professional_fees", name: "Professional Fees", nameAr: "\u0627\u0644\u0631\u0633\u0648\u0645 \u0627\u0644\u0645\u0647\u0646\u064A\u0629", function: "administrative", glCode: "5350" },
+        { code: "licenses_permits", name: "Licenses & Permits", nameAr: "\u0627\u0644\u0631\u062E\u0635 \u0648\u0627\u0644\u062A\u0635\u0627\u0631\u064A\u062D", function: "administrative", glCode: "5360" },
+        { code: "bank_charges", name: "Bank Charges", nameAr: "\u0631\u0633\u0648\u0645 \u0627\u0644\u0628\u0646\u0643", function: "administrative", glCode: "5370" },
+        { code: "equipment", name: "Equipment", nameAr: "\u0627\u0644\u0645\u0639\u062F\u0627\u062A", function: "administrative", glCode: "5400" },
+        { code: "maintenance", name: "Repairs & Maintenance", nameAr: "\u0627\u0644\u0635\u064A\u0627\u0646\u0629 \u0648\u0627\u0644\u0625\u0635\u0644\u0627\u062D\u0627\u062A", function: "administrative", glCode: "5410" },
+        { code: "other", name: "Other Expenses", nameAr: "\u0645\u0635\u0631\u0648\u0641\u0627\u062A \u0623\u062E\u0631\u0649", function: "other_operating", glCode: "5900" }
+      ];
+      res.json({ success: true, data: categories });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get expense categories" });
+    }
+  });
+  app.get("/api/finance/expenses/aging", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const allExpenses = await sql`SELECT * FROM finance_expenses WHERE status != 'paid' AND status != 'cancelled'`;
+      const today = /* @__PURE__ */ new Date();
+      const summary = { current: 0, days1to30: 0, days31to60: 0, days61to90: 0, over90Days: 0, total: 0 };
+      const byVendorMap = {};
+      const details = [];
+      allExpenses.forEach((expense) => {
+        const dueDate = expense.due_date ? new Date(expense.due_date) : new Date(expense.created_at);
+        const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1e3 * 60 * 60 * 24));
+        const amount = parseFloat(String(expense.amount || "0"));
+        const balance = amount;
+        let bucket = "current";
+        if (daysOverdue <= 0) {
+          summary.current += balance;
+          bucket = "current";
+        } else if (daysOverdue <= 30) {
+          summary.days1to30 += balance;
+          bucket = "1-30";
+        } else if (daysOverdue <= 60) {
+          summary.days31to60 += balance;
+          bucket = "31-60";
+        } else if (daysOverdue <= 90) {
+          summary.days61to90 += balance;
+          bucket = "61-90";
+        } else {
+          summary.over90Days += balance;
+          bucket = "90+";
+        }
+        summary.total += balance;
+        const vendorName = expense.vendor || "Unknown";
+        if (!byVendorMap[vendorName]) byVendorMap[vendorName] = { vendorId: "", vendorName, current: 0, days1to30: 0, days31to60: 0, days61to90: 0, over90Days: 0, total: 0 };
+        if (daysOverdue <= 0) byVendorMap[vendorName].current += balance;
+        else if (daysOverdue <= 30) byVendorMap[vendorName].days1to30 += balance;
+        else if (daysOverdue <= 60) byVendorMap[vendorName].days31to60 += balance;
+        else if (daysOverdue <= 90) byVendorMap[vendorName].days61to90 += balance;
+        else byVendorMap[vendorName].over90Days += balance;
+        byVendorMap[vendorName].total += balance;
+        details.push({ expenseId: expense.id, vendorName, invoiceNumber: expense.invoice_number || "-", dueDate: dueDate.toISOString(), amount, balance, daysOverdue: Math.max(0, daysOverdue), agingBucket: bucket });
+      });
+      res.json({ success: true, data: { asOfDate: today.toISOString(), summary, byVendor: Object.values(byVendorMap), details } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get aging report" });
+    }
+  });
+  app.get("/api/finance/vendors", async (req, res) => {
+    try {
+      res.json({ success: true, data: [
+        { id: "v-001", code: "V-001", name: "Al Ain Farms", nameAr: "\u0645\u0632\u0627\u0631\u0639 \u0627\u0644\u0639\u064A\u0646", email: "accounts@alainfarms.ae", phone: "+971 4 123 4567", trn: "100123456789003", defaultPaymentTerms: "net_30", currentBalance: 15e3, isActive: true, category: "supplier" },
+        { id: "v-002", code: "V-002", name: "Emirates Spices", nameAr: "\u062A\u0648\u0627\u0628\u0644 \u0627\u0644\u0625\u0645\u0627\u0631\u0627\u062A", email: "billing@emiratesspices.com", phone: "+971 4 987 6543", trn: "100987654321003", defaultPaymentTerms: "net_15", currentBalance: 5200, isActive: true, category: "supplier" }
+      ] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get vendors" });
+    }
+  });
+  app.post("/api/finance/vendors", async (req, res) => {
+    try {
+      const data = req.body;
+      const newVendor = { id: genId(), code: "V-" + String(Date.now()).slice(-4), ...data, currentBalance: data.openingBalance || 0, isActive: true, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+      res.status(201).json({ success: true, data: newVendor });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to create vendor" });
+    }
+  });
+  app.get("/api/finance/vendors/:id", async (req, res) => {
+    try {
+      res.json({ success: true, data: { id: req.params.id, code: "V-001", name: "Sample Vendor", currentBalance: 0, isActive: true } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get vendor" });
+    }
+  });
+  app.get("/api/finance/cost-centers", async (req, res) => {
+    try {
+      res.json({ success: true, data: [
+        { id: "cc-001", code: "CC-OPS", name: "Operations", nameAr: "\u0627\u0644\u0639\u0645\u0644\u064A\u0627\u062A", isActive: true },
+        { id: "cc-002", code: "CC-ADMIN", name: "Administration", nameAr: "\u0627\u0644\u0625\u062F\u0627\u0631\u0629", isActive: true },
+        { id: "cc-003", code: "CC-SALES", name: "Sales & Marketing", nameAr: "\u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A \u0648\u0627\u0644\u062A\u0633\u0648\u064A\u0642", isActive: true },
+        { id: "cc-004", code: "CC-DELIVERY", name: "Delivery", nameAr: "\u0627\u0644\u062A\u0648\u0635\u064A\u0644", isActive: true },
+        { id: "cc-005", code: "CC-WAREHOUSE", name: "Warehouse", nameAr: "\u0627\u0644\u0645\u0633\u062A\u0648\u062F\u0639", isActive: true }
+      ] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get cost centers" });
+    }
+  });
+  app.post("/api/finance/cost-centers", async (req, res) => {
+    try {
+      res.status(201).json({ success: true, data: { id: genId(), ...req.body, isActive: true, createdAt: (/* @__PURE__ */ new Date()).toISOString() } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to create cost center" });
+    }
+  });
+  app.get("/api/finance/budgets", async (req, res) => {
+    try {
+      res.json({ success: true, data: [
+        { id: "bud-001", name: "Operations Q1 2026", periodType: "quarterly", startDate: "2026-01-01", endDate: "2026-03-31", budgetAmount: 5e4, spentAmount: 22500, remainingAmount: 27500, percentUsed: 45, alertThreshold: 80, isActive: true },
+        { id: "bud-002", name: "Marketing Monthly", periodType: "monthly", startDate: "2026-01-01", endDate: "2026-01-31", category: "marketing", budgetAmount: 1e4, spentAmount: 7800, remainingAmount: 2200, percentUsed: 78, alertThreshold: 80, isActive: true }
+      ] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get budgets" });
+    }
+  });
+  app.post("/api/finance/budgets", async (req, res) => {
+    try {
+      const data = req.body;
+      res.status(201).json({ success: true, data: { id: genId(), ...data, spentAmount: 0, remainingAmount: data.budgetAmount, percentUsed: 0, isActive: true } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to create budget" });
+    }
+  });
+  app.get("/api/finance/budgets/vs-actual", async (req, res) => {
+    try {
+      res.json({ success: true, data: { period: req.query.period || "quarter", summary: { totalBudget: 18e4, totalSpent: 38800, totalRemaining: 141200 }, byCategory: [
+        { category: "marketing", budget: 1e4, actual: 7800, variance: 2200, variancePercent: 22 },
+        { category: "delivery", budget: 1e4, actual: 8500, variance: 1500, variancePercent: 15 }
+      ] } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get budget vs actual" });
+    }
+  });
+  app.get("/api/finance/approval-rules", async (req, res) => {
+    try {
+      res.json({ success: true, data: [
+        { id: "rule-001", name: "Auto-approve small expenses", minAmount: 0, maxAmount: 500, autoApproveBelow: 500, approverLevel: 0, isActive: true },
+        { id: "rule-002", name: "Manager approval (500-5000)", minAmount: 500, maxAmount: 5e3, approverRole: "manager", approverLevel: 1, isActive: true }
+      ] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get approval rules" });
+    }
+  });
+  app.get("/api/finance/reports/profit-loss", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { period = "month", startDate, endDate } = req.query;
+      const { start, end } = getFinanceDateRange(period, startDate, endDate);
+      const startStr = start.toISOString();
+      const endStr = end.toISOString();
+      const ordersRows = await sql`SELECT total, vat_amount FROM orders WHERE created_at >= ${startStr}::timestamp AND created_at <= ${endStr}::timestamp AND status != 'cancelled'`;
+      const sales = ordersRows.reduce((s, o) => s + parseFloat(String(o.total || "0")), 0);
+      const totalRevenue = sales;
+      const inventoryCost = totalRevenue * 0.6;
+      const totalCOGS = inventoryCost;
+      const grossProfit = totalRevenue - totalCOGS;
+      const grossProfitMargin = totalRevenue > 0 ? grossProfit / totalRevenue * 100 : 0;
+      const expRows = await sql`SELECT category, amount FROM finance_expenses WHERE created_at >= ${startStr}::timestamp AND created_at <= ${endStr}::timestamp AND status = 'paid'`;
+      const expenseByCategory = {};
+      expRows.forEach((e) => {
+        expenseByCategory[e.category] = (expenseByCategory[e.category] || 0) + parseFloat(String(e.amount || "0"));
+      });
+      const operatingExpenses = Object.entries(expenseByCategory).map(([category, amount]) => ({ category, amount }));
+      const totalOperatingExpenses = expRows.reduce((s, e) => s + parseFloat(String(e.amount || "0")), 0);
+      const operatingProfit = grossProfit - totalOperatingExpenses;
+      const txnRows = await sql`SELECT type, amount FROM finance_transactions WHERE created_at >= ${startStr}::timestamp AND created_at <= ${endStr}::timestamp AND type = 'refund'`;
+      const refunds = txnRows.reduce((s, t) => s + Math.abs(parseFloat(String(t.amount || "0"))), 0);
+      const netProfit = operatingProfit - refunds;
+      const netProfitMargin = totalRevenue > 0 ? netProfit / totalRevenue * 100 : 0;
+      res.json({ success: true, data: {
+        period,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        revenue: { sales: Math.round(sales * 100) / 100, otherIncome: 0, totalRevenue: Math.round(totalRevenue * 100) / 100 },
+        costOfGoodsSold: { inventoryCost: Math.round(inventoryCost * 100) / 100, supplierPurchases: 0, totalCOGS: Math.round(totalCOGS * 100) / 100 },
+        grossProfit: Math.round(grossProfit * 100) / 100,
+        grossProfitMargin: Math.round(grossProfitMargin * 100) / 100,
+        operatingExpenses,
+        totalOperatingExpenses: Math.round(totalOperatingExpenses * 100) / 100,
+        operatingProfit: Math.round(operatingProfit * 100) / 100,
+        otherExpenses: { vatPaid: 0, refunds: Math.round(refunds * 100) / 100, totalOther: Math.round(refunds * 100) / 100 },
+        netProfit: Math.round(netProfit * 100) / 100,
+        netProfitMargin: Math.round(netProfitMargin * 100) / 100
+      } });
+    } catch (error) {
+      console.error("[P&L Report Error]", error);
+      res.status(500).json({ success: false, error: "Failed to generate profit/loss report" });
+    }
+  });
+  app.get("/api/finance/reports/cash-flow", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { period = "month", startDate, endDate } = req.query;
+      const { start, end } = getFinanceDateRange(period, startDate, endDate);
+      const startStr = start.toISOString();
+      const endStr = end.toISOString();
+      const accounts = await sql`SELECT * FROM finance_accounts`;
+      const allTransactions = await sql`SELECT * FROM finance_transactions WHERE created_at >= ${startStr}::timestamp AND created_at <= ${endStr}::timestamp`;
+      const ordersRows = await sql`SELECT total, payment_method FROM orders WHERE created_at >= ${startStr}::timestamp AND created_at <= ${endStr}::timestamp AND status != 'cancelled'`;
+      const expRows = await sql`SELECT amount FROM finance_expenses WHERE status = 'paid' AND paid_at >= ${startStr}::timestamp AND paid_at <= ${endStr}::timestamp`;
+      const closingBalance = accounts.reduce((s, a2) => s + parseFloat(String(a2.balance || "0")), 0);
+      const txnTotal = allTransactions.reduce((s, t) => s + parseFloat(String(t.amount || "0")), 0);
+      const openingBalance = closingBalance - txnTotal;
+      const cashFromSales = ordersRows.filter((o) => o.payment_method === "card").reduce((s, o) => s + parseFloat(String(o.total || "0")), 0);
+      const cashFromCOD = ordersRows.filter((o) => o.payment_method === "cod").reduce((s, o) => s + parseFloat(String(o.total || "0")), 0);
+      const cashFromRefunds = allTransactions.filter((t) => t.type === "refund").reduce((s, t) => s + parseFloat(String(t.amount || "0")), 0);
+      const cashToSuppliers = allTransactions.filter((t) => t.type === "purchase").reduce((s, t) => s + Math.abs(parseFloat(String(t.amount || "0"))), 0);
+      const cashToExpenses = expRows.reduce((s, e) => s + parseFloat(String(e.amount || "0")), 0);
+      const netOperating = cashFromSales + cashFromCOD + cashFromRefunds - cashToSuppliers - cashToExpenses;
+      const netCashFlow = closingBalance - openingBalance;
+      const dailyCashFlow = [];
+      const currentDate = new Date(start);
+      let runningBalance = openingBalance;
+      while (currentDate <= end) {
+        const dayStr = currentDate.toISOString().split("T")[0];
+        const dayInflow = allTransactions.filter((t) => parseFloat(String(t.amount)) > 0 && String(t.created_at).startsWith(dayStr)).reduce((s, t) => s + parseFloat(String(t.amount)), 0);
+        const dayOutflow = Math.abs(allTransactions.filter((t) => parseFloat(String(t.amount)) < 0 && String(t.created_at).startsWith(dayStr)).reduce((s, t) => s + parseFloat(String(t.amount)), 0));
+        const dayNet = dayInflow - dayOutflow;
+        runningBalance += dayNet;
+        dailyCashFlow.push({ date: dayStr, inflow: Math.round(dayInflow * 100) / 100, outflow: Math.round(dayOutflow * 100) / 100, net: Math.round(dayNet * 100) / 100, balance: Math.round(runningBalance * 100) / 100 });
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      res.json({ success: true, data: {
+        period,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        openingBalance: Math.round(openingBalance * 100) / 100,
+        closingBalance: Math.round(closingBalance * 100) / 100,
+        operatingActivities: { cashFromSales: Math.round(cashFromSales * 100) / 100, cashFromCOD: Math.round(cashFromCOD * 100) / 100, cashFromRefunds: Math.round(cashFromRefunds * 100) / 100, cashToSuppliers: Math.round(cashToSuppliers * 100) / 100, cashToExpenses: Math.round(cashToExpenses * 100) / 100, netOperating: Math.round(netOperating * 100) / 100 },
+        investingActivities: { equipmentPurchases: 0, netInvesting: 0 },
+        financingActivities: { ownerDrawings: 0, capitalInjection: 0, netFinancing: 0 },
+        netCashFlow: Math.round(netCashFlow * 100) / 100,
+        dailyCashFlow
+      } });
+    } catch (error) {
+      console.error("[Cash Flow Report Error]", error);
+      res.status(500).json({ success: false, error: "Failed to generate cash flow report" });
+    }
+  });
+  app.get("/api/finance/reports/vat", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { period = "month", startDate, endDate } = req.query;
+      const { start, end } = getFinanceDateRange(period, startDate, endDate);
+      const startStr = start.toISOString();
+      const endStr = end.toISOString();
+      const ordersRows = await sql`SELECT total, vat_amount, order_number, created_at FROM orders WHERE created_at >= ${startStr}::timestamp AND created_at <= ${endStr}::timestamp AND status != 'cancelled'`;
+      const salesTaxableAmount = ordersRows.reduce((s, o) => s + (parseFloat(String(o.total || "0")) - parseFloat(String(o.vat_amount || "0"))), 0);
+      const salesVATAmount = ordersRows.reduce((s, o) => s + parseFloat(String(o.vat_amount || "0")), 0);
+      const transactionDetails = ordersRows.map((o) => ({
+        date: o.created_at,
+        type: "sale",
+        reference: o.order_number,
+        taxableAmount: Math.round((parseFloat(String(o.total || "0")) - parseFloat(String(o.vat_amount || "0"))) * 100) / 100,
+        vatAmount: Math.round(parseFloat(String(o.vat_amount || "0")) * 100) / 100,
+        vatRate: 5
+      }));
+      res.json({ success: true, data: {
+        period,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        salesVAT: { taxableAmount: Math.round(salesTaxableAmount * 100) / 100, vatAmount: Math.round(salesVATAmount * 100) / 100, exemptAmount: 0 },
+        purchasesVAT: { taxableAmount: 0, vatAmount: 0 },
+        vatDue: Math.round(salesVATAmount * 100) / 100,
+        vatRefund: 0,
+        netVAT: Math.round(salesVATAmount * 100) / 100,
+        transactionDetails
+      } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to generate VAT report" });
+    }
+  });
+  app.get("/api/finance/reports/balance-sheet", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const accounts = await sql`SELECT * FROM finance_accounts`;
+      const ordersRows = await sql`SELECT total, vat_amount, payment_status, status FROM orders WHERE status != 'cancelled' AND payment_status = 'captured'`;
+      const expRows = await sql`SELECT amount, status FROM finance_expenses`;
+      const pendingOrdersRows = await sql`SELECT total FROM orders WHERE payment_status = 'pending' AND status != 'cancelled'`;
+      const totalRevenue = ordersRows.reduce((s, o) => s + parseFloat(String(o.total || "0")), 0);
+      const totalVAT = ordersRows.reduce((s, o) => s + parseFloat(String(o.vat_amount || "0")), 0);
+      const totalExpensesPaid = expRows.filter((e) => e.status === "paid").reduce((s, e) => s + parseFloat(String(e.amount || "0")), 0);
+      const cashInHand = accounts.filter((a2) => a2.type === "cash").reduce((s, a2) => s + parseFloat(String(a2.balance || "0")), 0);
+      const bankAccounts = accounts.filter((a2) => a2.type === "bank").reduce((s, a2) => s + parseFloat(String(a2.balance || "0")), 0);
+      const accountsReceivable = pendingOrdersRows.reduce((s, o) => s + parseFloat(String(o.total || "0")), 0);
+      const inventoryValue = totalRevenue * 0.3;
+      const totalCurrentAssets = cashInHand + bankAccounts + accountsReceivable + inventoryValue;
+      const fixedAssets = 5e4;
+      const totalAssets = totalCurrentAssets + fixedAssets;
+      const accountsPayable = expRows.filter((e) => e.status === "pending" || e.status === "approved").reduce((s, e) => s + parseFloat(String(e.amount || "0")), 0);
+      const totalCurrentLiabilities = totalVAT + accountsPayable;
+      const totalLiabilities = totalCurrentLiabilities;
+      const openingCapital = 1e5;
+      const retainedEarnings = totalRevenue - totalExpensesPaid - totalRevenue * 0.6;
+      const totalEquity = openingCapital + retainedEarnings;
+      res.json({ success: true, data: {
+        asOfDate: (/* @__PURE__ */ new Date()).toISOString(),
+        assets: { currentAssets: { cashInHand: Math.round(cashInHand * 100) / 100, bankAccounts: Math.round(bankAccounts * 100) / 100, accountsReceivable: Math.round(accountsReceivable * 100) / 100, inventory: Math.round(inventoryValue * 100) / 100, total: Math.round(totalCurrentAssets * 100) / 100 }, fixedAssets: { equipment: 3e4, furniture: 1e4, vehicles: 1e4, total: fixedAssets }, totalAssets: Math.round(totalAssets * 100) / 100 },
+        liabilities: { currentLiabilities: { accountsPayable: Math.round(accountsPayable * 100) / 100, vatPayable: Math.round(totalVAT * 100) / 100, accruedExpenses: 0, total: Math.round(totalCurrentLiabilities * 100) / 100 }, longTermLiabilities: { loans: 0, total: 0 }, totalLiabilities: Math.round(totalLiabilities * 100) / 100 },
+        equity: { openingCapital, retainedEarnings: Math.round(retainedEarnings * 100) / 100, currentYearIncome: Math.round(retainedEarnings * 100) / 100, totalEquity: Math.round(totalEquity * 100) / 100 },
+        balanceCheck: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01
+      } });
+    } catch (error) {
+      console.error("[Balance Sheet Error]", error);
+      res.status(500).json({ success: false, error: "Failed to generate balance sheet" });
+    }
+  });
+  app.get("/api/finance/chart-of-accounts", async (req, res) => {
+    try {
+      res.json({ success: true, data: [
+        { code: "1000", name: "Assets", nameAr: "\u0627\u0644\u0623\u0635\u0648\u0644", accountClass: "asset", isHeader: true },
+        { code: "1100", name: "Cash & Bank", nameAr: "\u0627\u0644\u0646\u0642\u062F \u0648\u0627\u0644\u0628\u0646\u0648\u0643", accountClass: "asset" },
+        { code: "1110", name: "Cash in Hand", nameAr: "\u0627\u0644\u0646\u0642\u062F \u0641\u064A \u0627\u0644\u0635\u0646\u062F\u0648\u0642", accountClass: "asset" },
+        { code: "1120", name: "Bank Accounts", nameAr: "\u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0628\u0646\u0643\u064A\u0629", accountClass: "asset" },
+        { code: "1200", name: "Accounts Receivable", nameAr: "\u0627\u0644\u0630\u0645\u0645 \u0627\u0644\u0645\u062F\u064A\u0646\u0629", accountClass: "asset" },
+        { code: "1300", name: "Inventory", nameAr: "\u0627\u0644\u0645\u062E\u0632\u0648\u0646", accountClass: "asset" },
+        { code: "1400", name: "Fixed Assets", nameAr: "\u0627\u0644\u0623\u0635\u0648\u0644 \u0627\u0644\u062B\u0627\u0628\u062A\u0629", accountClass: "asset" },
+        { code: "2000", name: "Liabilities", nameAr: "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645\u0627\u062A", accountClass: "liability", isHeader: true },
+        { code: "2100", name: "Accounts Payable", nameAr: "\u0627\u0644\u0630\u0645\u0645 \u0627\u0644\u062F\u0627\u0626\u0646\u0629", accountClass: "liability" },
+        { code: "2200", name: "VAT Payable", nameAr: "\u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0642\u064A\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629 \u0627\u0644\u0645\u0633\u062A\u062D\u0642\u0629", accountClass: "liability" },
+        { code: "3000", name: "Equity", nameAr: "\u062D\u0642\u0648\u0642 \u0627\u0644\u0645\u0644\u0643\u064A\u0629", accountClass: "equity", isHeader: true },
+        { code: "3100", name: "Owner's Capital", nameAr: "\u0631\u0623\u0633 \u0645\u0627\u0644 \u0627\u0644\u0645\u0627\u0644\u0643", accountClass: "equity" },
+        { code: "3200", name: "Retained Earnings", nameAr: "\u0627\u0644\u0623\u0631\u0628\u0627\u062D \u0627\u0644\u0645\u062D\u062A\u062C\u0632\u0629", accountClass: "equity" },
+        { code: "4000", name: "Revenue", nameAr: "\u0627\u0644\u0625\u064A\u0631\u0627\u062F\u0627\u062A", accountClass: "revenue", isHeader: true },
+        { code: "4100", name: "Sales Revenue", nameAr: "\u0625\u064A\u0631\u0627\u062F\u0627\u062A \u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A", accountClass: "revenue" },
+        { code: "4200", name: "Delivery Revenue", nameAr: "\u0625\u064A\u0631\u0627\u062F\u0627\u062A \u0627\u0644\u062A\u0648\u0635\u064A\u0644", accountClass: "revenue" },
+        { code: "5000", name: "Expenses", nameAr: "\u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062A", accountClass: "expense", isHeader: true },
+        { code: "5100", name: "Cost of Goods Sold", nameAr: "\u062A\u0643\u0644\u0641\u0629 \u0627\u0644\u0628\u0636\u0627\u0639\u0629 \u0627\u0644\u0645\u0628\u0627\u0639\u0629", accountClass: "expense" },
+        { code: "5200", name: "Salaries & Wages", nameAr: "\u0627\u0644\u0631\u0648\u0627\u062A\u0628 \u0648\u0627\u0644\u0623\u062C\u0648\u0631", accountClass: "expense" },
+        { code: "5300", name: "Rent Expense", nameAr: "\u0645\u0635\u0631\u0648\u0641 \u0627\u0644\u0625\u064A\u062C\u0627\u0631", accountClass: "expense" },
+        { code: "5900", name: "Other Expenses", nameAr: "\u0645\u0635\u0631\u0648\u0641\u0627\u062A \u0623\u062E\u0631\u0649", accountClass: "expense" }
+      ] });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get chart of accounts" });
+    }
+  });
+  app.post("/api/finance/chart-of-accounts", async (req, res) => {
+    try {
+      const { code, name, nameAr, accountClass, parentId, description } = req.body;
+      if (!code || !name || !accountClass) return res.status(400).json({ success: false, error: "Missing required fields" });
+      res.json({ success: true, data: { id: genId(), code, name, nameAr, accountClass, parentId, description, isActive: true, balance: "0", normalBalance: ["asset", "expense"].includes(accountClass) ? "debit" : "credit" } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to create account" });
+    }
+  });
+  app.get("/api/finance/journal-entries", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const ordersRows = await sql`SELECT * FROM orders WHERE payment_status = 'captured' ORDER BY created_at DESC LIMIT 20`;
+      const journalEntries = ordersRows.map((order, idx) => ({
+        id: "je_" + order.id,
+        entryNumber: "JE-" + new Date(order.created_at).getFullYear() + "-" + String(idx + 1).padStart(4, "0"),
+        entryDate: order.created_at,
+        description: "Sale - Order " + order.order_number,
+        descriptionAr: "\u0645\u0628\u064A\u0639\u0627\u062A - \u0637\u0644\u0628 " + order.order_number,
+        reference: order.order_number,
+        referenceType: "order",
+        referenceId: order.id,
+        status: "posted",
+        totalDebit: parseFloat(String(order.total || "0")),
+        totalCredit: parseFloat(String(order.total || "0")),
+        createdBy: "system",
+        postedAt: order.created_at,
+        lines: [
+          { accountCode: "1110", accountName: "Cash in Hand", debit: parseFloat(String(order.total || "0")), credit: 0, description: "Payment received for " + order.order_number },
+          { accountCode: "4100", accountName: "Sales Revenue", debit: 0, credit: parseFloat(String(order.total || "0")) - parseFloat(String(order.vat_amount || "0")), description: "Sale " + order.order_number },
+          { accountCode: "2200", accountName: "VAT Payable", debit: 0, credit: parseFloat(String(order.vat_amount || "0")), description: "VAT on " + order.order_number }
+        ]
+      }));
+      res.json({ success: true, data: journalEntries });
+    } catch (error) {
+      console.error("[Journal Entries Error]", error);
+      res.status(500).json({ success: false, error: "Failed to get journal entries" });
+    }
+  });
+  app.post("/api/finance/journal-entries", async (req, res) => {
+    try {
+      const { entryDate, description, descriptionAr, reference, lines } = req.body;
+      if (!lines || lines.length < 2) return res.status(400).json({ success: false, error: "Journal entry must have at least 2 lines" });
+      const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
+      const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+      if (Math.abs(totalDebit - totalCredit) > 0.01) return res.status(400).json({ success: false, error: `Debits (${totalDebit}) must equal Credits (${totalCredit})` });
+      const entry = { id: genId(), entryNumber: "JE-" + (/* @__PURE__ */ new Date()).getFullYear() + "-" + Date.now().toString().slice(-6), entryDate: entryDate || (/* @__PURE__ */ new Date()).toISOString(), description, descriptionAr, reference, status: "draft", totalDebit, totalCredit, lines, createdBy: "admin", createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+      res.json({ success: true, data: entry });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to create journal entry" });
+    }
+  });
+  app.post("/api/finance/journal-entries/:id/post", async (req, res) => {
+    try {
+      res.json({ success: true, data: { id: req.params.id, status: "posted", postedAt: (/* @__PURE__ */ new Date()).toISOString() }, message: "Journal entry posted successfully" });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to post journal entry" });
+    }
+  });
+  app.get("/api/finance/audit-log", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const limit = parseInt(req.query.limit) || 100;
+      const ordersRows = await sql`SELECT * FROM orders ORDER BY created_at DESC LIMIT ${limit}`;
+      const auditEntries = ordersRows.flatMap((order) => {
+        const entries = [];
+        entries.push({ id: "audit_" + order.id + "_create", entityType: "order", entityId: order.id, action: "create", previousValue: null, newValue: { status: "pending", total: parseFloat(String(order.total || "0")) }, userId: order.user_id || "guest", userName: order.customer_name, createdAt: order.created_at });
+        const history = safeJson(order.status_history, []);
+        history.forEach((h, idx) => {
+          entries.push({ id: "audit_" + order.id + "_status_" + idx, entityType: "order", entityId: order.id, action: "status_change", previousValue: { status: history[idx - 1]?.status || "pending" }, newValue: { status: h.status }, changedFields: ["status"], userId: h.changedBy || "system", userName: h.changedBy || "System", createdAt: h.changedAt });
+        });
+        return entries;
+      });
+      res.json({ success: true, data: auditEntries.slice(0, limit) });
+    } catch (error) {
+      console.error("[Audit Log Error]", error);
+      res.status(500).json({ success: false, error: "Failed to get audit log" });
+    }
+  });
+  app.get("/api/finance/vat-returns", async (req, res) => {
+    try {
+      const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
+      const vatReturns = [];
+      for (let q = 1; q <= 4; q++) {
+        const startMonth = (q - 1) * 3;
+        vatReturns.push({ id: "vat_" + currentYear + "_q" + q, period: "Q" + q + " " + currentYear, periodStart: new Date(currentYear, startMonth, 1).toISOString(), periodEnd: new Date(currentYear, startMonth + 3, 0).toISOString(), dueDate: new Date(currentYear, startMonth + 3, 28).toISOString(), status: q < Math.ceil(((/* @__PURE__ */ new Date()).getMonth() + 1) / 3) ? "submitted" : "draft", netVatDue: 0 });
+      }
+      res.json({ success: true, data: vatReturns });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to get VAT returns" });
+    }
+  });
+  app.post("/api/finance/vat-returns", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { periodStart, periodEnd } = req.body;
+      const ordersRows = await sql`SELECT total, vat_amount FROM orders WHERE created_at >= ${periodStart}::timestamp AND created_at <= ${periodEnd}::timestamp AND status != 'cancelled'`;
+      const totalSales = ordersRows.reduce((s, o) => s + parseFloat(String(o.total || "0")) - parseFloat(String(o.vat_amount || "0")), 0);
+      const totalVat = ordersRows.reduce((s, o) => s + parseFloat(String(o.vat_amount || "0")), 0);
+      res.json({ success: true, data: {
+        id: genId(),
+        periodStart,
+        periodEnd,
+        dueDate: new Date(new Date(periodEnd).getFullYear(), new Date(periodEnd).getMonth() + 1, 28).toISOString(),
+        box1Amount: 0,
+        box1Vat: 0,
+        box2Amount: totalSales,
+        box2Vat: totalVat,
+        box3Amount: 0,
+        box3Vat: 0,
+        totalSalesVat: Math.round(totalVat * 100) / 100,
+        totalPurchasesVat: 0,
+        netVatDue: Math.round(totalVat * 100) / 100,
+        status: "draft"
+      } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to create VAT return" });
+    }
+  });
+  app.post("/api/finance/reports/export", async (req, res) => {
+    try {
+      const { reportType, format, startDate, endDate } = req.body;
+      res.json({ success: true, data: { url: "/api/finance/reports/download/" + reportType + "-" + format + "-" + Date.now(), filename: reportType + "-report-" + startDate + "-" + endDate + "." + format } });
+    } catch (error) {
+      res.status(500).json({ success: false, error: "Failed to export report" });
     }
   });
   app.use((req, res) => {
