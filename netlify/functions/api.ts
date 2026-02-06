@@ -2229,14 +2229,14 @@ function createApp() {
       const now = new Date();
 
       await sql`
-        INSERT INTO products (id, name, name_ar, sku, price, cost_price, discount, category, description, description_ar, image, unit, min_order_quantity, max_order_quantity, is_active, is_featured, is_premium, tags, badges, created_at, updated_at)
-        VALUES (${productId}, ${name}, ${nameAr || null}, ${productSku}, ${price}, ${costPrice || 0}, ${discount || 0}, ${category}, ${description || null}, ${descriptionAr || null}, ${image || null}, ${unit || 'kg'}, ${minOrderQuantity || 0.25}, ${maxOrderQuantity || 10}, ${isActive !== false}, ${isFeatured || false}, ${isPremium || false}, ${JSON.stringify(tags || [])}, ${JSON.stringify(badges || [])}, ${now}, ${now})
+        INSERT INTO products (id, name, name_ar, sku, price, cost_price, discount, category, description, description_ar, image, unit, min_order_quantity, max_order_quantity, is_active, is_featured, is_premium, rating, tags, badges, created_at, updated_at)
+        VALUES (${productId}, ${name}, ${nameAr || null}, ${productSku}, ${price}, ${costPrice || 0}, ${discount || 0}, ${category}, ${description || null}, ${descriptionAr || null}, ${image || null}, ${unit || 'kg'}, ${minOrderQuantity || 0.25}, ${maxOrderQuantity || 10}, ${isActive !== false}, ${isFeatured || false}, ${isPremium || false}, ${0}, ${JSON.stringify(tags || [])}, ${JSON.stringify(badges || [])}, ${now}, ${now})
       `;
 
       // Create stock entry
       await sql`
-        INSERT INTO stock (id, product_id, quantity, reserved_quantity, low_stock_threshold, reorder_quantity, created_at, updated_at)
-        VALUES (${`stock_${productId}`}, ${productId}, 0, 0, 10, 50, ${now}, ${now})
+        INSERT INTO stock (id, product_id, quantity, reserved_quantity, available_quantity, low_stock_threshold, reorder_point, reorder_quantity, updated_at)
+        VALUES (${`stock_${productId}`}, ${productId}, 0, 0, 0, 10, 10, 50, ${now})
       `;
 
       res.json({ success: true, data: { id: productId }, message: 'Product created successfully' });
