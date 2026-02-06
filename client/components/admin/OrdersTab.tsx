@@ -882,7 +882,7 @@ function OrderDetailsModal({
                 <span className="text-slate-500">{t.vat} ({(Number(order.vatRate) * 100).toFixed(0)}%)</span>
                 <span className="flex items-center gap-1">
                   <CurrencySymbol size="sm" />
-                  {Number(order.vatAmount).toFixed(2)}
+                  {Number(order.vat).toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center font-bold text-lg pt-2 border-t border-slate-300">

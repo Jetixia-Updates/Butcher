@@ -80,7 +80,7 @@ export const OrdersProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             notes: item.notes,
           })),
           subtotal: order.subtotal,
-          vat: order.vatAmount,
+          vat: order.vat,
           deliveryFee: order.deliveryFee,
           discount: order.discount,
           total: order.total,
