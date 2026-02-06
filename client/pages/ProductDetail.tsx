@@ -159,9 +159,9 @@ export default function ProductDetailPage() {
 
   const tt = translations[language];
 
-  // Mock multiple images (in production, these would come from the product data)
+  // Use product images array if available, otherwise single image
   const productImages = product?.image 
-    ? [product.image, product.image, product.image] 
+    ? [product.image] 
     : [];
 
   const formatWeight = (weight: number) => weight.toFixed(3);

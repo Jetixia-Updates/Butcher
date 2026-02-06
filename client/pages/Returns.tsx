@@ -1,10 +1,12 @@
 import React from "react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useSettings } from "@/context/SettingsContext";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Returns: React.FC = () => {
   const { language } = useLanguage();
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const isRTL = language === "ar";
 
@@ -270,9 +272,9 @@ const Returns: React.FC = () => {
                   : "To report an issue or request a return:"}
               </p>
               <div className="space-y-2 text-muted-foreground">
-                <p>📱 WhatsApp: +971 50 123 4567</p>
-                <p>📧 Email: returns@aljazzar.ae</p>
-                <p>☎️ Phone: +971 50 123 4567</p>
+                <p>📱 WhatsApp: {settings.contactPhone}</p>
+                <p>📧 Email: {settings.contactEmail}</p>
+                <p>☎️ Phone: {settings.contactPhone}</p>
               </div>
             </section>
           </div>

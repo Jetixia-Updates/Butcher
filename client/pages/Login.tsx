@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useSettings } from "@/context/SettingsContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { LogIn, UserPlus, User } from "lucide-react";
 
@@ -9,6 +10,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { loginWithCredentials, login } = useAuth();
   const { t, language } = useLanguage();
+  const { settings } = useSettings();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -234,7 +236,7 @@ export default function LoginPage() {
           {/* Footer Links */}
           <div className="mt-8 pt-8 border-t border-border space-y-2 text-center text-xs text-muted-foreground">
             <p>
-              📍 Dubai, UAE | ☎ +971 50 123 4567 | 🟢 Open Now
+              📍 Dubai, UAE | ☎ {settings.contactPhone}
             </p>
             <p className="text-xs">
               <a href="#" className="hover:text-foreground">Terms</a> · {" "}

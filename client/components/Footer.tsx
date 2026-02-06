@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useSettings } from "@/context/SettingsContext";
 import { X } from "lucide-react";
 
 interface ContactLink {
@@ -98,7 +99,10 @@ const ComingSoonModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ i
 
 export const Footer: React.FC = () => {
   const { t } = useLanguage();
+  const { settings } = useSettings();
   const [showComingSoon, setShowComingSoon] = useState(false);
+  
+  const phoneDigits = settings.contactPhone.replace(/[^0-9]/g, '');
   
   const contacts: ContactLink[] = [
     {
@@ -110,14 +114,14 @@ export const Footer: React.FC = () => {
     {
       icon: <span className="text-2xl">📱</span>,
       label: t("footer.phone"),
-      value: "+971 50 123 4567",
-      href: "tel:+971501234567",
+      value: settings.contactPhone,
+      href: `tel:${phoneDigits}`,
     },
     {
       icon: <WhatsAppIcon className="w-7 h-7 mx-auto text-[#25D366]" />,
       label: t("footer.whatsapp"),
-      value: "+971 50 123 4567",
-      href: "https://wa.me/971501234567",
+      value: settings.contactPhone,
+      href: `https://wa.me/${phoneDigits}`,
     },
     {
       icon: <span className="text-2xl">🟢</span>,

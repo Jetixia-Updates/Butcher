@@ -1,14 +1,10 @@
 import React, { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
 import {
   Percent,
-  Clock,
   Flame,
   Gift,
   Tag,
-  ChevronRight,
   Star,
-  Filter,
   Sparkles,
   Zap,
 } from "lucide-react";
@@ -130,12 +126,12 @@ export default function DealsPage() {
     return products.filter((p) => p.discount && p.discount > 0);
   }, [products]);
 
-  // Filter products based on category (demo - in production would have actual categories)
+  // Filter products based on category
   const filteredProducts = useMemo(() => {
     if (activeCategory === "all") return dealsProducts;
     if (activeCategory === "flash") return dealsProducts.filter((p) => (p.discount || 0) >= 20);
-    if (activeCategory === "bundle") return dealsProducts.slice(0, 4);
-    if (activeCategory === "seasonal") return dealsProducts.filter((p) => p.category.toLowerCase() === "lamb");
+    if (activeCategory === "bundle") return dealsProducts.filter((p) => (p.discount || 0) >= 10 && (p.discount || 0) < 20);
+    if (activeCategory === "seasonal") return dealsProducts.filter((p) => ["lamb", "beef"].includes(p.category.toLowerCase()));
     if (activeCategory === "clearance") return dealsProducts.filter((p) => (p.discount || 0) >= 30);
     return dealsProducts;
   }, [dealsProducts, activeCategory]);
@@ -263,79 +259,6 @@ export default function DealsPage() {
               <p className="text-muted-foreground">{tt.noDeals}</p>
             </div>
           )}
-        </section>
-
-        {/* Bundle Deals Section */}
-        <section className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Gift className="w-5 h-5 text-orange-500" />
-                {tt.bundleDeals}
-              </h2>
-              <p className="text-sm text-muted-foreground">{tt.bundleDescription}</p>
-            </div>
-            <Link
-              to="/products?filter=bundle"
-              className="text-primary text-sm font-medium flex items-center gap-1 hover:underline"
-            >
-              {language === "en" ? "View All" : "عرض الكل"}
-              <ChevronRight className={cn("w-4 h-4", isRTL && "rotate-180")} />
-            </Link>
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Bundle Card 1 */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-sm border border-border">
-              <div className="flex items-start gap-4">
-                <div className="w-24 h-24 bg-muted rounded-lg flex items-center justify-center text-4xl">
-                  🥩
-                </div>
-                <div className="flex-1">
-                  <span className="inline-block px-2 py-0.5 bg-red-100 text-red-600 text-xs font-medium rounded-full mb-2">
-                    {tt.save} 25%
-                  </span>
-                  <h3 className="font-semibold text-foreground">
-                    {isRTL ? "حزمة الشواء العائلية" : "Family BBQ Bundle"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {isRTL
-                      ? "ستيك ريب آي + كباب لحم + صدور دجاج"
-                      : "Ribeye Steak + Lamb Kebab + Chicken Breast"}
-                  </p>
-                  <div className="flex items-center gap-2 mt-3">
-                    <span className="text-lg font-bold text-primary">AED 199</span>
-                    <span className="text-sm text-muted-foreground line-through">AED 265</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bundle Card 2 */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-sm border border-border">
-              <div className="flex items-start gap-4">
-                <div className="w-24 h-24 bg-muted rounded-lg flex items-center justify-center text-4xl">
-                  🍖
-                </div>
-                <div className="flex-1">
-                  <span className="inline-block px-2 py-0.5 bg-green-100 text-green-600 text-xs font-medium rounded-full mb-2">
-                    {tt.save} 30%
-                  </span>
-                  <h3 className="font-semibold text-foreground">
-                    {isRTL ? "حزمة العيد الخاصة" : "Eid Special Pack"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {isRTL
-                      ? "فخذ لحم ضأن + لحم مفروم + كستليته"
-                      : "Lamb Leg + Minced Lamb + Lamb Chops"}
-                  </p>
-                  <div className="flex items-center gap-2 mt-3">
-                    <span className="text-lg font-bold text-primary">AED 349</span>
-                    <span className="text-sm text-muted-foreground line-through">AED 499</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </section>
 
         {/* Weekly Specials */}

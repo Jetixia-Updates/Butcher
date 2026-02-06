@@ -3046,18 +3046,17 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee } = req.body;
+      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
 
       if (!name || !emirate) {
         return res.status(400).json({ success: false, error: 'Name and emirate are required' });
       }
 
       const zoneId = `zone_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-      const now = new Date();
 
       await sql`
-        INSERT INTO delivery_zones (id, name, name_ar, emirate, areas, delivery_fee, minimum_order, estimated_minutes, is_active, express_enabled, express_fee, created_at, updated_at)
-        VALUES (${zoneId}, ${name}, ${nameAr || null}, ${emirate}, ${JSON.stringify(areas || [])}, ${deliveryFee || 15}, ${minimumOrder || 50}, ${estimatedMinutes || 60}, ${isActive !== false}, ${expressEnabled || false}, ${expressFee || 25}, ${now}, ${now})
+        INSERT INTO delivery_zones (id, name, name_ar, emirate, areas, delivery_fee, minimum_order, estimated_minutes, is_active, express_enabled, express_fee, express_hours)
+        VALUES (${zoneId}, ${name}, ${nameAr || null}, ${emirate}, ${JSON.stringify(areas || [])}, ${deliveryFee || 15}, ${minimumOrder || 50}, ${estimatedMinutes || 60}, ${isActive !== false}, ${expressEnabled || false}, ${expressFee || 25}, ${expressHours || 1})
       `;
 
       res.json({ success: true, data: { id: zoneId }, message: 'Delivery zone created successfully' });
@@ -3075,8 +3074,7 @@ function createApp() {
       }
 
       const { id } = req.params;
-      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee } = req.body;
-      const now = new Date();
+      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
 
       await sql`
         UPDATE delivery_zones SET
@@ -3090,7 +3088,7 @@ function createApp() {
           is_active = COALESCE(${isActive}, is_active),
           express_enabled = COALESCE(${expressEnabled}, express_enabled),
           express_fee = COALESCE(${expressFee}, express_fee),
-          updated_at = ${now}
+          express_hours = COALESCE(${expressHours}, express_hours)
         WHERE id = ${id}
       `;
 

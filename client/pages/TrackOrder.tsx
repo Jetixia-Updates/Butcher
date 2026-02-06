@@ -51,16 +51,6 @@ const destinationIcon = L.divIcon({
   iconAnchor: [20, 20],
 });
 
-// Simulated driver locations for demo (would come from real-time API)
-const simulateDriverMovement = (currentLat: number, currentLng: number, targetLat: number, targetLng: number) => {
-  const latDiff = (targetLat - currentLat) * 0.1;
-  const lngDiff = (targetLng - currentLat) * 0.1;
-  return {
-    latitude: currentLat + latDiff + (Math.random() - 0.5) * 0.001,
-    longitude: currentLng + lngDiff + (Math.random() - 0.5) * 0.001,
-  };
-};
-
 interface TrackingInfo {
   status: "preparing" | "ready" | "picked_up" | "on_the_way" | "nearby" | "delivered";
   driver?: {
@@ -229,9 +219,9 @@ export default function TrackOrderPage() {
           driver: {
             name: apiTracking.driverName,
             phone: apiTracking.driverMobile,
-            rating: 4.8,
-            vehicleType: "Motorcycle",
-            vehiclePlate: "DXB A 12345",
+            rating: apiTracking.driverRating || 0,
+            vehicleType: apiTracking.vehicleType || '',
+            vehiclePlate: apiTracking.vehiclePlate || '',
           },
           estimatedArrival: apiTracking.estimatedArrival,
           currentLocation: undefined, // Would come from real-time tracking
@@ -339,8 +329,12 @@ export default function TrackOrderPage() {
   useEffect(() => {
     if (!mapRef.current || !tracking?.currentLocation || leafletMapRef.current) return;
 
-    // Destination coordinates (demo - would come from order address)
-    const destination = { latitude: 25.2100, longitude: 55.2750 };
+    // Destination coordinates from order delivery address
+    const deliveryCoords = order?.deliveryAddress as any;
+    const destination = {
+      latitude: deliveryCoords?.latitude || tracking.currentLocation.latitude,
+      longitude: deliveryCoords?.longitude || tracking.currentLocation.longitude,
+    };
 
     leafletMapRef.current = L.map(mapRef.current).setView(
       [tracking.currentLocation.latitude, tracking.currentLocation.longitude],
@@ -387,34 +381,6 @@ export default function TrackOrderPage() {
       }
     };
   }, [tracking?.currentLocation]);
-
-  // Simulate driver movement
-  useEffect(() => {
-    if (!tracking?.currentLocation || tracking.status === "delivered") return;
-
-    const interval = setInterval(() => {
-      const destination = { latitude: 25.2100, longitude: 55.2750 };
-      const newLocation = simulateDriverMovement(
-        tracking.currentLocation!.latitude,
-        tracking.currentLocation!.longitude,
-        destination.latitude,
-        destination.longitude
-      );
-
-      if (driverMarkerRef.current) {
-        driverMarkerRef.current.setLatLng([newLocation.latitude, newLocation.longitude]);
-      }
-
-      if (routeLineRef.current) {
-        routeLineRef.current.setLatLngs([
-          [newLocation.latitude, newLocation.longitude],
-          [destination.latitude, destination.longitude],
-        ]);
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [tracking?.currentLocation, tracking?.status]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);

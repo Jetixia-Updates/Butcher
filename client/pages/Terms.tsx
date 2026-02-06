@@ -1,10 +1,12 @@
 import React from "react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useSettings } from "@/context/SettingsContext";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Terms: React.FC = () => {
   const { language } = useLanguage();
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const isRTL = language === "ar";
 
@@ -207,8 +209,8 @@ const Terms: React.FC = () => {
                   : "For inquiries about these Terms and Conditions:"}
               </p>
               <div className="space-y-2 text-muted-foreground">
-                <p>📧 Email: legal@aljazzar.ae</p>
-                <p>📱 Phone: +971 50 123 4567</p>
+                <p>📧 Email: {settings.contactEmail}</p>
+                <p>📱 Phone: {settings.contactPhone}</p>
                 <p>📍 {isRTL ? "دبي، الإمارات العربية المتحدة" : "Dubai, United Arab Emirates"}</p>
               </div>
             </section>

@@ -259,6 +259,8 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
     if (response.success) {
       await fetchData();
       setCreateZoneModal(false);
+    } else {
+      toast({ title: isRTL ? "فشل إنشاء المنطقة" : "Failed to create zone", description: response.error || undefined, variant: "destructive" });
     }
   };
 
@@ -267,6 +269,8 @@ export function DeliveryTab({ onNavigate }: AdminTabProps) {
     if (response.success) {
       await fetchData();
       setZoneModal(null);
+    } else {
+      toast({ title: isRTL ? "فشل تحديث المنطقة" : "Failed to update zone", description: response.error || undefined, variant: "destructive" });
     }
   };
 
