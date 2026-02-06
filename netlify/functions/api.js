@@ -32422,8 +32422,8 @@ function createApp() {
             productNameAr: i.product_name_ar,
             sku: i.sku,
             quantity: parseFloat(String(i.quantity || "0")),
-            price: parseFloat(String(i.unit_price || "0")),
-            total: parseFloat(String(i.total_price || "0")),
+            unitPrice: parseFloat(String(i.unit_price || "0")),
+            totalPrice: parseFloat(String(i.total_price || "0")),
             notes: i.notes
           })),
           createdAt: safeDate(o.created_at),
@@ -32505,8 +32505,8 @@ function createApp() {
           productNameAr: i.product_name_ar,
           sku: i.sku,
           quantity: parseFloat(String(i.quantity || "0")),
-          price: parseFloat(String(i.unit_price || "0")),
-          total: parseFloat(String(i.total_price || "0")),
+          unitPrice: parseFloat(String(i.unit_price || "0")),
+          totalPrice: parseFloat(String(i.total_price || "0")),
           notes: i.notes
         })),
         createdAt: safeDate(o.created_at),
@@ -35368,8 +35368,8 @@ function createApp() {
           productNameAr: i.product_name_ar,
           sku: i.sku,
           quantity: parseFloat(String(i.quantity || "0")),
-          price: parseFloat(String(i.unit_price || "0")),
-          total: parseFloat(String(i.total_price || "0")),
+          unitPrice: parseFloat(String(i.unit_price || "0")),
+          totalPrice: parseFloat(String(i.total_price || "0")),
           notes: i.notes
         })),
         createdAt: safeDate(o.created_at),
@@ -35524,8 +35524,8 @@ function createApp() {
           productNameAr: i.product_name_ar,
           sku: i.sku,
           quantity: parseFloat(String(i.quantity || "0")),
-          price: parseFloat(String(i.unit_price || "0")),
-          total: parseFloat(String(i.total_price || "0"))
+          unitPrice: parseFloat(String(i.unit_price || "0")),
+          totalPrice: parseFloat(String(i.total_price || "0"))
         })),
         createdAt: safeDate(o.created_at),
         updatedAt: safeDate(o.updated_at)
