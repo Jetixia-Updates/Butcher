@@ -5196,11 +5196,11 @@ function createApp() {
       }
 
       const rows = await sql`
-        SELECT oi.product_name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as total_revenue
+        SELECT oi.product_id, oi.product_name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as total_revenue
         FROM order_items oi
         JOIN orders o ON oi.order_id = o.id
         WHERE o.status NOT IN ('cancelled', 'refunded')
-        GROUP BY oi.product_name
+        GROUP BY oi.product_id, oi.product_name
         ORDER BY total_revenue DESC
         LIMIT 10
       `;
@@ -5208,9 +5208,10 @@ function createApp() {
       res.json({
         success: true,
         data: rows.map((r: any) => ({
-          name: r.product_name,
+          productId: r.product_id || '',
+          productName: r.product_name,
+          sales: parseFloat(String(r.total_revenue || '0')),
           quantity: parseFloat(String(r.total_qty || '0')),
-          revenue: parseFloat(String(r.total_revenue || '0')),
         })),
       });
     } catch (error) {
@@ -5450,12 +5451,13 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { startDate, endDate, period = 'today' } = req.query;
+      const { period = 'today' } = req.query;
       
-      let dateFilter = `created_at >= NOW() - INTERVAL '1 day'`;
-      if (period === 'week') dateFilter = `created_at >= NOW() - INTERVAL '7 days'`;
-      if (period === 'month') dateFilter = `created_at >= NOW() - INTERVAL '30 days'`;
-      if (period === 'year') dateFilter = `created_at >= NOW() - INTERVAL '365 days'`;
+      // Use database NOW() for date range to avoid clock skew issues
+      let intervalDays = 1;
+      if (period === 'week') intervalDays = 7;
+      else if (period === 'month') intervalDays = 30;
+      else if (period === 'year') intervalDays = 365;
 
       const summary = await sql`
         SELECT 
@@ -5467,17 +5469,41 @@ function createApp() {
           COALESCE(AVG(total), 0) as avg_order_value
         FROM orders
         WHERE status NOT IN ('cancelled', 'refunded')
+          AND created_at >= NOW() - make_interval(days => ${intervalDays})
       `;
+
+      // Also get items sold count
+      const itemsSold = await sql`
+        SELECT COALESCE(SUM(oi.quantity), 0) as total_items
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.status NOT IN ('cancelled', 'refunded')
+          AND o.created_at >= NOW() - make_interval(days => ${intervalDays})
+      `;
+
+      const totalRevenue = parseFloat(String(summary[0].total_revenue || '0'));
+      const totalDeliveryFees = parseFloat(String(summary[0].total_delivery_fees || '0'));
+      const totalVat = parseFloat(String(summary[0].total_vat || '0'));
+      const totalDiscounts = parseFloat(String(summary[0].total_discounts || '0'));
+      const netRevenue = totalRevenue - totalDiscounts;
 
       res.json({
         success: true,
         data: {
+          period: String(period),
+          startDate: new Date(Date.now() - intervalDays * 86400000).toISOString().split('T')[0],
+          endDate: new Date().toISOString().split('T')[0],
+          totalSales: totalRevenue,
           totalOrders: parseInt(summary[0].total_orders),
-          totalRevenue: parseFloat(String(summary[0].total_revenue || '0')),
-          totalVat: parseFloat(String(summary[0].total_vat || '0')),
-          totalDeliveryFees: parseFloat(String(summary[0].total_delivery_fees || '0')),
-          totalDiscounts: parseFloat(String(summary[0].total_discounts || '0')),
-          avgOrderValue: parseFloat(String(summary[0].avg_order_value || '0')),
+          averageOrderValue: parseFloat(String(summary[0].avg_order_value || '0')),
+          totalDiscount: totalDiscounts,
+          totalVat: totalVat,
+          totalDeliveryFees: totalDeliveryFees,
+          netRevenue: netRevenue,
+          costOfGoods: 0,
+          grossProfit: netRevenue,
+          grossProfitMargin: totalRevenue > 0 ? (netRevenue / totalRevenue) * 100 : 0,
+          itemsSold: parseInt(String(itemsSold[0].total_items || '0')),
         },
       });
     } catch (error) {
@@ -5503,12 +5529,16 @@ function createApp() {
         ORDER BY revenue DESC
       `;
 
+      // Calculate total for percentage
+      const totalSalesAll = rows.reduce((sum: number, r: any) => sum + parseFloat(String(r.revenue || '0')), 0);
+
       res.json({
         success: true,
         data: rows.map((r: any) => ({
           category: r.category,
-          revenue: parseFloat(String(r.revenue || '0')),
-          quantity: parseFloat(String(r.quantity || '0')),
+          totalSales: parseFloat(String(r.revenue || '0')),
+          totalQuantity: parseFloat(String(r.quantity || '0')),
+          percentage: totalSalesAll > 0 ? parseFloat(((parseFloat(String(r.revenue || '0')) / totalSalesAll) * 100).toFixed(1)) : 0,
         })),
       });
     } catch (error) {
@@ -5529,7 +5559,8 @@ function createApp() {
           oi.product_id, oi.product_name, 
           SUM(oi.total_price) as revenue, 
           SUM(oi.quantity) as quantity,
-          COUNT(DISTINCT oi.order_id) as order_count
+          COUNT(DISTINCT oi.order_id) as order_count,
+          CASE WHEN SUM(oi.quantity) > 0 THEN SUM(oi.total_price) / SUM(oi.quantity) ELSE 0 END as avg_price
         FROM order_items oi
         JOIN orders o ON oi.order_id = o.id
         WHERE o.status NOT IN ('cancelled', 'refunded')
@@ -5542,8 +5573,9 @@ function createApp() {
         data: rows.map((r: any) => ({
           productId: r.product_id,
           productName: r.product_name,
-          revenue: parseFloat(String(r.revenue || '0')),
-          quantity: parseFloat(String(r.quantity || '0')),
+          totalSales: parseFloat(String(r.revenue || '0')),
+          totalQuantity: parseFloat(String(r.quantity || '0')),
+          averagePrice: parseFloat(String(r.avg_price || '0')),
           orderCount: parseInt(r.order_count),
         })),
       });

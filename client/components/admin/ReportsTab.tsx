@@ -181,8 +181,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
       if (reportType === "sales") {
         const [reportRes, topRes, categoryRes, revenueRes] = await Promise.all([
           reportsApi.getSales({
-            startDate: startDate.toISOString().split("T")[0],
-            endDate: endDate.toISOString().split("T")[0],
+            period: period,
           }),
           analyticsApi.getTopProducts(period, 10),
           reportsApi.getSalesByCategory(period),
@@ -194,11 +193,11 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
           setSalesReport({
             totalRevenue: data.totalSales || 0,
             totalOrders: data.totalOrders || 0,
-            itemsSold: 0, // Not in the API response
+            itemsSold: (data as any).itemsSold || 0,
             averageOrderValue: data.averageOrderValue || 0,
             taxCollected: data.totalVat || 0,
             totalDiscounts: data.totalDiscount || 0,
-            totalRefunds: 0, // Not in the API response
+            totalRefunds: 0,
             dailySales: revenueRes.success && revenueRes.data 
               ? revenueRes.data.map(d => ({ date: d.date, revenue: d.revenue, orders: d.orders }))
               : [],
