@@ -34056,6 +34056,43 @@ function createApp() {
     return notifications[status] || null;
   }
   const genId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  async function createNotification(params) {
+    if (!sql) return;
+    const typeMapping = {
+      "order": "order_placed",
+      "order_new": "order_placed",
+      "order_placed": "order_placed",
+      "order_confirmed": "order_confirmed",
+      "order_processing": "order_processing",
+      "order_ready": "order_ready",
+      "order_shipped": "order_shipped",
+      "order_delivered": "order_delivered",
+      "order_cancelled": "order_cancelled",
+      "payment": "payment_received",
+      "payment_received": "payment_received",
+      "driver_assigned": "order_shipped",
+      "delivery": "order_shipped",
+      "system": "promotional",
+      "general": "promotional",
+      "chat": "promotional"
+    };
+    const mappedType = typeMapping[params.type] || "promotional";
+    const notifId = genId("notif");
+    const metadata = JSON.stringify({
+      originalType: params.type,
+      titleAr: params.titleAr,
+      link: params.link || null,
+      linkTab: null,
+      linkId: null
+    });
+    try {
+      await sql`INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
+        VALUES (${notifId}, ${params.userId}, ${mappedType}, 'push', ${params.title}, ${params.message}, ${params.messageAr}, 'sent', ${metadata}::jsonb, NOW())`;
+      console.log(`[Notification] Created for user ${params.userId}: ${params.title}`);
+    } catch (err) {
+      console.error(`[Notification] Failed to create:`, err);
+    }
+  }
   app.get("/api/delivery/tracking", async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -34155,16 +34192,27 @@ function createApp() {
       }
       await sql`UPDATE orders SET status = 'ready_for_pickup', updated_at = NOW() WHERE id = ${orderId}`;
       if (order.user_id) {
-        const notifId = genId("notif");
-        await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-          VALUES (${notifId}, ${order.user_id}, 'driver_assigned', 'Driver Assigned to Your Order', 'تم تعيين سائق لطلبك', ${`Driver: ${driverFullName} | Mobile: ${driver.mobile}`}, ${`\u0627\u0644\u0633\u0627\u0626\u0642: ${driverFullName} | \u0627\u0644\u0647\u0627\u062A\u0641: ${driver.mobile}`}, '/orders', true, NOW())`;
+        await createNotification({
+          userId: order.user_id,
+          type: "driver_assigned",
+          title: "Driver Assigned to Your Order",
+          titleAr: "\u062A\u0645 \u062A\u0639\u064A\u064A\u0646 \u0633\u0627\u0626\u0642 \u0644\u0637\u0644\u0628\u0643",
+          message: `Driver: ${driverFullName} | Mobile: ${driver.mobile}`,
+          messageAr: `\u0627\u0644\u0633\u0627\u0626\u0642: ${driverFullName} | \u0627\u0644\u0647\u0627\u062A\u0641: ${driver.mobile}`,
+          link: "/orders"
+        });
         console.log("[ASSIGN DELIVERY] User notification created");
       }
-      const driverNotifId = genId("notif");
       const parsedAddr = safeJson(order.delivery_address);
       const addressStr = parsedAddr ? `${parsedAddr.building || ""}, ${parsedAddr.street || ""}, ${parsedAddr.area || ""}` : "Address not available";
-      await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, unread, created_at)
-        VALUES (${driverNotifId}, ${driverId}, 'delivery', 'New Delivery Assigned', 'تم تعيين توصيل جديد', ${`Order ${order.order_number} assigned to you. Customer: ${order.customer_name}. Address: ${addressStr}`}, ${`\u062A\u0645 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0637\u0644\u0628 ${order.order_number} \u0644\u0643. \u0627\u0644\u0639\u0645\u064A\u0644: ${order.customer_name}. \u0627\u0644\u0639\u0646\u0648\u0627\u0646: ${addressStr}`}, true, NOW())`;
+      await createNotification({
+        userId: driverId,
+        type: "delivery",
+        title: "New Delivery Assigned",
+        titleAr: "\u062A\u0645 \u062A\u0639\u064A\u064A\u0646 \u062A\u0648\u0635\u064A\u0644 \u062C\u062F\u064A\u062F",
+        message: `Order ${order.order_number} assigned to you. Customer: ${order.customer_name}. Address: ${addressStr}`,
+        messageAr: `\u062A\u0645 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0637\u0644\u0628 ${order.order_number} \u0644\u0643. \u0627\u0644\u0639\u0645\u064A\u0644: ${order.customer_name}. \u0627\u0644\u0639\u0646\u0648\u0627\u0646: ${addressStr}`
+      });
       console.log("[ASSIGN DELIVERY] Success! Tracking ID:", tracking.id);
       const result = {
         id: tracking.id,
@@ -34301,22 +34349,40 @@ function createApp() {
         if (status === "assigned") {
           const driverName = tracking.driver_name || "Driver";
           const driverMobile = tracking.driver_mobile || "N/A";
-          const notifId = genId("notif");
-          await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-            VALUES (${notifId}, ${order.user_id}, 'driver_assigned', 'Driver Assigned to Your Order', 'تم تعيين سائق لطلبك', ${`Driver: ${driverName} | Mobile: ${driverMobile}`}, ${`\u0627\u0644\u0633\u0627\u0626\u0642: ${driverName} | \u0627\u0644\u0647\u0627\u062A\u0641: ${driverMobile}`}, '/orders', true, NOW())`;
+          await createNotification({
+            userId: order.user_id,
+            type: "driver_assigned",
+            title: "Driver Assigned to Your Order",
+            titleAr: "\u062A\u0645 \u062A\u0639\u064A\u064A\u0646 \u0633\u0627\u0626\u0642 \u0644\u0637\u0644\u0628\u0643",
+            message: `Driver: ${driverName} | Mobile: ${driverMobile}`,
+            messageAr: `\u0627\u0644\u0633\u0627\u0626\u0642: ${driverName} | \u0627\u0644\u0647\u0627\u062A\u0641: ${driverMobile}`,
+            link: "/orders"
+          });
         } else if (status === "in_transit" || status === "picked_up") {
           const content = getNotificationContent(order.order_number, "out_for_delivery");
           if (content) {
-            const notifId = genId("notif");
-            await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-              VALUES (${notifId}, ${order.user_id}, 'order', ${content.title}, ${content.titleAr}, ${content.message}, ${content.messageAr}, '/orders', true, NOW())`;
+            await createNotification({
+              userId: order.user_id,
+              type: "order_shipped",
+              title: content.title,
+              titleAr: content.titleAr,
+              message: content.message,
+              messageAr: content.messageAr,
+              link: "/orders"
+            });
           }
         } else if (status === "delivered") {
           const content = getNotificationContent(order.order_number, "delivered");
           if (content) {
-            const notifId = genId("notif");
-            await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-              VALUES (${notifId}, ${order.user_id}, 'order', ${content.title}, ${content.titleAr}, ${content.message}, ${content.messageAr}, '/orders', true, NOW())`;
+            await createNotification({
+              userId: order.user_id,
+              type: "order_delivered",
+              title: content.title,
+              titleAr: content.titleAr,
+              message: content.message,
+              messageAr: content.messageAr,
+              link: "/orders"
+            });
           }
         }
       }
@@ -34376,11 +34442,17 @@ function createApp() {
       const orderResult = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
       if (orderResult.length > 0 && orderResult[0].user_id) {
         const order = orderResult[0];
-        const notifId = genId("notif");
         const notifMsg = notes ? `Your order ${order.order_number} has been delivered. Driver note: ${notes}` : `Your order ${order.order_number} has been delivered. Enjoy!`;
         const notifMsgAr = notes ? `\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0637\u0644\u0628\u0643 ${order.order_number}. \u0645\u0644\u0627\u062D\u0638\u0629 \u0627\u0644\u0633\u0627\u0626\u0642: ${notes}` : `\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0637\u0644\u0628\u0643 ${order.order_number}. \u0628\u0627\u0644\u0647\u0646\u0627\u0621 \u0648\u0627\u0644\u0634\u0641\u0627\u0621!`;
-        await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-          VALUES (${notifId}, ${order.user_id}, 'order', 'Order Delivered', 'تم تسليم الطلب', ${notifMsg}, ${notifMsgAr}, '/orders', true, NOW())`;
+        await createNotification({
+          userId: order.user_id,
+          type: "order_delivered",
+          title: "Order Delivered",
+          titleAr: "\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0637\u0644\u0628",
+          message: notifMsg,
+          messageAr: notifMsgAr,
+          link: "/orders"
+        });
       }
       const updated = await sql`SELECT * FROM delivery_tracking WHERE id = ${id}`;
       const t = updated[0];
@@ -34474,9 +34546,15 @@ function createApp() {
         if (orderRes.length > 0 && orderRes[0].user_id) {
           const content = getNotificationContent(orderRes[0].order_number, "delivered");
           if (content) {
-            const notifId = genId("notif");
-            await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-              VALUES (${notifId}, ${orderRes[0].user_id}, 'order', ${content.title}, ${content.titleAr}, ${content.message}, ${content.messageAr}, '/orders', true, NOW())`;
+            await createNotification({
+              userId: orderRes[0].user_id,
+              type: "order_delivered",
+              title: content.title,
+              titleAr: content.titleAr,
+              message: content.message,
+              messageAr: content.messageAr,
+              link: "/orders"
+            });
           }
         }
       }
@@ -35297,6 +35375,30 @@ function createApp() {
         createdAt: safeDate(o.created_at),
         updatedAt: safeDate(o.updated_at)
       };
+      if (status && o.user_id) {
+        const statusToNotifType = {
+          "confirmed": "order_confirmed",
+          "processing": "order_processing",
+          "ready_for_pickup": "order_ready",
+          "out_for_delivery": "order_shipped",
+          "delivered": "order_delivered",
+          "cancelled": "order_cancelled"
+        };
+        const notifType = statusToNotifType[status] || "order_placed";
+        const content = getNotificationContent(o.order_number, status);
+        if (content) {
+          await createNotification({
+            userId: o.user_id,
+            type: notifType,
+            title: content.title,
+            titleAr: content.titleAr,
+            message: content.message,
+            messageAr: content.messageAr,
+            link: "/orders"
+          });
+          console.log(`[Order Status] Notification created for user ${o.user_id}: ${status}`);
+        }
+      }
       res.json({ success: true, data: order, message: "Order status updated successfully" });
     } catch (error) {
       console.error("[Update Order Status Error]", error);

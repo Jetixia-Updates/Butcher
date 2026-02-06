@@ -2968,6 +2968,45 @@ function createApp() {
   // Helper: generate unique id
   const genId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+  // Helper: create a notification in the `notifications` table (the table that GET /api/notifications reads)
+  // Maps app notification types to valid DB enum values and stores extra fields in metadata
+  async function createNotification(params: {
+    userId: string;
+    type: string;
+    title: string;
+    titleAr: string;
+    message: string;
+    messageAr: string;
+    link?: string | null;
+  }) {
+    if (!sql) return;
+    const typeMapping: Record<string, string> = {
+      'order': 'order_placed', 'order_new': 'order_placed', 'order_placed': 'order_placed',
+      'order_confirmed': 'order_confirmed', 'order_processing': 'order_processing',
+      'order_ready': 'order_ready', 'order_shipped': 'order_shipped',
+      'order_delivered': 'order_delivered', 'order_cancelled': 'order_cancelled',
+      'payment': 'payment_received', 'payment_received': 'payment_received',
+      'driver_assigned': 'order_shipped', 'delivery': 'order_shipped',
+      'system': 'promotional', 'general': 'promotional', 'chat': 'promotional',
+    };
+    const mappedType = typeMapping[params.type] || 'promotional';
+    const notifId = genId('notif');
+    const metadata = JSON.stringify({
+      originalType: params.type,
+      titleAr: params.titleAr,
+      link: params.link || null,
+      linkTab: null,
+      linkId: null,
+    });
+    try {
+      await sql`INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
+        VALUES (${notifId}, ${params.userId}, ${mappedType}, 'push', ${params.title}, ${params.message}, ${params.messageAr}, 'sent', ${metadata}::jsonb, NOW())`;
+      console.log(`[Notification] Created for user ${params.userId}: ${params.title}`);
+    } catch (err) {
+      console.error(`[Notification] Failed to create:`, err);
+    }
+  }
+
   // GET /api/delivery/tracking - Get all trackings (admin) or filter by query
   app.get('/api/delivery/tracking', async (req, res) => {
     try {
@@ -3095,18 +3134,29 @@ function createApp() {
 
       // Create notification for user: driver assigned
       if (order.user_id) {
-        const notifId = genId('notif');
-        await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-          VALUES (${notifId}, ${order.user_id}, 'driver_assigned', 'Driver Assigned to Your Order', 'تم تعيين سائق لطلبك', ${`Driver: ${driverFullName} | Mobile: ${driver.mobile}`}, ${`السائق: ${driverFullName} | الهاتف: ${driver.mobile}`}, '/orders', true, NOW())`;
+        await createNotification({
+          userId: order.user_id,
+          type: 'driver_assigned',
+          title: 'Driver Assigned to Your Order',
+          titleAr: 'تم تعيين سائق لطلبك',
+          message: `Driver: ${driverFullName} | Mobile: ${driver.mobile}`,
+          messageAr: `السائق: ${driverFullName} | الهاتف: ${driver.mobile}`,
+          link: '/orders',
+        });
         console.log('[ASSIGN DELIVERY] User notification created');
       }
 
       // Create notification for driver
-      const driverNotifId = genId('notif');
       const parsedAddr = safeJson(order.delivery_address);
       const addressStr = parsedAddr ? `${parsedAddr.building || ''}, ${parsedAddr.street || ''}, ${parsedAddr.area || ''}` : 'Address not available';
-      await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, unread, created_at)
-        VALUES (${driverNotifId}, ${driverId}, 'delivery', 'New Delivery Assigned', 'تم تعيين توصيل جديد', ${`Order ${order.order_number} assigned to you. Customer: ${order.customer_name}. Address: ${addressStr}`}, ${`تم تعيين الطلب ${order.order_number} لك. العميل: ${order.customer_name}. العنوان: ${addressStr}`}, true, NOW())`;
+      await createNotification({
+        userId: driverId,
+        type: 'delivery',
+        title: 'New Delivery Assigned',
+        titleAr: 'تم تعيين توصيل جديد',
+        message: `Order ${order.order_number} assigned to you. Customer: ${order.customer_name}. Address: ${addressStr}`,
+        messageAr: `تم تعيين الطلب ${order.order_number} لك. العميل: ${order.customer_name}. العنوان: ${addressStr}`,
+      });
 
       console.log('[ASSIGN DELIVERY] Success! Tracking ID:', tracking.id);
       const result = {
@@ -3266,22 +3316,40 @@ function createApp() {
         if (status === 'assigned') {
           const driverName = tracking.driver_name || 'Driver';
           const driverMobile = tracking.driver_mobile || 'N/A';
-          const notifId = genId('notif');
-          await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-            VALUES (${notifId}, ${order.user_id}, 'driver_assigned', 'Driver Assigned to Your Order', 'تم تعيين سائق لطلبك', ${`Driver: ${driverName} | Mobile: ${driverMobile}`}, ${`السائق: ${driverName} | الهاتف: ${driverMobile}`}, '/orders', true, NOW())`;
+          await createNotification({
+            userId: order.user_id,
+            type: 'driver_assigned',
+            title: 'Driver Assigned to Your Order',
+            titleAr: 'تم تعيين سائق لطلبك',
+            message: `Driver: ${driverName} | Mobile: ${driverMobile}`,
+            messageAr: `السائق: ${driverName} | الهاتف: ${driverMobile}`,
+            link: '/orders',
+          });
         } else if (status === 'in_transit' || status === 'picked_up') {
           const content = getNotificationContent(order.order_number, 'out_for_delivery');
           if (content) {
-            const notifId = genId('notif');
-            await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-              VALUES (${notifId}, ${order.user_id}, 'order', ${content.title}, ${content.titleAr}, ${content.message}, ${content.messageAr}, '/orders', true, NOW())`;
+            await createNotification({
+              userId: order.user_id,
+              type: 'order_shipped',
+              title: content.title,
+              titleAr: content.titleAr,
+              message: content.message,
+              messageAr: content.messageAr,
+              link: '/orders',
+            });
           }
         } else if (status === 'delivered') {
           const content = getNotificationContent(order.order_number, 'delivered');
           if (content) {
-            const notifId = genId('notif');
-            await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-              VALUES (${notifId}, ${order.user_id}, 'order', ${content.title}, ${content.titleAr}, ${content.message}, ${content.messageAr}, '/orders', true, NOW())`;
+            await createNotification({
+              userId: order.user_id,
+              type: 'order_delivered',
+              title: content.title,
+              titleAr: content.titleAr,
+              message: content.message,
+              messageAr: content.messageAr,
+              link: '/orders',
+            });
           }
         }
       }
@@ -3345,11 +3413,17 @@ function createApp() {
       const orderResult = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
       if (orderResult.length > 0 && orderResult[0].user_id) {
         const order = orderResult[0];
-        const notifId = genId('notif');
         const notifMsg = notes ? `Your order ${order.order_number} has been delivered. Driver note: ${notes}` : `Your order ${order.order_number} has been delivered. Enjoy!`;
         const notifMsgAr = notes ? `تم تسليم طلبك ${order.order_number}. ملاحظة السائق: ${notes}` : `تم تسليم طلبك ${order.order_number}. بالهناء والشفاء!`;
-        await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-          VALUES (${notifId}, ${order.user_id}, 'order', 'Order Delivered', 'تم تسليم الطلب', ${notifMsg}, ${notifMsgAr}, '/orders', true, NOW())`;
+        await createNotification({
+          userId: order.user_id,
+          type: 'order_delivered',
+          title: 'Order Delivered',
+          titleAr: 'تم تسليم الطلب',
+          message: notifMsg,
+          messageAr: notifMsgAr,
+          link: '/orders',
+        });
       }
 
       const updated = await sql`SELECT * FROM delivery_tracking WHERE id = ${id}`;
@@ -3445,9 +3519,15 @@ function createApp() {
         if (orderRes.length > 0 && orderRes[0].user_id) {
           const content = getNotificationContent(orderRes[0].order_number, 'delivered');
           if (content) {
-            const notifId = genId('notif');
-            await sql`INSERT INTO in_app_notifications (id, user_id, type, title, title_ar, message, message_ar, link, unread, created_at)
-              VALUES (${notifId}, ${orderRes[0].user_id}, 'order', ${content.title}, ${content.titleAr}, ${content.message}, ${content.messageAr}, '/orders', true, NOW())`;
+            await createNotification({
+              userId: orderRes[0].user_id,
+              type: 'order_delivered',
+              title: content.title,
+              titleAr: content.titleAr,
+              message: content.message,
+              messageAr: content.messageAr,
+              link: '/orders',
+            });
           }
         }
       }
@@ -4483,6 +4563,33 @@ function createApp() {
         createdAt: safeDate(o.created_at),
         updatedAt: safeDate(o.updated_at),
       };
+
+      // Create server-side notification for order status change
+      if (status && o.user_id) {
+        // Map order status to notification content
+        const statusToNotifType: Record<string, string> = {
+          'confirmed': 'order_confirmed',
+          'processing': 'order_processing',
+          'ready_for_pickup': 'order_ready',
+          'out_for_delivery': 'order_shipped',
+          'delivered': 'order_delivered',
+          'cancelled': 'order_cancelled',
+        };
+        const notifType = statusToNotifType[status] || 'order_placed';
+        const content = getNotificationContent(o.order_number, status);
+        if (content) {
+          await createNotification({
+            userId: o.user_id,
+            type: notifType,
+            title: content.title,
+            titleAr: content.titleAr,
+            message: content.message,
+            messageAr: content.messageAr,
+            link: '/orders',
+          });
+          console.log(`[Order Status] Notification created for user ${o.user_id}: ${status}`);
+        }
+      }
 
       res.json({ success: true, data: order, message: 'Order status updated successfully' });
     } catch (error) {
