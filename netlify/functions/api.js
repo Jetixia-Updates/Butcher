@@ -34722,8 +34722,8 @@ ${driverNote}` : driverNote;
       const transactionId = `txn_${Date.now()}`;
       const now = /* @__PURE__ */ new Date();
       await sql`
-        INSERT INTO payments (id, order_id, user_id, amount, method, status, transaction_id, created_at, updated_at)
-        VALUES (${paymentId}, ${orderId}, ${userId || null}, ${amount}, ${method}, 'completed', ${transactionId}, ${now}, ${now})
+        INSERT INTO payments (id, order_id, amount, method, status, created_at, updated_at)
+        VALUES (${paymentId}, ${orderId}, ${amount}, ${method}, 'captured', ${now}, ${now})
       `;
       await sql`UPDATE orders SET payment_status = 'captured', updated_at = ${now} WHERE id = ${orderId}`;
       res.json({ success: true, data: { id: paymentId, transactionId }, message: "Payment processed successfully" });
@@ -35559,22 +35559,30 @@ ${driverNote}` : driverNote;
         return res.status(500).json({ success: false, error: "Database not available" });
       }
       const { id } = req.params;
-      const { paymentMethod, amount, transactionId } = req.body;
+      const { paymentMethod, amount, transactionId, status } = req.body;
       const now = /* @__PURE__ */ new Date();
+      const orderRows = await sql`SELECT * FROM orders WHERE id = ${id}`;
+      if (orderRows.length === 0) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+      const order = orderRows[0];
+      const paymentAmount = amount || parseFloat(String(order.total || "0"));
+      const method = paymentMethod || order.payment_method || "cod";
       await sql`
         UPDATE orders 
-        SET payment_status = 'captured', payment_method = ${paymentMethod || "cod"}, updated_at = ${now}
+        SET payment_status = 'captured', payment_method = ${method}, updated_at = ${now}
         WHERE id = ${id}
       `;
       const paymentId = `pay_${Date.now()}`;
       await sql`
-        INSERT INTO payments (id, order_id, amount, method, status, gateway_response, created_at, updated_at)
-        VALUES (${paymentId}, ${id}, ${amount || 0}, ${paymentMethod || "cod"}, 'captured', ${JSON.stringify({ transactionId })}, ${now}, ${now})
+        INSERT INTO payments (id, order_id, order_number, amount, method, status, created_at, updated_at)
+        VALUES (${paymentId}, ${id}, ${order.order_number}, ${paymentAmount}, ${method}, 'captured', ${now}, ${now})
       `;
+      console.log(`[Order Payment] Payment confirmed for order ${id}: ${paymentAmount} ${method}`);
       res.json({ success: true, data: { paymentId, status: "captured" } });
     } catch (error) {
-      console.error("[Order Payment Error]", error);
-      res.status(500).json({ success: false, error: "Failed to process payment" });
+      console.error("[Order Payment Error]", error?.message || error, JSON.stringify(error));
+      res.status(500).json({ success: false, error: error?.message || "Failed to process payment" });
     }
   });
   app.get("/api/delivery/zones/:id", async (req, res) => {

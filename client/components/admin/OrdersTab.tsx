@@ -381,6 +381,10 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
       const response = await ordersApi.updatePaymentStatus(orderId, "captured", user?.id);
 
       if (response.success) {
+        toast({
+          title: t.paymentReceived,
+          description: `${t.confirmPayment} ✅`,
+        });
         await fetchOrders();
         if (selectedOrder?.id === orderId) {
           const orderResponse = await ordersApi.getById(orderId);
@@ -388,9 +392,20 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
             setSelectedOrder(orderResponse.data);
           }
         }
+      } else {
+        toast({
+          title: "Error",
+          description: response.error || "Failed to confirm payment",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Error confirming payment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to confirm payment",
+        variant: "destructive",
+      });
     }
     setUpdating(null);
   };
