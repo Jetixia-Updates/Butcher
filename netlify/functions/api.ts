@@ -2233,10 +2233,10 @@ function createApp() {
         VALUES (${productId}, ${name}, ${nameAr || null}, ${productSku}, ${price}, ${costPrice || 0}, ${discount || 0}, ${category}, ${description || null}, ${descriptionAr || null}, ${image || null}, ${unit || 'kg'}, ${minOrderQuantity || 0.25}, ${maxOrderQuantity || 10}, ${isActive !== false}, ${isFeatured || false}, ${isPremium || false}, ${0}, ${JSON.stringify(tags || [])}, ${JSON.stringify(badges || [])}, ${now}, ${now})
       `;
 
-      // Create stock entry
+      // Create stock entry - unlimited quantity by default
       await sql`
         INSERT INTO stock (id, product_id, quantity, reserved_quantity, available_quantity, low_stock_threshold, reorder_point, reorder_quantity, updated_at)
-        VALUES (${`stock_${productId}`}, ${productId}, 0, 0, 0, 10, 10, 50, ${now})
+        VALUES (${`stock_${productId}`}, ${productId}, 999999, 0, 999999, 10, 10, 50, ${now})
       `;
 
       res.json({ success: true, data: { id: productId }, message: 'Product created successfully' });
@@ -2644,10 +2644,11 @@ function createApp() {
         category: s.category,
         quantity: parseFloat(String(s.quantity || '0')),
         reservedQuantity: parseFloat(String(s.reserved_quantity || '0')),
-        availableQuantity: parseFloat(String(s.quantity || '0')) - parseFloat(String(s.reserved_quantity || '0')),
-        reorderLevel: parseFloat(String(s.low_stock_threshold || '10')),
+        availableQuantity: parseFloat(String(s.available_quantity || s.quantity || '0')),
+        lowStockThreshold: parseFloat(String(s.low_stock_threshold || '10')),
+        reorderPoint: parseFloat(String(s.reorder_point || '10')),
         reorderQuantity: parseFloat(String(s.reorder_quantity || '50')),
-        lastRestocked: s.last_restocked_at ? safeDate(s.last_restocked_at) : null,
+        lastRestockedAt: s.last_restocked_at ? safeDate(s.last_restocked_at) : null,
         updatedAt: safeDate(s.updated_at),
       }));
 
@@ -2772,8 +2773,12 @@ function createApp() {
           productId: s.product_id,
           quantity: parseFloat(String(s.quantity || '0')),
           reservedQuantity: parseFloat(String(s.reserved_quantity || '0')),
-          reorderLevel: parseFloat(String(s.low_stock_threshold || '10')),
+          availableQuantity: parseFloat(String(s.available_quantity || s.quantity || '0')),
+          lowStockThreshold: parseFloat(String(s.low_stock_threshold || '10')),
+          reorderPoint: parseFloat(String(s.reorder_point || '10')),
           reorderQuantity: parseFloat(String(s.reorder_quantity || '50')),
+          lastRestockedAt: s.last_restocked_at ? safeDate(s.last_restocked_at) : null,
+          updatedAt: safeDate(s.updated_at),
         },
       });
     } catch (error) {

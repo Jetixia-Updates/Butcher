@@ -23,13 +23,24 @@ import { useLanguage } from "@/context/LanguageContext";
 /**
  * Format weight - always display in kg
  * Converts grams to kilograms with 3 decimal precision
+ * Shows "Unlimited" for very high quantities (>= 99999)
  */
-function formatWeight(grams: number, isRTL?: boolean): { value: string; unit: string } {
-  return { value: (grams / 1000).toFixed(3), unit: isRTL ? "كجم" : "kg" };
+function formatWeight(grams: number, isRTL?: boolean): { value: string; unit: string; unlimited: boolean } {
+  if (grams >= 99999) {
+    return { value: isRTL ? "غير محدود" : "Unlimited", unit: "", unlimited: true };
+  }
+  return { value: (grams / 1000).toFixed(3), unit: isRTL ? "كجم" : "kg", unlimited: false };
 }
 
 function WeightDisplay({ grams, className, isRTL }: { grams: number; className?: string; isRTL?: boolean }) {
-  const { value, unit } = formatWeight(grams, isRTL);
+  const { value, unit, unlimited } = formatWeight(grams, isRTL);
+  if (unlimited) {
+    return (
+      <span className={cn("text-green-600 font-medium", className)}>
+        ∞ {value}
+      </span>
+    );
+  }
   return (
     <span className={className}>
       {value} <span className="text-xs text-slate-400">{unit}</span>
