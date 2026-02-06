@@ -223,6 +223,8 @@ export interface Product {
 export interface StockItem {
   id: string;
   productId: string;
+  productName?: string;
+  productNameAr?: string;
   quantity: number;
   reservedQuantity: number;
   availableQuantity: number;

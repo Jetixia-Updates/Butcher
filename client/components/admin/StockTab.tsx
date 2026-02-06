@@ -65,7 +65,7 @@ export function StockTab({ onNavigate }: AdminTabProps) {
     inventory: isRTL ? 'المخزون' : 'Inventory',
     alerts: isRTL ? 'تنبيهات المخزون' : 'Low Stock Alerts',
     history: isRTL ? 'سجل الحركة' : 'Movement History',
-    searchPlaceholder: isRTL ? 'البحث برقم المنتج...' : 'Search by product ID...',
+    searchPlaceholder: isRTL ? 'البحث بإسم المنتج...' : 'Search by product name...',
     noItems: isRTL ? 'لا توجد عناصر في المخزون' : 'No inventory items found',
     product: isRTL ? 'المنتج' : 'Product',
     quantity: isRTL ? 'الكمية' : 'Quantity',
@@ -160,7 +160,12 @@ export function StockTab({ onNavigate }: AdminTabProps) {
 
   const filteredStock = stock.filter((item) => {
     if (!searchQuery) return true;
-    return item.productId.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase();
+    return (
+      item.productId.toLowerCase().includes(q) ||
+      (item.productName || '').toLowerCase().includes(q) ||
+      (item.productNameAr || '').toLowerCase().includes(q)
+    );
   });
 
   return (
@@ -353,7 +358,7 @@ function InventoryTable({
             return (
               <tr key={item.id} className="hover:bg-slate-50">
                 <td className="px-3 sm:px-4 py-3">
-                  <span className="font-mono text-xs sm:text-sm truncate block max-w-[100px] sm:max-w-none">{item.productId}</span>
+                  <span className="text-sm font-medium text-slate-900 block truncate max-w-[140px] sm:max-w-none">{(isRTL && item.productNameAr) ? item.productNameAr : (item.productName || item.productId)}</span>
                 </td>
                 <td className="px-3 sm:px-4 py-3 text-center font-medium hidden sm:table-cell">
                   <WeightDisplay grams={item.quantity} isRTL={isRTL} />
