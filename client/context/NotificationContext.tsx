@@ -38,12 +38,15 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 // Admin user ID constant for admin notifications
 const ADMIN_USER_ID = "admin";
 
+import { safeISOString, safeDate } from "@/lib/utils";
+
 // Helper to generate unique ID (for local fallback)
 const generateId = () => `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // Helper to format relative time
 export function formatRelativeTime(dateString: string, language: "en" | "ar" = "en"): string {
-  const date = new Date(dateString);
+  const date = safeDate(dateString);
+  if (!date) return language === "ar" ? "غير معروف" : "Unknown";
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
@@ -79,7 +82,7 @@ function toNotification(apiNotif: InAppNotification): Notification {
     linkTab: apiNotif.linkTab,
     linkId: apiNotif.linkId,
     unread: apiNotif.unread,
-    createdAt: typeof apiNotif.createdAt === 'string' ? apiNotif.createdAt : new Date(apiNotif.createdAt).toISOString(),
+    createdAt: typeof apiNotif.createdAt === 'string' ? apiNotif.createdAt : safeISOString(apiNotif.createdAt),
     userId: apiNotif.userId,
   };
 }
@@ -111,7 +114,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (response.success && response.data) {
         const sorted = response.data
           .map(toNotification)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          .sort((a, b) => (safeDate(b.createdAt)?.getTime() ?? 0) - (safeDate(a.createdAt)?.getTime() ?? 0));
         setNotifications(sorted);
       } else {
         console.warn(`[Notifications] Fetch failed for ${userId}:`, response.error);

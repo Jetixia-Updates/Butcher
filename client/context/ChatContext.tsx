@@ -337,7 +337,7 @@ export const useAdminChat = () => {
 
   // Sort chats by last message time (newest first)
   const sortedChats = [...allChats].sort(
-    (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+    (a, b) => (new Date(b.lastMessageAt).getTime() || 0) - (new Date(a.lastMessageAt).getTime() || 0)
   );
 
   return {

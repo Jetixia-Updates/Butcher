@@ -450,6 +450,7 @@ function TrackingList({
   
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "-";
     return date.toLocaleString(isRTL ? 'ar-AE' : 'en-AE', {
       day: '2-digit',
       month: 'short',
@@ -584,7 +585,7 @@ function TrackingList({
                       <span className="w-2 h-2 rounded-full bg-primary"></span>
                       <span className="text-slate-700 capitalize">{event.status.replace('_', ' ')}</span>
                       <span className="text-slate-400">
-                        {new Date(event.timestamp).toLocaleTimeString(isRTL ? 'ar-AE' : 'en-AE', { hour: '2-digit', minute: '2-digit' })}
+                        {(() => { const d = new Date(event.timestamp); return isNaN(d.getTime()) ? "-" : d.toLocaleTimeString(isRTL ? 'ar-AE' : 'en-AE', { hour: '2-digit', minute: '2-digit' }); })()}
                       </span>
                     </div>
                   ))}
@@ -615,6 +616,7 @@ function DeliveriesList({
 }) {
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "-";
     return date.toLocaleString(isRTL ? 'ar-AE' : 'en-AE', {
       day: '2-digit',
       month: 'short',
@@ -783,7 +785,7 @@ function DeliveriesList({
                           <span className="w-2 h-2 rounded-full bg-primary"></span>
                           <span className="text-slate-600 capitalize">{event.status.replace('_', ' ')}</span>
                           <span className="text-slate-400">
-                            {new Date(event.timestamp).toLocaleTimeString(isRTL ? 'ar-AE' : 'en-AE', { hour: '2-digit', minute: '2-digit' })}
+                            {(() => { const d = new Date(event.timestamp); return isNaN(d.getTime()) ? "-" : d.toLocaleTimeString(isRTL ? 'ar-AE' : 'en-AE', { hour: '2-digit', minute: '2-digit' }); })()}
                           </span>
                           {idx < tracking.timeline.length - 1 && <span className="text-slate-300 mx-1">→</span>}
                         </div>

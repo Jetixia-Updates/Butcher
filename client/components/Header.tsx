@@ -386,10 +386,13 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                               <p className={`text-xs mt-1 ${
                                 msg.sender === "user" ? "text-white/70" : "text-gray-400 dark:text-gray-500"
                               }`}>
-                                {new Date(msg.timestamp).toLocaleTimeString(language === "ar" ? "ar-AE" : "en-US", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
+                                {(() => {
+                                  const d = new Date(msg.timestamp);
+                                  return isNaN(d.getTime()) ? "-" : d.toLocaleTimeString(language === "ar" ? "ar-AE" : "en-US", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  });
+                                })()}
                               </p>
                             </div>
                           </div>

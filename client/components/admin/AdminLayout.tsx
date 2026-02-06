@@ -471,12 +471,15 @@ export function AdminLayout({
                                       {chat.messages[0]?.text || ''}
                                     </p>
                                     <p className="text-xs text-slate-400 mt-1">
-                                      {new Date(chat.lastMessageAt).toLocaleString(language === 'ar' ? 'ar-SA' : 'en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      })}
+                                      {(() => {
+                                        const d = new Date(chat.lastMessageAt);
+                                        return isNaN(d.getTime()) ? "-" : d.toLocaleString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        });
+                                      })()}
                                     </p>
                                   </div>
                                 </div>
@@ -558,17 +561,20 @@ export function AdminLayout({
                                     "text-xs mt-1",
                                     msg.sender === 'admin' ? "text-white/70" : "text-slate-400"
                                   )}>
-                                    {new Date(msg.timestamp).toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
+                                    {(() => {
+                                      const d = new Date(msg.timestamp);
+                                      return isNaN(d.getTime()) ? "-" : d.toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      });
+                                    })()}
                                   </p>
                                 </div>
                               ))
                           ) : (
                             selectedChat?.messages && selectedChat.messages.length > 0 && selectedChat.messages
                               .slice()
-                              .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                              .sort((a, b) => (new Date(a.timestamp).getTime() || 0) - (new Date(b.timestamp).getTime() || 0))
                               .map((msg) => (
                                 <div
                                   key={msg.id}
@@ -584,10 +590,13 @@ export function AdminLayout({
                                     "text-xs mt-1",
                                     msg.sender === 'admin' ? "text-white/70" : "text-slate-400"
                                   )}>
-                                    {new Date(msg.timestamp).toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
+                                    {(() => {
+                                      const d = new Date(msg.timestamp);
+                                      return isNaN(d.getTime()) ? "-" : d.toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      });
+                                    })()}
                                   </p>
                                 </div>
                               ))

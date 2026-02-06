@@ -755,10 +755,13 @@ function OrderDetailsModal({
               <div>
                 <p className="text-xs text-slate-500 mb-1">{t.estimatedDelivery}</p>
                 <span className="text-sm font-medium">
-                  {new Date(order.estimatedDeliveryAt).toLocaleString(isRTL ? 'ar-AE' : 'en-AE', {
-                    dateStyle: 'short',
-                    timeStyle: 'short'
-                  })}
+                  {(() => {
+                    const d = new Date(order.estimatedDeliveryAt);
+                    return isNaN(d.getTime()) ? "-" : d.toLocaleString(isRTL ? 'ar-AE' : 'en-AE', {
+                      dateStyle: 'short',
+                      timeStyle: 'short'
+                    });
+                  })()}
                 </span>
               </div>
             )}

@@ -87,7 +87,8 @@ function formatCurrency(amount: number | undefined) {
 
 function formatDate(value?: string) {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString();
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
 }
 
 export function SuppliersTab({ onNavigate }: SuppliersTabProps) {

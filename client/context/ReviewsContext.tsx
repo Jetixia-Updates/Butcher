@@ -119,7 +119,7 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const getProductReviews = useCallback((productId: string): Review[] => {
     return reviews
       .filter((r) => r.productId === productId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => (new Date(b.createdAt).getTime() || 0) - (new Date(a.createdAt).getTime() || 0));
   }, [reviews]);
 
   const getProductRating = useCallback((productId: string): ProductRating => {

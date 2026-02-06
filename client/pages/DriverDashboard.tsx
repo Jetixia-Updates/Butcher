@@ -383,7 +383,9 @@ export default function DriverDashboardPage() {
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString(isRTL ? "ar-AE" : "en-AE", {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleTimeString(isRTL ? "ar-AE" : "en-AE", {
       hour: "2-digit",
       minute: "2-digit",
     });
