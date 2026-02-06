@@ -3299,10 +3299,19 @@ function createApp() {
         const currentOrder = await sql`SELECT * FROM orders WHERE id = ${tracking.order_id}`;
         if (currentOrder.length > 0) {
           let statusHistory = safeJson(currentOrder[0].status_history, []);
-          statusHistory.push({ status: orderStatus, changedBy: tracking.driver_id || 'driver', changedAt: new Date().toISOString(), notes: `Updated via delivery tracking: ${status}` });
+          const historyNotes = notes ? `Driver note: ${notes}` : `Updated via delivery tracking: ${status}`;
+          statusHistory.push({ status: orderStatus, changedBy: tracking.driver_id || 'driver', changedAt: new Date().toISOString(), notes: historyNotes });
 
           if (status === 'delivered') {
-            await sql`UPDATE orders SET status = 'delivered', status_history = ${JSON.stringify(statusHistory)}::jsonb, actual_delivery_at = NOW(), updated_at = NOW() WHERE id = ${tracking.order_id}`;
+            // Save driver notes to delivery_notes (do NOT auto-capture payment for COD)
+            if (notes) {
+              const existingNotes = currentOrder[0].delivery_notes;
+              const driverNote = `Driver note: ${notes}`;
+              const combinedNotes = existingNotes ? `${existingNotes}\n${driverNote}` : driverNote;
+              await sql`UPDATE orders SET status = 'delivered', status_history = ${JSON.stringify(statusHistory)}::jsonb, actual_delivery_at = NOW(), delivery_notes = ${combinedNotes}, updated_at = NOW() WHERE id = ${tracking.order_id}`;
+            } else {
+              await sql`UPDATE orders SET status = 'delivered', status_history = ${JSON.stringify(statusHistory)}::jsonb, actual_delivery_at = NOW(), updated_at = NOW() WHERE id = ${tracking.order_id}`;
+            }
           } else {
             await sql`UPDATE orders SET status = ${orderStatus}, status_history = ${JSON.stringify(statusHistory)}::jsonb, updated_at = NOW() WHERE id = ${tracking.order_id}`;
           }
