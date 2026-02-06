@@ -3099,12 +3099,21 @@ function createApp() {
 
       values.push(id);
       const query = `UPDATE delivery_zones SET ${setClauses.join(', ')} WHERE id = $${paramIdx}`;
+      console.log('[Update Zone] Query:', query);
+      console.log('[Update Zone] Values:', values);
       await sql.query(query, values);
 
       res.json({ success: true, message: 'Delivery zone updated successfully' });
     } catch (error) {
       console.error('[Update Zone Error]', error);
-      res.status(500).json({ success: false, error: 'Failed to update delivery zone' });
+      console.error('[Update Zone Error Details]', { 
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined 
+      });
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to update delivery zone' 
+      });
     }
   });
 
