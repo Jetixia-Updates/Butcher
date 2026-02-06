@@ -34149,7 +34149,7 @@ function createApp() {
           name = ${updateName},
           name_ar = ${updateNameAr},
           emirate = ${updateEmirate},
-          areas = ${JSON.stringify(updateAreas)}::jsonb,
+          areas = ${JSON.stringify(updateAreas)},
           delivery_fee = ${updateDeliveryFee},
           minimum_order = ${updateMinimumOrder},
           estimated_minutes = ${updateEstimatedMinutes},

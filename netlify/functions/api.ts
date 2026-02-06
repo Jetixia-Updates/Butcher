@@ -3096,14 +3096,14 @@ function createApp() {
       const updateExpressFee = expressFee !== undefined ? expressFee : current.express_fee;
       const updateExpressHours = expressHours !== undefined ? expressHours : current.express_hours;
 
-      // Use raw SQL with proper JSONB handling
+      // Update using template literal - Neon handles JSONB conversion automatically
       await sql`
         UPDATE delivery_zones 
         SET 
           name = ${updateName},
           name_ar = ${updateNameAr},
           emirate = ${updateEmirate},
-          areas = ${JSON.stringify(updateAreas)}::jsonb,
+          areas = ${JSON.stringify(updateAreas)},
           delivery_fee = ${updateDeliveryFee},
           minimum_order = ${updateMinimumOrder},
           estimated_minutes = ${updateEstimatedMinutes},
