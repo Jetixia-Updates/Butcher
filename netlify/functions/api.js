@@ -34127,61 +34127,38 @@ function createApp() {
       }
       const { id } = req.params;
       const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
-      const setClauses = [];
-      const values = [];
-      let paramIdx = 1;
-      if (name !== void 0 && name !== null) {
-        setClauses.push(`name = $${paramIdx++}`);
-        values.push(name);
+      const existing = await sql`SELECT * FROM delivery_zones WHERE id = ${id}`;
+      if (existing.length === 0) {
+        return res.status(404).json({ success: false, error: "Delivery zone not found" });
       }
-      if (nameAr !== void 0) {
-        setClauses.push(`name_ar = $${paramIdx++}`);
-        values.push(nameAr);
-      }
-      if (emirate !== void 0 && emirate !== null) {
-        setClauses.push(`emirate = $${paramIdx++}`);
-        values.push(emirate);
-      }
-      if (areas !== void 0 && areas !== null) {
-        setClauses.push(`areas = $${paramIdx++}::jsonb`);
-        values.push(JSON.stringify(areas));
-      }
-      if (deliveryFee !== void 0 && deliveryFee !== null) {
-        setClauses.push(`delivery_fee = $${paramIdx++}`);
-        values.push(deliveryFee);
-      }
-      if (minimumOrder !== void 0 && minimumOrder !== null) {
-        setClauses.push(`minimum_order = $${paramIdx++}`);
-        values.push(minimumOrder);
-      }
-      if (estimatedMinutes !== void 0 && estimatedMinutes !== null) {
-        setClauses.push(`estimated_minutes = $${paramIdx++}`);
-        values.push(estimatedMinutes);
-      }
-      if (isActive !== void 0 && isActive !== null) {
-        setClauses.push(`is_active = $${paramIdx++}`);
-        values.push(isActive);
-      }
-      if (expressEnabled !== void 0 && expressEnabled !== null) {
-        setClauses.push(`express_enabled = $${paramIdx++}`);
-        values.push(expressEnabled);
-      }
-      if (expressFee !== void 0 && expressFee !== null) {
-        setClauses.push(`express_fee = $${paramIdx++}`);
-        values.push(expressFee);
-      }
-      if (expressHours !== void 0 && expressHours !== null) {
-        setClauses.push(`express_hours = $${paramIdx++}`);
-        values.push(expressHours);
-      }
-      if (setClauses.length === 0) {
-        return res.json({ success: true, message: "No changes to update" });
-      }
-      values.push(id);
-      const query = `UPDATE delivery_zones SET ${setClauses.join(", ")} WHERE id = $${paramIdx}`;
-      console.log("[Update Zone] Query:", query);
-      console.log("[Update Zone] Values:", values);
-      await sql.query(query, values);
+      const current = existing[0];
+      const updateName = name !== void 0 ? name : current.name;
+      const updateNameAr = nameAr !== void 0 ? nameAr : current.name_ar;
+      const updateEmirate = emirate !== void 0 ? emirate : current.emirate;
+      const updateAreas = areas !== void 0 ? areas : typeof current.areas === "string" ? JSON.parse(current.areas) : current.areas;
+      const updateDeliveryFee = deliveryFee !== void 0 ? deliveryFee : current.delivery_fee;
+      const updateMinimumOrder = minimumOrder !== void 0 ? minimumOrder : current.minimum_order;
+      const updateEstimatedMinutes = estimatedMinutes !== void 0 ? estimatedMinutes : current.estimated_minutes;
+      const updateIsActive = isActive !== void 0 ? isActive : current.is_active;
+      const updateExpressEnabled = expressEnabled !== void 0 ? expressEnabled : current.express_enabled;
+      const updateExpressFee = expressFee !== void 0 ? expressFee : current.express_fee;
+      const updateExpressHours = expressHours !== void 0 ? expressHours : current.express_hours;
+      await sql`
+        UPDATE delivery_zones 
+        SET 
+          name = ${updateName},
+          name_ar = ${updateNameAr},
+          emirate = ${updateEmirate},
+          areas = ${JSON.stringify(updateAreas)}::jsonb,
+          delivery_fee = ${updateDeliveryFee},
+          minimum_order = ${updateMinimumOrder},
+          estimated_minutes = ${updateEstimatedMinutes},
+          is_active = ${updateIsActive},
+          express_enabled = ${updateExpressEnabled},
+          express_fee = ${updateExpressFee},
+          express_hours = ${updateExpressHours}
+        WHERE id = ${id}
+      `;
       res.json({ success: true, message: "Delivery zone updated successfully" });
     } catch (error) {
       console.error("[Update Zone Error]", error);
