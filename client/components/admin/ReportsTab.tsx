@@ -751,14 +751,14 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                         <p className="font-medium text-slate-900">{product.productName}</p>
                         <div className="flex items-center gap-4 text-sm text-slate-500">
                           <span>{product.quantity} {t.sold}</span>
-                          <span className="flex items-center gap-1"><CurrencySymbol size="xs" /> {product.sales.toFixed(2)}</span>
+                          <span className="flex items-center gap-1"><CurrencySymbol size="xs" /> {(product.sales || 0).toFixed(2)}</span>
                         </div>
                       </div>
                       <div className="w-24 bg-slate-100 rounded-full h-2">
                         <div
                           className="bg-primary h-2 rounded-full"
                           style={{
-                            width: `${(product.sales / (topProducts[0]?.sales || 1)) * 100}%`,
+                            width: `${((product.sales || 0) / (topProducts[0]?.sales || 1)) * 100}%`,
                           }}
                         />
                       </div>
@@ -791,11 +791,11 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                       "bg-pink-500",
                     ];
                     const totalRevenue = categorySales.reduce(
-                      (sum, c) => sum + c.totalSales,
+                      (sum, c) => sum + (c.totalSales || 0),
                       0
                     );
                     const displayPercentage = category.percentage || (totalRevenue
-                      ? ((category.totalSales / totalRevenue) * 100).toFixed(1)
+                      ? (((category.totalSales || 0) / totalRevenue) * 100).toFixed(1)
                       : "0");
 
                     return (
@@ -814,7 +814,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                           </div>
                           <div className="text-right">
                             <span className="text-sm font-medium flex items-center justify-end gap-1">
-                              <CurrencySymbol size="xs" /> {category.totalSales.toFixed(2)}
+                              <CurrencySymbol size="xs" /> {(category.totalSales || 0).toFixed(2)}
                             </span>
                             <span className="text-xs text-slate-500 ml-2">
                               ({displayPercentage}%)
@@ -1049,7 +1049,7 @@ function ChangeIndicator({
       )}
     >
       <Icon className="w-3 h-3" />
-      {Math.abs(value).toFixed(1)}%
+      {Math.abs(value || 0).toFixed(1)}%
       {showLabel && (
         <span className="text-slate-500 font-normal ml-1">{labelText}</span>
       )}
@@ -1249,7 +1249,7 @@ function CustomerOrdersReport({
                         </div>
                         <div className="text-center">
                           <p className="text-lg font-bold text-slate-900 flex items-center gap-1">
-                            <CurrencySymbol size="sm" /> {customer.totalSpent.toFixed(2)}
+                            <CurrencySymbol size="sm" /> {(customer.totalSpent || 0).toFixed(2)}
                           </p>
                           <p className="text-xs text-slate-500">{t.totalSpent}</p>
                         </div>
