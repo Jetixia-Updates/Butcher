@@ -34127,23 +34127,27 @@ function createApp() {
         return res.status(500).json({ success: false, error: "Database not available" });
       }
       const { id } = req.params;
-      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee } = req.body;
-      const now = /* @__PURE__ */ new Date();
-      await sql`
-        UPDATE delivery_zones SET
-          name = COALESCE(${name}, name),
-          name_ar = COALESCE(${nameAr}, name_ar),
-          emirate = COALESCE(${emirate}, emirate),
-          areas = COALESCE(${areas ? JSON.stringify(areas) : null}, areas),
-          delivery_fee = COALESCE(${deliveryFee}, delivery_fee),
-          minimum_order = COALESCE(${minimumOrder}, minimum_order),
-          estimated_minutes = COALESCE(${estimatedMinutes}, estimated_minutes),
-          is_active = COALESCE(${isActive}, is_active),
-          express_enabled = COALESCE(${expressEnabled}, express_enabled),
-          express_fee = COALESCE(${expressFee}, express_fee),
-          updated_at = ${now}
-        WHERE id = ${id}
-      `;
+      const { name, nameAr, emirate, areas, deliveryFee, minimumOrder, estimatedMinutes, isActive, expressEnabled, expressFee, expressHours } = req.body;
+      const setClauses = [];
+      const values = [];
+      let paramIdx = 1;
+      if (name !== void 0 && name !== null) { setClauses.push(`name = $${paramIdx++}`); values.push(name); }
+      if (nameAr !== void 0) { setClauses.push(`name_ar = $${paramIdx++}`); values.push(nameAr); }
+      if (emirate !== void 0 && emirate !== null) { setClauses.push(`emirate = $${paramIdx++}`); values.push(emirate); }
+      if (areas !== void 0 && areas !== null) { setClauses.push(`areas = $${paramIdx++}::jsonb`); values.push(JSON.stringify(areas)); }
+      if (deliveryFee !== void 0 && deliveryFee !== null) { setClauses.push(`delivery_fee = $${paramIdx++}`); values.push(deliveryFee); }
+      if (minimumOrder !== void 0 && minimumOrder !== null) { setClauses.push(`minimum_order = $${paramIdx++}`); values.push(minimumOrder); }
+      if (estimatedMinutes !== void 0 && estimatedMinutes !== null) { setClauses.push(`estimated_minutes = $${paramIdx++}`); values.push(estimatedMinutes); }
+      if (isActive !== void 0 && isActive !== null) { setClauses.push(`is_active = $${paramIdx++}`); values.push(isActive); }
+      if (expressEnabled !== void 0 && expressEnabled !== null) { setClauses.push(`express_enabled = $${paramIdx++}`); values.push(expressEnabled); }
+      if (expressFee !== void 0 && expressFee !== null) { setClauses.push(`express_fee = $${paramIdx++}`); values.push(expressFee); }
+      if (expressHours !== void 0 && expressHours !== null) { setClauses.push(`express_hours = $${paramIdx++}`); values.push(expressHours); }
+      if (setClauses.length === 0) {
+        return res.json({ success: true, message: "No changes to update" });
+      }
+      values.push(id);
+      const query = `UPDATE delivery_zones SET ${setClauses.join(", ")} WHERE id = $${paramIdx}`;
+      await sql(query, values);
       res.json({ success: true, message: "Delivery zone updated successfully" });
     } catch (error) {
       console.error("[Update Zone Error]", error);
@@ -35738,8 +35742,11 @@ ${driverNote}` : driverNote;
           areas: parsedAreas,
           deliveryFee: parseFloat(String(z.delivery_fee || "0")),
           minimumOrder: parseFloat(String(z.minimum_order || "0")),
-          estimatedTime: z.estimated_time,
-          isActive: z.is_active
+          estimatedMinutes: z.estimated_minutes,
+          isActive: z.is_active,
+          expressEnabled: z.express_enabled,
+          expressFee: parseFloat(String(z.express_fee || "25")),
+          expressHours: z.express_hours
         }
       });
     } catch (error) {
