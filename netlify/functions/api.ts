@@ -3099,7 +3099,7 @@ function createApp() {
 
       values.push(id);
       const query = `UPDATE delivery_zones SET ${setClauses.join(', ')} WHERE id = $${paramIdx}`;
-      await sql(query, values);
+      await sql.query(query, values);
 
       res.json({ success: true, message: 'Delivery zone updated successfully' });
     } catch (error) {
