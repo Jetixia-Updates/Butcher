@@ -52,9 +52,9 @@ interface AuthContextType {
     }
   }) => Promise<{ success: boolean; error?: string }>;
   updateUser: (user: Partial<User>) => void;
-  requestPasswordReset: (email: string, mobile: string) => { success: boolean; error?: string };
-  verifyResetToken: (token: string) => { valid: boolean; email?: string };
-  resetPassword: (token: string, newPassword: string) => { success: boolean; error?: string };
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string; resetLink?: string }>;
+  verifyResetToken: (token: string) => Promise<{ valid: boolean; email?: string }>;
+  resetPassword: (token: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   getRegisteredUsers: () => RegisteredUser[];
 }
 
@@ -293,85 +293,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const requestPasswordReset = (email: string, mobile: string): { success: boolean; error?: string } => {
-    const users = getRegisteredUsers();
-    const normalizedMobile = mobile.replace(/\s/g, "");
-
-    // Find user by mobile number
-    const foundUser = users.find(
-      (u) => u.mobile.replace(/\s/g, "") === normalizedMobile
-    );
-
-    if (!foundUser) {
-      return { success: false, error: "No account found with this phone number" };
+  const requestPasswordReset = async (email: string): Promise<{ success: boolean; error?: string; resetLink?: string }> => {
+    try {
+      const { passwordResetApi } = await import('@/lib/api');
+      const response = await passwordResetApi.forgotPassword(email);
+      if (response.success) {
+        return { success: true, resetLink: response.data?.resetLink };
+      }
+      return { success: false, error: response.error || 'Failed to process request' };
+    } catch (err) {
+      return { success: false, error: 'Network error. Please try again.' };
     }
-
-    // Verify email matches the registered email for this mobile
-    if (foundUser.email.toLowerCase() !== email.toLowerCase()) {
-      return { success: false, error: "Email does not match the registered email for this phone number" };
-    }
-
-    // Generate reset token
-    const token = `reset_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-    const expiresAt = Date.now() + 30 * 60 * 1000; // 30 minutes
-
-    // Save reset request
-    const requests = getResetRequests();
-    // Remove any existing requests for this email
-    const filteredRequests = requests.filter((r) => r.email.toLowerCase() !== email.toLowerCase());
-    filteredRequests.push({ email, mobile: normalizedMobile, token, expiresAt });
-    saveResetRequests(filteredRequests);
-
-    // In a real app, send email here
-    console.log(`Password reset link: /reset-password?token=${token}`);
-
-    return { success: true };
   };
 
-  const verifyResetToken = (token: string): { valid: boolean; email?: string } => {
-    const requests = getResetRequests();
-    const request = requests.find((r) => r.token === token);
-
-    if (!request) {
+  const verifyResetToken = async (token: string): Promise<{ valid: boolean; email?: string }> => {
+    try {
+      const { passwordResetApi } = await import('@/lib/api');
+      const response = await passwordResetApi.verifyResetToken(token);
+      if (response.success && response.data) {
+        return { valid: response.data.valid, email: response.data.email };
+      }
+      return { valid: false };
+    } catch (err) {
       return { valid: false };
     }
-
-    if (Date.now() > request.expiresAt) {
-      // Token expired, remove it
-      const filteredRequests = requests.filter((r) => r.token !== token);
-      saveResetRequests(filteredRequests);
-      return { valid: false };
-    }
-
-    return { valid: true, email: request.email };
   };
 
-  const resetPassword = (token: string, newPassword: string): { success: boolean; error?: string } => {
-    const verification = verifyResetToken(token);
-
-    if (!verification.valid) {
-      return { success: false, error: "Invalid or expired reset link" };
+  const resetPassword = async (token: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { passwordResetApi } = await import('@/lib/api');
+      const response = await passwordResetApi.resetPassword(token, newPassword);
+      if (response.success) {
+        return { success: true };
+      }
+      return { success: false, error: response.error || 'Failed to reset password' };
+    } catch (err) {
+      return { success: false, error: 'Network error. Please try again.' };
     }
-
-    const users = getRegisteredUsers();
-    const userIndex = users.findIndex(
-      (u) => u.email.toLowerCase() === verification.email?.toLowerCase()
-    );
-
-    if (userIndex === -1) {
-      return { success: false, error: "User not found" };
-    }
-
-    // Update password
-    users[userIndex].password = newPassword;
-    saveRegisteredUsers(users);
-
-    // Remove the used token
-    const requests = getResetRequests();
-    const filteredRequests = requests.filter((r) => r.token !== token);
-    saveResetRequests(filteredRequests);
-
-    return { success: true };
   };
 
   return (

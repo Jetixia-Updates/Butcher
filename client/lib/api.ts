@@ -554,6 +554,33 @@ export const usersApi = {
       method: "PUT",
       body: JSON.stringify({ isActive }),
     }),
+
+  adminResetPassword: (id: string, newPassword: string) =>
+    fetchApi<null>(`/admin/users/${id}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({ newPassword }),
+    }),
+};
+
+// =====================================================
+// PASSWORD RESET API
+// =====================================================
+
+export const passwordResetApi = {
+  forgotPassword: (email: string) =>
+    fetchApi<{ resetLink?: string; token?: string }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyResetToken: (token: string) =>
+    fetchApi<{ valid: boolean; email?: string }>(`/auth/verify-reset-token?token=${encodeURIComponent(token)}`),
+
+  resetPassword: (token: string, newPassword: string) =>
+    fetchApi<null>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, newPassword }),
+    }),
 };
 
 // =====================================================

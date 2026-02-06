@@ -1,33 +1,27 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { isValidEmail, isValidUAEPhone } from "@/utils/validators";
+import { isValidEmail } from "@/utils/validators";
 
 export default function ForgotPasswordPage() {
-  const navigate = useNavigate();
   const { requestPasswordReset } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const isRTL = language === "ar";
 
-  const [mobile, setMobile] = useState("+971 ");
   const [email, setEmail] = useState("");
-  const [errors, setErrors] = useState<{ mobile?: string; email?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [resetLink, setResetLink] = useState<string | null>(null);
   const [serverError, setServerError] = useState("");
 
   const validateForm = () => {
-    const newErrors: { mobile?: string; email?: string } = {};
-
-    if (!isValidUAEPhone(mobile)) {
-      newErrors.mobile = t("forgot.invalidPhone");
-    }
-
+    const newErrors: { email?: string } = {};
     if (!email || !isValidEmail(email)) {
       newErrors.email = t("forgot.invalidEmail");
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -36,19 +30,17 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setServerError("");
 
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsLoading(true);
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const result = requestPasswordReset(email, mobile);
+    const result = await requestPasswordReset(email);
 
     if (result.success) {
       setIsSuccess(true);
+      if (result.resetLink) {
+        setResetLink(result.resetLink);
+      }
     } else {
       setServerError(result.error || t("forgot.genericError"));
     }
@@ -58,15 +50,13 @@ export default function ForgotPasswordPage() {
 
   if (isSuccess) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex flex-col">
-        {/* Header */}
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex flex-col" dir={isRTL ? "rtl" : "ltr"}>
         <div className="py-4 sm:py-6 px-3 sm:px-4">
           <div className="max-w-md mx-auto flex justify-center">
             <LanguageSwitcher variant="compact" />
           </div>
         </div>
 
-        {/* Success Message */}
         <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-8 sm:py-12">
           <div className="w-full max-w-md">
             <div className="card-premium p-4 sm:p-8 text-center">
@@ -84,6 +74,14 @@ export default function ForgotPasswordPage() {
               <p className="text-xs sm:text-sm text-muted-foreground bg-muted p-2 sm:p-3 rounded-lg mb-4 sm:mb-6 break-all">
                 📧 {email}
               </p>
+              {resetLink && (
+                <Link
+                  to={resetLink}
+                  className="block mb-4 text-sm bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  🔗 {isRTL ? "اضغط هنا لإعادة تعيين كلمة المرور" : "Click here to reset your password"}
+                </Link>
+              )}
               <Link
                 to="/login"
                 className="btn-primary inline-block px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-sm sm:text-base"
@@ -98,27 +96,23 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex flex-col">
-      {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex flex-col" dir={isRTL ? "rtl" : "ltr"}>
       <div className="py-4 sm:py-6 px-3 sm:px-4">
         <div className="max-w-md mx-auto flex justify-center">
           <LanguageSwitcher variant="compact" />
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-8 sm:py-12">
         <div className="w-full max-w-md">
-          {/* Logo & Title */}
           <div className="text-center mb-6 sm:mb-8 animate-fade-in">
             <h1 className="text-3xl sm:text-4xl font-bold text-primary mb-2">🔑</h1>
             <h2 className="text-2xl sm:text-3xl font-bold text-foreground">{t("forgot.title")}</h2>
             <p className="text-muted-foreground text-xs sm:text-sm mt-2">
-              {t("forgot.subtitle")}
+              {isRTL ? "أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين" : "Enter your email and we'll send you a reset link"}
             </p>
           </div>
 
-          {/* Forgot Password Form */}
           <form
             onSubmit={handleSubmit}
             className="card-premium p-4 sm:p-8 space-y-4 sm:space-y-6 animate-slide-up"
@@ -131,35 +125,6 @@ export default function ForgotPasswordPage() {
 
             <div>
               <label className="block text-xs sm:text-sm font-semibold text-foreground mb-2">
-                {t("forgot.phone")}
-              </label>
-              <input
-                type="tel"
-                value={mobile}
-                onChange={(e) => {
-                  let value = e.target.value;
-                  if (!value.startsWith("+971")) {
-                    value = "+971";
-                  }
-                  setMobile(value);
-                  if (errors.mobile) {
-                    setErrors({ ...errors, mobile: undefined });
-                  }
-                }}
-                placeholder="+971 50 123 4567"
-                className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border-2 transition-colors text-sm sm:text-base ${
-                  errors.mobile
-                    ? "border-destructive bg-destructive/5"
-                    : "border-input bg-white dark:bg-gray-800 focus:border-primary"
-                } text-foreground placeholder-muted-foreground focus:outline-none`}
-              />
-              {errors.mobile && (
-                <p className="text-destructive text-xs sm:text-sm mt-1">{errors.mobile}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-foreground mb-2">
                 {t("forgot.email")}
               </label>
               <input
@@ -167,9 +132,7 @@ export default function ForgotPasswordPage() {
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  if (errors.email) {
-                    setErrors({ ...errors, email: undefined });
-                  }
+                  if (errors.email) setErrors({});
                 }}
                 placeholder={t("forgot.emailPlaceholder")}
                 className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border-2 transition-colors text-sm sm:text-base ${
@@ -181,9 +144,6 @@ export default function ForgotPasswordPage() {
               {errors.email && (
                 <p className="text-destructive text-xs sm:text-sm mt-1">{errors.email}</p>
               )}
-              <p className="text-[10px] sm:text-xs text-muted-foreground mt-2">
-                {t("forgot.emailNote")}
-              </p>
             </div>
 
             <button
@@ -195,7 +155,6 @@ export default function ForgotPasswordPage() {
             </button>
           </form>
 
-          {/* Back to Login Link */}
           <div className="text-center mt-4 sm:mt-6">
             <Link
               to="/login"

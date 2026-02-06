@@ -31950,6 +31950,120 @@ function createApp() {
       res.status(500).json({ success: false, error: "Login failed" });
     }
   });
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ success: false, error: "Email is required" });
+      }
+      const users = await sql`SELECT id, email, first_name FROM users WHERE LOWER(email) = LOWER(${email})`;
+      if (users.length === 0) {
+        return res.json({ success: true, message: "If an account with this email exists, a reset link has been generated." });
+      }
+      const dbUser = users[0];
+      await sql`UPDATE password_reset_tokens SET used = true WHERE user_id = ${dbUser.id} AND used = false`;
+      const tokenId = `prt_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+      const token = `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 15)}_${Math.random().toString(36).substr(2, 15)}`;
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1e3);
+      await sql`
+        INSERT INTO password_reset_tokens (id, user_id, token, expires_at, used, created_at)
+        VALUES (${tokenId}, ${dbUser.id}, ${token}, ${expiresAt}, false, ${/* @__PURE__ */ new Date()})
+      `;
+      const resetLink = `/reset-password?token=${token}`;
+      console.log(`[Password Reset] Reset link for ${dbUser.email}: ${resetLink}`);
+      res.json({
+        success: true,
+        message: "If an account with this email exists, a reset link has been generated.",
+        // Include reset link in response since we don't have email service
+        resetLink,
+        token
+      });
+    } catch (error) {
+      console.error("[Forgot Password Error]", error);
+      res.status(500).json({ success: false, error: "Failed to process password reset request" });
+    }
+  });
+  app.get("/api/auth/verify-reset-token", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { token } = req.query;
+      if (!token) {
+        return res.status(400).json({ success: false, valid: false, error: "Token is required" });
+      }
+      const tokens = await sql`
+        SELECT prt.*, u.email FROM password_reset_tokens prt
+        JOIN users u ON prt.user_id = u.id
+        WHERE prt.token = ${token} AND prt.used = false AND prt.expires_at > NOW()
+      `;
+      if (tokens.length === 0) {
+        return res.json({ success: true, valid: false });
+      }
+      res.json({ success: true, valid: true, email: tokens[0].email });
+    } catch (error) {
+      console.error("[Verify Reset Token Error]", error);
+      res.status(500).json({ success: false, valid: false, error: "Failed to verify token" });
+    }
+  });
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { token, newPassword } = req.body;
+      if (!token || !newPassword) {
+        return res.status(400).json({ success: false, error: "Token and new password are required" });
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ success: false, error: "Password must be at least 6 characters" });
+      }
+      const tokens = await sql`
+        SELECT prt.*, u.id as uid, u.email FROM password_reset_tokens prt
+        JOIN users u ON prt.user_id = u.id
+        WHERE prt.token = ${token} AND prt.used = false AND prt.expires_at > NOW()
+      `;
+      if (tokens.length === 0) {
+        return res.status(400).json({ success: false, error: "Invalid or expired reset token" });
+      }
+      const resetToken = tokens[0];
+      const hashedPassword = await bcryptjs_default.hash(newPassword, 10);
+      await sql`UPDATE users SET password = ${hashedPassword}, updated_at = ${/* @__PURE__ */ new Date()} WHERE id = ${resetToken.uid}`;
+      await sql`UPDATE password_reset_tokens SET used = true WHERE id = ${resetToken.id}`;
+      res.json({ success: true, message: "Password has been reset successfully" });
+    } catch (error) {
+      console.error("[Reset Password Error]", error);
+      res.status(500).json({ success: false, error: "Failed to reset password" });
+    }
+  });
+  app.post("/api/admin/users/:id/reset-password", async (req, res) => {
+    try {
+      if (!isDatabaseAvailable() || !sql) {
+        return res.status(500).json({ success: false, error: "Database not available" });
+      }
+      const { id } = req.params;
+      const { newPassword } = req.body;
+      if (!newPassword) {
+        return res.status(400).json({ success: false, error: "New password is required" });
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ success: false, error: "Password must be at least 6 characters" });
+      }
+      const users = await sql`SELECT id, username, email FROM users WHERE id = ${id}`;
+      if (users.length === 0) {
+        return res.status(404).json({ success: false, error: "User not found" });
+      }
+      const hashedPassword = await bcryptjs_default.hash(newPassword, 10);
+      await sql`UPDATE users SET password = ${hashedPassword}, updated_at = ${/* @__PURE__ */ new Date()} WHERE id = ${id}`;
+      res.json({ success: true, message: "Password reset successfully" });
+    } catch (error) {
+      console.error("[Admin Reset Password Error]", error);
+      res.status(500).json({ success: false, error: "Failed to reset password" });
+    }
+  });
   app.get("/api/products", async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {

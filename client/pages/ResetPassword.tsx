@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { isStrongPassword } from "@/utils/validators";
 
 export default function ResetPasswordPage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { verifyResetToken, resetPassword } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const isRTL = language === "ar";
 
   const token = searchParams.get("token") || "";
   
@@ -30,12 +30,15 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    const result = verifyResetToken(token);
-    setIsValidToken(result.valid);
-    if (result.email) {
-      setUserEmail(result.email);
-    }
-  }, [token, verifyResetToken]);
+    const verify = async () => {
+      const result = await verifyResetToken(token);
+      setIsValidToken(result.valid);
+      if (result.email) {
+        setUserEmail(result.email);
+      }
+    };
+    verify();
+  }, [token]);
 
   const validateForm = () => {
     const newErrors: { password?: string; confirmPassword?: string } = {};
@@ -66,10 +69,7 @@ export default function ResetPasswordPage() {
 
     setIsLoading(true);
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const result = resetPassword(token, password);
+    const result = await resetPassword(token, password);
 
     if (result.success) {
       setIsSuccess(true);

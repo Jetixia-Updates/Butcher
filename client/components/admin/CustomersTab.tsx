@@ -32,6 +32,7 @@ import {
   UserX,
   Edit2,
   Send,
+  Key,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/context/LanguageContext";
@@ -89,6 +90,13 @@ const translations = {
     verifiedAccount: "Verified",
     viewDetails: "View Details",
     editCustomer: "Edit Customer",
+    resetPassword: "Reset Password",
+    newPassword: "New Password",
+    confirmNewPassword: "Confirm New Password",
+    passwordMismatch: "Passwords do not match",
+    passwordTooShort: "Password must be at least 6 characters",
+    passwordResetSuccess: "Password reset successfully",
+    passwordResetFailed: "Failed to reset password",
     customer: "Customer",
     balance: "Balance",
     totalEarned: "Total Earned",
@@ -167,6 +175,13 @@ const translations = {
     verifiedAccount: "موثق",
     viewDetails: "عرض التفاصيل",
     editCustomer: "تعديل العميل",
+    resetPassword: "إعادة تعيين كلمة المرور",
+    newPassword: "كلمة المرور الجديدة",
+    confirmNewPassword: "تأكيد كلمة المرور الجديدة",
+    passwordMismatch: "كلمات المرور غير متطابقة",
+    passwordTooShort: "يجب أن تكون كلمة المرور 6 أحرف على الأقل",
+    passwordResetSuccess: "تم إعادة تعيين كلمة المرور بنجاح",
+    passwordResetFailed: "فشل في إعادة تعيين كلمة المرور",
     customer: "العميل",
     balance: "الرصيد",
     totalEarned: "إجمالي المكتسب",
@@ -1369,11 +1384,48 @@ function EditCustomerModal({
   });
   const [saving, setSaving] = useState(false);
 
+  // Password reset state
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [resettingPassword, setResettingPassword] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     await onSave(formData);
     setSaving(false);
+  };
+
+  const handleResetPassword = async () => {
+    setPasswordError("");
+
+    if (newPassword.length < 6) {
+      setPasswordError(t.passwordTooShort);
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError(t.passwordMismatch);
+      return;
+    }
+
+    setResettingPassword(true);
+    try {
+      const response = await usersApi.adminResetPassword(customer.id, newPassword);
+      if (response.success) {
+        alert(t.passwordResetSuccess);
+        setShowResetPassword(false);
+        setNewPassword("");
+        setConfirmNewPassword("");
+      } else {
+        setPasswordError(response.error || t.passwordResetFailed);
+      }
+    } catch (err) {
+      setPasswordError(t.passwordResetFailed);
+    }
+    setResettingPassword(false);
   };
 
   return (
@@ -1479,6 +1531,82 @@ function EditCustomerModal({
               />
               <span className="text-sm text-slate-700">{t.verifiedAccount}</span>
             </label>
+          </div>
+
+          {/* Reset Password Section */}
+          <div className="border-t border-slate-200 pt-4">
+            {!showResetPassword ? (
+              <button
+                type="button"
+                onClick={() => setShowResetPassword(true)}
+                className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 font-medium"
+              >
+                <Key className="w-4 h-4" />
+                {t.resetPassword}
+              </button>
+            ) : (
+              <div className="space-y-3 bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-orange-800 flex items-center gap-1.5">
+                    <Key className="w-4 h-4" />
+                    {t.resetPassword}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowResetPassword(false);
+                      setNewPassword("");
+                      setConfirmNewPassword("");
+                      setPasswordError("");
+                    }}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    {t.newPassword}
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      setPasswordError("");
+                    }}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    {t.confirmNewPassword}
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmNewPassword}
+                    onChange={(e) => {
+                      setConfirmNewPassword(e.target.value);
+                      setPasswordError("");
+                    }}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm"
+                  />
+                </div>
+                {passwordError && (
+                  <p className="text-xs text-red-600">{passwordError}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={resettingPassword || !newPassword || !confirmNewPassword}
+                  className="w-full py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {resettingPassword ? "..." : t.resetPassword}
+                </button>
+              </div>
+            )}
           </div>
         </form>
 
