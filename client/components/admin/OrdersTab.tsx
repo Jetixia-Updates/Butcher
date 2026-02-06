@@ -946,15 +946,22 @@ function OrderDetailsModal({
             <h3 className="font-semibold text-slate-900 mb-3">{t.statusHistory}</h3>
             <div className="space-y-2">
               {order.statusHistory.map((history, idx) => (
-                <div key={idx} className="flex items-center gap-3 text-sm">
-                  <div className="w-2 h-2 bg-primary rounded-full" />
-                  <span className="font-medium">
-                    {getStatusLabel(history.status, t)}
-                  </span>
-                  <span className="text-slate-500">
-                    {new Date(history.changedAt).toLocaleString(isRTL ? 'ar-AE' : 'en-AE')}
-                  </span>
-                  <span className="text-slate-400">{t.by} {history.changedBy}</span>
+                <div key={idx} className="text-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0" />
+                    <span className="font-medium">
+                      {getStatusLabel(history.status, t)}
+                    </span>
+                    <span className="text-slate-500">
+                      {new Date(history.changedAt).toLocaleString(isRTL ? 'ar-AE' : 'en-AE')}
+                    </span>
+                    <span className="text-slate-400">{t.by} {history.changedBy}</span>
+                  </div>
+                  {history.notes && (
+                    <p className="text-xs text-slate-500 mt-0.5" style={{ marginLeft: isRTL ? 0 : '1.25rem', marginRight: isRTL ? '1.25rem' : 0 }}>
+                      📝 {history.notes}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
