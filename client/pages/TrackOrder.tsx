@@ -76,7 +76,7 @@ interface TrackingInfo {
 export default function TrackOrderPage() {
   const { orderNumber } = useParams<{ orderNumber: string }>();
   const navigate = useNavigate();
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
   const { orders } = useOrders();
   const { user, isLoggedIn, isAuthLoading } = useAuth();
   const isRTL = language === "ar";
@@ -99,78 +99,6 @@ export default function TrackOrderPage() {
 
   // Find order
   const order = orders.find(o => o.orderNumber === orderNumber);
-
-  // Translations
-  const t = {
-    en: {
-      trackOrder: "Track Order",
-      orderNumber: "Order",
-      estimatedArrival: "Estimated Arrival",
-      minutes: "min",
-      arriving: "Arriving",
-      yourDriver: "Your Driver",
-      callDriver: "Call",
-      messageDriver: "Message",
-      vehicleInfo: "Vehicle Info",
-      orderStatus: "Order Status",
-      preparing: "Preparing Your Order",
-      preparingDesc: "Our butchers are preparing your fresh cuts",
-      ready: "Order Ready",
-      readyDesc: "Your order is ready for pickup",
-      pickedUp: "Picked Up",
-      pickedUpDesc: "Driver has collected your order",
-      onTheWay: "On the Way",
-      onTheWayDesc: "Driver is heading to your location",
-      nearby: "Almost There",
-      nearbyDesc: "Driver is nearby, please be ready",
-      delivered: "Delivered",
-      deliveredDesc: "Order has been delivered",
-      deliveryAddress: "Delivery Address",
-      orderDetails: "Order Details",
-      items: "items",
-      total: "Total",
-      refresh: "Refresh",
-      orderNotFound: "Order not found",
-      goToOrders: "View All Orders",
-      liveTracking: "Live Tracking",
-      driverLocation: "Driver's current location",
-    },
-    ar: {
-      trackOrder: "تتبع الطلب",
-      orderNumber: "الطلب",
-      estimatedArrival: "الوصول المتوقع",
-      minutes: "دقيقة",
-      arriving: "يصل خلال",
-      yourDriver: "السائق",
-      callDriver: "اتصال",
-      messageDriver: "رسالة",
-      vehicleInfo: "معلومات المركبة",
-      orderStatus: "حالة الطلب",
-      preparing: "جاري تحضير طلبك",
-      preparingDesc: "جزارونا يحضرون قطعك الطازجة",
-      ready: "الطلب جاهز",
-      readyDesc: "طلبك جاهز للاستلام",
-      pickedUp: "تم الاستلام",
-      pickedUpDesc: "السائق استلم طلبك",
-      onTheWay: "في الطريق",
-      onTheWayDesc: "السائق متجه إلى موقعك",
-      nearby: "على وشك الوصول",
-      nearbyDesc: "السائق قريب، كن مستعداً",
-      delivered: "تم التوصيل",
-      deliveredDesc: "تم توصيل الطلب",
-      deliveryAddress: "عنوان التوصيل",
-      orderDetails: "تفاصيل الطلب",
-      items: "منتجات",
-      total: "المجموع",
-      refresh: "تحديث",
-      orderNotFound: "الطلب غير موجود",
-      goToOrders: "عرض جميع الطلبات",
-      liveTracking: "تتبع مباشر",
-      driverLocation: "موقع السائق الحالي",
-    },
-  };
-
-  const tt = t[language];
 
   // Fetch real tracking data from API
   const fetchTrackingData = useCallback(async () => {
@@ -312,7 +240,7 @@ export default function TrackOrderPage() {
       const diff = arrival - now;
 
       if (diff <= 0) {
-        setCountdown(isRTL ? "يصل الآن!" : "Arriving now!");
+        setCountdown(t("trackOrder.arrivingNow"));
       } else {
         const minutes = Math.floor(diff / 60000);
         const seconds = Math.floor((diff % 60000) / 1000);
@@ -417,9 +345,9 @@ export default function TrackOrderPage() {
       <div className="min-h-screen flex items-center justify-center p-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="text-center">
           <Package className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-foreground mb-2">{tt.orderNotFound}</h1>
+          <h1 className="text-xl font-bold text-foreground mb-2">{t("trackOrder.orderNotFound")}</h1>
           <Link to="/orders" className="btn-primary inline-block mt-4">
-            {tt.goToOrders}
+            {t("trackOrder.goToOrders")}
           </Link>
         </div>
       </div>
@@ -436,8 +364,8 @@ export default function TrackOrderPage() {
               <ArrowLeft className={cn("w-5 h-5", isRTL && "rotate-180")} />
             </button>
             <div>
-              <h1 className="font-bold text-foreground">{tt.trackOrder}</h1>
-              <p className="text-xs text-muted-foreground">{tt.orderNumber} #{orderNumber}</p>
+              <h1 className="font-bold text-foreground">{t("trackOrder.title")}</h1>
+              <p className="text-xs text-muted-foreground">{t("trackOrder.orderNumber")} #{orderNumber}</p>
             </div>
           </div>
           <button
@@ -455,7 +383,7 @@ export default function TrackOrderPage() {
           <div className="bg-gradient-to-r from-primary to-primary/80 rounded-2xl p-6 text-white">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-primary-foreground/80 text-sm">{tt.estimatedArrival}</p>
+                <p className="text-primary-foreground/80 text-sm">{t("trackOrder.estimatedArrival")}</p>
                 <p className="text-3xl font-bold mt-1">{countdown}</p>
               </div>
               <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
@@ -469,8 +397,8 @@ export default function TrackOrderPage() {
         {tracking?.status === "delivered" && (
           <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center">
             <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-3" />
-            <h2 className="text-xl font-bold text-green-700">{tt.delivered}</h2>
-            <p className="text-green-600 text-sm mt-1">{tt.deliveredDesc}</p>
+            <h2 className="text-xl font-bold text-green-700">{t("trackOrder.delivered")}</h2>
+            <p className="text-green-600 text-sm mt-1">{t("trackOrder.deliveredDesc")}</p>
           </div>
         )}
 
@@ -480,9 +408,9 @@ export default function TrackOrderPage() {
             <div className="p-3 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                <span className="font-medium text-sm">{tt.liveTracking}</span>
+                <span className="font-medium text-sm">{t("trackOrder.liveTracking")}</span>
               </div>
-              <span className="text-xs text-muted-foreground">{tt.driverLocation}</span>
+              <span className="text-xs text-muted-foreground">{t("trackOrder.driverLocation")}</span>
             </div>
             <div ref={mapRef} className="w-full h-64" />
           </div>
@@ -491,7 +419,7 @@ export default function TrackOrderPage() {
         {/* Driver Card */}
         {tracking?.driver && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-border p-4 shadow-sm">
-            <h3 className="font-semibold text-foreground mb-3">{tt.yourDriver}</h3>
+            <h3 className="font-semibold text-foreground mb-3">{t("trackOrder.yourDriver")}</h3>
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center">
                 <User className="w-7 h-7 text-muted-foreground" />
@@ -523,17 +451,17 @@ export default function TrackOrderPage() {
 
         {/* Status Timeline */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-border p-4 shadow-sm">
-          <h3 className="font-semibold text-foreground mb-4">{tt.orderStatus}</h3>
+          <h3 className="font-semibold text-foreground mb-4">{t("trackOrder.orderStatus")}</h3>
           <div className="space-y-4">
             {tracking?.timeline.map((step, index) => {
               const statusInfo = getStatusInfo(step.status);
               const isActive = tracking.status === step.status;
               const statusLabels: Record<string, { title: string; desc: string }> = {
-                preparing: { title: tt.preparing, desc: tt.preparingDesc },
-                ready: { title: tt.ready, desc: tt.readyDesc },
-                picked_up: { title: tt.pickedUp, desc: tt.pickedUpDesc },
-                on_the_way: { title: tt.onTheWay, desc: tt.onTheWayDesc },
-                delivered: { title: tt.delivered, desc: tt.deliveredDesc },
+                preparing: { title: t("trackOrder.preparing"), desc: t("trackOrder.preparingDesc") },
+                ready: { title: t("trackOrder.ready"), desc: t("trackOrder.readyDesc") },
+                picked_up: { title: t("trackOrder.pickedUp"), desc: t("trackOrder.pickedUpDesc") },
+                on_the_way: { title: t("trackOrder.onTheWay"), desc: t("trackOrder.onTheWayDesc") },
+                delivered: { title: t("trackOrder.delivered"), desc: t("trackOrder.deliveredDesc") },
               };
               const label = statusLabels[step.status] || { title: step.status, desc: "" };
 
@@ -586,7 +514,7 @@ export default function TrackOrderPage() {
 
         {/* Delivery Address */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-border p-4 shadow-sm">
-          <h3 className="font-semibold text-foreground mb-3">{tt.deliveryAddress}</h3>
+          <h3 className="font-semibold text-foreground mb-3">{t("trackOrder.deliveryAddress")}</h3>
           <div className="flex items-start gap-3">
             <MapPin className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
             <div>
@@ -604,7 +532,7 @@ export default function TrackOrderPage() {
 
         {/* Order Summary */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-border p-4 shadow-sm">
-          <h3 className="font-semibold text-foreground mb-3">{tt.orderDetails}</h3>
+          <h3 className="font-semibold text-foreground mb-3">{t("trackOrder.orderDetails")}</h3>
           <div className="space-y-2">
             {order.items.map((item) => (
               <div key={item.id} className="flex justify-between items-center text-sm">
@@ -615,7 +543,7 @@ export default function TrackOrderPage() {
               </div>
             ))}
             <div className="border-t border-border pt-2 mt-2 flex justify-between items-center">
-              <span className="font-semibold">{tt.total}</span>
+              <span className="font-semibold">{t("trackOrder.total")}</span>
               <span className="font-bold text-primary">AED {Number(order.total).toFixed(2)}</span>
             </div>
           </div>

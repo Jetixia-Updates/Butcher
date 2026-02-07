@@ -1,8 +1,11 @@
 import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import { useLanguage } from "@/context/LanguageContext";
 
 const NotFound = () => {
   const location = useLocation();
+  const { t, language } = useLanguage();
+  const isRTL = language === "ar";
 
   useEffect(() => {
     console.error(
@@ -12,12 +15,12 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4" dir={isRTL ? "rtl" : "ltr"}>
       <div className="text-center">
-        <h1 className="text-3xl sm:text-4xl font-bold mb-3 sm:mb-4">404</h1>
-        <p className="text-lg sm:text-xl text-gray-600 mb-3 sm:mb-4">Oops! Page not found</p>
+        <h1 className="text-3xl sm:text-4xl font-bold mb-3 sm:mb-4">{t("notFound.title")}</h1>
+        <p className="text-lg sm:text-xl text-gray-600 mb-3 sm:mb-4">{t("notFound.message")}</p>
         <a href="/" className="text-blue-500 hover:text-blue-700 underline text-sm sm:text-base">
-          Return to Home
+          {t("notFound.returnHome")}
         </a>
       </div>
     </div>

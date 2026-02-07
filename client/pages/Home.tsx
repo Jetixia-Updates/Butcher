@@ -41,7 +41,7 @@ interface Banner {
 }
 
 export default function HomePage() {
-  const { language } = useLanguage();
+  const { language, t, isRTL } = useLanguage();
   const { products } = useProducts();
   const { orders } = useOrders();
   const { user, isLoggedIn } = useAuth();
@@ -49,7 +49,6 @@ export default function HomePage() {
   const { banners: allBanners, settings } = useSettings();
   const { categories } = useCategories();
   const navigate = useNavigate();
-  const isRTL = language === "ar";
   
   // Filter to only show enabled banners
   const banners = allBanners.filter((b) => b.enabled);
@@ -77,76 +76,6 @@ export default function HomePage() {
     }, 5000);
     return () => clearInterval(interval);
   }, [banners.length]);
-
-  // Translations
-  const t = {
-    en: {
-      greeting: "Hello",
-      welcomeBack: "Welcome back",
-      whatWouldYouLike: "What would you like today?",
-      shopNow: "Shop Now",
-      categories: "Categories",
-      allProducts: "All Products",
-      viewAll: "View All",
-      todaysDeals: "Today's Deals",
-      flashSale: "Flash Sale",
-      endsIn: "Ends in",
-      bestSellers: "Best Sellers",
-      newArrivals: "New Arrivals",
-      reorderFavorites: "Reorder Your Favorites",
-      orderAgain: "Order Again",
-      whyChooseUs: "Why Choose Us",
-      freshGuarantee: "Fresh Guarantee",
-      freshGuaranteeDesc: "100% fresh or money back",
-      fastDelivery: "Fast Delivery",
-      fastDeliveryDesc: "Same-day delivery available",
-      premiumQuality: "Premium Quality",
-      premiumQualityDesc: "Hand-selected by experts",
-      securePayment: "Secure Payment",
-      securePaymentDesc: "100% secure checkout",
-      beef: "Beef",
-      lamb: "Lamb",
-      chicken: "Chicken",
-      marinated: "Marinated",
-      premium: "Premium",
-      quickReorder: "Quick Reorder",
-      fromYourLastOrder: "From your last order",
-    },
-    ar: {
-      greeting: "مرحباً",
-      welcomeBack: "أهلاً بعودتك",
-      whatWouldYouLike: "ماذا تريد اليوم؟",
-      shopNow: "تسوق الآن",
-      categories: "الفئات",
-      allProducts: "جميع المنتجات",
-      viewAll: "عرض الكل",
-      todaysDeals: "عروض اليوم",
-      flashSale: "تخفيضات سريعة",
-      endsIn: "تنتهي خلال",
-      bestSellers: "الأكثر مبيعاً",
-      newArrivals: "وصل حديثاً",
-      reorderFavorites: "أعد طلب المفضلة",
-      orderAgain: "اطلب مرة أخرى",
-      whyChooseUs: "لماذا تختارنا",
-      freshGuarantee: "ضمان الطزاجة",
-      freshGuaranteeDesc: "طازج 100% أو استرداد المال",
-      fastDelivery: "توصيل سريع",
-      fastDeliveryDesc: "توصيل في نفس اليوم",
-      premiumQuality: "جودة ممتازة",
-      premiumQualityDesc: "مختارة بعناية من الخبراء",
-      securePayment: "دفع آمن",
-      securePaymentDesc: "دفع آمن 100%",
-      beef: "لحم بقري",
-      lamb: "لحم ضأن",
-      chicken: "دجاج",
-      marinated: "متبل",
-      premium: "فاخر",
-      quickReorder: "إعادة طلب سريع",
-      fromYourLastOrder: "من طلبك الأخير",
-    },
-  };
-
-  const tt = t[language];
 
   // Get featured products (with discount or high rating)
   const dealsProducts = products
@@ -247,21 +176,21 @@ export default function HomePage() {
         {/* Greeting */}
         {user && (
           <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-2xl p-4">
-            <p className="text-muted-foreground text-sm">{tt.greeting}</p>
+            <p className="text-muted-foreground text-sm">{t("home.greeting")}</p>
             <h2 className="text-xl font-bold text-foreground">{user.firstName} 👋</h2>
-            <p className="text-muted-foreground text-sm mt-1">{tt.whatWouldYouLike}</p>
+            <p className="text-muted-foreground text-sm mt-1">{t("home.whatWouldYouLike")}</p>
           </div>
         )}
 
         {/* Categories */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-foreground">{tt.categories}</h2>
+            <h2 className="text-lg font-bold text-foreground">{t("home.categories")}</h2>
             <Link
               to="/products"
               className="text-primary text-sm font-medium flex items-center gap-1 hover:underline"
             >
-              {tt.viewAll}
+              {t("home.viewAll")}
               <ChevronRight className={cn("w-4 h-4", isRTL && "rotate-180")} />
             </Link>
           </div>
@@ -290,11 +219,11 @@ export default function HomePage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Flame className="w-6 h-6" />
-                <h2 className="text-lg font-bold">{tt.flashSale}</h2>
+                <h2 className="text-lg font-bold">{t("home.flashSale")}</h2>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
-                <span className="text-sm">{tt.endsIn}</span>
+                <span className="text-sm">{t("home.endsIn")}</span>
                 <div className="flex gap-1 font-mono text-sm font-bold">
                   <span className="bg-white/20 px-2 py-1 rounded">
                     {countdown.hours.toString().padStart(2, "0")}
@@ -325,15 +254,15 @@ export default function HomePage() {
               <div>
                 <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <ShoppingBag className="w-5 h-5 text-primary" />
-                  {tt.quickReorder}
+                  {t("home.quickReorder")}
                 </h2>
-                <p className="text-sm text-muted-foreground">{tt.fromYourLastOrder}</p>
+                <p className="text-sm text-muted-foreground">{t("home.fromYourLastOrder")}</p>
               </div>
               <Link
                 to="/orders"
                 className="text-primary text-sm font-medium flex items-center gap-1 hover:underline"
               >
-                {tt.viewAll}
+                {t("home.viewAll")}
                 <ChevronRight className={cn("w-4 h-4", isRTL && "rotate-180")} />
               </Link>
             </div>
@@ -353,13 +282,13 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-primary" />
-              {tt.bestSellers}
+              {t("home.bestSellers")}
             </h2>
             <Link
               to="/products?sort=popular"
               className="text-primary text-sm font-medium flex items-center gap-1 hover:underline"
             >
-              {tt.viewAll}
+              {t("home.viewAll")}
               <ChevronRight className={cn("w-4 h-4", isRTL && "rotate-180")} />
             </Link>
           </div>
@@ -375,13 +304,13 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
-              {tt.newArrivals}
+              {t("home.newArrivals")}
             </h2>
             <Link
               to="/products?sort=newest"
               className="text-primary text-sm font-medium flex items-center gap-1 hover:underline"
             >
-              {tt.viewAll}
+              {t("home.viewAll")}
               <ChevronRight className={cn("w-4 h-4", isRTL && "rotate-180")} />
             </Link>
           </div>
@@ -394,35 +323,35 @@ export default function HomePage() {
 
         {/* Why Choose Us */}
         <section className="bg-muted/50 rounded-2xl p-6">
-          <h2 className="text-lg font-bold text-foreground text-center mb-6">{tt.whyChooseUs}</h2>
+          <h2 className="text-lg font-bold text-foreground text-center mb-6">{t("home.whyChooseUs")}</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Shield className="w-6 h-6 text-green-600" />
               </div>
-              <h3 className="font-semibold text-foreground text-sm">{tt.freshGuarantee}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{tt.freshGuaranteeDesc}</p>
+              <h3 className="font-semibold text-foreground text-sm">{t("home.freshGuarantee")}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{t("home.freshGuaranteeDesc")}</p>
             </div>
             <div className="text-center">
               <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Truck className="w-6 h-6 text-blue-600" />
               </div>
-              <h3 className="font-semibold text-foreground text-sm">{tt.fastDelivery}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{tt.fastDeliveryDesc}</p>
+              <h3 className="font-semibold text-foreground text-sm">{t("home.fastDelivery")}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{t("home.fastDeliveryDesc")}</p>
             </div>
             <div className="text-center">
               <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Star className="w-6 h-6 text-purple-600" />
               </div>
-              <h3 className="font-semibold text-foreground text-sm">{tt.premiumQuality}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{tt.premiumQualityDesc}</p>
+              <h3 className="font-semibold text-foreground text-sm">{t("home.premiumQuality")}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{t("home.premiumQualityDesc")}</p>
             </div>
             <div className="text-center">
               <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Shield className="w-6 h-6 text-orange-600" />
               </div>
-              <h3 className="font-semibold text-foreground text-sm">{tt.securePayment}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{tt.securePaymentDesc}</p>
+              <h3 className="font-semibold text-foreground text-sm">{t("home.securePayment")}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{t("home.securePaymentDesc")}</p>
             </div>
           </div>
         </section>

@@ -38,47 +38,6 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
-  const translations = {
-    en: {
-      searchPlaceholder: "Search products...",
-      filters: "Filters",
-      sortBy: "Sort by",
-      default: "Default",
-      priceLowHigh: "Price: Low to High",
-      priceHighLow: "Price: High to Low",
-      rating: "Top Rated",
-      name: "Name A-Z",
-      priceRange: "Price Range",
-      clearFilters: "Clear Filters",
-      showingResults: "Showing",
-      results: "results",
-      noResults: "No products found",
-      tryDifferent: "Try a different search or filter",
-      inStock: "In Stock",
-      outOfStock: "Out of Stock",
-    },
-    ar: {
-      searchPlaceholder: "ابحث عن منتجات...",
-      filters: "التصفية",
-      sortBy: "ترتيب حسب",
-      default: "الافتراضي",
-      priceLowHigh: "السعر: من الأقل للأعلى",
-      priceHighLow: "السعر: من الأعلى للأقل",
-      rating: "الأعلى تقييماً",
-      name: "الاسم أ-ي",
-      priceRange: "نطاق السعر",
-      clearFilters: "مسح الفلاتر",
-      showingResults: "عرض",
-      results: "نتيجة",
-      noResults: "لم يتم العثور على منتجات",
-      tryDifferent: "جرب بحثاً أو فلتراً مختلفاً",
-      inStock: "متوفر",
-      outOfStock: "غير متوفر",
-    },
-  };
-
-  const tt = translations[language];
-
   // Auto-refresh products
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -200,11 +159,11 @@ export default function ProductsPage() {
   };
 
   const sortOptions: { value: SortOption; label: string }[] = [
-    { value: "default", label: tt.default },
-    { value: "price-low", label: tt.priceLowHigh },
-    { value: "price-high", label: tt.priceHighLow },
-    { value: "rating", label: tt.rating },
-    { value: "name", label: tt.name },
+    { value: "default", label: t("productsPage.default") },
+    { value: "price-low", label: t("productsPage.priceLowHigh") },
+    { value: "price-high", label: t("productsPage.priceHighLow") },
+    { value: "rating", label: t("productsPage.rating") },
+    { value: "name", label: t("productsPage.name") },
   ];
 
   const hasActiveFilters = searchQuery || selectedCategory !== "All" || sortBy !== "default" || priceRange[0] > 0 || priceRange[1] < maxPrice;
@@ -234,7 +193,7 @@ export default function ProductsPage() {
               <Search className={cn("absolute top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground", isRTL ? "right-3" : "left-3")} />
               <input
                 type="text"
-                placeholder={tt.searchPlaceholder}
+                placeholder={t("productsPage.searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className={cn(
@@ -269,7 +228,7 @@ export default function ProductsPage() {
                 onClick={() => setShowSortDropdown(!showSortDropdown)}
                 className="flex items-center gap-2 px-4 py-3 border border-border rounded-xl hover:bg-muted transition-colors min-w-[180px]"
               >
-                <span className="text-sm">{tt.sortBy}:</span>
+                <span className="text-sm">{t("productsPage.sortBy")}:</span>
                 <span className="font-medium text-sm flex-1 text-left">
                   {sortOptions.find(o => o.value === sortBy)?.label}
                 </span>
@@ -321,7 +280,7 @@ export default function ProductsPage() {
             <div className="sm:hidden p-4 bg-muted/50 rounded-xl space-y-4">
               {/* Sort */}
               <div>
-                <label className="block text-sm font-medium mb-2">{tt.sortBy}</label>
+                <label className="block text-sm font-medium mb-2">{t("productsPage.sortBy")}</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortOption)}
@@ -336,7 +295,7 @@ export default function ProductsPage() {
               {/* Price Range */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  {tt.priceRange}: <PriceDisplay price={priceRange[0]} size="sm" /> - <PriceDisplay price={priceRange[1]} size="sm" />
+                  {t("productsPage.priceRange")}: <PriceDisplay price={priceRange[0]} size="sm" /> - <PriceDisplay price={priceRange[1]} size="sm" />
                 </label>
                 <input
                   type="range"
@@ -377,7 +336,7 @@ export default function ProductsPage() {
           {/* Active Filters & Results Count */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {tt.showingResults} <span className="font-semibold text-foreground">{filteredProducts.length}</span> {tt.results}
+              {t("productsPage.showingResults")} <span className="font-semibold text-foreground">{filteredProducts.length}</span> {t("productsPage.results")}
             </p>
             {hasActiveFilters && (
               <button
@@ -385,7 +344,7 @@ export default function ProductsPage() {
                 className="text-sm text-primary hover:underline flex items-center gap-1"
               >
                 <X className="w-4 h-4" />
-                {tt.clearFilters}
+                {t("productsPage.clearFilters")}
               </button>
             )}
           </div>
@@ -395,10 +354,10 @@ export default function ProductsPage() {
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16">
             <Search className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-foreground mb-2">{tt.noResults}</h2>
-            <p className="text-muted-foreground mb-4">{tt.tryDifferent}</p>
+            <h2 className="text-xl font-semibold text-foreground mb-2">{t("productsPage.noResults")}</h2>
+            <p className="text-muted-foreground mb-4">{t("productsPage.tryDifferent")}</p>
             <button onClick={handleClearFilters} className="btn-primary">
-              {tt.clearFilters}
+              {t("productsPage.clearFilters")}
             </button>
           </div>
         ) : viewMode === "grid" ? (
@@ -520,7 +479,7 @@ export default function ProductsPage() {
                         "text-xs px-2 py-0.5 rounded-full",
                         product.available ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                       )}>
-                        {product.available ? tt.inStock : tt.outOfStock}
+                        {product.available ? t("productsPage.inStock") : t("productsPage.outOfStock")}
                       </span>
                     </div>
 

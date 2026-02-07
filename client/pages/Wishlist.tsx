@@ -13,7 +13,7 @@ export default function WishlistPage() {
   const { items, removeFromWishlist, clearWishlist, ensureLoaded } = useWishlist();
   const { addItem } = useBasket();
   const { isLoggedIn, isAuthLoading } = useAuth();
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
   const isRTL = language === "ar";
 
   // Load wishlist data when page mounts
@@ -22,39 +22,6 @@ export default function WishlistPage() {
       ensureLoaded();
     }
   }, [isLoggedIn, ensureLoaded]);
-
-  const translations = {
-    en: {
-      wishlist: "My Wishlist",
-      subtitle: "Your saved items",
-      empty: "Your wishlist is empty",
-      emptyDesc: "Save products you love for later!",
-      browseProducts: "Browse Products",
-      moveToCart: "Move to Cart",
-      remove: "Remove",
-      clearAll: "Clear All",
-      addedOn: "Added on",
-      viewProduct: "View Product",
-      continueShopping: "Continue Shopping",
-      itemsCount: "items",
-    },
-    ar: {
-      wishlist: "قائمة المفضلة",
-      subtitle: "المنتجات المحفوظة",
-      empty: "قائمة المفضلة فارغة",
-      emptyDesc: "احفظ المنتجات التي تحبها لوقت لاحق!",
-      browseProducts: "تصفح المنتجات",
-      moveToCart: "نقل للسلة",
-      remove: "حذف",
-      clearAll: "مسح الكل",
-      addedOn: "تمت الإضافة في",
-      viewProduct: "عرض المنتج",
-      continueShopping: "متابعة التسوق",
-      itemsCount: "منتجات",
-    },
-  };
-
-  const t = translations[language];
 
   const handleAddToCart = (item: typeof items[0]) => {
     addItem({
@@ -97,23 +64,23 @@ export default function WishlistPage() {
           <div>
             <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2 flex items-center gap-3">
               <Heart className="w-8 h-8 text-primary" />
-              {t.wishlist}
+              {t("wishlist.title")}
             </h1>
             <p className="text-muted-foreground">
-              {items.length > 0 ? `${items.length} ${t.itemsCount}` : t.subtitle}
+              {items.length > 0 ? `${items.length} ${t("wishlist.itemsCount")}` : t("wishlist.subtitle")}
             </p>
           </div>
           {items.length > 0 && (
             <button
               onClick={() => {
-                if (window.confirm(language === "ar" ? "هل أنت متأكد من مسح جميع المنتجات؟" : "Are you sure you want to clear all items?")) {
+                if (window.confirm(t("wishlist.clearConfirm"))) {
                   clearWishlist();
                 }
               }}
               className="btn-outline text-destructive border-destructive hover:bg-destructive hover:text-white flex items-center gap-2"
             >
               <Trash2 className="w-4 h-4" />
-              {t.clearAll}
+              {t("wishlist.clearAll")}
             </button>
           )}
         </div>
@@ -124,10 +91,10 @@ export default function WishlistPage() {
             <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
               <Heart className="w-12 h-12 text-muted-foreground" />
             </div>
-            <h2 className="text-xl font-semibold text-foreground mb-2">{t.empty}</h2>
-            <p className="text-muted-foreground mb-6">{t.emptyDesc}</p>
+            <h2 className="text-xl font-semibold text-foreground mb-2">{t("wishlist.empty")}</h2>
+            <p className="text-muted-foreground mb-6">{t("wishlist.emptyDesc")}</p>
             <button onClick={() => navigate("/products")} className="btn-primary">
-              {t.browseProducts}
+              {t("wishlist.browseProducts")}
             </button>
           </div>
         ) : (
@@ -169,7 +136,7 @@ export default function WishlistPage() {
                       </h3>
                     </Link>
                     <p className="text-sm text-muted-foreground mb-2">
-                      {t.addedOn} {new Date(item.addedAt).toLocaleDateString()}
+                      {t("wishlist.addedOn")} {new Date(item.addedAt).toLocaleDateString()}
                     </p>
                     <p className="text-xl font-bold text-primary mb-4">
                       <PriceDisplay price={item.price} size="lg" />
@@ -183,7 +150,7 @@ export default function WishlistPage() {
                         className="flex-1 btn-primary flex items-center justify-center gap-2"
                       >
                         <ShoppingCart className="w-4 h-4" />
-                        {t.moveToCart}
+                        {t("wishlist.moveToCart")}
                       </button>
                       <button
                         onClick={() => removeFromWishlist(item.productId)}
@@ -204,7 +171,7 @@ export default function WishlistPage() {
                 className="btn-outline flex items-center gap-2 mx-auto"
               >
                 <ArrowLeft className={cn("w-4 h-4", isRTL && "rotate-180")} />
-                {t.continueShopping}
+                {t("wishlist.continueShopping")}
               </button>
             </div>
           </>

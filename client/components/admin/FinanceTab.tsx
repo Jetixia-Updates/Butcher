@@ -1016,7 +1016,7 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
 
       {/* Add Expense Modal */}
       {showExpenseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowExpenseModal(false)}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" onClick={() => setShowExpenseModal(false)}>
           <div 
             className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4"
             onClick={(e) => e.stopPropagation()}
@@ -1249,7 +1249,7 @@ export function FinanceTab({ onNavigate }: AdminTabProps) {
 
       {/* Create Account Modal */}
       {showAccountModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowAccountModal(false)}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" onClick={() => setShowAccountModal(false)}>
           <div 
             className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto m-4"
             onClick={(e) => e.stopPropagation()}

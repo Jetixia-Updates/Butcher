@@ -77,88 +77,6 @@ export default function ProductDetailPage() {
     .filter((p) => p.category === product?.category && p.id !== product?.id)
     .slice(0, 4);
 
-  // Translations
-  const translations = {
-    en: {
-      backToProducts: "Back to Products",
-      addToCart: "Add to Cart",
-      addedToCart: "Added!",
-      addToWishlist: "Add to Wishlist",
-      removeFromWishlist: "Remove from Wishlist",
-      share: "Share",
-      inStock: "In Stock",
-      outOfStock: "Out of Stock",
-      lowStock: "Low Stock - Order Soon!",
-      description: "Description",
-      nutrition: "Nutrition",
-      reviews: "Reviews",
-      perKg: "per Kg",
-      productDetails: "Product Details",
-      cutOptions: "Cut Options",
-      nutritionFacts: "Nutrition Facts",
-      per100g: "Per 100g",
-      calories: "Calories",
-      protein: "Protein",
-      fat: "Fat",
-      carbs: "Carbohydrates",
-      customerReviews: "Customer Reviews",
-      writeReview: "Write a Review",
-      noReviews: "No reviews yet. Be the first to review!",
-      verifiedPurchase: "Verified Purchase",
-      helpful: "Helpful",
-      reviewTitle: "Review Title",
-      reviewComment: "Your Review",
-      submitReview: "Submit Review",
-      cancel: "Cancel",
-      ratingLabel: "Your Rating",
-      relatedProducts: "You May Also Like",
-      loginToReview: "Login to write a review",
-      alreadyReviewed: "You have already reviewed this product",
-      reviewSubmitted: "Review submitted successfully!",
-      quantity: "Quantity",
-    },
-    ar: {
-      backToProducts: "العودة للمنتجات",
-      addToCart: "أضف للسلة",
-      addedToCart: "تمت الإضافة!",
-      addToWishlist: "أضف للمفضلة",
-      removeFromWishlist: "إزالة من المفضلة",
-      share: "مشاركة",
-      inStock: "متوفر",
-      outOfStock: "غير متوفر",
-      lowStock: "كمية محدودة - اطلب الآن!",
-      description: "الوصف",
-      nutrition: "القيمة الغذائية",
-      reviews: "التقييمات",
-      perKg: "للكيلو",
-      productDetails: "تفاصيل المنتج",
-      cutOptions: "خيارات التقطيع",
-      nutritionFacts: "معلومات غذائية",
-      per100g: "لكل 100 جرام",
-      calories: "سعرات حرارية",
-      protein: "بروتين",
-      fat: "دهون",
-      carbs: "كربوهيدرات",
-      customerReviews: "تقييمات العملاء",
-      writeReview: "اكتب تقييماً",
-      noReviews: "لا توجد تقييمات حتى الآن. كن أول من يقيم!",
-      verifiedPurchase: "مشتري موثق",
-      helpful: "مفيد",
-      reviewTitle: "عنوان التقييم",
-      reviewComment: "تقييمك",
-      submitReview: "إرسال التقييم",
-      cancel: "إلغاء",
-      ratingLabel: "تقييمك",
-      relatedProducts: "قد يعجبك أيضاً",
-      loginToReview: "سجل دخولك لكتابة تقييم",
-      alreadyReviewed: "لقد قمت بتقييم هذا المنتج مسبقاً",
-      reviewSubmitted: "تم إرسال التقييم بنجاح!",
-      quantity: "الكمية",
-    },
-  };
-
-  const tt = translations[language];
-
   // Use product images array if available, otherwise single image
   const productImages = product?.image 
     ? [product.image] 
@@ -273,9 +191,9 @@ export default function ProductDetailPage() {
       <div className="min-h-screen flex items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-foreground mb-2">Product Not Found</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t("product.notFound")}</h1>
           <button onClick={() => navigate("/products")} className="btn-primary mt-4">
-            {tt.backToProducts}
+            {t("payment.backToProducts")}
           </button>
         </div>
       </div>
@@ -318,7 +236,7 @@ export default function ProductDetailPage() {
               {!product.available && (
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <span className="bg-destructive text-white px-4 py-2 rounded-full font-semibold">
-                    {tt.outOfStock}
+                    {t("product.outOfStock")}
                   </span>
                 </div>
               )}
@@ -359,14 +277,14 @@ export default function ProductDetailPage() {
                       ? "bg-red-100 text-red-500 dark:bg-red-900/30" 
                       : "bg-muted hover:bg-muted/80 text-muted-foreground"
                   )}
-                  title={isWishlisted ? tt.removeFromWishlist : tt.addToWishlist}
+                  title={isWishlisted ? t("product.removeFromWishlist") : t("product.addToWishlist")}
                 >
                   <Heart className={cn("w-5 h-5", isWishlisted && "fill-current")} />
                 </button>
                 <button
                   onClick={handleShare}
                   className="p-2 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
-                  title={tt.share}
+                  title={t("product.share")}
                 >
                   <Share2 className="w-5 h-5" />
                 </button>
@@ -393,7 +311,7 @@ export default function ProductDetailPage() {
                   ))}
                 </div>
                 <span className="font-semibold text-foreground">{rating.averageRating}</span>
-                <span className="text-muted-foreground">({rating.totalReviews} {tt.reviews})</span>
+                <span className="text-muted-foreground">({rating.totalReviews} {t("product.reviews")})</span>
               </div>
             )}
 
@@ -426,7 +344,7 @@ export default function ProductDetailPage() {
                 "font-medium",
                 product.available ? "text-green-600" : "text-red-600"
               )}>
-                {product.available ? tt.inStock : tt.outOfStock}
+                {product.available ? t("product.inStock") : t("product.outOfStock")}
               </span>
             </div>
 
@@ -436,7 +354,7 @@ export default function ProductDetailPage() {
                 {/* Bone Options */}
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-2">
-                    🦴 {tt.productDetails}
+                    🦴 {t("product.details")}
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {BONE_OPTIONS.map((option) => (
@@ -465,7 +383,7 @@ export default function ProductDetailPage() {
                 {/* Cut Options */}
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-2">
-                    🔪 {tt.cutOptions}
+                    🔪 {t("product.cutType")}
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {CUT_OPTIONS.map((option) => (
@@ -494,7 +412,7 @@ export default function ProductDetailPage() {
                 {/* Quantity */}
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-2">
-                    {tt.quantity}
+                    {t("product.quantity")}
                   </label>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center border border-border rounded-lg">
@@ -532,12 +450,12 @@ export default function ProductDetailPage() {
                 {isAdding ? (
                   <>
                     <Check className="w-6 h-6" />
-                    {tt.addedToCart}
+                    {t("product.addedToCart")}
                   </>
                 ) : (
                   <>
                     <ShoppingCart className="w-6 h-6" />
-                    {tt.addToCart}
+                    {t("product.addToCart")}
                   </>
                 )}
               </button>
@@ -569,7 +487,7 @@ export default function ProductDetailPage() {
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
               >
-                {tt[tab]}
+                {tab === "description" ? t("product.description") : tab === "nutrition" ? t("product.nutrition") : t("product.reviews")}
                 {tab === "reviews" && rating && rating.totalReviews > 0 && (
                   <span className="ml-2 text-xs bg-muted px-2 py-0.5 rounded-full">
                     {rating.totalReviews}
@@ -590,22 +508,22 @@ export default function ProductDetailPage() {
             {/* Nutrition Tab */}
             {activeTab === "nutrition" && nutrition && (
               <div className="max-w-md">
-                <h3 className="text-lg font-bold mb-4">{tt.nutritionFacts} ({tt.per100g})</h3>
+                <h3 className="text-lg font-bold mb-4">{t("product.nutritionFacts")} ({t("product.per100g")})</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between py-2 border-b border-border">
-                    <span className="text-muted-foreground">{tt.calories}</span>
+                    <span className="text-muted-foreground">{t("product.calories")}</span>
                     <span className="font-semibold">{nutrition.calories} kcal</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-border">
-                    <span className="text-muted-foreground">{tt.protein}</span>
+                    <span className="text-muted-foreground">{t("product.protein")}</span>
                     <span className="font-semibold">{nutrition.protein}g</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-border">
-                    <span className="text-muted-foreground">{tt.fat}</span>
+                    <span className="text-muted-foreground">{t("product.fat")}</span>
                     <span className="font-semibold">{nutrition.fat}g</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-border">
-                    <span className="text-muted-foreground">{tt.carbs}</span>
+                    <span className="text-muted-foreground">{t("product.carbs")}</span>
                     <span className="font-semibold">{nutrition.carbs}g</span>
                   </div>
                 </div>
@@ -663,23 +581,23 @@ export default function ProductDetailPage() {
                     onClick={() => setShowReviewForm(true)}
                     className="btn-outline"
                   >
-                    {tt.writeReview}
+                    {t("product.writeReview")}
                   </button>
                 )}
 
                 {!isLoggedIn && (
-                  <p className="text-muted-foreground">{tt.loginToReview}</p>
+                  <p className="text-muted-foreground">{t("product.loginToReview")}</p>
                 )}
 
                 {userHasReviewed && !showReviewForm && (
-                  <p className="text-muted-foreground">{tt.alreadyReviewed}</p>
+                  <p className="text-muted-foreground">{t("product.alreadyReviewed")}</p>
                 )}
 
                 {/* Review Form */}
                 {showReviewForm && (
                   <div className="p-4 border border-border rounded-xl space-y-4">
                     <div>
-                      <label className="block text-sm font-semibold mb-2">{tt.ratingLabel}</label>
+                      <label className="block text-sm font-semibold mb-2">{t("product.ratingLabel")}</label>
                       <div className="flex gap-1">
                         {[1, 2, 3, 4, 5].map((star) => (
                           <button
@@ -700,7 +618,7 @@ export default function ProductDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold mb-2">{tt.reviewTitle}</label>
+                      <label className="block text-sm font-semibold mb-2">{t("product.reviewTitle")}</label>
                       <input
                         type="text"
                         value={reviewForm.title}
@@ -710,7 +628,7 @@ export default function ProductDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold mb-2">{tt.reviewComment}</label>
+                      <label className="block text-sm font-semibold mb-2">{t("product.reviewComment")}</label>
                       <textarea
                         value={reviewForm.comment}
                         onChange={(e) => setReviewForm((prev) => ({ ...prev, comment: e.target.value }))}
@@ -720,10 +638,10 @@ export default function ProductDetailPage() {
                     </div>
                     <div className="flex gap-3">
                       <button onClick={handleSubmitReview} className="btn-primary">
-                        {tt.submitReview}
+                        {t("product.submitReview")}
                       </button>
                       <button onClick={() => setShowReviewForm(false)} className="btn-outline">
-                        {tt.cancel}
+                        {t("common.cancel")}
                       </button>
                     </div>
                   </div>
@@ -732,7 +650,7 @@ export default function ProductDetailPage() {
                 {/* Reviews List */}
                 <div className="space-y-4">
                   {reviews.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-8">{tt.noReviews}</p>
+                    <p className="text-muted-foreground text-center py-8">{t("product.noReviews")}. {t("product.beFirstReview")}</p>
                   ) : (
                     reviews.map((review) => (
                       <div key={review.id} className="p-4 border border-border rounded-xl">
@@ -760,7 +678,7 @@ export default function ProductDetailPage() {
                                 {review.isVerifiedPurchase && (
                                   <span className="text-xs text-green-600 flex items-center gap-1">
                                     <Check className="w-3 h-3" />
-                                    {tt.verifiedPurchase}
+                                    {t("product.verifiedPurchase")}
                                   </span>
                                 )}
                               </div>
@@ -777,7 +695,7 @@ export default function ProductDetailPage() {
                           className="mt-3 text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
                         >
                           <ThumbsUp className="w-4 h-4" />
-                          {tt.helpful} ({review.helpfulCount})
+                          {t("product.helpful")} ({review.helpfulCount})
                         </button>
                       </div>
                     ))
@@ -791,7 +709,7 @@ export default function ProductDetailPage() {
         {/* Related Products */}
         {relatedProducts.length > 0 && (
           <div className="mt-12">
-            <h2 className="text-2xl font-bold text-foreground mb-6">{tt.relatedProducts}</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-6">{t("product.relatedProducts")}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
               {relatedProducts.map((p) => (
                 <Link

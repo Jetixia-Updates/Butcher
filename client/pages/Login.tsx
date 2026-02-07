@@ -23,13 +23,11 @@ export default function LoginPage() {
     const newErrors: { username?: string; password?: string } = {};
 
     if (!username || username.length < 3) {
-      newErrors.username = language === "ar" 
-        ? "يرجى إدخال اسم المستخدم أو البريد الإلكتروني (3 أحرف على الأقل)" 
-        : "Please enter a username or email (at least 3 characters)";
+      newErrors.username = t("login.invalidCredentials");
     }
 
     if (!password) {
-      newErrors.password = language === "ar" ? "كلمة المرور مطلوبة" : "Password is required";
+      newErrors.password = t("login.enterPassword");
     }
 
     setErrors(newErrors);
@@ -78,7 +76,7 @@ export default function LoginPage() {
               onClick={() => setActiveTab("register")}
             >
               <UserPlus className="w-4 h-4" />
-              <span className="hidden xs:inline">{language === "ar" ? "تسجيل" : "Register"}</span>
+              <span className="hidden xs:inline">{t("login.registerTab")}</span>
             </Link>
             <button
               onClick={() => setActiveTab("login")}
@@ -89,7 +87,7 @@ export default function LoginPage() {
               }`}
             >
               <LogIn className="w-4 h-4" />
-              <span className="hidden xs:inline">{language === "ar" ? "دخول" : "Login"}</span>
+              <span className="hidden xs:inline">{t("login.loginTab")}</span>
             </button>
           </div>
 
@@ -107,10 +105,10 @@ export default function LoginPage() {
           <div className="text-center mb-6 sm:mb-10 animate-fade-in">
             <div className="text-5xl sm:text-7xl mb-3 sm:mb-4">🥩</div>
             <p className="text-base sm:text-lg text-muted-foreground mb-1">
-              {language === "ar" ? "مرحباً بكم في" : "Welcome to"}
+              {t("login.welcomeTo")}
             </p>
             <h1 className="text-3xl sm:text-5xl font-bold text-foreground tracking-tight">
-              {language === "ar" ? "الجزار" : "BUTCHER"}
+              {t("login.title")}
             </h1>
             <p className="text-muted-foreground text-xs sm:text-sm mt-2 sm:mt-3">
               {t("login.subtitle")}
@@ -124,7 +122,7 @@ export default function LoginPage() {
           >
             <div>
               <label className="block text-sm font-semibold text-foreground mb-2">
-                {language === "ar" ? "اسم المستخدم أو البريد الإلكتروني" : "Username or Email"}
+                {t("login.usernameOrEmail")}
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -139,7 +137,7 @@ export default function LoginPage() {
                       setErrors({ ...errors, username: undefined });
                     }
                   }}
-                  placeholder={language === "ar" ? "أدخل اسم المستخدم أو البريد الإلكتروني" : "Enter your username or email"}
+                  placeholder={t("login.usernamePlaceholder")}
                   className={`w-full pl-10 pr-4 py-3 rounded-lg border-2 transition-colors ${
                     errors.username
                       ? "border-destructive bg-destructive/5"

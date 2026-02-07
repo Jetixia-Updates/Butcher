@@ -79,7 +79,7 @@ export default function ForgotPasswordPage() {
                   to={resetLink}
                   className="block mb-4 text-sm bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg hover:bg-blue-100 transition-colors"
                 >
-                  🔗 {isRTL ? "اضغط هنا لإعادة تعيين كلمة المرور" : "Click here to reset your password"}
+                  🔗 {t("forgot.resetLinkText")}
                 </Link>
               )}
               <Link
@@ -109,7 +109,7 @@ export default function ForgotPasswordPage() {
             <h1 className="text-3xl sm:text-4xl font-bold text-primary mb-2">🔑</h1>
             <h2 className="text-2xl sm:text-3xl font-bold text-foreground">{t("forgot.title")}</h2>
             <p className="text-muted-foreground text-xs sm:text-sm mt-2">
-              {isRTL ? "أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين" : "Enter your email and we'll send you a reset link"}
+              {t("forgot.enterEmailDesc")}
             </p>
           </div>
 

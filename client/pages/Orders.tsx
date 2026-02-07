@@ -27,7 +27,7 @@ export default function OrdersPage() {
   const { orders, isLoading, cancelOrder, fetchOrders } = useOrders();
   const { addItem } = useBasket();
   const { user, isLoggedIn, isAuthLoading } = useAuth();
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
   const isRTL = language === "ar";
 
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
@@ -45,89 +45,6 @@ export default function OrdersPage() {
       fetchOrders();
     }
   }, [fetchOrders, isLoggedIn]);
-
-  const translations = {
-    en: {
-      myOrders: "My Orders",
-      subtitle: "Track and manage your orders",
-      noOrders: "No orders yet",
-      startShopping: "Start Shopping",
-      orderNumber: "Order",
-      placedOn: "Placed on",
-      items: "items",
-      total: "Total",
-      status: "Status",
-      viewDetails: "View Details",
-      hideDetails: "Hide Details",
-      reorder: "Reorder",
-      cancelOrder: "Cancel Order",
-      downloadInvoice: "Download Invoice",
-      trackOrder: "Track Order",
-      deliveryAddress: "Delivery Address",
-      paymentMethod: "Payment Method",
-      orderItems: "Order Items",
-      searchPlaceholder: "Search by order number...",
-      allOrders: "All Orders",
-      pending: "Pending",
-      confirmed: "Confirmed",
-      processing: "Processing",
-      outForDelivery: "Out for Delivery",
-      delivered: "Delivered",
-      cancelled: "Cancelled",
-      card: "Credit Card",
-      cod: "Cash on Delivery",
-      bank_transfer: "Bank Transfer",
-      estimatedDelivery: "Estimated Delivery",
-      cancelConfirm: "Are you sure you want to cancel this order?",
-      orderCancelled: "Order cancelled successfully",
-      cannotCancel: "This order cannot be cancelled",
-      subtotal: "Subtotal",
-      vat: "VAT",
-      deliveryFee: "Delivery Fee",
-      discount: "Discount",
-    },
-    ar: {
-      myOrders: "طلباتي",
-      subtitle: "تتبع وإدارة طلباتك",
-      noOrders: "لا توجد طلبات حتى الآن",
-      startShopping: "ابدأ التسوق",
-      orderNumber: "الطلب",
-      placedOn: "تم الطلب في",
-      items: "منتجات",
-      total: "المجموع",
-      status: "الحالة",
-      viewDetails: "عرض التفاصيل",
-      hideDetails: "إخفاء التفاصيل",
-      reorder: "إعادة الطلب",
-      cancelOrder: "إلغاء الطلب",
-      downloadInvoice: "تحميل الفاتورة",
-      trackOrder: "تتبع الطلب",
-      deliveryAddress: "عنوان التوصيل",
-      paymentMethod: "طريقة الدفع",
-      orderItems: "منتجات الطلب",
-      searchPlaceholder: "البحث برقم الطلب...",
-      allOrders: "جميع الطلبات",
-      pending: "قيد الانتظار",
-      confirmed: "تم التأكيد",
-      processing: "قيد التجهيز",
-      outForDelivery: "في الطريق",
-      delivered: "تم التوصيل",
-      cancelled: "ملغي",
-      card: "بطاقة ائتمان",
-      cod: "الدفع عند الاستلام",
-      bank_transfer: "تحويل بنكي",
-      estimatedDelivery: "التوصيل المتوقع",
-      cancelConfirm: "هل أنت متأكد من إلغاء هذا الطلب؟",
-      orderCancelled: "تم إلغاء الطلب بنجاح",
-      cannotCancel: "لا يمكن إلغاء هذا الطلب",
-      subtotal: "المجموع الفرعي",
-      vat: "ضريبة القيمة المضافة",
-      deliveryFee: "رسوم التوصيل",
-      discount: "الخصم",
-    },
-  };
-
-  const t = translations[language];
 
   // Smart weight display - converts to Kg when >= 1 Kg
   const formatWeightDisplay = (weight: number) => {
@@ -154,8 +71,15 @@ export default function OrdersPage() {
   };
 
   const getStatusLabel = (status: string) => {
-    const statusKey = status.replace(/_/g, "") as keyof typeof t;
-    return t[statusKey] || status;
+    const statusMap: Record<string, string> = {
+      pending: t("orders.pending"),
+      confirmed: t("orders.confirmed"),
+      processing: t("orders.processing"),
+      out_for_delivery: t("orders.outForDelivery"),
+      delivered: t("orders.delivered"),
+      cancelled: t("orders.cancelled"),
+    };
+    return statusMap[status] || status;
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -181,12 +105,12 @@ export default function OrdersPage() {
   };
 
   const handleCancelOrder = async (orderId: string) => {
-    if (window.confirm(t.cancelConfirm)) {
+    if (window.confirm(t("orders.cancelConfirm"))) {
       const success = await cancelOrder(orderId);
       if (success) {
-        alert(t.orderCancelled);
+        alert(t("orders.orderCancelled"));
       } else {
-        alert(t.cannotCancel);
+        alert(t("orders.cannotCancel"));
       }
     }
   };
@@ -232,38 +156,38 @@ export default function OrdersPage() {
       <body>
         <div class="header">
           <div>
-            <div class="logo">🥩 Butcher Shop</div>
-            <div class="logo-sub">Premium Quality Meats</div>
+            <div class="logo">🥩 ${t("invoice.butcherShop")}</div>
+            <div class="logo-sub">${t("invoice.premiumMeats")}</div>
           </div>
           <div class="invoice-title">
-            <h1>INVOICE</h1>
+            <h1>${t("invoice.title")}</h1>
             <p>${order.orderNumber}</p>
           </div>
         </div>
         
         <div class="info-section">
           <div class="info-box">
-            <h3>Invoice Details</h3>
-            <p><strong>Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
-            <p><strong>Status:</strong> <span class="status-badge status-${order.status}">${order.status.replace(/_/g, ' ')}</span></p>
-            <p><strong>Payment:</strong> ${order.paymentMethod}</p>
+            <h3>${t("invoice.details")}</h3>
+            <p><strong>${t("invoice.date")}</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
+            <p><strong>${t("invoice.status")}</strong> <span class="status-badge status-${order.status}">${getStatusLabel(order.status)}</span></p>
+            <p><strong>${t("invoice.payment")}</strong> ${order.paymentMethod}</p>
           </div>
           <div class="info-box">
-            <h3>Delivery Address</h3>
+            <h3>${t("orders.deliveryAddress")}</h3>
             <p>${order.deliveryAddress ? 
               `${(order.deliveryAddress as any).building || ''}, ${(order.deliveryAddress as any).street || ''}<br/>
                ${(order.deliveryAddress as any).area || ''}, ${(order.deliveryAddress as any).emirate || ''}` 
-              : 'N/A'}</p>
+              : t("invoice.na")}</p>
           </div>
         </div>
         
         <table class="items-table">
           <thead>
             <tr>
-              <th>Item</th>
-              <th class="text-right">Qty</th>
-              <th class="text-right">Unit Price</th>
-              <th class="text-right">Amount</th>
+              <th>${t("invoice.item")}</th>
+              <th class="text-right">${t("invoice.qty")}</th>
+              <th class="text-right">${t("invoice.unitPrice")}</th>
+              <th class="text-right">${t("invoice.amount")}</th>
             </tr>
           </thead>
           <tbody>
@@ -280,32 +204,32 @@ export default function OrdersPage() {
         
         <div class="totals">
           <div class="totals-row">
-            <span>Subtotal</span>
+            <span>${t("invoice.subtotal")}</span>
             <span>AED ${Number(order.subtotal).toFixed(2)}</span>
           </div>
           <div class="totals-row">
-            <span>VAT (5%)</span>
+            <span>${t("invoice.vat")}</span>
             <span>AED ${Number(order.vat).toFixed(2)}</span>
           </div>
           <div class="totals-row">
-            <span>Delivery Fee</span>
+            <span>${t("invoice.deliveryFee")}</span>
             <span>AED ${Number(order.deliveryFee).toFixed(2)}</span>
           </div>
           ${Number(order.discount) > 0 ? `
             <div class="totals-row" style="color: #dc2626;">
-              <span>Discount</span>
+              <span>${t("invoice.discount")}</span>
               <span>-AED ${Number(order.discount).toFixed(2)}</span>
             </div>
           ` : ''}
           <div class="totals-row total">
-            <span>Total</span>
+            <span>${t("invoice.total")}</span>
             <span>AED ${Number(order.total).toFixed(2)}</span>
           </div>
         </div>
         
         <div class="footer">
-          <p>Thank you for your order!</p>
-          <p style="margin-top: 10px;">Butcher Shop • Premium Quality Meats • UAE</p>
+          <p>${t("invoice.thankYou")}</p>
+          <p style="margin-top: 10px;">${t("invoice.tagline")}</p>
         </div>
       </body>
       </html>
@@ -339,13 +263,13 @@ export default function OrdersPage() {
         {/* Header */}
         <div className="mb-6 sm:mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2">{t.myOrders}</h1>
-            <p className="text-muted-foreground">{t.subtitle}</p>
+            <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2">{t("orders.title")}</h1>
+            <p className="text-muted-foreground">{t("orders.subtitle")}</p>
           </div>
           <button
             onClick={() => fetchOrders()}
             className={cn("p-2 hover:bg-muted rounded-full transition-colors", isLoading && "animate-spin")}
-            title={language === "ar" ? "تحديث" : "Refresh"}
+            title={t("orders.refresh")}
           >
             <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
           </button>
@@ -358,7 +282,7 @@ export default function OrdersPage() {
             <Search className={cn("absolute top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground", isRTL ? "right-3" : "left-3")} />
             <input
               type="text"
-              placeholder={t.searchPlaceholder}
+              placeholder={t("orders.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={cn("w-full py-2 border border-border rounded-lg focus:border-primary outline-none", isRTL ? "pr-10 pl-4" : "pl-10 pr-4")}
@@ -379,7 +303,7 @@ export default function OrdersPage() {
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
                 )}
               >
-                {status === "all" ? t.allOrders : getStatusLabel(status)}
+                {status === "all" ? t("orders.allOrders") : getStatusLabel(status)}
               </button>
             ))}
           </div>
@@ -398,9 +322,9 @@ export default function OrdersPage() {
         ) : filteredOrders.length === 0 ? (
           <div className="text-center py-12">
             <Package className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-foreground mb-2">{t.noOrders}</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-2">{t("orders.noOrders")}</h2>
             <button onClick={() => navigate("/products")} className="btn-primary mt-4">
-              {t.startShopping}
+              {t("orders.startShopping")}
             </button>
           </div>
         ) : (
@@ -424,10 +348,10 @@ export default function OrdersPage() {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground">
-                            {t.orderNumber} #{order.orderNumber}
+                            {t("orders.orderNumber")}{order.orderNumber}
                           </h3>
                           <p className="text-sm text-muted-foreground">
-                            {t.placedOn} {new Date(order.createdAt).toLocaleDateString(language === "ar" ? "ar-AE" : "en-AE", {
+                            {t("orders.placedOn")} {new Date(order.createdAt).toLocaleDateString(language === "ar" ? "ar-AE" : "en-AE", {
                               year: "numeric",
                               month: "short",
                               day: "numeric",
@@ -445,7 +369,7 @@ export default function OrdersPage() {
                             <PriceDisplay price={order.total} size="md" />
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {order.items.length} {t.items}
+                            {order.items.length} {t("orders.items")}
                           </p>
                         </div>
                         <span className={cn("px-3 py-1 rounded-full text-sm font-medium", statusInfo.bgColor, statusInfo.color)}>
@@ -490,7 +414,7 @@ export default function OrdersPage() {
 
                       {/* Order Items */}
                       <div>
-                        <h4 className="font-semibold text-foreground mb-3">{t.orderItems}</h4>
+                        <h4 className="font-semibold text-foreground mb-3">{t("orders.orderItems")}</h4>
                         <div className="space-y-2">
                           {order.items.map((item) => (
                             <div key={item.id} className="flex items-center gap-3 p-2 bg-background rounded-lg">
@@ -523,7 +447,7 @@ export default function OrdersPage() {
                         <div className="p-3 bg-background rounded-lg">
                           <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                             <MapPin className="w-4 h-4" />
-                            {t.deliveryAddress}
+                            {t("orders.deliveryAddress")}
                           </h4>
                           <p className="text-sm text-muted-foreground">
                             {order.deliveryAddress.fullName}<br />
@@ -533,30 +457,30 @@ export default function OrdersPage() {
                         </div>
 
                         <div className="p-3 bg-background rounded-lg">
-                          <h4 className="font-semibold text-foreground mb-2">{t.paymentMethod}</h4>
-                          <p className="text-sm text-muted-foreground">{t[order.paymentMethod as keyof typeof t]}</p>
+                          <h4 className="font-semibold text-foreground mb-2">{t("orders.paymentMethod")}</h4>
+                          <p className="text-sm text-muted-foreground">{t(`payments.${order.paymentMethod === 'bank_transfer' ? 'bankTransfer' : order.paymentMethod}`)}</p>
                           
                           <div className="mt-3 space-y-1 text-sm">
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">{t.subtotal}</span>
+                              <span className="text-muted-foreground">{t("orders.subtotal")}</span>
                               <span><PriceDisplay price={order.subtotal} size="sm" /></span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">{t.vat}</span>
+                              <span className="text-muted-foreground">{t("orders.vat")}</span>
                               <span><PriceDisplay price={order.vat} size="sm" /></span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">{t.deliveryFee}</span>
+                              <span className="text-muted-foreground">{t("orders.deliveryFee")}</span>
                               <span><PriceDisplay price={order.deliveryFee} size="sm" /></span>
                             </div>
                             {order.discount > 0 && (
                               <div className="flex justify-between text-green-600">
-                                <span>{t.discount}</span>
+                                <span>{t("orders.discount")}</span>
                                 <span>-<PriceDisplay price={order.discount} size="sm" /></span>
                               </div>
                             )}
                             <div className="flex justify-between font-bold pt-2 border-t border-border">
-                              <span>{t.total}</span>
+                              <span>{t("orders.total")}</span>
                               <span><PriceDisplay price={order.total} size="sm" /></span>
                             </div>
                           </div>
@@ -571,7 +495,7 @@ export default function OrdersPage() {
                             className="btn-primary flex items-center gap-2 text-sm"
                           >
                             <MapPin className="w-4 h-4" />
-                            {t.trackOrder}
+                            {t("orders.trackOrder")}
                           </Link>
                         )}
                         <button
@@ -579,14 +503,14 @@ export default function OrdersPage() {
                           className="btn-primary flex items-center gap-2 text-sm"
                         >
                           <RotateCcw className="w-4 h-4" />
-                          {t.reorder}
+                          {t("orders.reorder")}
                         </button>
                         <button
                           onClick={() => handleDownloadInvoice(order)}
                           className="btn-outline flex items-center gap-2 text-sm"
                         >
                           <Download className="w-4 h-4" />
-                          {t.downloadInvoice}
+                          {t("orders.downloadInvoice")}
                         </button>
                         {["pending", "confirmed"].includes(order.status) && (
                           <button
@@ -594,7 +518,7 @@ export default function OrdersPage() {
                             className="btn-outline text-destructive border-destructive hover:bg-destructive hover:text-white flex items-center gap-2 text-sm"
                           >
                             <XCircle className="w-4 h-4" />
-                            {t.cancelOrder}
+                            {t("orders.cancelOrder")}
                           </button>
                         )}
                       </div>

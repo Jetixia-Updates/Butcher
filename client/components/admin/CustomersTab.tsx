@@ -1169,7 +1169,7 @@ function AdjustModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full" dir={isRTL ? "rtl" : "ltr"}>
         <div className="p-6 border-b border-slate-200">
           <h2 className="text-xl font-bold text-slate-900">
@@ -1305,7 +1305,7 @@ function HistoryModal({
   }, [user.id, type]);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden" dir={isRTL ? "rtl" : "ltr"}>
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <div>
@@ -1429,7 +1429,7 @@ function EditCustomerModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden" dir={isRTL ? "rtl" : "ltr"}>
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-xl font-bold text-slate-900">{t.editCustomer}</h2>
@@ -1658,7 +1658,7 @@ function MessageCustomerModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full" dir={isRTL ? "rtl" : "ltr"}>
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <div>

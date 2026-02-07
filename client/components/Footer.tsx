@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useSettings } from "@/context/SettingsContext";
+import { useDraggable } from "@/hooks/useDraggable";
 import { X } from "lucide-react";
 
 interface ContactLink {
@@ -24,28 +25,32 @@ const WhatsAppIcon: React.FC<{ className?: string }> = ({ className }) => (
 // Coming Soon Modal Component
 const ComingSoonModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { language } = useLanguage();
+  const { dragHandleProps, dialogStyle } = useDraggable();
   
   if (!isOpen) return null;
   
   return (
     <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
       onClick={onClose}
     >
       <div 
         className="bg-gradient-to-br from-primary/10 via-background to-secondary/10 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300 border border-primary/20"
         onClick={(e) => e.stopPropagation()}
+        style={dialogStyle}
       >
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        {/* Drag Handle + Close Button */}
+        <div {...dragHandleProps} className="relative p-2">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors z-10"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
         
         {/* Content */}
-        <div className="p-8 text-center relative overflow-hidden">
+        <div className="px-8 pb-8 text-center relative overflow-hidden">
           {/* Decorative elements */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-full blur-3xl -z-10" />
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-r from-secondary/20 to-primary/20 rounded-full blur-2xl -z-10" />

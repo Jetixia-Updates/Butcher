@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDraggable } from "@/hooks/useDraggable";
 import { useBasket } from "@/context/BasketContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -333,7 +334,8 @@ function MapPicker({
       {/* Map Container */}
       <div
         ref={mapRef}
-        className="w-full h-64 rounded-lg border border-input overflow-hidden z-0"
+        className="w-full h-64 rounded-lg border border-input overflow-hidden"
+        style={{ zIndex: 0, isolation: 'isolate' }}
       />
 
       <p className="text-xs text-muted-foreground text-center">
@@ -379,7 +381,7 @@ function AddressMapPreview({ latitude, longitude }: { latitude?: number; longitu
   }
 
   return (
-    <div className="mt-2 rounded-lg overflow-hidden border border-border">
+    <div className="mt-2 rounded-lg overflow-hidden border border-border relative" style={{ zIndex: 0, isolation: 'isolate' }}>
       <div ref={mapRef} className="w-full h-20" />
     </div>
   );
@@ -436,9 +438,11 @@ function AddressLocationViewer({
     };
   }, [address]);
 
+  const { dragHandleProps, dialogStyle } = useDraggable();
+
   if (!address.latitude || !address.longitude) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
         <div className="bg-background rounded-2xl shadow-xl max-w-lg w-full p-6">
           <div className="text-center">
             <p className="text-muted-foreground">No location data available for this address.</p>
@@ -455,9 +459,9 @@ function AddressLocationViewer({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background rounded-2xl shadow-xl max-w-2xl w-full overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center justify-between">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+      <div className="bg-background rounded-2xl shadow-xl max-w-2xl w-full overflow-hidden" style={dialogStyle}>
+        <div className="p-4 border-b border-border flex items-center justify-between" {...dragHandleProps}>
           <div>
             <h3 className="font-bold text-foreground text-lg">{address.label}</h3>
             <p className="text-sm text-muted-foreground">{address.fullName}</p>
@@ -531,7 +535,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const { items, subtotal, vat, total, clearBasket } = useBasket();
   const { user, isAuthLoading, isLoggedIn } = useAuth();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const isRTL = language === 'ar';
   const { addNotification, addAdminNotification } = useNotifications();
   const { validatePromoCode, settings, timeSlots: adminTimeSlots } = useSettings();
@@ -598,82 +602,9 @@ export default function CheckoutPage() {
       : Math.round(promoApplied.discount * 100) / 100
     : 0;
 
-  // Translations
-  const t = {
-    basket: isRTL ? 'السلة' : 'Basket',
-    checkout: isRTL ? 'الدفع' : 'Checkout',
-    confirmation: isRTL ? 'التأكيد' : 'Confirmation',
-    deliveryAddress: isRTL ? 'عنوان التوصيل' : 'Delivery Address',
-    addNewAddress: isRTL ? 'إضافة عنوان جديد' : 'Add New Address',
-    editAddress: isRTL ? 'تعديل العنوان' : 'Edit Address',
-    edit: isRTL ? 'تعديل' : 'Edit',
-    delete: isRTL ? 'حذف' : 'Delete',
-    setAsDefault: isRTL ? 'تعيين كافتراضي' : 'Set as Default',
-    default: isRTL ? 'افتراضي' : 'Default',
-    viewOnMap: isRTL ? 'عرض على الخريطة' : 'View on Map',
-    noAddresses: isRTL ? 'لم تتم إضافة أي عناوين بعد' : 'No addresses added yet',
-    addFirstAddress: isRTL ? 'أضف عنوانك الأول لمتابعة الطلب' : 'Add your first address to continue with your order',
-    deliveryTime: isRTL ? 'وقت التوصيل' : 'Delivery Time',
-    selectTimeSlot: isRTL ? 'اختر الموعد' : 'Select a Slot',
-    paymentMethod: isRTL ? 'طريقة الدفع' : 'Payment Method',
-    payWithCard: isRTL ? 'الدفع بالبطاقة' : 'Pay with Card',
-    securePayment: isRTL ? 'دفع آمن وسريع' : 'Secure & fast payment',
-    cashOnDelivery: isRTL ? 'الدفع عند الاستلام' : 'Cash on Delivery',
-    payWhenReceive: isRTL ? 'ادفع عند استلام طلبك' : 'Pay when you receive your order',
-    orderSummary: isRTL ? 'ملخص الطلب' : 'Order Summary',
-    subtotal: isRTL ? 'المجموع الفرعي' : 'Subtotal',
-    vat: isRTL ? 'ضريبة القيمة المضافة (5%)' : 'VAT (5%)',
-    deliveryFee: isRTL ? 'رسوم التوصيل' : 'Delivery Fee',
-    free: isRTL ? 'مجاني' : 'Free',
-    total: isRTL ? 'الإجمالي' : 'Total',
-    placeOrder: isRTL ? 'تأكيد الطلب' : 'Place Order',
-    processing: isRTL ? 'جاري المعالجة...' : 'Processing...',
-    cancel: isRTL ? 'إلغاء' : 'Cancel',
-    saveAddress: isRTL ? 'حفظ العنوان' : 'Save Address',
-    saving: isRTL ? 'جاري الحفظ...' : 'Saving...',
-    addressLabel: isRTL ? 'اسم العنوان' : 'Address Label',
-    home: isRTL ? 'المنزل' : 'Home',
-    work: isRTL ? 'العمل' : 'Work',
-    other: isRTL ? 'آخر' : 'Other',
-    fullName: isRTL ? 'الاسم الكامل' : 'Full Name',
-    mobileNumber: isRTL ? 'رقم الجوال' : 'Mobile Number',
-    emirate: isRTL ? 'الإمارة' : 'Emirate',
-    selectEmirate: isRTL ? 'اختر الإمارة' : 'Select Emirate',
-    area: isRTL ? 'المنطقة' : 'Area',
-    street: isRTL ? 'الشارع' : 'Street',
-    building: isRTL ? 'المبنى' : 'Building',
-    floor: isRTL ? 'الطابق' : 'Floor',
-    apartment: isRTL ? 'الشقة' : 'Apartment',
-    optional: isRTL ? 'اختياري' : 'optional',
-    setDefault: isRTL ? 'تعيين كعنوان افتراضي' : 'Set as default address',
-    selectLocation: isRTL ? 'اختر الموقع' : 'Select Location',
-    emptyBasket: isRTL ? 'سلتك فارغة' : 'Your basket is empty',
-    addItemsFirst: isRTL ? 'أضف منتجات قبل الدفع' : 'Add some items before checking out',
-    browseProducts: isRTL ? 'تصفح المنتجات' : 'Browse Products',
-    items: isRTL ? 'منتجات' : 'items',
-    selectAddress: isRTL ? 'يرجى اختيار عنوان التوصيل' : 'Please select a delivery address',
-    selectSlot: isRTL ? 'يرجى اختيار موعد التوصيل' : 'Please select a delivery time slot',
-    selectPayment: isRTL ? 'يرجى اختيار طريقة الدفع' : 'Please select a payment method',
-    close: isRTL ? 'إغلاق' : 'Close',
-    locationOnMap: isRTL ? 'الموقع على الخريطة' : 'Location on Map',
-    promoCode: isRTL ? 'كود الخصم' : 'Promo Code',
-    promoPlaceholder: isRTL ? 'أدخل كود الخصم' : 'Enter promo code',
-    apply: isRTL ? 'تطبيق' : 'Apply',
-    applying: isRTL ? 'جاري التطبيق...' : 'Applying...',
-    discount: isRTL ? 'الخصم' : 'Discount',
-    remove: isRTL ? 'إزالة' : 'Remove',
-  };
 
-  // Emirates translations
-  const emirates = {
-    dubai: isRTL ? 'دبي' : 'Dubai',
-    abuDhabi: isRTL ? 'أبوظبي' : 'Abu Dhabi',
-    sharjah: isRTL ? 'الشارقة' : 'Sharjah',
-    ajman: isRTL ? 'عجمان' : 'Ajman',
-    rasAlKhaimah: isRTL ? 'رأس الخيمة' : 'Ras Al Khaimah',
-    fujairah: isRTL ? 'الفجيرة' : 'Fujairah',
-    ummAlQuwain: isRTL ? 'أم القيوين' : 'Umm Al Quwain',
-  };
+
+
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
@@ -857,13 +788,13 @@ export default function CheckoutPage() {
       <div className="flex-1 flex items-center justify-center px-4" dir={isRTL ? 'rtl' : 'ltr'}>
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground mb-2">
-            {t.emptyBasket}
+            {t("basket.empty")}
           </h1>
           <button
             onClick={() => navigate("/products")}
             className="btn-primary mt-4"
           >
-            {t.browseProducts}
+            {t("basket.continueShopping")}
           </button>
         </div>
       </div>
@@ -1218,21 +1149,21 @@ export default function CheckoutPage() {
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-muted text-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
                 ✓
               </div>
-              <p className="text-[10px] sm:text-xs text-muted-foreground">{t.basket}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">{t("payment.progressBasket")}</p>
             </div>
             <div className="w-6 sm:w-12 h-1 bg-muted" />
             <div className="text-center">
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary text-primary-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
                 2
               </div>
-              <p className="text-[10px] sm:text-xs text-foreground font-semibold">{t.checkout}</p>
+              <p className="text-[10px] sm:text-xs text-foreground font-semibold">{t("checkout.title")}</p>
             </div>
             <div className="w-6 sm:w-12 h-1 bg-muted" />
             <div className="text-center">
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-muted text-muted-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
                 3
               </div>
-              <p className="text-[10px] sm:text-xs text-muted-foreground">{t.confirmation}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">{isRTL ? 'التأكيد' : 'Confirmation'}</p>
             </div>
           </div>
         </div>
@@ -1251,7 +1182,7 @@ export default function CheckoutPage() {
             <div className="card-premium p-4 sm:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <h2 className="text-lg sm:text-2xl font-bold text-foreground">
-                  {t.deliveryAddress}
+                  {t("checkout.deliveryAddress")}
                 </h2>
                 <button
                   onClick={handleOpenAddModal}
@@ -1260,7 +1191,7 @@ export default function CheckoutPage() {
                   <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  <span className="hidden xs:inline">{t.addNewAddress}</span>
+                  <span className="hidden xs:inline">{t("checkout.addNewAddress")}</span>
                   <span className="xs:hidden">{isRTL ? 'إضافة' : 'Add'}</span>
                 </button>
               </div>
@@ -1273,12 +1204,12 @@ export default function CheckoutPage() {
               ) : addresses.length === 0 ? (
                 <div className="text-center py-6 sm:py-8 border-2 border-dashed border-border rounded-lg">
                   <div className="text-3xl sm:text-4xl mb-2">📍</div>
-                  <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4">{t.noAddresses}</p>
+                  <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4">{t("checkout.noAddresses")}</p>
                   <button
                     onClick={handleOpenAddModal}
                     className="btn-primary px-4 sm:px-6 py-2 text-sm"
                   >
-                    {t.addFirstAddress}
+                    {t("checkout.addFirstAddress")}
                   </button>
                 </div>
               ) : (
@@ -1310,7 +1241,7 @@ export default function CheckoutPage() {
                             <span className="font-semibold text-foreground text-sm sm:text-base">{address.label}</span>
                             {address.isDefault && (
                               <span className="px-1.5 sm:px-2 py-0.5 bg-primary/10 text-primary text-[10px] sm:text-xs rounded-full font-medium">
-                                {t.default}
+                                {isRTL ? 'افتراضي' : 'Default'}
                               </span>
                             )}
                             {address.latitude && address.longitude && (
@@ -1388,7 +1319,7 @@ export default function CheckoutPage() {
             {/* Preferred Delivery Time Slot Section */}
             <div className="card-premium p-4 sm:p-6">
               <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-1 sm:mb-2">
-                {language === "ar" ? "وقت التوصيل المفضل" : "Preferred Delivery Time"}
+                {t("checkout.preferredDeliveryTime")}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
                 {language === "ar"
@@ -1515,10 +1446,10 @@ export default function CheckoutPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-xl">⚡</span>
                           <h3 className="font-semibold text-foreground text-sm sm:text-base">
-                            {language === "ar" ? "توصيل سريع" : "Express Delivery"}
+                            {t("checkout.expressDelivery")}
                           </h3>
                           <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">
-                            {language === "ar" ? "سريع" : "FAST"}
+                            {t("checkout.fast")}
                           </span>
                         </div>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -1539,7 +1470,7 @@ export default function CheckoutPage() {
             {/* Driver Tip Section */}
             <div className="card-premium p-4 sm:p-6">
               <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-2">
-                {language === "ar" ? "إكرامية للسائق" : "Tip Your Driver"}
+                {t("checkout.tipDriver")}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground mb-4">
                 {language === "ar"
@@ -1601,7 +1532,7 @@ export default function CheckoutPage() {
             {/* Payment Method Selection */}
             <div className="card-premium p-4 sm:p-6">
               <h2 className="text-lg sm:text-2xl font-bold text-foreground mb-4 sm:mb-6">
-                {language === "ar" ? "طريقة الدفع" : "Payment Method"}
+                {t("checkout.paymentMethod")}
               </h2>
 
               <div className="space-y-3 sm:space-y-4">
@@ -1636,7 +1567,7 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground text-sm sm:text-base">
-                        {t.payWithCard}
+                        {t("checkout.creditCard")}
                       </h3>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
                         {isRTL ? 'ادفع بأمان باستخدام فيزا، ماستركارد، أو أمريكان إكسبريس' : 'Pay securely with Visa, Mastercard, or American Express'}
@@ -1677,10 +1608,10 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground text-sm sm:text-base">
-                        {t.cashOnDelivery}
+                        {t("checkout.cashOnDelivery")}
                       </h3>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
-                        {t.payWhenReceive}
+                        {isRTL ? 'ادفع عند استلام طلبك' : 'Pay when you receive your order'}
                       </p>
                     </div>
                     <div className="text-xl sm:text-2xl">💵</div>
@@ -1702,7 +1633,7 @@ export default function CheckoutPage() {
                   {isProcessing
                     ? (language === "ar" ? "جاري المعالجة..." : "Processing...")
                     : !selectedAddressId
-                      ? (language === "ar" ? "اختر عنوان التوصيل" : "Select a Delivery Address")
+                      ? t("checkout.selectAddress")
                       : (!isExpressDelivery && !selectedTimeSlotId)
                         ? (language === "ar" ? "اختر موعد التوصيل" : "Select a Delivery Time")
                         : paymentMethod === "card"
@@ -1725,7 +1656,7 @@ export default function CheckoutPage() {
           <div className="lg:col-span-1">
             <div className="card-premium p-4 sm:p-6 sticky top-24 space-y-3 sm:space-y-4">
               <h2 className="text-lg sm:text-xl font-bold text-foreground">
-                {t.orderSummary}
+                {t("checkout.orderSummary")}
               </h2>
 
               {/* Selected Address Preview */}
@@ -1757,7 +1688,7 @@ export default function CheckoutPage() {
               {/* Promo Code Section */}
               <div className="border-b border-border pb-3 sm:pb-4">
                 <label className="block text-xs sm:text-sm font-medium text-foreground mb-2">
-                  {t.promoCode}
+                  {t("basket.promoCode")}
                 </label>
                 {promoApplied ? (
                   <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2.5 sm:p-3">
@@ -1779,7 +1710,7 @@ export default function CheckoutPage() {
                       onClick={handleRemovePromo}
                       className="text-xs sm:text-sm text-red-600 hover:text-red-700 font-medium"
                     >
-                      {t.remove}
+                      {t("basket.remove")}
                     </button>
                   </div>
                 ) : (
@@ -1788,7 +1719,7 @@ export default function CheckoutPage() {
                       type="text"
                       value={promoCode}
                       onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                      placeholder={t.promoPlaceholder}
+                      placeholder={isRTL ? 'أدخل كود الخصم' : 'Enter promo code'}
                       className="flex-1 px-3 py-2 text-xs sm:text-sm border border-border rounded-lg focus:border-primary outline-none"
                     />
                     <button
@@ -1796,7 +1727,7 @@ export default function CheckoutPage() {
                       disabled={!promoCode.trim() || isApplyingPromo}
                       className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground text-xs sm:text-sm font-medium rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
                     >
-                      {isApplyingPromo ? t.applying : t.apply}
+                      {isApplyingPromo ? (isRTL ? 'جاري التطبيق...' : 'Applying...') : t("basket.apply")}
                     </button>
                   </div>
                 )}
@@ -1808,19 +1739,19 @@ export default function CheckoutPage() {
               {/* Totals */}
               <div className="space-y-2 sm:space-y-3">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">{t.subtotal}</span>
+                  <span className="text-muted-foreground">{t("checkout.subtotal")}</span>
                   <span className="font-semibold"><PriceDisplay price={subtotal} size="md" /></span>
                 </div>
                 {promoApplied && discountAmount > 0 && (
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-green-600 dark:text-green-400">{t.discount}</span>
+                    <span className="text-green-600 dark:text-green-400">{t("checkout.discount")}</span>
                     <span className="font-semibold text-green-600 dark:text-green-400">
                       -<PriceDisplay price={discountAmount} size="md" />
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between items-center bg-secondary/10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 text-sm">
-                  <span className="text-muted-foreground">{t.vat}</span>
+                  <span className="text-muted-foreground">{t("checkout.vat")}</span>
                   <span className="font-semibold text-secondary">
                     <PriceDisplay price={adjustedVat} size="md" />
                   </span>
@@ -1829,7 +1760,7 @@ export default function CheckoutPage() {
                 {isExpressDelivery ? (
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-orange-600 dark:text-orange-400 flex items-center gap-1">
-                      ⚡ {isRTL ? "توصيل سريع" : "Express Delivery"}
+                      ⚡ {t("checkout.expressDelivery")}
                     </span>
                     <span className="font-semibold text-orange-600 dark:text-orange-400">
                       +<PriceDisplay price={expressDeliveryFee} size="md" />
@@ -1838,7 +1769,7 @@ export default function CheckoutPage() {
                 ) : (
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground flex items-center gap-1">
-                      🚚 {t.deliveryFee}
+                      🚚 {t("checkout.deliveryFee")}
                       {matchedZone && (
                         <span className="text-xs text-muted-foreground/70">
                           ({language === "ar" ? matchedZone.nameAr : matchedZone.name})
@@ -1847,7 +1778,7 @@ export default function CheckoutPage() {
                     </span>
                     <span className="font-semibold">
                       {zoneDeliveryFee === 0 ? (
-                        <span className="text-green-600 dark:text-green-400">{isRTL ? 'مجاني' : 'FREE'}</span>
+                        <span className="text-green-600 dark:text-green-400">{t("checkout.free")}</span>
                       ) : (
                         <>+<PriceDisplay price={zoneDeliveryFee} size="md" /></>
                       )}
@@ -1857,7 +1788,7 @@ export default function CheckoutPage() {
                 {driverTip > 0 && (
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                      💚 {isRTL ? "إكرامية السائق" : "Driver Tip"}
+                      💚 {t("checkout.driverTip")}
                     </span>
                     <span className="font-semibold text-green-600 dark:text-green-400">
                       +<PriceDisplay price={driverTip} size="md" />
@@ -1866,7 +1797,7 @@ export default function CheckoutPage() {
                 )}
                 <div className="flex justify-between items-center pt-2 border-t border-border">
                   <span className="text-base sm:text-lg font-bold text-foreground">
-                    {t.total}
+                    {t("checkout.total")}
                   </span>
                   <span className="text-xl sm:text-2xl font-bold text-primary">
                     <PriceDisplay price={adjustedTotal} size="lg" />
@@ -1888,235 +1819,18 @@ export default function CheckoutPage() {
 
       {/* Add/Edit Address Modal */}
       {showAddressModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" dir={isRTL ? 'rtl' : 'ltr'}>
-            <div className="p-6 border-b border-border">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-foreground">
-                  {editingAddress ? t.editAddress : t.addNewAddress}
-                </h2>
-                <button
-                  onClick={handleCloseModal}
-                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-4">
-              {/* Address Label */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  {t.addressLabel} *
-                </label>
-                <div className="flex gap-2">
-                  {[
-                    { key: "Home", label: t.home },
-                    { key: "Office", label: t.work },
-                    { key: "Other", label: t.other }
-                  ].map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => setAddressForm({ ...addressForm, label: item.key })}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${addressForm.label === item.key
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-foreground hover:bg-muted/80"
-                        }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Full Name */}
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  {t.fullName}<span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={addressForm.fullName}
-                  onChange={(e) => setAddressForm({ ...addressForm, fullName: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
-                  placeholder={isRTL ? "الاسم الكامل" : "John Doe"}
-                />
-              </div>
-
-              {/* Mobile Number */}
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  {t.mobileNumber}<span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="tel"
-                  value={addressForm.mobile}
-                  onChange={(e) => setAddressForm({ ...addressForm, mobile: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
-                  placeholder="+971 50 123 4567"
-                />
-              </div>
-
-              {/* Map Location Picker */}
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  {t.selectLocation}
-                  {addressForm.latitude && addressForm.longitude && (
-                    <span className={cn("text-green-600 font-normal", isRTL ? "mr-2" : "ml-2")}>✓ {isRTL ? 'تم التحديد' : 'Located'}</span>
-                  )}
-                </label>
-                <MapPicker
-                  latitude={addressForm.latitude}
-                  longitude={addressForm.longitude}
-                  onLocationSelect={handleLocationSelect}
-                />
-              </div>
-
-              {/* Emirate */}
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  {t.emirate}<span className="text-destructive">*</span>
-                </label>
-                <select
-                  value={addressForm.emirate}
-                  onChange={(e) => setAddressForm({ ...addressForm, emirate: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground focus:outline-none"
-                >
-                  <option value="">{t.selectEmirate}</option>
-                  <option value="Dubai">{emirates.dubai}</option>
-                  <option value="Abu Dhabi">{emirates.abuDhabi}</option>
-                  <option value="Sharjah">{emirates.sharjah}</option>
-                  <option value="Ajman">{emirates.ajman}</option>
-                  <option value="Ras Al Khaimah">{emirates.rasAlKhaimah}</option>
-                  <option value="Fujairah">{emirates.fujairah}</option>
-                  <option value="Umm Al Quwain">{emirates.ummAlQuwain}</option>
-                </select>
-              </div>
-
-              {/* Area / Neighborhood */}
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  {t.area}<span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={addressForm.area}
-                  onChange={(e) => setAddressForm({ ...addressForm, area: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
-                  placeholder={isRTL ? "مثال: البرشاء، جميرا، داون تاون" : "e.g., Al Barsha, Jumeirah, Downtown"}
-                />
-              </div>
-
-              {/* Street */}
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  {t.street}<span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={addressForm.street}
-                  onChange={(e) => setAddressForm({ ...addressForm, street: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
-                  placeholder={isRTL ? "اسم الشارع" : "Street name"}
-                />
-              </div>
-
-              {/* Building Name / Number */}
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  {t.building}<span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={addressForm.building}
-                  onChange={(e) => setAddressForm({ ...addressForm, building: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
-                  placeholder={isRTL ? "اسم أو رقم المبنى" : "Building name or number"}
-                />
-              </div>
-
-              {/* Floor and Apartment */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-foreground mb-2">
-                    {t.floor}
-                  </label>
-                  <input
-                    type="text"
-                    value={addressForm.floor}
-                    onChange={(e) => setAddressForm({ ...addressForm, floor: e.target.value })}
-                    className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
-                    placeholder={t.optional}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-foreground mb-2">
-                    {t.apartment}
-                  </label>
-                  <input
-                    type="text"
-                    value={addressForm.apartment}
-                    onChange={(e) => setAddressForm({ ...addressForm, apartment: e.target.value })}
-                    className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
-                    placeholder={t.optional}
-                  />
-                </div>
-              </div>
-
-              {/* Set as Default */}
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="isDefault"
-                  checked={addressForm.isDefault}
-                  onChange={(e) => setAddressForm({ ...addressForm, isDefault: e.target.checked })}
-                  className="w-5 h-5 text-primary border-input rounded focus:ring-primary"
-                />
-                <label htmlFor="isDefault" className="text-sm font-medium text-foreground">
-                  {t.setDefault}
-                </label>
-              </div>
-
-              {/* Location Confirmation */}
-              {addressForm.latitude && addressForm.longitude && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-sm font-medium">{isRTL ? 'تم تأكيد الموقع' : 'Location confirmed'}</span>
-                  </div>
-                  <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                    {isRTL ? 'خط العرض' : 'Lat'}: {addressForm.latitude.toFixed(6)}, {isRTL ? 'خط الطول' : 'Lng'}: {addressForm.longitude.toFixed(6)}
-                  </p>
-                </div>
-              )}
-
-              {/* Buttons */}
-              <div className="flex gap-4 pt-4 border-t border-border">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="flex-1 px-4 py-3 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors"
-                >
-                  {t.cancel}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveAddress}
-                  disabled={isSavingAddress}
-                  className="flex-1 px-4 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-                >
-                  {isSavingAddress ? t.saving : editingAddress ? (isRTL ? 'تحديث العنوان' : 'Update Address') : t.saveAddress}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AddressFormModal
+          isRTL={isRTL}
+          editingAddress={editingAddress}
+          addressForm={addressForm}
+          setAddressForm={setAddressForm}
+          handleCloseModal={handleCloseModal}
+          handleSaveAddress={handleSaveAddress}
+          handleLocationSelect={handleLocationSelect}
+          isSavingAddress={isSavingAddress}
+          addresses={addresses}
+          t={t}
+        />
       )}
 
       {/* View Location Modal */}
@@ -2126,6 +1840,266 @@ export default function CheckoutPage() {
           onClose={() => setViewingAddress(null)}
         />
       )}
+    </div>
+  );
+}
+
+// Extracted Address Form Modal component with draggable support
+function AddressFormModal({
+  isRTL,
+  editingAddress,
+  addressForm,
+  setAddressForm,
+  handleCloseModal,
+  handleSaveAddress,
+  handleLocationSelect,
+  isSavingAddress,
+  addresses,
+  t,
+}: {
+  isRTL: boolean;
+  editingAddress: Address | null;
+  addressForm: AddressFormData;
+  setAddressForm: React.Dispatch<React.SetStateAction<AddressFormData>>;
+  handleCloseModal: () => void;
+  handleSaveAddress: () => void;
+  handleLocationSelect: (lat: number, lng: number, formattedAddress?: string) => void;
+  isSavingAddress: boolean;
+  addresses: Address[];
+  t: (key: string) => string;
+}) {
+  const { dragHandleProps, dialogStyle } = useDraggable();
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+      <div className="bg-background rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" dir={isRTL ? 'rtl' : 'ltr'} style={dialogStyle}>
+        <div className="p-6 border-b border-border" {...dragHandleProps}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-foreground">
+              {editingAddress ? t("checkout.editAddress") : t("checkout.addNewAddress")}
+            </h2>
+            <button
+              onClick={handleCloseModal}
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* Address Label */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              {t("checkout.addressLabel")} *
+            </label>
+            <div className="flex gap-2">
+              {[
+                { key: "Home", label: isRTL ? 'المنزل' : 'Home' },
+                { key: "Office", label: isRTL ? 'العمل' : 'Work' },
+                { key: "Other", label: t("checkout.other") }
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setAddressForm({ ...addressForm, label: item.key })}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    addressForm.label === item.key
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Full Name */}
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              {t("checkout.recipientName")}<span className="text-destructive">*</span>
+            </label>
+            <input
+              type="text"
+              value={addressForm.fullName}
+              onChange={(e) => setAddressForm({ ...addressForm, fullName: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+              placeholder={isRTL ? "الاسم الكامل" : "John Doe"}
+            />
+          </div>
+
+          {/* Mobile Number */}
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              {t("checkout.recipientPhone")}<span className="text-destructive">*</span>
+            </label>
+            <input
+              type="tel"
+              value={addressForm.mobile}
+              onChange={(e) => setAddressForm({ ...addressForm, mobile: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+              placeholder="+971 50 123 4567"
+            />
+          </div>
+
+          {/* Map Location Picker */}
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              {isRTL ? 'اختر الموقع' : 'Select Location'}
+              {addressForm.latitude && addressForm.longitude && (
+                <span className={cn("text-green-600 font-normal", isRTL ? "mr-2" : "ml-2")}>✓ {isRTL ? 'تم التحديد' : 'Located'}</span>
+              )}
+            </label>
+            <MapPicker
+              latitude={addressForm.latitude}
+              longitude={addressForm.longitude}
+              onLocationSelect={handleLocationSelect}
+            />
+          </div>
+
+          {/* Emirate */}
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              {t("checkout.emirate")}<span className="text-destructive">*</span>
+            </label>
+            <select
+              value={addressForm.emirate}
+              onChange={(e) => setAddressForm({ ...addressForm, emirate: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground focus:outline-none"
+            >
+              <option value="">{isRTL ? 'اختر الإمارة' : 'Select Emirate'}</option>
+              <option value="Dubai">{t("checkout.dubai")}</option>
+              <option value="Abu Dhabi">{t("checkout.abuDhabi")}</option>
+              <option value="Sharjah">{t("checkout.sharjah")}</option>
+              <option value="Ajman">{t("checkout.ajman")}</option>
+              <option value="Ras Al Khaimah">{t("checkout.rasAlKhaimah")}</option>
+              <option value="Fujairah">{t("checkout.fujairah")}</option>
+              <option value="Umm Al Quwain">{t("checkout.ummAlQuwain")}</option>
+            </select>
+          </div>
+
+          {/* Area / Neighborhood */}
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              {t("checkout.area")}<span className="text-destructive">*</span>
+            </label>
+            <input
+              type="text"
+              value={addressForm.area}
+              onChange={(e) => setAddressForm({ ...addressForm, area: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+              placeholder={isRTL ? "مثال: البرشاء، جميرا، داون تاون" : "e.g., Al Barsha, Jumeirah, Downtown"}
+            />
+          </div>
+
+          {/* Street */}
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              {t("checkout.street")}<span className="text-destructive">*</span>
+            </label>
+            <input
+              type="text"
+              value={addressForm.street}
+              onChange={(e) => setAddressForm({ ...addressForm, street: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+              placeholder={isRTL ? "اسم الشارع" : "Street name"}
+            />
+          </div>
+
+          {/* Building Name / Number */}
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              {t("checkout.building")}<span className="text-destructive">*</span>
+            </label>
+            <input
+              type="text"
+              value={addressForm.building}
+              onChange={(e) => setAddressForm({ ...addressForm, building: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+              placeholder={isRTL ? "اسم أو رقم المبنى" : "Building name or number"}
+            />
+          </div>
+
+          {/* Floor and Apartment */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2">
+                {t("checkout.floor")}
+              </label>
+              <input
+                type="text"
+                value={addressForm.floor}
+                onChange={(e) => setAddressForm({ ...addressForm, floor: e.target.value })}
+                className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+                placeholder={t("checkout.optional")}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2">
+                {t("checkout.apartment")}
+              </label>
+              <input
+                type="text"
+                value={addressForm.apartment}
+                onChange={(e) => setAddressForm({ ...addressForm, apartment: e.target.value })}
+                className="w-full px-4 py-2 rounded-lg border-2 border-input bg-white focus:border-primary text-foreground placeholder-muted-foreground focus:outline-none"
+                placeholder={t("checkout.optional")}
+              />
+            </div>
+          </div>
+
+          {/* Set as Default */}
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="isDefault"
+              checked={addressForm.isDefault}
+              onChange={(e) => setAddressForm({ ...addressForm, isDefault: e.target.checked })}
+              className="w-5 h-5 text-primary border-input rounded focus:ring-primary"
+            />
+            <label htmlFor="isDefault" className="text-sm font-medium text-foreground">
+              {isRTL ? 'تعيين كعنوان افتراضي' : 'Set as default address'}
+            </label>
+          </div>
+
+          {/* Location Confirmation */}
+          {addressForm.latitude && addressForm.longitude && (
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-sm font-medium">{isRTL ? 'تم تأكيد الموقع' : 'Location confirmed'}</span>
+              </div>
+              <p className="text-xs text-green-600 dark:text-green-500 mt-1">
+                {isRTL ? 'خط العرض' : 'Lat'}: {addressForm.latitude.toFixed(6)}, {isRTL ? 'خط الطول' : 'Lng'}: {addressForm.longitude.toFixed(6)}
+              </p>
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex gap-4 pt-4 border-t border-border">
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              className="flex-1 px-4 py-3 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors"
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveAddress}
+              disabled={isSavingAddress}
+              className="flex-1 px-4 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {isSavingAddress ? (isRTL ? 'جاري الحفظ...' : 'Saving...') : editingAddress ? t("checkout.updateAddress") : t("checkout.saveAddress")}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

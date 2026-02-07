@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Heart, LogIn, UserPlus } from "lucide-react";
+import { useDraggable } from "@/hooks/useDraggable";
 import { useBasket } from "@/context/BasketContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useAuth } from "@/context/AuthContext";
@@ -22,12 +23,12 @@ export default function BasketPage() {
     if (weight >= 1) {
       // Display as Kg
       const kgValue = weight.toFixed(3);
-      const kgUnit = language === "ar" ? "كجم" : "Kg";
+      const kgUnit = t("product.kg");
       return `${kgValue} ${kgUnit}`;
     } else {
       // Display as grams (multiply by 1000 for display)
       const gramsValue = Math.round(weight * 1000);
-      const grUnit = language === "ar" ? "جرام" : "gr";
+      const grUnit = t("product.gr");
       return `${gramsValue} ${grUnit}`;
     }
   };
@@ -178,10 +179,10 @@ export default function BasketPage() {
                           onClick={() => handleSaveForLater(item)}
                           className={`text-primary hover:text-primary/80 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1 ${isInWishlist(item.productId) ? 'opacity-50 cursor-not-allowed' : ''}`}
                           disabled={isInWishlist(item.productId)}
-                          title={isInWishlist(item.productId) ? (language === 'ar' ? 'موجود في المفضلة' : 'Already in wishlist') : (language === 'ar' ? 'حفظ لوقت لاحق' : 'Save for later')}
+                          title={isInWishlist(item.productId) ? t("product.inWishlist") : t("product.saveLater")}
                         >
                           <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
-                          <span className="hidden sm:inline">{language === 'ar' ? 'حفظ' : 'Save'}</span>
+                          <span className="hidden sm:inline">{t("product.save")}</span>
                         </button>
                         <button
                           onClick={() => removeItem(item.id)}
@@ -218,7 +219,7 @@ export default function BasketPage() {
                   <span className="font-semibold text-sm sm:text-base"><PriceDisplay price={subtotal} size="md" /></span>
                 </div>
                 <div className="flex justify-between items-center bg-secondary/10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 rounded-lg">
-                  <span className="text-sm sm:text-base text-muted-foreground">VAT (5%)</span>
+                  <span className="text-sm sm:text-base text-muted-foreground">{t("basket.vat")}</span>
                   <span className="font-semibold text-secondary text-sm sm:text-base">
                     <PriceDisplay price={vat} size="md" />
                   </span>
@@ -266,19 +267,19 @@ export default function BasketPage() {
                 }}
                 className="w-full btn-outline py-2 rounded-lg text-xs sm:text-sm font-semibold"
               >
-                {language === 'ar' ? 'حفظ لوقت لاحق' : 'Save for Later'}
+                {t("product.saveLater")}
               </button>
 
               {/* Clear Basket */}
               <button
                 onClick={() => {
-                  if (confirm("Are you sure you want to clear your basket?")) {
+                  if (confirm(t("basket.clearConfirm"))) {
                     clearBasket();
                   }
                 }}
                 className="w-full text-destructive text-xs sm:text-sm font-semibold py-2 hover:bg-destructive/10 rounded-lg transition-colors"
               >
-                Clear Basket
+                {t("basket.clearBasket")}
               </button>
             </div>
           </div>
@@ -286,96 +287,92 @@ export default function BasketPage() {
       </div>
 
       {/* Login/Register Prompt Modal */}
-      {showLoginPrompt && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="p-6 text-center border-b border-border">
-              <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
-                <LogIn className="w-8 h-8 text-primary" />
-              </div>
-              <h2 className="text-xl font-bold text-foreground">
-                {language === "ar" ? "تسجيل الدخول مطلوب" : "Login Required"}
-              </h2>
-              <p className="text-sm text-muted-foreground mt-2">
-                {language === "ar"
-                  ? "يرجى تسجيل الدخول أو إنشاء حساب جديد للمتابعة مع طلبك"
-                  : "Please login or create an account to proceed with your order"}
-              </p>
+      {showLoginPrompt && <LoginPromptModal t={t} onClose={() => setShowLoginPrompt(false)} />}
+    </div>
+  );
+}
+
+// Extracted LoginPromptModal component with draggable support
+function LoginPromptModal({ t, onClose }: { t: (key: string) => string; onClose: () => void }) {
+  const { dragHandleProps, dialogStyle } = useDraggable();
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+      <div className="bg-background rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200" style={dialogStyle}>
+        {/* Modal Header - Drag Handle */}
+        <div className="p-6 text-center border-b border-border" {...dragHandleProps}>
+          <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
+            <LogIn className="w-8 h-8 text-primary" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">
+            {t("basket.loginRequired")}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-2">
+            {t("basket.loginRequiredDesc")}
+          </p>
+        </div>
+
+        {/* Modal Content */}
+        <div className="p-6 space-y-4">
+          <Link
+            to="/login"
+            state={{ from: "/basket" }}
+            className="w-full btn-primary py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+          >
+            <LogIn className="w-5 h-5" />
+            {t("basket.loginToCheckout")}
+          </Link>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border"></div>
             </div>
-
-            {/* Modal Content */}
-            <div className="p-6 space-y-4">
-              {/* Login Button */}
-              <Link
-                to="/login"
-                state={{ from: "/basket" }}
-                className="w-full btn-primary py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
-              >
-                <LogIn className="w-5 h-5" />
-                {language === "ar" ? "تسجيل الدخول" : "Login"}
-              </Link>
-
-              {/* Divider */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-background text-muted-foreground">
-                    {language === "ar" ? "أو" : "or"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Register Button */}
-              <Link
-                to="/register"
-                state={{ from: "/basket" }}
-                className="w-full btn-outline py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
-              >
-                <UserPlus className="w-5 h-5" />
-                {language === "ar" ? "إنشاء حساب جديد" : "Create New Account"}
-              </Link>
-
-              {/* Benefits */}
-              <div className="mt-4 p-4 bg-muted/50 rounded-lg">
-                <p className="text-xs font-semibold text-foreground mb-2">
-                  {language === "ar" ? "مزايا إنشاء حساب:" : "Benefits of creating an account:"}
-                </p>
-                <ul className="text-xs text-muted-foreground space-y-1">
-                  <li className="flex items-center gap-2">
-                    <span className="text-primary">✓</span>
-                    {language === "ar" ? "تتبع طلباتك بسهولة" : "Track your orders easily"}
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-primary">✓</span>
-                    {language === "ar" ? "حفظ عناوين التوصيل" : "Save delivery addresses"}
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-primary">✓</span>
-                    {language === "ar" ? "كسب نقاط الولاء" : "Earn loyalty points"}
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-primary">✓</span>
-                    {language === "ar" ? "عروض وخصومات حصرية" : "Exclusive deals & discounts"}
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-border bg-muted/30">
-              <button
-                onClick={() => setShowLoginPrompt(false)}
-                className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
-              >
-                {language === "ar" ? "متابعة التسوق" : "Continue Shopping"}
-              </button>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-background text-muted-foreground">
+                {t("login.or")}
+              </span>
             </div>
           </div>
+
+          <Link
+            to="/register"
+            state={{ from: "/basket" }}
+            className="w-full btn-outline py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+          >
+            <UserPlus className="w-5 h-5" />
+            {t("basket.createAccount")}
+          </Link>
+
+          <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+            <p className="text-xs font-semibold text-foreground mb-2">
+              {t("basket.benefitFreshMeats")}
+            </p>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              <li className="flex items-center gap-2">
+                <span className="text-primary">✓</span>
+                {t("basket.benefitTrackOrders")}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-primary">✓</span>
+                {t("basket.benefitSaveAddresses")}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-primary">✓</span>
+                {t("basket.benefitExclusive")}
+              </li>
+            </ul>
+          </div>
         </div>
-      )}
+
+        {/* Modal Footer */}
+        <div className="p-4 border-t border-border bg-muted/30">
+          <button
+            onClick={onClose}
+            className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
+          >
+            {t("basket.continueShopping")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

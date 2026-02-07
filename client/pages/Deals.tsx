@@ -17,7 +17,7 @@ import ProductCard from "@/components/ProductCard";
 type DealCategory = "all" | "flash" | "bundle" | "seasonal" | "clearance";
 
 export default function DealsPage() {
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
   const { products } = useProducts();
   const { promoCodes: adminPromoCodes } = useSettings();
   const isRTL = language === "ar";
@@ -56,69 +56,13 @@ export default function DealsPage() {
       }));
   }, [adminPromoCodes]);
 
-  // Translations
-  const t = {
-    en: {
-      pageTitle: "Deals & Offers",
-      pageSubtitle: "Fresh savings on premium cuts",
-      promoCodes: "Promo Codes",
-      copyCode: "Copy Code",
-      copied: "Copied!",
-      minOrder: "Min. order",
-      expiresIn: "Expires in",
-      days: "days",
-      filterAll: "All Deals",
-      filterFlash: "Flash Sale",
-      filterBundle: "Bundles",
-      filterSeasonal: "Seasonal",
-      filterClearance: "Clearance",
-      todaysDeals: "Today's Deals",
-      off: "OFF",
-      save: "Save",
-      upTo: "Up to",
-      viewProduct: "View",
-      noDeals: "No deals available in this category",
-      bundleDeals: "Bundle Deals",
-      bundleDescription: "Save more when you buy together",
-      weeklySpecials: "Weekly Specials",
-      limitedTime: "Limited Time",
-    },
-    ar: {
-      pageTitle: "العروض والخصومات",
-      pageSubtitle: "توفيرات طازجة على القطع الممتازة",
-      promoCodes: "أكواد الخصم",
-      copyCode: "نسخ الكود",
-      copied: "تم النسخ!",
-      minOrder: "الحد الأدنى للطلب",
-      expiresIn: "ينتهي خلال",
-      days: "أيام",
-      filterAll: "كل العروض",
-      filterFlash: "تخفيضات سريعة",
-      filterBundle: "حزم",
-      filterSeasonal: "موسمية",
-      filterClearance: "تصفية",
-      todaysDeals: "عروض اليوم",
-      off: "خصم",
-      save: "وفر",
-      upTo: "حتى",
-      viewProduct: "عرض",
-      noDeals: "لا توجد عروض في هذه الفئة",
-      bundleDeals: "عروض الحزم",
-      bundleDescription: "وفر أكثر عند الشراء معاً",
-      weeklySpecials: "عروض الأسبوع",
-      limitedTime: "لوقت محدود",
-    },
-  };
-
-  const tt = t[language];
-
   // Filter categories
   const dealCategories: { id: DealCategory; label: string; icon: React.ReactNode }[] = [
-    { id: "all", label: tt.filterAll, icon: <Tag className="w-4 h-4" /> },
-    { id: "flash", label: tt.filterFlash, icon: <Zap className="w-4 h-4" /> },
-    { id: "bundle", label: tt.filterBundle, icon: <Gift className="w-4 h-4" /> },
-    { id: "seasonal", label: tt.filterSeasonal, icon: <Sparkles className="w-4 h-4" /> },
-    { id: "clearance", label: tt.filterClearance, icon: <Percent className="w-4 h-4" /> },
+    { id: "all", label: t("deals.filterAll"), icon: <Tag className="w-4 h-4" /> },
+    { id: "flash", label: t("deals.filterFlash"), icon: <Zap className="w-4 h-4" /> },
+    { id: "bundle", label: t("deals.filterBundle"), icon: <Gift className="w-4 h-4" /> },
+    { id: "seasonal", label: t("deals.filterSeasonal"), icon: <Sparkles className="w-4 h-4" /> },
+    { id: "clearance", label: t("deals.filterClearance"), icon: <Percent className="w-4 h-4" /> },
   ];
 
   // Get products with discounts
@@ -162,10 +106,10 @@ export default function DealsPage() {
         <div className="max-w-7xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-white/20 rounded-full px-4 py-1 text-sm mb-4">
             <Flame className="w-4 h-4" />
-            <span>{tt.limitedTime}</span>
+            <span>{t("deals.limited")}</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">{tt.pageTitle}</h1>
-          <p className="text-primary-foreground/80">{tt.pageSubtitle}</p>
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">{t("deals.title")}</h1>
+          <p className="text-primary-foreground/80">{t("deals.subtitle")}</p>
         </div>
       </div>
 
@@ -175,7 +119,7 @@ export default function DealsPage() {
         <section>
           <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
             <Gift className="w-5 h-5 text-primary" />
-            {tt.promoCodes}
+            {t("deals.promoCodes")}
           </h2>
           <div className="grid md:grid-cols-3 gap-4">
             {promoCodes.map((promo) => (
@@ -196,12 +140,12 @@ export default function DealsPage() {
                   </p>
                   {promo.minOrder && (
                     <p className="text-white/60 text-xs mt-2">
-                      {tt.minOrder}: AED {promo.minOrder}
+                      {t("deals.minOrder")}: AED {promo.minOrder}
                     </p>
                   )}
                   {promo.expiresAt && (
                     <p className="text-white/60 text-xs mt-1">
-                      {tt.expiresIn} {getDaysUntilExpiry(promo.expiresAt)} {tt.days}
+                      {t("deals.expiresIn")} {getDaysUntilExpiry(promo.expiresAt)} {t("deals.days")}
                     </p>
                   )}
                   <div className="mt-4 flex items-center gap-3">
@@ -212,7 +156,7 @@ export default function DealsPage() {
                       onClick={() => handleCopyCode(promo.code)}
                       className="bg-white text-gray-900 rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-100 transition-colors"
                     >
-                      {copiedCode === promo.code ? tt.copied : tt.copyCode}
+                      {copiedCode === promo.code ? t("deals.copied") : t("deals.copyCode")}
                     </button>
                   </div>
                 </div>
@@ -245,7 +189,7 @@ export default function DealsPage() {
         <section>
           <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
             <Percent className="w-5 h-5 text-primary" />
-            {tt.todaysDeals}
+            {t("deals.todaysDeals")}
           </h2>
           {filteredProducts.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -256,7 +200,7 @@ export default function DealsPage() {
           ) : (
             <div className="text-center py-12">
               <Tag className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-muted-foreground">{tt.noDeals}</p>
+              <p className="text-muted-foreground">{t("deals.noDeals")}</p>
             </div>
           )}
         </section>
@@ -266,7 +210,7 @@ export default function DealsPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               <Star className="w-5 h-5 text-primary" />
-              {tt.weeklySpecials}
+              {t("deals.weeklySpecials")}
             </h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

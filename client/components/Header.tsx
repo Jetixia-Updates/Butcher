@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bell, Package, Truck, CreditCard, CheckCircle, X, Trash2, FileText, MessageCircle, Send, Paperclip, Download, Image, File, Heart, User, ShoppingBag, ChevronDown, Sun, Moon, Home, Percent, Wallet } from "lucide-react";
+import { useDraggable } from "@/hooks/useDraggable";
 import { useAuth } from "@/context/AuthContext";
 import { useBasket } from "@/context/BasketContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -303,10 +304,10 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         <MessageCircle className="w-5 h-5" />
                         <div>
                           <h3 className="font-semibold text-sm">
-                            {language === "ar" ? "الدعم الفني" : "Customer Support"}
+                            {t("header.customerSupport")}
                           </h3>
                           <p className="text-xs opacity-80">
-                            {language === "ar" ? "نحن هنا للمساعدة" : "We're here to help"}
+                            {t("header.hereToHelp")}
                           </p>
                         </div>
                       </div>
@@ -327,9 +328,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
                           <MessageCircle className="w-12 h-12 mb-2 opacity-50" />
                           <p className="text-sm text-center">
-                            {language === "ar" 
-                              ? "ابدأ محادثة مع فريق الدعم"
-                              : "Start a conversation with our support team"}
+                            {t("header.startConversation")}
                           </p>
                         </div>
                       ) : (
@@ -437,7 +436,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         <button
                           onClick={() => fileInputRef.current?.click()}
                           className="p-2 text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-                          title={language === "ar" ? "إرفاق ملف" : "Attach file"}
+                          title={t("header.attachFile")}
                         >
                           <Paperclip className="w-5 h-5" />
                         </button>
@@ -446,7 +445,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                           value={newMessage}
                           onChange={(e) => setNewMessage(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                          placeholder={language === "ar" ? "اكتب رسالتك..." : "Type your message..."}
+                          placeholder={t("header.typeMessage")}
                           className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         />
                         <button
@@ -485,7 +484,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                     {/* Header */}
                     <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
                       <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
-                        {language === "ar" ? "الإشعارات" : "Notifications"}
+                        {t("header.notifications")}
                       </h3>
                       <div className="flex items-center gap-2">
                         {userUnreadCount > 0 && (
@@ -493,7 +492,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                             onClick={() => markAllAsRead()}
                             className="text-xs text-primary hover:underline whitespace-nowrap"
                           >
-                            {language === "ar" ? "تحديد الكل كمقروء" : "Mark all read"}
+                            {t("header.markAllRead")}
                           </button>
                         )}
                       </div>
@@ -504,7 +503,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                       {userNotifications.length === 0 ? (
                         <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                           <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
-                          <p>{language === "ar" ? "لا توجد إشعارات" : "No notifications"}</p>
+                          <p>{t("header.noNotifications")}</p>
                         </div>
                       ) : (
                         userNotifications.map((notification) => (
@@ -535,14 +534,14 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                               </div>
                               <p className="text-xs text-gray-600 dark:text-gray-200 mt-0.5 line-clamp-2">
                                 {isInvoiceNotification(notification) 
-                                  ? (language === "ar" ? "اضغط لعرض الفاتورة الكاملة" : "Click to view full invoice")
+                                  ? t("header.clickToViewInvoice")
                                   : (language === "ar" ? notification.messageAr : notification.message)
                                 }
                               </p>
                               {isInvoiceNotification(notification) && (
                                 <span className="inline-flex items-center gap-1 mt-1 text-xs text-emerald-600 dark:text-emerald-300 font-medium">
                                   <FileText className="w-3 h-3" />
-                                  {language === "ar" ? "عرض الفاتورة" : "View Invoice"}
+                                  {t("header.viewInvoice")}
                                 </span>
                               )}
                               <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">
@@ -568,7 +567,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                           className="w-full text-center text-xs text-red-500 hover:text-red-600 py-1 flex items-center justify-center gap-1"
                         >
                           <Trash2 className="w-3 h-3" />
-                          {language === "ar" ? "مسح جميع الإشعارات" : "Clear all notifications"}
+                          {t("header.clearAll")}
                         </button>
                       </div>
                     )}
@@ -642,7 +641,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <Home className="w-4 h-4 text-muted-foreground" />
-                        {language === "ar" ? "الرئيسية" : "Home"}
+                        {t("header.home")}
                       </Link>
                       <Link
                         to="/profile"
@@ -650,7 +649,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <User className="w-4 h-4 text-muted-foreground" />
-                        {language === "ar" ? "حسابي" : "My Account"}
+                        {t("header.myAccount")}
                       </Link>
                       <Link
                         to="/orders"
@@ -658,7 +657,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <ShoppingBag className="w-4 h-4 text-muted-foreground" />
-                        {language === "ar" ? "طلباتي" : "My Orders"}
+                        {t("header.myOrders")}
                       </Link>
                       <Link
                         to="/wallet"
@@ -666,7 +665,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <Wallet className="w-4 h-4 text-muted-foreground" />
-                        {language === "ar" ? "المحفظة" : "Wallet"}
+                        {t("header.wallet")}
                       </Link>
                       <Link
                         to="/deals"
@@ -674,7 +673,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <Percent className="w-4 h-4 text-muted-foreground" />
-                        {language === "ar" ? "العروض" : "Deals & Offers"}
+                        {t("header.dealsOffers")}
                       </Link>
                       <Link
                         to="/wishlist"
@@ -682,7 +681,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <Heart className="w-4 h-4 text-muted-foreground" />
-                        {language === "ar" ? "المفضلة" : "Wishlist"}
+                        {t("header.wishlist")}
                         {wishlistItems.length > 0 && (
                           <span className="ml-auto bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-medium px-2 py-0.5 rounded-full">
                             {wishlistItems.length}
@@ -728,10 +727,10 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
             ) : (
               <div className="flex items-center gap-1 sm:gap-2">
                 <Link to="/login" className="text-[11px] sm:text-sm px-1.5 py-1 sm:px-3 sm:py-1.5 text-primary hover:text-primary/80 font-medium whitespace-nowrap">
-                  {language === "ar" ? "دخول" : "Login"}
+                  {t("header.login")}
                 </Link>
                 <Link to="/register" className="btn-primary text-[11px] sm:text-sm px-1.5 py-1 sm:px-3 sm:py-1.5 whitespace-nowrap">
-                  {language === "ar" ? "سجل" : "Register"}
+                  {t("header.register")}
                 </Link>
               </div>
             )}
@@ -741,85 +740,96 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
       {/* Invoice Modal */}
       {selectedInvoice && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-primary/80 text-white">
-              <div className="flex items-center gap-3">
-                <FileText className="w-6 h-6" />
-                <div>
-                  <h2 className="font-bold text-lg">
-                    {language === "ar" ? "فاتورة ضريبية" : "TAX Invoice"}
-                  </h2>
-                  <p className="text-sm opacity-90">
-                    {formatRelativeTime(selectedInvoice.createdAt, language)}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedInvoice(null)}
-                className="p-2 hover:bg-white/20 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            {/* Invoice Content */}
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
-              <pre className="whitespace-pre-wrap font-mono text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 leading-relaxed">
-                {language === "ar" ? selectedInvoice.messageAr : selectedInvoice.message}
-              </pre>
-            </div>
-            
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t dark:border-gray-600 flex gap-3">
-              <button
-                onClick={() => {
-                  // Copy invoice to clipboard
-                  const invoiceText = language === "ar" ? selectedInvoice.messageAr : selectedInvoice.message;
-                  navigator.clipboard.writeText(invoiceText);
-                  alert(language === "ar" ? "تم نسخ الفاتورة!" : "Invoice copied to clipboard!");
-                }}
-                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                {language === "ar" ? "نسخ الفاتورة" : "Copy Invoice"}
-              </button>
-              <button
-                onClick={() => {
-                  // Print invoice
-                  const invoiceText = language === "ar" ? selectedInvoice.messageAr : selectedInvoice.message;
-                  const printWindow = window.open('', '_blank');
-                  if (printWindow) {
-                    printWindow.document.write(`
-                      <html>
-                        <head>
-                          <title>${language === "ar" ? "فاتورة ضريبية" : "TAX Invoice"}</title>
-                          <style>
-                            body { font-family: monospace; padding: 20px; white-space: pre-wrap; }
-                            @media print { body { padding: 0; } }
-                          </style>
-                        </head>
-                        <body>${invoiceText}</body>
-                      </html>
-                    `);
-                    printWindow.document.close();
-                    printWindow.print();
-                  }
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                {language === "ar" ? "طباعة" : "Print"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <InvoiceModal
+          invoice={selectedInvoice}
+          language={language}
+          onClose={() => setSelectedInvoice(null)}
+        />
       )}
     </header>
   );
 };
+
+// Extracted Invoice Modal with draggable support
+function InvoiceModal({ invoice, language, onClose }: { invoice: Notification; language: "en" | "ar"; onClose: () => void }) {
+  const { dragHandleProps, dialogStyle } = useDraggable();
+  const { t } = useLanguage();
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden" style={dialogStyle}>
+        {/* Modal Header - Drag Handle */}
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-primary/80 text-white" {...dragHandleProps}>
+          <div className="flex items-center gap-3">
+            <FileText className="w-6 h-6" />
+            <div>
+              <h2 className="font-bold text-lg">
+                {t("header.taxInvoice")}
+              </h2>
+              <p className="text-sm opacity-90">
+                {formatRelativeTime(invoice.createdAt, language)}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/20 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Invoice Content */}
+        <div className="p-6 overflow-y-auto max-h-[60vh]">
+          <pre className="whitespace-pre-wrap font-mono text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 leading-relaxed">
+            {language === "ar" ? invoice.messageAr : invoice.message}
+          </pre>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t dark:border-gray-600 flex gap-3">
+          <button
+            onClick={() => {
+              const invoiceText = language === "ar" ? invoice.messageAr : invoice.message;
+              navigator.clipboard.writeText(invoiceText);
+              alert(t("header.invoiceCopied"));
+            }}
+            className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            {t("header.copyInvoice")}
+          </button>
+          <button
+            onClick={() => {
+              const invoiceText = language === "ar" ? invoice.messageAr : invoice.message;
+              const printWindow = window.open('', '_blank');
+              if (printWindow) {
+                printWindow.document.write(`
+                  <html>
+                    <head>
+                      <title>${t("header.taxInvoice")}</title>
+                      <style>
+                        body { font-family: monospace; padding: 20px; white-space: pre-wrap; }
+                        @media print { body { padding: 0; } }
+                      </style>
+                    </head>
+                    <body>${invoiceText}</body>
+                  </html>
+                `);
+                printWindow.document.close();
+                printWindow.print();
+              }
+            }}
+            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            {t("header.print")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

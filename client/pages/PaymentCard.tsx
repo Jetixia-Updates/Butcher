@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useBasket } from "@/context/BasketContext";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { useNotifications, createOrderNotification, createUserOrderNotification, createDetailedInvoiceNotification, generateInvoiceNumber, type InvoiceData } from "@/context/NotificationContext";
 import { formatPrice } from "@/utils/vat";
 import {
@@ -20,6 +21,7 @@ export default function PaymentCardPage() {
   const { items, subtotal, vat, total, clearBasket } = useBasket();
   const { user, isAuthLoading, isLoggedIn } = useAuth();
   const { addNotification, addAdminNotification } = useNotifications();
+  const { t, isRTL } = useLanguage();
 
   // Redirect if not logged in and not loading
   React.useEffect(() => {
@@ -98,18 +100,18 @@ export default function PaymentCardPage() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-background flex flex-col" dir={isRTL ? "rtl" : "ltr"}>
         <Header />
         <main className="flex-1 flex items-center justify-center px-4">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-foreground mb-2">
-              Your basket is empty
+              {t("basket.empty")}
             </h1>
             <button
               onClick={() => navigate("/products")}
               className="btn-primary mt-4"
             >
-              Back to Products
+              {t("payment.backToProducts")}
             </button>
           </div>
         </main>
@@ -121,21 +123,21 @@ export default function PaymentCardPage() {
   // If no addressId was passed, redirect back to checkout
   if (!addressId) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-background flex flex-col" dir={isRTL ? "rtl" : "ltr"}>
         <Header />
         <main className="flex-1 flex items-center justify-center px-4">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-foreground mb-2">
-              No delivery address selected
+              {t("payment.noAddress")}
             </h1>
             <p className="text-muted-foreground mb-4">
-              Please select a delivery address before proceeding to payment.
+              {t("payment.noAddressDesc")}
             </p>
             <button
               onClick={() => navigate("/checkout")}
               className="btn-primary mt-4"
             >
-              Back to Checkout
+              {t("payment.backToCheckout")}
             </button>
           </div>
         </main>
@@ -148,23 +150,23 @@ export default function PaymentCardPage() {
     const newErrors: Record<string, string> = {};
 
     if (!formData.cardholderName.trim()) {
-      newErrors.cardholderName = "Cardholder name is required";
+      newErrors.cardholderName = t("payment.cardholderName") + " " + t("common.required").toLowerCase();
     }
 
     if (!isValidCardNumber(formData.cardNumber)) {
-      newErrors.cardNumber = "Invalid card number";
+      newErrors.cardNumber = t("payment.invalidCard");
     }
 
     if (!isValidExpiryDate(formData.expiryDate)) {
-      newErrors.expiryDate = "Invalid expiry date (MM/YY)";
+      newErrors.expiryDate = t("payment.invalidExpiry");
     }
 
     if (!isValidCVV(formData.cvv)) {
-      newErrors.cvv = "Invalid CVV (3-4 digits)";
+      newErrors.cvv = t("payment.invalidCvv");
     }
 
     if (formData.billingAddress.length < 5) {
-      newErrors.billingAddress = "Please enter a valid billing address";
+      newErrors.billingAddress = t("checkout.fillRequired");
     }
 
     setErrors(newErrors);
@@ -224,10 +226,10 @@ export default function PaymentCardPage() {
     // Build delivery notes with time slot and VAT reference
     const deliveryNotesParts: string[] = [];
     if (deliveryTimeSlot) {
-      deliveryNotesParts.push(`Preferred Delivery Time: ${deliveryTimeSlot}`);
+      deliveryNotesParts.push(`${t("checkout.preferredTime")} ${deliveryTimeSlot}`);
     }
     if (formData.vat_reference) {
-      deliveryNotesParts.push(`VAT Reference: ${formData.vat_reference}`);
+      deliveryNotesParts.push(`${t("checkout.vatReference")} ${formData.vat_reference}`);
     }
     const deliveryNotes = deliveryNotesParts.join(" | ");
 
@@ -302,7 +304,7 @@ export default function PaymentCardPage() {
             hour: "2-digit",
             minute: "2-digit",
           }),
-          customerName: orderData.customerName || selectedAddress?.fullName || formData.cardholderName || "Customer",
+          customerName: orderData.customerName || selectedAddress?.fullName || formData.cardholderName || t("payment.customer"),
           customerMobile: orderData.customerMobile || selectedAddress?.mobile || user?.mobile || "",
           customerAddress: orderData.deliveryAddress 
             ? `${orderData.deliveryAddress.building}, ${orderData.deliveryAddress.street}, ${orderData.deliveryAddress.area}, ${orderData.deliveryAddress.emirate}`
@@ -334,14 +336,14 @@ export default function PaymentCardPage() {
         
         clearBasket();
         alert(
-          `Payment successful! Your order has been placed.\n\nOrder ID: ${response.data.orderNumber}\nInvoice: ${invoiceNumber}\n\nYour TAX invoice has been sent to your notifications.\n\nThank you for your order!`
+          `${t("payment.paymentSuccess")}\n\nOrder ID: ${response.data.orderNumber}\nInvoice: ${invoiceNumber}\n\n${t("payment.paymentSuccessDesc")}`
         );
         navigate("/products");
       } else {
-        setApiError(response.error || "Failed to create order. Please try again.");
+        setApiError(response.error || t("payment.orderFailed"));
       }
     } catch (err) {
-      setApiError("Network error. Please check your connection and try again.");
+      setApiError(t("payment.networkError"));
     }
 
     setIsProcessing(false);
@@ -389,7 +391,7 @@ export default function PaymentCardPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col" dir={isRTL ? "rtl" : "ltr"}>
       <Header />
 
       <main className="flex-1 py-6 sm:py-12 px-3 sm:px-4">
@@ -401,21 +403,21 @@ export default function PaymentCardPage() {
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-muted text-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
                   ✓
                 </div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">Basket</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">{t("payment.progressBasket")}</p>
               </div>
               <div className="w-6 sm:w-12 h-1 bg-muted" />
               <div className="text-center">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-muted text-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
                   ✓
                 </div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">Checkout</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">{t("payment.progressCheckout")}</p>
               </div>
               <div className="w-6 sm:w-12 h-1 bg-muted" />
               <div className="text-center">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary text-primary-foreground font-bold text-sm sm:text-base flex items-center justify-center mb-1 sm:mb-2">
                   3
                 </div>
-                <p className="text-[10px] sm:text-xs text-foreground font-semibold">Payment</p>
+                <p className="text-[10px] sm:text-xs text-foreground font-semibold">{t("payment.progressPayment")}</p>
               </div>
             </div>
           </div>
@@ -425,10 +427,10 @@ export default function PaymentCardPage() {
             <div className="lg:col-span-2">
               <div className="card-premium p-4 sm:p-8 space-y-4 sm:space-y-6">
                 <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-                  Complete Payment
+                  {t("payment.completePayment")}
                 </h1>
                 <p className="text-sm sm:text-base text-muted-foreground">
-                  All transactions are secure and encrypted
+                  {t("payment.secureEncrypted")}
                 </p>
 
                 {/* API Error Display */}
@@ -441,15 +443,15 @@ export default function PaymentCardPage() {
                 <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                   {/* Cardholder Name */}
                   <FormField
-                    label="Cardholder Name"
+                    label={t("payment.cardholderName")}
                     name="cardholderName"
-                    placeholder="John Doe"
+                    placeholder={t("payment.cardholderPlaceholder")}
                   />
 
                   {/* Card Number */}
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-2">
-                      Card Number<span className="text-destructive">*</span>
+                      {t("payment.cardNumber")}<span className="text-destructive">*</span>
                     </label>
                     <div className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 bg-white border-input">
                       <svg
@@ -464,7 +466,7 @@ export default function PaymentCardPage() {
                         name="cardNumber"
                         value={formData.cardNumber}
                         onChange={handleChange}
-                        placeholder="1234 5678 9012 3456"
+                        placeholder={t("payment.cardNumberPlaceholder")}
                         className="flex-1 outline-none text-foreground placeholder-muted-foreground"
                       />
                     </div>
@@ -478,14 +480,14 @@ export default function PaymentCardPage() {
                   {/* Expiry & CVV */}
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
-                      label="Expiry Date"
+                      label={t("payment.expiryDate")}
                       name="expiryDate"
-                      placeholder="MM/YY"
+                      placeholder={t("payment.expiryPlaceholder")}
                       helper="Valid through end of month"
                     />
                     <div>
                       <label className="block text-sm font-semibold text-foreground mb-2">
-                        CVV<span className="text-destructive">*</span>
+                        {t("payment.cvv")}<span className="text-destructive">*</span>
                       </label>
                       <div className="relative">
                         <input
@@ -493,7 +495,7 @@ export default function PaymentCardPage() {
                           name="cvv"
                           value={formData.cvv}
                           onChange={handleChange}
-                          placeholder="123"
+                          placeholder={t("payment.cvvPlaceholder")}
                           className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${
                             errors.cvv
                               ? "border-destructive bg-destructive/5"
@@ -505,7 +507,7 @@ export default function PaymentCardPage() {
                           onClick={() => setShowCVV(!showCVV)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors text-sm"
                         >
-                          {showCVV ? "Hide" : "Show"}
+                          {showCVV ? t("payment.hide") : t("payment.show")}
                         </button>
                       </div>
                       {errors.cvv && (
@@ -519,7 +521,7 @@ export default function PaymentCardPage() {
                   {/* Billing Address */}
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-2">
-                      Billing Address
+                      {t("checkout.deliveryAddress")}
                       <span className="text-destructive">*</span>
                     </label>
                     <textarea
@@ -543,9 +545,9 @@ export default function PaymentCardPage() {
 
                   {/* VAT Reference */}
                   <FormField
-                    label="VAT Invoice Reference"
+                    label={t("checkout.vatInvoiceRef")}
                     name="vat_reference"
-                    placeholder="Optional: Enter your company VAT number"
+                    placeholder={t("checkout.vatRefPlaceholder")}
                     required={false}
                   />
 
@@ -560,9 +562,9 @@ export default function PaymentCardPage() {
                         <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
                       </svg>
                       <div className="text-xs sm:text-sm text-secondary">
-                        <p className="font-semibold">Secure Payment</p>
+                        <p className="font-semibold">{t("payment.securePayment")}</p>
                         <p className="text-[10px] sm:text-xs mt-1">
-                          Your card details are encrypted and never stored on our servers
+                          {t("payment.cardSecureDesc")}
                         </p>
                       </div>
                     </div>
@@ -575,8 +577,8 @@ export default function PaymentCardPage() {
                     className="w-full btn-primary py-2.5 sm:py-3 rounded-lg font-semibold text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {isProcessing
-                      ? "Processing Payment..."
-                      : `Pay ${formatPrice(adjustedTotal)}`}
+                      ? t("payment.processing")
+                      : `${t("payment.completePayment")} ${formatPrice(adjustedTotal)}`}
                   </button>
 
                   {/* Back Link */}
@@ -585,7 +587,7 @@ export default function PaymentCardPage() {
                     onClick={() => navigate("/checkout")}
                     className="w-full btn-outline py-2 rounded-lg text-xs sm:text-sm font-semibold"
                   >
-                    Back to Checkout
+                    {t("payment.backToCheckout")}
                   </button>
                 </form>
               </div>
@@ -595,7 +597,7 @@ export default function PaymentCardPage() {
             <div className="lg:col-span-1">
               <div className="card-premium p-4 sm:p-6 sticky top-24 space-y-3 sm:space-y-4">
                 <h2 className="text-lg sm:text-xl font-bold text-foreground">
-                  Order Summary
+                  {t("payment.orderSummary")}
                 </h2>
 
                 {/* Items */}
@@ -618,19 +620,19 @@ export default function PaymentCardPage() {
                 {/* Totals */}
                 <div className="space-y-2 sm:space-y-3">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">{t("payment.subtotal")}</span>
                     <span className="font-semibold">{formatPrice(subtotal)}</span>
                   </div>
                   {discountAmount > 0 && (
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-green-600">Discount</span>
+                      <span className="text-green-600">{t("payment.discount")}</span>
                       <span className="font-semibold text-green-600">
                         -{formatPrice(discountAmount)}
                       </span>
                     </div>
                   )}
                   <div className="flex justify-between items-center bg-secondary/10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 text-sm">
-                    <span className="text-muted-foreground">VAT (5%)</span>
+                    <span className="text-muted-foreground">{t("payment.vat")}</span>
                     <span className="font-semibold text-secondary">
                       {formatPrice(adjustedVat)}
                     </span>
@@ -638,14 +640,14 @@ export default function PaymentCardPage() {
                   {/* Show either zone delivery fee OR express delivery fee, not both */}
                   {isExpressDelivery ? (
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-orange-600">⚡ Express Delivery</span>
+                      <span className="text-orange-600">{t("payment.expressDelivery")}</span>
                       <span className="font-semibold text-orange-600">
                         +{formatPrice(expressDeliveryFee)}
                       </span>
                     </div>
                   ) : zoneDeliveryFee > 0 ? (
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">🚚 Delivery Fee</span>
+                      <span className="text-muted-foreground">{t("payment.deliveryFee")}</span>
                       <span className="font-semibold">
                         +{formatPrice(zoneDeliveryFee)}
                       </span>
@@ -653,7 +655,7 @@ export default function PaymentCardPage() {
                   ) : null}
                   {driverTip > 0 && (
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-green-600">💚 Driver Tip</span>
+                      <span className="text-green-600">{t("payment.driverTip")}</span>
                       <span className="font-semibold text-green-600">
                         +{formatPrice(driverTip)}
                       </span>
@@ -661,7 +663,7 @@ export default function PaymentCardPage() {
                   )}
                   <div className="flex justify-between items-center pt-2 border-t border-border">
                     <span className="text-base sm:text-lg font-bold text-foreground">
-                      Total
+                      {t("payment.total")}
                     </span>
                     <span className="text-xl sm:text-2xl font-bold text-primary">
                       {formatPrice(adjustedTotal)}

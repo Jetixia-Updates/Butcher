@@ -7,7 +7,8 @@ import { User } from "lucide-react";
 export default function AdminLoginPage() {
   const navigate = useNavigate();
   const { loginAdmin, isAdmin } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const isRTL = language === "ar";
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -41,7 +42,7 @@ export default function AdminLoginPage() {
         navigate("/admin/dashboard");
       }
     } else {
-      setError(result.error || "Invalid staff credentials");
+      setError(result.error || t("adminLogin.invalidCredentials"));
     }
 
     setIsLoading(false);
@@ -57,8 +58,8 @@ export default function AdminLoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Staff Portal</h1>
-          <p className="text-slate-400 mt-2 text-sm sm:text-base">Sign in to manage your tasks</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">{t("adminLogin.title")}</h1>
+          <p className="text-slate-400 mt-2 text-sm sm:text-base">{t("adminLogin.subtitle")}</p>
         </div>
 
         {/* Login Form */}
@@ -72,7 +73,7 @@ export default function AdminLoginPage() {
 
             <div>
               <label htmlFor="username" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
-                Username or Email
+                {t("adminLogin.username")}
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -82,7 +83,7 @@ export default function AdminLoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm sm:text-base"
-                  placeholder="Username or email"
+                  placeholder={t("adminLogin.usernamePlaceholder")}
                   required
                 />
               </div>
@@ -90,7 +91,7 @@ export default function AdminLoginPage() {
 
             <div>
               <label htmlFor="password" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
-                Password
+                {t("adminLogin.password")}
               </label>
               <input
                 id="password"
@@ -114,10 +115,10 @@ export default function AdminLoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Signing in...
+                  {t("adminLogin.signingIn")}
                 </span>
               ) : (
-                "Sign In"
+                t("adminLogin.signIn")
               )}
             </button>
           </form>
@@ -128,7 +129,7 @@ export default function AdminLoginPage() {
                 onClick={() => navigate("/login")}
                 className="text-primary hover:underline font-medium"
               >
-                Back to Customer Login
+                {t("adminLogin.backToCustomer")}
               </button>
             </p>
           </div>

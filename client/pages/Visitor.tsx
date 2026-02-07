@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 
 // Helper to get or create a persistent visitor ID
 const getOrCreateVisitorId = (): string => {
@@ -16,6 +17,7 @@ const getOrCreateVisitorId = (): string => {
 export default function VisitorPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { t, isRTL } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,14 +68,13 @@ export default function VisitorPage() {
 
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              errorMessage =
-                "Location permission denied. You can still browse as a guest.";
+              errorMessage = t("visitor.locationDenied");
               break;
             case error.POSITION_UNAVAILABLE:
-              errorMessage = "Location information is unavailable.";
+              errorMessage = t("visitor.locationUnavailable");
               break;
             case error.TIMEOUT:
-              errorMessage = "Location request timed out.";
+              errorMessage = t("visitor.locationTimeout");
               break;
           }
 
@@ -110,7 +111,7 @@ export default function VisitorPage() {
         }
       );
     } else {
-      setError("Geolocation is not supported by your browser");
+      setError(t("visitor.locationNotSupported"));
       setLoading(false);
 
       // Still proceed as visitor with persistent ID
@@ -134,7 +135,7 @@ export default function VisitorPage() {
   }, [login, navigate]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-3 sm:p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-3 sm:p-4" dir={isRTL ? "rtl" : "ltr"}>
       <div className="max-w-md w-full text-center">
         <div className="mb-6 sm:mb-8">
           <div className="inline-block animate-spin">
@@ -143,10 +144,10 @@ export default function VisitorPage() {
             </svg>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground mt-4">
-            🔍 Detecting Location...
+            {t("visitor.detectingLocation")}
           </h1>
           <p className="text-muted-foreground mt-2 text-xs sm:text-sm">
-            We're finding your location to show available products
+            {t("visitor.pleaseWait")}
           </p>
         </div>
 
@@ -154,14 +155,14 @@ export default function VisitorPage() {
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
             <p className="text-yellow-800 text-xs sm:text-sm">{error}</p>
             <p className="text-yellow-700 text-[10px] sm:text-xs mt-2">
-              Redirecting you anyway...
+              {t("visitor.redirecting")}
             </p>
           </div>
         )}
 
         <div className="card-premium p-4 sm:p-6">
           <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-            Please allow location access in the popup above
+            {t("visitor.allowLocation")}
           </p>
           <button
             onClick={() => {
@@ -181,7 +182,7 @@ export default function VisitorPage() {
             }}
             className="btn-secondary w-full py-2 rounded-lg text-xs sm:text-sm font-semibold"
           >
-            Continue Without Location
+            {t("visitor.continueWithout")}
           </button>
         </div>
       </div>

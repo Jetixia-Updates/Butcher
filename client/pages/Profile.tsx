@@ -54,7 +54,7 @@ type TabType = "profile" | "addresses" | "preferences" | "loyalty" | "wishlist";
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { user, isLoggedIn, isAuthLoading, updateUser, logout } = useAuth();
-  const { language, setLanguage } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const { items: wishlistItems, removeFromWishlist, ensureLoaded: ensureWishlistLoaded } = useWishlist();
   const { points, currentTier, nextTier, pointsToNextTier, transactions, referralCode, applyReferral, ensureLoaded: ensureLoyaltyLoaded } = useLoyalty();
   const { orders } = useOrders();
@@ -382,139 +382,6 @@ export default function ProfilePage() {
     return null;
   }
 
-  const translations = {
-    en: {
-      myAccount: "My Account",
-      subtitle: "Manage your profile and preferences",
-      profile: "Profile",
-      addresses: "Addresses",
-      preferences: "Preferences",
-      loyalty: "Loyalty",
-      wishlist: "Wishlist",
-      personalInfo: "Personal Information",
-      edit: "Edit",
-      save: "Save",
-      cancel: "Cancel",
-      firstName: "First Name",
-      lastName: "Last Name",
-      email: "Email",
-      mobile: "Mobile",
-      emirate: "Emirate",
-      logout: "Logout",
-      savedAddresses: "Saved Addresses",
-      addAddress: "Add Address",
-      noAddresses: "No saved addresses",
-      defaultAddress: "Default",
-      settings: "Settings",
-      language: "Language",
-      notifications: "Notifications",
-      emailNotifications: "Email Notifications",
-      smsNotifications: "SMS Notifications",
-      loyaltyProgram: "Loyalty Program",
-      yourPoints: "Your Points",
-      currentTier: "Current Tier",
-      pointsToNextTier: "Points to next tier",
-      earnedPoints: "Total Earned",
-      recentActivity: "Recent Activity",
-      noActivity: "No activity yet",
-      referralCode: "Your Referral Code",
-      copyCode: "Copy",
-      copied: "Copied!",
-      applyReferral: "Have a referral code?",
-      apply: "Apply",
-      wishlistEmpty: "Your wishlist is empty",
-      addToCart: "Add to Cart",
-      remove: "Remove",
-      viewOrders: "View Orders",
-      totalOrders: "Total Orders",
-      memberSince: "Member Since",
-      addNewAddress: "Add New Address",
-      addressLabel: "Address Label",
-      fullName: "Full Name",
-      area: "Area",
-      street: "Street Address",
-      building: "Building Name/Number",
-      floor: "Floor (Optional)",
-      apartment: "Apartment (Optional)",
-      setAsDefault: "Set as default address",
-      saveAddress: "Save Address",
-      home: "Home",
-      work: "Work",
-      other: "Other",
-      selectEmirate: "Select Emirate",
-      detectLocation: "Detect My Location",
-      detectingLocation: "Detecting...",
-      pinLocation: "Pin Your Location",
-      pinLocationHint: "Click on the map or drag the marker to set your exact location",
-    },
-    ar: {
-      myAccount: "حسابي",
-      subtitle: "إدارة ملفك الشخصي وإعداداتك",
-      profile: "الملف الشخصي",
-      addresses: "العناوين",
-      preferences: "الإعدادات",
-      loyalty: "الولاء",
-      wishlist: "المفضلة",
-      personalInfo: "المعلومات الشخصية",
-      edit: "تعديل",
-      save: "حفظ",
-      cancel: "إلغاء",
-      firstName: "الاسم الأول",
-      lastName: "اسم العائلة",
-      email: "البريد الإلكتروني",
-      mobile: "الجوال",
-      emirate: "الإمارة",
-      logout: "تسجيل الخروج",
-      savedAddresses: "العناوين المحفوظة",
-      addAddress: "إضافة عنوان",
-      noAddresses: "لا توجد عناوين محفوظة",
-      defaultAddress: "الافتراضي",
-      settings: "الإعدادات",
-      language: "اللغة",
-      notifications: "الإشعارات",
-      emailNotifications: "إشعارات البريد الإلكتروني",
-      smsNotifications: "إشعارات SMS",
-      loyaltyProgram: "برنامج الولاء",
-      yourPoints: "نقاطك",
-      currentTier: "المستوى الحالي",
-      pointsToNextTier: "نقاط للمستوى التالي",
-      earnedPoints: "إجمالي المكتسب",
-      recentActivity: "النشاط الأخير",
-      noActivity: "لا يوجد نشاط حتى الآن",
-      referralCode: "كود الإحالة الخاص بك",
-      copyCode: "نسخ",
-      copied: "تم النسخ!",
-      applyReferral: "هل لديك كود إحالة؟",
-      apply: "تطبيق",
-      wishlistEmpty: "قائمة المفضلة فارغة",
-      addToCart: "أضف للسلة",
-      remove: "حذف",
-      viewOrders: "عرض الطلبات",
-      totalOrders: "إجمالي الطلبات",
-      memberSince: "عضو منذ",
-      addNewAddress: "إضافة عنوان جديد",
-      addressLabel: "تسمية العنوان",
-      fullName: "الاسم الكامل",
-      area: "المنطقة",
-      street: "عنوان الشارع",
-      building: "اسم/رقم المبنى",
-      floor: "الطابق (اختياري)",
-      apartment: "الشقة (اختياري)",
-      setAsDefault: "تعيين كعنوان افتراضي",
-      saveAddress: "حفظ العنوان",
-      home: "المنزل",
-      work: "العمل",
-      other: "آخر",
-      selectEmirate: "اختر الإمارة",
-      detectLocation: "تحديد موقعي",
-      detectingLocation: "جاري التحديد...",
-      pinLocation: "حدد موقعك",
-      pinLocationHint: "انقر على الخريطة أو اسحب العلامة لتحديد موقعك الدقيق",
-    },
-  };
-
-  const t = translations[language];
-
   const handleSaveProfile = () => {
     updateUser({
       firstName: editForm.firstName,
@@ -551,11 +418,11 @@ export default function ProfilePage() {
   }
 
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
-    { id: "profile", label: t.profile, icon: User },
-    { id: "addresses", label: t.addresses, icon: MapPin },
-    { id: "preferences", label: t.preferences, icon: Settings },
-    { id: "loyalty", label: t.loyalty, icon: Award },
-    { id: "wishlist", label: t.wishlist, icon: Heart },
+    { id: "profile", label: t("profile.profile"), icon: User },
+    { id: "addresses", label: t("profile.addresses"), icon: MapPin },
+    { id: "preferences", label: t("profile.preferences"), icon: Settings },
+    { id: "loyalty", label: t("profile.loyalty"), icon: Award },
+    { id: "wishlist", label: t("profile.wishlist"), icon: Heart },
   ];
 
   return (
@@ -564,13 +431,13 @@ export default function ProfilePage() {
         {/* Header */}
         <div className="mb-6 sm:mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2">{t.myAccount}</h1>
-            <p className="text-muted-foreground">{t.subtitle}</p>
+            <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2">{t("profile.myAccount")}</h1>
+            <p className="text-muted-foreground">{t("profile.subtitle")}</p>
           </div>
           <button
             onClick={() => window.location.reload()}
             className="p-2 hover:bg-muted rounded-full transition-colors"
-            title={language === "ar" ? "تحديث" : "Refresh"}
+            title={t("profile.refresh")}
           >
             <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
           </button>
@@ -629,7 +496,7 @@ export default function ProfilePage() {
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
               >
                 <Package className="w-5 h-5" />
-                <span className="font-medium">{t.viewOrders}</span>
+                <span className="font-medium">{t("profile.viewOrders")}</span>
                 <ChevronRight className={cn("w-4 h-4 ml-auto", isRTL && "rotate-180")} />
               </button>
 
@@ -639,22 +506,22 @@ export default function ProfilePage() {
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-destructive/10 text-destructive transition-colors mt-4"
               >
                 <LogOut className="w-5 h-5" />
-                <span className="font-medium">{t.logout}</span>
+                <span className="font-medium">{t("profile.logout")}</span>
               </button>
             </div>
 
             {/* Quick Stats */}
             <div className="card-premium p-4 mt-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{t.totalOrders}</span>
+                <span className="text-sm text-muted-foreground">{t("profile.totalOrders")}</span>
                 <span className="font-bold text-foreground">{orders.length}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{t.yourPoints}</span>
+                <span className="text-sm text-muted-foreground">{t("profile.yourPoints")}</span>
                 <span className="font-bold text-primary">{points.toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{t.memberSince}</span>
+                <span className="text-sm text-muted-foreground">{t("profile.memberSince")}</span>
                 <span className="font-medium text-foreground">2025</span>
               </div>
             </div>
@@ -666,21 +533,21 @@ export default function ProfilePage() {
             {activeTab === "profile" && (
               <div className="card-premium p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-foreground">{t.personalInfo}</h2>
+                  <h2 className="text-xl font-bold text-foreground">{t("profile.personalInfo")}</h2>
                   {!isEditing ? (
                     <button onClick={() => setIsEditing(true)} className="btn-outline flex items-center gap-2">
                       <Edit2 className="w-4 h-4" />
-                      {t.edit}
+                      {t("profile.edit")}
                     </button>
                   ) : (
                     <div className="flex gap-2">
                       <button onClick={handleSaveProfile} className="btn-primary flex items-center gap-2">
                         <Save className="w-4 h-4" />
-                        {t.save}
+                        {t("profile.save")}
                       </button>
                       <button onClick={() => setIsEditing(false)} className="btn-outline flex items-center gap-2">
                         <X className="w-4 h-4" />
-                        {t.cancel}
+                        {t("profile.cancel")}
                       </button>
                     </div>
                   )}
@@ -688,7 +555,7 @@ export default function ProfilePage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t.firstName}</label>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.firstName")}</label>
                     {isEditing ? (
                       <input
                         type="text"
@@ -701,7 +568,7 @@ export default function ProfilePage() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t.lastName}</label>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.lastName")}</label>
                     {isEditing ? (
                       <input
                         type="text"
@@ -714,7 +581,7 @@ export default function ProfilePage() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t.email}</label>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.email")}</label>
                     {isEditing ? (
                       <input
                         type="email"
@@ -727,7 +594,7 @@ export default function ProfilePage() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t.mobile}</label>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.mobile")}</label>
                     {isEditing ? (
                       <input
                         type="tel"
@@ -740,7 +607,7 @@ export default function ProfilePage() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t.emirate}</label>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.emirate")}</label>
                     <p className="text-foreground font-medium">{user.emirate}</p>
                   </div>
                 </div>
@@ -751,11 +618,11 @@ export default function ProfilePage() {
             {activeTab === "addresses" && (
               <div className="card-premium p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-foreground">{t.savedAddresses}</h2>
+                  <h2 className="text-xl font-bold text-foreground">{t("profile.savedAddresses")}</h2>
                   {!showAddressForm && (
                     <button onClick={() => setShowAddressForm(true)} className="btn-primary flex items-center gap-2">
                       <MapPin className="w-4 h-4" />
-                      {t.addAddress}
+                      {t("profile.addAddress")}
                     </button>
                   )}
                 </div>
@@ -764,7 +631,7 @@ export default function ProfilePage() {
                 {showAddressForm && (
                   <div className="border border-border rounded-xl p-4 mb-6 space-y-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold text-foreground">{t.addNewAddress}</h3>
+                      <h3 className="font-semibold text-foreground">{t("profile.addNewAddress")}</h3>
                       <button
                         onClick={closeAddressForm}
                         className="p-1 hover:bg-muted rounded-full transition-colors"
@@ -775,7 +642,7 @@ export default function ProfilePage() {
 
                     {/* Address Label */}
                     <div>
-                      <label className="block text-sm font-medium text-muted-foreground mb-2">{t.addressLabel}</label>
+                      <label className="block text-sm font-medium text-muted-foreground mb-2">{t("profile.addressLabel")}</label>
                       <div className="flex gap-2">
                         {["Home", "Work", "Other"].map((label) => (
                           <button
@@ -788,7 +655,7 @@ export default function ProfilePage() {
                                 : "bg-muted hover:bg-muted/80"
                             )}
                           >
-                            {label === "Home" ? t.home : label === "Work" ? t.work : t.other}
+                            {label === "Home" ? t("profile.home") : label === "Work" ? t("profile.work") : t("profile.other")}
                           </button>
                         ))}
                       </div>
@@ -797,7 +664,7 @@ export default function ProfilePage() {
                     {/* Map Section */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="block text-sm font-medium text-muted-foreground">{t.pinLocation}</label>
+                        <label className="block text-sm font-medium text-muted-foreground">{t("profile.pinLocation")}</label>
                         <button
                           type="button"
                           onClick={detectCurrentLocation}
@@ -807,17 +674,17 @@ export default function ProfilePage() {
                           {isDetectingLocation ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
-                              {t.detectingLocation}
+                              {t("profile.detectingLocation")}
                             </>
                           ) : (
                             <>
                               <Navigation className="w-4 h-4" />
-                              {t.detectLocation}
+                              {t("profile.detectLocation")}
                             </>
                           )}
                         </button>
                       </div>
-                      <p className="text-xs text-muted-foreground mb-2">{t.pinLocationHint}</p>
+                      <p className="text-xs text-muted-foreground mb-2">{t("profile.pinLocationHint")}</p>
                       <div 
                         ref={mapContainerRef} 
                         className="h-[250px] rounded-lg border border-border overflow-hidden"
@@ -828,7 +695,7 @@ export default function ProfilePage() {
                     {/* Full Name & Mobile */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t.fullName} *</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.fullName")} *</label>
                         <input
                           type="text"
                           value={addressForm.fullName}
@@ -838,7 +705,7 @@ export default function ProfilePage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t.mobile} *</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.mobile")} *</label>
                         <input
                           type="tel"
                           value={addressForm.mobile}
@@ -852,25 +719,25 @@ export default function ProfilePage() {
                     {/* Emirate & Area */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t.emirate} *</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.emirate")} *</label>
                         <select
                           value={addressForm.emirate}
                           onChange={(e) => setAddressForm({ ...addressForm, emirate: e.target.value })}
                           className="w-full px-3 py-2 border border-border rounded-lg focus:border-primary outline-none bg-background"
                           required
                         >
-                          <option value="">{t.selectEmirate}</option>
-                          <option value="Abu Dhabi">Abu Dhabi</option>
-                          <option value="Dubai">Dubai</option>
-                          <option value="Sharjah">Sharjah</option>
-                          <option value="Ajman">Ajman</option>
-                          <option value="Umm Al Quwain">Umm Al Quwain</option>
-                          <option value="Ras Al Khaimah">Ras Al Khaimah</option>
-                          <option value="Fujairah">Fujairah</option>
+                          <option value="">{t("profile.selectEmirate")}</option>
+                          <option value="Abu Dhabi">{t("checkout.abuDhabi")}</option>
+                          <option value="Dubai">{t("checkout.dubai")}</option>
+                          <option value="Sharjah">{t("checkout.sharjah")}</option>
+                          <option value="Ajman">{t("checkout.ajman")}</option>
+                          <option value="Umm Al Quwain">{t("checkout.ummAlQuwain")}</option>
+                          <option value="Ras Al Khaimah">{t("checkout.rasAlKhaimah")}</option>
+                          <option value="Fujairah">{t("checkout.fujairah")}</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t.area} *</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.area")} *</label>
                         <input
                           type="text"
                           value={addressForm.area}
@@ -884,7 +751,7 @@ export default function ProfilePage() {
                     {/* Street & Building */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t.street} *</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.street")} *</label>
                         <input
                           type="text"
                           value={addressForm.street}
@@ -894,7 +761,7 @@ export default function ProfilePage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t.building} *</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.building")} *</label>
                         <input
                           type="text"
                           value={addressForm.building}
@@ -908,7 +775,7 @@ export default function ProfilePage() {
                     {/* Floor & Apartment */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t.floor}</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.floor")}</label>
                         <input
                           type="text"
                           value={addressForm.floor}
@@ -917,7 +784,7 @@ export default function ProfilePage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t.apartment}</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-1">{t("profile.apt")}</label>
                         <input
                           type="text"
                           value={addressForm.apartment}
@@ -937,7 +804,7 @@ export default function ProfilePage() {
                         className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                       />
                       <label htmlFor="isDefault" className="text-sm font-medium text-muted-foreground">
-                        {t.setAsDefault}
+                        {t("profile.setAsDefault")}
                       </label>
                     </div>
 
@@ -949,13 +816,13 @@ export default function ProfilePage() {
                         disabled={!addressForm.fullName || !addressForm.mobile || !addressForm.emirate || !addressForm.area || !addressForm.street || !addressForm.building}
                       >
                         <Save className="w-4 h-4 mr-2" />
-                        {t.saveAddress}
+                        {t("profile.saveAddress")}
                       </button>
                       <button
                         onClick={closeAddressForm}
                         className="btn-outline flex-1"
                       >
-                        {t.cancel}
+                        {t("profile.cancel")}
                       </button>
                     </div>
                   </div>
@@ -975,11 +842,11 @@ export default function ProfilePage() {
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-2 mb-2">
                             <span className="px-2 py-0.5 bg-muted rounded text-xs font-medium">
-                              {address.label === "Home" ? t.home : address.label === "Work" ? t.work : t.other}
+                              {address.label === "Home" ? t("profile.home") : address.label === "Work" ? t("profile.work") : t("profile.other")}
                             </span>
                             {address.isDefault && (
                               <span className="px-2 py-0.5 bg-primary/20 text-primary rounded text-xs font-medium">
-                                {t.defaultAddress}
+                                {t("profile.defaultAddress")}
                               </span>
                             )}
                           </div>
@@ -987,14 +854,14 @@ export default function ProfilePage() {
                             onClick={() => handleDeleteAddress(address.id)}
                             className="text-destructive hover:text-destructive/80 text-sm font-medium"
                           >
-                            {t.remove}
+                            {t("profile.remove")}
                           </button>
                         </div>
                         <p className="font-medium text-foreground">{address.fullName}</p>
                         <p className="text-muted-foreground text-sm">
                           {address.building}, {address.street}
-                          {address.floor && `, Floor ${address.floor}`}
-                          {address.apartment && `, Apt ${address.apartment}`}
+                          {address.floor && `, ${t("profile.floor")} ${address.floor}`}
+                          {address.apartment && `, ${t("profile.apt")} ${address.apartment}`}
                         </p>
                         <p className="text-muted-foreground text-sm">{address.area}, {address.emirate}</p>
                         <p className="text-muted-foreground text-sm">{address.mobile}</p>
@@ -1003,7 +870,7 @@ export default function ProfilePage() {
                             onClick={() => handleSetDefaultAddress(address.id)}
                             className="text-primary hover:text-primary/80 text-sm font-medium mt-2"
                           >
-                            {t.setAsDefault}
+                            {t("profile.setAsDefault")}
                           </button>
                         )}
                       </div>
@@ -1011,7 +878,7 @@ export default function ProfilePage() {
                   </div>
                 ) : (
                   !showAddressForm && (
-                    <p className="text-muted-foreground text-center py-8">{t.noAddresses}</p>
+                    <p className="text-muted-foreground text-center py-8">{t("profile.noAddresses")}</p>
                   )
                 )}
               </div>
@@ -1020,14 +887,14 @@ export default function ProfilePage() {
             {/* Preferences Tab */}
             {activeTab === "preferences" && (
               <div className="card-premium p-6 space-y-6">
-                <h2 className="text-xl font-bold text-foreground">{t.settings}</h2>
+                <h2 className="text-xl font-bold text-foreground">{t("profile.settings")}</h2>
 
                 <div className="space-y-4">
                   {/* Language */}
                   <div className="flex items-center justify-between py-3 border-b border-border">
                     <div className="flex items-center gap-3">
                       <Globe className="w-5 h-5 text-muted-foreground" />
-                      <span className="font-medium">{t.language}</span>
+                      <span className="font-medium">{t("profile.language")}</span>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -1055,7 +922,7 @@ export default function ProfilePage() {
                   <div className="flex items-center justify-between py-3 border-b border-border">
                     <div className="flex items-center gap-3">
                       <Mail className="w-5 h-5 text-muted-foreground" />
-                      <span className="font-medium">{t.emailNotifications}</span>
+                      <span className="font-medium">{t("profile.emailNotifications")}</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" defaultChecked className="sr-only peer" />
@@ -1067,7 +934,7 @@ export default function ProfilePage() {
                   <div className="flex items-center justify-between py-3 border-b border-border">
                     <div className="flex items-center gap-3">
                       <Bell className="w-5 h-5 text-muted-foreground" />
-                      <span className="font-medium">{t.smsNotifications}</span>
+                      <span className="font-medium">{t("profile.smsNotifications")}</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" defaultChecked className="sr-only peer" />
@@ -1083,25 +950,25 @@ export default function ProfilePage() {
               <div className="space-y-6">
                 {/* Loyalty Summary */}
                 <div className="card-premium p-6">
-                  <h2 className="text-xl font-bold text-foreground mb-6">{t.loyaltyProgram}</h2>
+                  <h2 className="text-xl font-bold text-foreground mb-6">{t("profile.loyaltyProgram")}</h2>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                     <div className="text-center p-4 bg-primary/10 rounded-xl">
                       <div className="text-4xl mb-2">{currentTier.icon}</div>
-                      <p className="text-sm text-muted-foreground">{t.currentTier}</p>
+                      <p className="text-sm text-muted-foreground">{t("profile.currentTier")}</p>
                       <p className="font-bold text-lg text-foreground">
                         {isRTL ? currentTier.nameAr : currentTier.name}
                       </p>
                     </div>
                     <div className="text-center p-4 bg-muted rounded-xl">
                       <Star className="w-8 h-8 text-primary mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">{t.yourPoints}</p>
+                      <p className="text-sm text-muted-foreground">{t("profile.yourPoints")}</p>
                       <p className="font-bold text-2xl text-primary">{points.toLocaleString()}</p>
                     </div>
                     {nextTier && (
                       <div className="text-center p-4 bg-muted rounded-xl">
                         <div className="text-4xl mb-2">{nextTier.icon}</div>
-                        <p className="text-sm text-muted-foreground">{t.pointsToNextTier}</p>
+                        <p className="text-sm text-muted-foreground">{t("profile.pointsToNextTier")}</p>
                         <p className="font-bold text-lg text-foreground">{pointsToNextTier.toLocaleString()}</p>
                       </div>
                     )}
@@ -1127,7 +994,7 @@ export default function ProfilePage() {
 
                   {/* Referral Code */}
                   <div className="p-4 bg-muted/50 rounded-xl space-y-3">
-                    <p className="font-medium text-foreground">{t.referralCode}</p>
+                    <p className="font-medium text-foreground">{t("profile.referralCode")}</p>
                     <div className="flex gap-2">
                       <code className="flex-1 px-4 py-2 bg-background rounded-lg font-mono text-lg">
                         {referralCode}
@@ -1137,12 +1004,12 @@ export default function ProfilePage() {
                         className="btn-primary flex items-center gap-2"
                       >
                         {referralCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        {referralCopied ? t.copied : t.copyCode}
+                        {referralCopied ? t("profile.copied") : t("profile.copyCode")}
                       </button>
                     </div>
 
                     <div className="pt-3 border-t border-border">
-                      <p className="text-sm text-muted-foreground mb-2">{t.applyReferral}</p>
+                      <p className="text-sm text-muted-foreground mb-2">{t("profile.applyReferral")}</p>
                       <div className="flex gap-2">
                         <input
                           type="text"
@@ -1152,7 +1019,7 @@ export default function ProfilePage() {
                           className="flex-1 px-3 py-2 border border-border rounded-lg focus:border-primary outline-none font-mono"
                         />
                         <button onClick={handleApplyReferral} className="btn-outline">
-                          {t.apply}
+                          {t("profile.apply")}
                         </button>
                       </div>
                       {referralMessage && (
@@ -1166,9 +1033,9 @@ export default function ProfilePage() {
 
                 {/* Recent Activity */}
                 <div className="card-premium p-6">
-                  <h3 className="font-bold text-foreground mb-4">{t.recentActivity}</h3>
+                  <h3 className="font-bold text-foreground mb-4">{t("profile.recentActivity")}</h3>
                   {transactions.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">{t.noActivity}</p>
+                    <p className="text-muted-foreground text-center py-4">{t("profile.noActivity")}</p>
                   ) : (
                     <div className="space-y-3">
                       {transactions.slice(0, 5).map((tx) => (
@@ -1196,14 +1063,14 @@ export default function ProfilePage() {
             {/* Wishlist Tab */}
             {activeTab === "wishlist" && (
               <div className="card-premium p-6">
-                <h2 className="text-xl font-bold text-foreground mb-6">{t.wishlist}</h2>
+                <h2 className="text-xl font-bold text-foreground mb-6">{t("profile.wishlist")}</h2>
 
                 {wishlistItems.length === 0 ? (
                   <div className="text-center py-8">
                     <Heart className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">{t.wishlistEmpty}</p>
+                    <p className="text-muted-foreground">{t("profile.wishlistEmpty")}</p>
                     <button onClick={() => navigate("/products")} className="btn-primary mt-4">
-                      {language === "ar" ? "تصفح المنتجات" : "Browse Products"}
+                      {t("profile.browseProducts")}
                     </button>
                   </div>
                 ) : (
@@ -1229,13 +1096,13 @@ export default function ProfilePage() {
                               onClick={() => navigate(`/products/${item.productId}`)}
                               className="text-xs text-primary hover:underline"
                             >
-                              {language === "ar" ? "عرض" : "View"}
+                              {t("profile.view")}
                             </button>
                             <button
                               onClick={() => removeFromWishlist(item.productId)}
                               className="text-xs text-destructive hover:underline"
                             >
-                              {t.remove}
+                              {t("profile.remove")}
                             </button>
                           </div>
                         </div>

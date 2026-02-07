@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import {
@@ -25,14 +26,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-const EMIRATES = [
-  "Dubai",
-  "Abu Dhabi",
-  "Sharjah",
-  "Ajman",
-  "Ras Al Khaimah",
-  "Fujairah",
-  "Umm Al Quwain",
+const EMIRATES_KEYS = [
+  { value: "Dubai", key: "register.dubai" },
+  { value: "Abu Dhabi", key: "register.abuDhabi" },
+  { value: "Sharjah", key: "register.sharjah" },
+  { value: "Ajman", key: "register.ajman" },
+  { value: "Ras Al Khaimah", key: "register.rasAlKhaimah" },
+  { value: "Fujairah", key: "register.fujairah" },
+  { value: "Umm Al Quwain", key: "register.ummAlQuwain" },
 ];
 
 interface FormFieldProps {
@@ -82,6 +83,7 @@ const FormField: React.FC<FormFieldProps> = ({
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { register } = useAuth();
+  const { t, language, isRTL } = useLanguage();
 
   const [formData, setFormData] = useState({
     username: "",
@@ -206,7 +208,7 @@ export default function RegisterPage() {
 
   const autoDetectLocation = () => {
     if (!navigator.geolocation) {
-      setApiError("Geolocation is not supported by your browser");
+      setApiError(t("register.locationNotSupported"));
       return;
     }
 
@@ -241,50 +243,49 @@ export default function RegisterPage() {
     const newErrors: Record<string, string> = {};
 
     if (!formData.username || formData.username.length < 3) {
-      newErrors.username = "Username must be at least 3 characters";
+      newErrors.username = t("register.validation.usernameMinLength");
     } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-      newErrors.username = "Username can only contain letters, numbers, and underscores";
+      newErrors.username = t("register.validation.usernameRequired");
     }
 
     if (!isValidName(formData.firstName)) {
-      newErrors.firstName = "First name must be at least 2 characters";
+      newErrors.firstName = t("register.validation.firstNameRequired");
     }
 
     if (!isValidName(formData.familyName)) {
-      newErrors.familyName = "Family name must be at least 2 characters";
+      newErrors.familyName = t("register.validation.familyNameRequired");
     }
 
     if (!isValidEmail(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
+      newErrors.email = t("register.validation.emailInvalid");
     }
 
     if (!isValidUAEPhone(formData.mobile)) {
-      newErrors.mobile = "Please enter a valid UAE phone number";
+      newErrors.mobile = t("register.validation.phoneInvalid");
     }
 
     if (!isStrongPassword(formData.password)) {
-      newErrors.password =
-        "Password must be at least 8 characters with 1 uppercase and 1 special character";
+      newErrors.password = t("register.validation.passwordWeak");
     }
 
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
+      newErrors.confirmPassword = t("register.validation.passwordMismatch");
     }
 
     if (!formData.emirate) {
-      newErrors.emirate = "Please select an emirate";
+      newErrors.emirate = t("register.validation.emirateRequired");
     }
 
     if (!formData.area || formData.area.length < 2) {
-      newErrors.area = "Please enter your area";
+      newErrors.area = t("register.validation.areaRequired");
     }
 
     if (!formData.street || formData.street.length < 2) {
-      newErrors.street = "Please enter your street";
+      newErrors.street = t("register.validation.streetRequired");
     }
 
     if (!formData.building || formData.building.length < 1) {
-      newErrors.building = "Please enter your building name/number";
+      newErrors.building = t("register.validation.buildingRequired");
     }
 
     setErrors(newErrors);
@@ -380,16 +381,16 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col" dir={isRTL ? "rtl" : "ltr"}>
       <Header showBasketIcon={false} />
 
       <main className="flex-1 py-6 sm:py-12 px-3 sm:px-4">
         <div className="max-w-2xl mx-auto">
           {/* Page Title */}
           <div className="text-center mb-6 sm:mb-8">
-            <h1 className="text-2xl sm:text-4xl font-bold text-foreground">Create Account</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold text-foreground">{t("register.title")}</h1>
             <p className="text-muted-foreground mt-2 text-sm sm:text-base">
-              Join us and start shopping for premium quality meats
+              {t("register.subtitle")}
             </p>
           </div>
 
@@ -405,28 +406,30 @@ export default function RegisterPage() {
             {/* Personal Information */}
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-4">
-                Personal Information
+                {t("register.personalInfo")}
               </h3>
               <div className="space-y-4">
                 <FormField 
-                  label="Username" 
+                  label={t("register.username")} 
                   name="username"
-                  placeholder="Choose a unique username"
+                  placeholder={t("register.usernamePlaceholder")}
                   value={formData.username}
                   error={errors.username}
                   onChange={handleChange}
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField 
-                    label="First Name" 
+                    label={t("register.firstName")} 
                     name="firstName"
+                    placeholder={t("register.firstNamePlaceholder")}
                     value={formData.firstName}
                     error={errors.firstName}
                     onChange={handleChange}
                   />
                   <FormField 
-                    label="Family Name" 
+                    label={t("register.familyName")} 
                     name="familyName"
+                    placeholder={t("register.familyNamePlaceholder")}
                     value={formData.familyName}
                     error={errors.familyName}
                     onChange={handleChange}
@@ -438,23 +441,23 @@ export default function RegisterPage() {
             {/* Contact Information */}
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-4">
-                Contact Information
+                {t("register.contactInfo")}
               </h3>
               <div className="space-y-4">
                 <FormField
-                  label="Email"
+                  label={t("register.email")}
                   name="email"
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder={t("register.emailPlaceholder")}
                   value={formData.email}
                   error={errors.email}
                   onChange={handleChange}
                 />
                 <FormField
-                  label="Mobile Number"
+                  label={t("register.phone")}
                   name="mobile"
                   type="tel"
-                  placeholder="+971 50 123 4567"
+                  placeholder={t("register.phonePlaceholder")}
                   value={formData.mobile}
                   error={errors.mobile}
                   onChange={handleChange}
@@ -465,20 +468,20 @@ export default function RegisterPage() {
             {/* Location Information */}
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-4">
-                Delivery Address
+                {t("checkout.deliveryAddress")}
               </h3>
               <div className="space-y-4">
                 {/* Map for location */}
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-2">
-                    Your Location
+                    {t("register.yourLocation")}
                     {isDetectingLocation && (
                       <span className="ml-2 text-muted-foreground font-normal">
-                        (Detecting...)
+                        ({t("register.detecting")})
                       </span>
                     )}
                     {locationDetected && (
-                      <span className="ml-2 text-green-600 font-normal">✓ Detected</span>
+                      <span className="ml-2 text-green-600 font-normal">{t("register.detected")}</span>
                     )}
                   </label>
                   {locationDetected && formData.latitude && formData.longitude ? (
@@ -491,31 +494,31 @@ export default function RegisterPage() {
                       {isDetectingLocation ? (
                         <div className="text-center">
                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                          <p className="text-sm text-muted-foreground">Detecting your location...</p>
+                          <p className="text-sm text-muted-foreground">{t("register.detecting")}...</p>
                         </div>
                       ) : (
                         <div className="text-center">
-                          <p className="text-sm text-muted-foreground mb-2">Location not detected</p>
+                          <p className="text-sm text-muted-foreground mb-2">{t("register.locationNotDetected")}</p>
                           <button
                             type="button"
                             onClick={autoDetectLocation}
                             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
                           >
-                            📍 Detect My Location
+                            {t("register.detectLocation")}
                           </button>
                         </div>
                       )}
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
-                    Click on the map or drag the marker to adjust your exact location
+                    {t("register.clickMapOrDrag")}
                   </p>
                 </div>
 
                 {/* Emirate */}
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-2">
-                    Emirates<span className="text-destructive">*</span>
+                    {t("register.emirate")}<span className="text-destructive">*</span>
                   </label>
                   <select
                     name="emirate"
@@ -527,10 +530,10 @@ export default function RegisterPage() {
                         : "border-input bg-white dark:bg-gray-800 focus:border-primary"
                     } text-foreground focus:outline-none`}
                   >
-                    <option value="">Select an emirate</option>
-                    {EMIRATES.map((emirate) => (
-                      <option key={emirate} value={emirate}>
-                        {emirate}
+                    <option value="">{t("register.selectEmirate")}</option>
+                    {EMIRATES_KEYS.map((emirate) => (
+                      <option key={emirate.value} value={emirate.value}>
+                        {t(emirate.key)}
                       </option>
                     ))}
                   </select>
@@ -541,9 +544,9 @@ export default function RegisterPage() {
 
                 {/* Area */}
                 <FormField
-                  label="Area / Neighborhood"
+                  label={t("register.area")}
                   name="area"
-                  placeholder="e.g., Al Barsha, Jumeirah, Downtown"
+                  placeholder={t("register.areaPlaceholder")}
                   value={formData.area}
                   error={errors.area}
                   onChange={handleChange}
@@ -551,9 +554,9 @@ export default function RegisterPage() {
 
                 {/* Street */}
                 <FormField
-                  label="Street"
+                  label={t("register.street")}
                   name="street"
-                  placeholder="Street name"
+                  placeholder={t("register.streetPlaceholder")}
                   value={formData.street}
                   error={errors.street}
                   onChange={handleChange}
@@ -561,9 +564,9 @@ export default function RegisterPage() {
 
                 {/* Building */}
                 <FormField
-                  label="Building Name / Number"
+                  label={t("register.building")}
                   name="building"
-                  placeholder="Building name or number"
+                  placeholder={t("register.buildingPlaceholder")}
                   value={formData.building}
                   error={errors.building}
                   onChange={handleChange}
@@ -572,18 +575,18 @@ export default function RegisterPage() {
                 {/* Floor and Apartment */}
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
-                    label="Floor"
+                    label={t("register.floor")}
                     name="floor"
-                    placeholder="Optional"
+                    placeholder={t("register.floorPlaceholder")}
                     value={formData.floor}
                     error={errors.floor}
                     onChange={handleChange}
                     required={false}
                   />
                   <FormField
-                    label="Apartment"
+                    label={t("register.apartment")}
                     name="apartment"
-                    placeholder="Optional"
+                    placeholder={t("register.apartmentPlaceholder")}
                     value={formData.apartment}
                     error={errors.apartment}
                     onChange={handleChange}
@@ -596,12 +599,12 @@ export default function RegisterPage() {
             {/* Password */}
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-4">
-                Security
+                {t("register.security")}
               </h3>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-2">
-                    Password<span className="text-destructive">*</span>
+                    {t("register.password")}<span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -609,7 +612,7 @@ export default function RegisterPage() {
                       name="password"
                       value={formData.password}
                       onChange={handleChange}
-                      placeholder="Min 8 chars, 1 uppercase, 1 special"
+                      placeholder={t("register.passwordPlaceholder")}
                       className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${
                         errors.password
                           ? "border-destructive bg-destructive/5"
@@ -636,7 +639,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-2">
-                    Confirm Password<span className="text-destructive">*</span>
+                    {t("register.confirmPassword")}<span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -644,7 +647,7 @@ export default function RegisterPage() {
                       name="confirmPassword"
                       value={formData.confirmPassword}
                       onChange={handleChange}
-                      placeholder="Confirm your password"
+                      placeholder={t("register.confirmPasswordPlaceholder")}
                       className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${
                         errors.confirmPassword
                           ? "border-destructive bg-destructive/5"
@@ -677,14 +680,14 @@ export default function RegisterPage() {
               disabled={isLoading}
               className="w-full btn-primary py-3 rounded-lg font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {isLoading ? "Creating Account..." : "Create Account"}
+              {isLoading ? t("register.creatingAccount") : t("register.createAccount")}
             </button>
 
             {/* Login Link */}
             <p className="text-center text-muted-foreground">
-              Already have an account?{" "}
+              {t("register.alreadyHaveAccount")}{" "}
               <Link to="/" className="text-primary font-semibold hover:text-primary/80">
-                Login here
+                {t("register.loginHere")}
               </Link>
             </p>
           </form>

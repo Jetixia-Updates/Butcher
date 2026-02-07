@@ -4,6 +4,7 @@ import { PriceDisplay } from "@/components/CurrencySymbol";
 import { BasketItem } from "@/context/BasketContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useCategories } from "@/context/CategoryContext";
+import { useDraggable } from "@/hooks/useDraggable";
 import { X, Plus, Minus, ShoppingCart, Check, Star, Eye, ExternalLink } from "lucide-react";
 
 // Product options types
@@ -82,12 +83,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     if (weight >= 1) {
       // Convert to Kg
       const kgValue = weight.toFixed(3);
-      const kgUnit = language === "ar" ? "كجم" : "Kg";
+      const kgUnit = t("product.kg");
       return `${kgValue} ${kgUnit}`;
     } else {
       // Display as grams (multiply by 1000 for display)
       const gramsValue = Math.round(weight * 1000);
-      const grUnit = language === "ar" ? "جرام" : "gr";
+      const grUnit = t("product.gr");
       return `${gramsValue} ${grUnit}`;
     }
   };
@@ -97,8 +98,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const productDescription = language === "ar" && product.descriptionAr ? product.descriptionAr : product.description;
 
   // Unit labels - gr for weight button, Kg for price
-  const weightUnit = language === "ar" ? "جرام" : "gr";
-  const priceUnit = language === "ar" ? "كجم" : "Kg";
+  const weightUnit = t("product.gr");
+  const priceUnit = t("product.kg");
 
   const handleAddToCartClick = () => {
     // Allow visitors to add to cart - they'll be prompted at checkout
@@ -122,14 +123,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
     // Build notes from selected options
     const boneLabels = selectedOptions.boneType.map(id => {
-      const opt = BONE_OPTIONS.find(o => o.id === id);
-      return language === "ar" ? opt?.labelAr : opt?.label;
-    }).filter(Boolean);
+      return t(`product.${id === "bone" ? "bone" : "boneless"}`);
+    });
 
     const cutLabels = selectedOptions.cutType.map(id => {
-      const opt = CUT_OPTIONS.find(o => o.id === id);
-      return language === "ar" ? opt?.labelAr : opt?.label;
-    }).filter(Boolean);
+      return t(`product.${id === "curry-cut" ? "curryCut" : id}`);
+    });
 
     const notes = [
       boneLabels.length > 0 ? boneLabels.join(", ") : null,
@@ -211,7 +210,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${config.color}`}
                   >
                     <span>{config.icon}</span>
-                    <span className="hidden sm:inline">{language === "ar" ? config.labelAr : config.label}</span>
+                    <span className="hidden sm:inline">{t(`product.${badge}`)}</span>
                   </span>
                 );
               })}
@@ -332,7 +331,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
       {/* Product Options Modal */}
       {showOptionsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-background rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="p-4 border-b border-border bg-primary/5">
@@ -371,7 +370,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               <div>
                 <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                   <span className="text-lg">🦴</span>
-                  {language === "ar" ? "تفاصيل المنتج" : "Product Details"}
+                  {t("product.details")}
                 </h4>
                 <div className="space-y-2">
                   {BONE_OPTIONS.map((option) => (
@@ -389,7 +388,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                         className="w-5 h-5 text-primary border-border rounded focus:ring-primary"
                       />
                       <span className="font-medium text-foreground">
-                        {language === "ar" ? option.labelAr : option.label}
+                        {t(`product.${option.id === "bone" ? "bone" : "boneless"}`)}
                       </span>
                     </label>
                   ))}
@@ -400,7 +399,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               <div>
                 <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                   <span className="text-lg">🔪</span>
-                  {language === "ar" ? "نوع القطع" : "Cut Type"}
+                  {t("product.cutType")}
                 </h4>
                 <div className="space-y-2">
                   {CUT_OPTIONS.map((option) => (
@@ -418,7 +417,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                         className="w-5 h-5 text-primary border-border rounded focus:ring-primary"
                       />
                       <span className="font-medium text-foreground">
-                        {language === "ar" ? option.labelAr : option.label}
+                        {t(`product.${option.id === "curry-cut" ? "curryCut" : option.id}`)}
                       </span>
                     </label>
                   ))}
@@ -430,16 +429,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 <div className="p-3 bg-muted/50 rounded-lg">
                   <p className="text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">
-                      {language === "ar" ? "الخيارات المحددة:" : "Selected:"}
+                      {t("product.selected")}
                     </span>{" "}
                     {[
                       ...selectedOptions.boneType.map(id => {
-                        const opt = BONE_OPTIONS.find(o => o.id === id);
-                        return language === "ar" ? opt?.labelAr : opt?.label;
+                        return t(`product.${id === "bone" ? "bone" : "boneless"}`);
                       }),
                       ...selectedOptions.cutType.map(id => {
-                        const opt = CUT_OPTIONS.find(o => o.id === id);
-                        return language === "ar" ? opt?.labelAr : opt?.label;
+                        return t(`product.${id === "curry-cut" ? "curryCut" : id}`);
                       }),
                     ].join(", ")}
                   </p>
@@ -453,7 +450,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 onClick={handleCloseModal}
                 className="flex-1 px-4 py-3 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors"
               >
-                {language === "ar" ? "إلغاء" : "Cancel"}
+                {t("product.cancel")}
               </button>
               <button
                 onClick={handleConfirmAddToBasket}
@@ -465,14 +462,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    {language === "ar" ? "تمت الإضافة!" : "Added!"}
+                    {t("product.added")}
                   </>
                 ) : (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 8m10-8l2 8m-6 8a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
                     </svg>
-                    {language === "ar" ? "أضف للسلة" : "Add to Cart"}
+                    {t("product.addToCart")}
                   </>
                 )}
               </button>
