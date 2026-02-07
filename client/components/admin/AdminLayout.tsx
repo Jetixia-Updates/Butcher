@@ -250,11 +250,11 @@ export function AdminLayout({
   };
 
   return (
-    <div className="h-screen bg-slate-100 flex overflow-hidden">
+    <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex overflow-hidden">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -262,31 +262,31 @@ export function AdminLayout({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transform transition-transform duration-200 ease-in-out lg:transform-none flex flex-col",
+          "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-slate-950 via-[#0f1629] to-slate-950 text-white transform transition-transform duration-300 ease-in-out lg:transform-none flex flex-col border-r border-white/5",
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         {/* Logo */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-700 flex-shrink-0">
+        <div className="h-16 flex items-center justify-between px-4 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <Store className="w-6 h-6" />
+            <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-700 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/20">
+              <Store className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg">{t("admin.title")}</h1>
-              <p className="text-xs text-slate-400">{t("admin.subtitle")}</p>
+              <h1 className="font-bold text-lg bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">{t("admin.title")}</h1>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest">{t("admin.subtitle")}</p>
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 hover:bg-slate-800 rounded-lg"
+            className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
+        <nav className="p-3 space-y-0.5 flex-1 overflow-y-auto scrollbar-thin">
           {tabConfig.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -298,16 +298,19 @@ export function AdminLayout({
                   setSidebarOpen(false);
                 }}
                 className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors",
+                  "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium transition-all duration-200 group relative",
                   isActive
-                    ? "bg-primary text-white"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                    ? "bg-gradient-to-r from-red-600/90 to-red-500/80 text-white shadow-lg shadow-red-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white"
                 )}
               >
-                <Icon className="w-5 h-5" />
-                {t(tab.labelKey)}
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-red-400 rounded-r-full" />
+                )}
+                <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-white" : "text-slate-500 group-hover:text-slate-300")} />
+                <span className="text-sm">{t(tab.labelKey)}</span>
                 {tab.id === "orders" && orderNotifications > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
                     {orderNotifications}
                   </span>
                 )}
@@ -317,31 +320,31 @@ export function AdminLayout({
         </nav>
 
         {/* User section */}
-        <div className="p-4 border-t border-slate-700 flex-shrink-0 mt-auto">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
-              <span className="text-lg font-bold">
+        <div className="p-4 border-t border-white/10 flex-shrink-0 mt-auto bg-white/[0.02]">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-orange-500 rounded-full flex items-center justify-center ring-2 ring-white/10">
+              <span className="text-sm font-bold text-white">
                 {user?.firstName?.[0] || "A"}
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">{user?.firstName} {user?.familyName}</p>
-              <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+              <p className="font-medium text-sm text-white truncate">{user?.firstName} {user?.familyName}</p>
+              <p className="text-[11px] text-slate-500 truncate">{user?.email}</p>
             </div>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => navigate("/products")}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs transition-all duration-200"
             >
-              <Store className="w-4 h-4" />
+              <Store className="w-3.5 h-3.5" />
               {t("admin.viewStore")}
             </button>
             <button
               onClick={handleLogout}
-              className="flex items-center justify-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm transition-colors"
+              className="flex items-center justify-center gap-2 px-3 py-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/20 text-red-400 rounded-lg text-xs transition-all duration-200"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -350,29 +353,29 @@ export function AdminLayout({
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Top header */}
-        <header className="h-14 sm:h-16 bg-white shadow-sm flex items-center justify-between px-2 sm:px-4 lg:px-6">
+        <header className="h-14 sm:h-16 bg-slate-900/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-2 sm:px-4 lg:px-6">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg flex-shrink-0"
+              className="lg:hidden p-1.5 sm:p-2 hover:bg-white/10 rounded-lg flex-shrink-0 text-white"
             >
               <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
-            <h2 className="text-sm sm:text-xl font-bold text-slate-900 truncate">
+            <h2 className="text-sm sm:text-xl font-bold text-white truncate">
               {activeTab === "dashboard" ? t("admin.dashboardOverview") : t(`admin.${activeTab}`)}
             </h2>
           </div>
 
           <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
             {/* Language Switcher */}
-            <div className="flex gap-0.5 items-center bg-slate-100 border border-slate-200 rounded-md p-0.5 sm:p-1">
+            <div className="flex gap-0.5 items-center bg-white/5 border border-white/10 rounded-lg p-0.5 sm:p-1">
               <button
                 onClick={() => setLanguage("en")}
                 className={cn(
-                  "px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium rounded transition-colors",
+                  "px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200",
                   language === "en"
-                    ? "bg-primary text-white"
-                    : "text-slate-600 hover:bg-slate-200"
+                    ? "bg-red-600 text-white shadow-lg shadow-red-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/10"
                 )}
               >
                 E
@@ -380,10 +383,10 @@ export function AdminLayout({
               <button
                 onClick={() => setLanguage("ar")}
                 className={cn(
-                  "px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium rounded transition-colors",
+                  "px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200",
                   language === "ar"
-                    ? "bg-primary text-white"
-                    : "text-slate-600 hover:bg-slate-200"
+                    ? "bg-red-600 text-white shadow-lg shadow-red-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/10"
                 )}
               >
                 ع
@@ -397,11 +400,11 @@ export function AdminLayout({
                   setChatOpen(!chatOpen);
                   setNotificationOpen(false);
                 }}
-                className="relative p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                className="relative p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
-                <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
+                <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                 {chatTotalUnread > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-green-500 text-white text-xs font-bold rounded-full px-1">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-emerald-500 text-white text-xs font-bold rounded-full px-1 shadow-lg shadow-emerald-500/30">
                     {chatTotalUnread > 99 ? '99+' : chatTotalUnread}
                   </span>
                 )}
@@ -675,11 +678,11 @@ export function AdminLayout({
                   setNotificationOpen(!notificationOpen);
                   setChatOpen(false);
                 }}
-                className="relative p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                className="relative p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
-                <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1 shadow-lg shadow-red-500/30">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
@@ -796,7 +799,7 @@ export function AdminLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden overflow-y-auto pb-20">{children}</main>
+        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden overflow-y-auto pb-20 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">{children}</main>
       </div>
 
       {/* Invoice Modal */}

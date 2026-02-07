@@ -45,19 +45,19 @@ function StatCard({ title, value, change, changeText, icon: Icon, iconColor, ico
   return (
     <div
       className={cn(
-        "bg-white rounded-xl shadow-sm p-4 sm:p-6",
-        onClick && "cursor-pointer hover:shadow-md transition-shadow"
+        "bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4 sm:p-6 transition-all duration-300",
+        onClick && "cursor-pointer hover:bg-slate-800/80 hover:border-white/10 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5"
       )}
       onClick={onClick}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-slate-500 text-xs sm:text-sm truncate">{title}</p>
-          <p className="text-lg sm:text-2xl font-bold text-slate-900 mt-1 truncate">{value}</p>
+          <p className="text-slate-400 text-xs sm:text-sm truncate">{title}</p>
+          <p className="text-lg sm:text-2xl font-bold text-white mt-1 truncate">{value}</p>
           {change !== undefined && (
             <div className={cn(
               "flex items-center gap-1 mt-2 text-xs sm:text-sm font-medium",
-              change >= 0 ? "text-green-600" : "text-red-600"
+              change >= 0 ? "text-emerald-400" : "text-red-400"
             )}>
               {change >= 0 ? (
                 <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
@@ -73,7 +73,7 @@ function StatCard({ title, value, change, changeText, icon: Icon, iconColor, ico
         </div>
       </div>
       {onClick && (
-        <div className={cn("mt-3 pt-3 border-t border-slate-100 flex items-center text-xs sm:text-sm text-primary font-medium", isRTL ? "justify-start" : "justify-end")}>
+        <div className={cn("mt-3 pt-3 border-t border-white/5 flex items-center text-xs sm:text-sm text-red-400 font-medium", isRTL ? "justify-start" : "justify-end")}>
           {viewDetailsText} {isRTL ? <ArrowLeft className="w-4 h-4 me-1" /> : <ArrowRight className="w-4 h-4 ms-1" />}
         </div>
       )}
@@ -152,7 +152,7 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-red-500/20 border-t-red-500"></div>
       </div>
     );
   }
@@ -160,10 +160,10 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
   if (!stats) {
     return (
       <div className="text-center py-12">
-        <p className="text-slate-500">{t.failedToLoad}</p>
+        <p className="text-slate-400">{t.failedToLoad}</p>
         <button
           onClick={() => fetchData()}
-          className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+          className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors"
         >
           {t.retry}
         </button>
@@ -176,13 +176,13 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">{t.todaysOverview}</h3>
-          <p className="text-sm text-slate-500">{t.realtimeMetrics}</p>
+          <h3 className="text-lg font-semibold text-white">{t.todaysOverview}</h3>
+          <p className="text-sm text-slate-400">{t.realtimeMetrics}</p>
         </div>
         <button
           onClick={() => fetchData(true)}
           disabled={refreshing}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 disabled:opacity-50 text-slate-300 transition-all duration-200"
         >
           <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
           {t.refresh}
@@ -202,8 +202,8 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
           change={stats.revenueChange.daily}
           changeText={t.fromYesterday}
           icon={DollarSign}
-          iconColor="text-green-600"
-          iconBg="bg-green-100"
+          iconColor="text-emerald-400"
+          iconBg="bg-emerald-500/10 ring-1 ring-emerald-500/20"
           onClick={() => onNavigate?.("reports")}
           viewDetailsText={t.viewDetails}
           isRTL={isRTL}
@@ -214,8 +214,8 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
           change={stats.ordersChange.daily}
           changeText={t.fromYesterday}
           icon={ShoppingCart}
-          iconColor="text-blue-600"
-          iconBg="bg-blue-100"
+          iconColor="text-blue-400"
+          iconBg="bg-blue-500/10 ring-1 ring-blue-500/20"
           onClick={() => onNavigate?.("orders")}
           viewDetailsText={t.viewDetails}
           isRTL={isRTL}
@@ -224,8 +224,8 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
           title={t.totalCustomers}
           value={stats.totalCustomers}
           icon={Users}
-          iconColor="text-purple-600"
-          iconBg="bg-purple-100"
+          iconColor="text-violet-400"
+          iconBg="bg-violet-500/10 ring-1 ring-violet-500/20"
           onClick={() => onNavigate?.("users")}
           viewDetailsText={t.viewDetails}
           isRTL={isRTL}
@@ -234,8 +234,8 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
           title={t.pendingOrders}
           value={stats.pendingOrders}
           icon={Clock}
-          iconColor="text-orange-600"
-          iconBg="bg-orange-100"
+          iconColor="text-amber-400"
+          iconBg="bg-amber-500/10 ring-1 ring-amber-500/20"
           onClick={() => onNavigate?.("orders")}
           viewDetailsText={t.viewDetails}
           isRTL={isRTL}
@@ -244,23 +244,23 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
 
       {/* Secondary Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6">
-          <h4 className="font-semibold text-slate-900 mb-4 text-sm sm:text-base">{t.weeklyPerformance}</h4>
+        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4 sm:p-6">
+          <h4 className="font-semibold text-white mb-4 text-sm sm:text-base">{t.weeklyPerformance}</h4>
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-slate-500">{t.revenue}</span>
-              <span className="font-semibold inline-flex items-center gap-1">
+              <span className="text-slate-400">{t.revenue}</span>
+              <span className="font-semibold text-white inline-flex items-center gap-1">
                 <CurrencySymbol size="sm" />
                 {formatCurrency(stats.weekRevenue)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">{t.orders}</span>
-              <span className="font-semibold">{stats.weekOrders}</span>
+              <span className="text-slate-400">{t.orders}</span>
+              <span className="font-semibold text-white">{stats.weekOrders}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-500">{t.avgOrderValue}</span>
-              <span className="font-semibold inline-flex items-center gap-1">
+              <span className="text-slate-400">{t.avgOrderValue}</span>
+              <span className="font-semibold text-white inline-flex items-center gap-1">
                 <CurrencySymbol size="sm" />
                 {formatCurrency(stats.averageOrderValue)}
               </span>
@@ -268,32 +268,32 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6">
-          <h4 className="font-semibold text-slate-900 mb-4 text-sm sm:text-base">{t.monthlyPerformance}</h4>
+        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4 sm:p-6">
+          <h4 className="font-semibold text-white mb-4 text-sm sm:text-base">{t.monthlyPerformance}</h4>
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-slate-500">{t.revenue}</span>
-              <span className="font-semibold inline-flex items-center gap-1">
+              <span className="text-slate-400">{t.revenue}</span>
+              <span className="font-semibold text-white inline-flex items-center gap-1">
                 <CurrencySymbol size="sm" />
                 {formatCurrency(stats.monthRevenue)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">{t.orders}</span>
-              <span className="font-semibold">{stats.monthOrders}</span>
+              <span className="text-slate-400">{t.orders}</span>
+              <span className="font-semibold text-white">{stats.monthOrders}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">{t.newCustomers}</span>
-              <span className="font-semibold">{stats.newCustomers}</span>
+              <span className="text-slate-400">{t.newCustomers}</span>
+              <span className="font-semibold text-white">{stats.newCustomers}</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6">
+        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold text-slate-900 text-sm sm:text-base">{t.lowStockAlerts}</h4>
+            <h4 className="font-semibold text-white text-sm sm:text-base">{t.lowStockAlerts}</h4>
             {stats.lowStockCount > 0 && (
-              <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-full">
+              <span className="bg-red-500/20 text-red-400 text-xs font-bold px-2 py-1 rounded-full ring-1 ring-red-500/30">
                 {stats.lowStockCount}
               </span>
             )}
@@ -304,15 +304,15 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
                 <div
                   key={item.productId}
                   onClick={() => onNavigate?.("stock")}
-                  className="flex items-center justify-between p-2 bg-red-50 rounded-lg cursor-pointer hover:bg-red-100 transition-colors"
+                  className="flex items-center justify-between p-2 bg-red-500/5 border border-red-500/10 rounded-lg cursor-pointer hover:bg-red-500/10 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-500" />
-                    <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">
+                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                    <span className="text-sm font-medium text-slate-300 truncate max-w-[120px]">
                       {item.productName}
                     </span>
                   </div>
-                  <span className="text-sm text-red-600 font-semibold">
+                  <span className="text-sm text-red-400 font-semibold">
                     {item.currentQuantity} {t.left}
                   </span>
                 </div>
@@ -320,7 +320,7 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
               {stats.lowStockItems.length > 3 && (
                 <button
                   onClick={() => onNavigate?.("stock")}
-                  className="w-full text-xs text-primary font-medium text-center mt-2 hover:underline"
+                  className="w-full text-xs text-red-400 font-medium text-center mt-2 hover:underline"
                 >
                   {t.viewAllAlerts} {stats.lowStockItems.length} {t.alerts} →
                 </button>
@@ -335,19 +335,19 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
       </div>
 
       {/* Recent Orders */}
-      <div className="bg-white rounded-xl shadow-sm">
-        <div className="p-4 sm:p-6 border-b border-slate-200 flex items-center justify-between">
-          <h4 className="font-semibold text-slate-900 text-sm sm:text-base">{t.recentOrders}</h4>
+      <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-white/5 flex items-center justify-between">
+          <h4 className="font-semibold text-white text-sm sm:text-base">{t.recentOrders}</h4>
           <button
             onClick={() => onNavigate?.("orders")}
-            className="text-sm text-primary font-medium hover:underline flex items-center gap-1"
+            className="text-sm text-red-400 font-medium hover:text-red-300 flex items-center gap-1 transition-colors"
           >
             {t.viewAll} {isRTL ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
           </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-50">
+            <thead className="bg-slate-900/50">
               <tr>
                 <th className={cn("px-3 sm:px-6 py-3 text-xs font-semibold text-slate-500 uppercase whitespace-nowrap", isRTL ? "text-right" : "text-left")}>
                   {t.order}
@@ -372,24 +372,24 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-white/5">
               {stats.recentOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-slate-50">
+                <tr key={order.id} className="hover:bg-white/[0.02] transition-colors">
                   <td className="px-3 sm:px-6 py-3 sm:py-4">
                     <button
                       onClick={() => onNavigate?.("orders")}
-                      className="font-mono text-xs sm:text-sm font-medium text-blue-600 hover:underline"
+                      className="font-mono text-xs sm:text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
                     >
                       {order.orderNumber}
                     </button>
                   </td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-slate-700 hidden sm:table-cell">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-slate-300 hidden sm:table-cell">
                     {order.customerName}
                   </td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-slate-500 hidden md:table-cell">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-slate-400 hidden md:table-cell">
                     {order.itemCount} {t.itemsCount}
                   </td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-slate-900">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-white">
                     <span className="inline-flex items-center gap-1">
                       <CurrencySymbol size="sm" />
                       {formatCurrency(order.total)}
@@ -404,7 +404,7 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
                   <td className={cn("px-3 sm:px-6 py-3 sm:py-4", isRTL ? "text-left" : "text-right")}>
                     <button
                       onClick={() => onNavigate?.("orders")}
-                      className="p-2 text-slate-500 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                       title={t.viewOrder}
                     >
                       <Eye className="w-4 h-4" />
@@ -422,12 +422,12 @@ export function DashboardTab({ onNavigate }: AdminTabProps) {
 
 function OrderStatusBadge({ status, isRTL }: { status: string; isRTL?: boolean }) {
   const styles: Record<string, string> = {
-    pending: "bg-yellow-100 text-yellow-700",
-    confirmed: "bg-blue-100 text-blue-700",
-    processing: "bg-purple-100 text-purple-700",
-    out_for_delivery: "bg-indigo-100 text-indigo-700",
-    delivered: "bg-green-100 text-green-700",
-    cancelled: "bg-red-100 text-red-700",
+    pending: "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20",
+    confirmed: "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20",
+    processing: "bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20",
+    out_for_delivery: "bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20",
+    delivered: "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20",
+    cancelled: "bg-red-500/10 text-red-400 ring-1 ring-red-500/20",
   };
 
   const labels: Record<string, { en: string; ar: string }> = {
@@ -444,7 +444,7 @@ function OrderStatusBadge({ status, isRTL }: { status: string; isRTL?: boolean }
   return (
     <span className={cn(
       "px-2 py-1 rounded-full text-xs font-medium",
-      styles[status] || "bg-slate-100 text-slate-700"
+      styles[status] || "bg-slate-500/10 text-slate-400 ring-1 ring-slate-500/20"
     )}>
       {isRTL ? label.ar : label.en}
     </span>
@@ -453,11 +453,11 @@ function OrderStatusBadge({ status, isRTL }: { status: string; isRTL?: boolean }
 
 function PaymentStatusBadge({ status, isRTL }: { status: string; isRTL?: boolean }) {
   const styles: Record<string, string> = {
-    pending: "bg-yellow-100 text-yellow-700",
-    authorized: "bg-blue-100 text-blue-700",
-    captured: "bg-green-100 text-green-700",
-    failed: "bg-red-100 text-red-700",
-    refunded: "bg-orange-100 text-orange-700",
+    pending: "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20",
+    authorized: "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20",
+    captured: "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20",
+    failed: "bg-red-500/10 text-red-400 ring-1 ring-red-500/20",
+    refunded: "bg-orange-500/10 text-orange-400 ring-1 ring-orange-500/20",
   };
 
   const labels: Record<string, { en: string; ar: string }> = {
@@ -473,7 +473,7 @@ function PaymentStatusBadge({ status, isRTL }: { status: string; isRTL?: boolean
   return (
     <span className={cn(
       "px-2 py-1 rounded-full text-xs font-medium",
-      styles[status] || "bg-slate-100 text-slate-700"
+      styles[status] || "bg-slate-500/10 text-slate-400 ring-1 ring-slate-500/20"
     )}>
       {isRTL ? label.ar : label.en}
     </span>
