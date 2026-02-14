@@ -99,7 +99,7 @@ export default function ProductsPage() {
       result = result.filter((p) => {
         const name = (isRTL && p.nameAr ? p.nameAr : p.name).toLowerCase();
         const desc = (isRTL && p.descriptionAr ? p.descriptionAr : p.description).toLowerCase();
-        return name.includes(query) || desc.includes(query) || p.category.toLowerCase().includes(query);
+        return name?.includes(query) || desc?.includes(query) || p.category?.toLowerCase().includes(query);
       });
     }
 

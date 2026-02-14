@@ -201,13 +201,13 @@ export default function ProfilePage() {
         
         let emirate = "";
         const city = (addr.city || addr.town || addr.state || "").toLowerCase();
-        if (city.includes("dubai")) emirate = "Dubai";
-        else if (city.includes("abu dhabi")) emirate = "Abu Dhabi";
-        else if (city.includes("sharjah")) emirate = "Sharjah";
-        else if (city.includes("ajman")) emirate = "Ajman";
-        else if (city.includes("ras al")) emirate = "Ras Al Khaimah";
-        else if (city.includes("fujairah")) emirate = "Fujairah";
-        else if (city.includes("umm al")) emirate = "Umm Al Quwain";
+        if (city?.includes("dubai")) emirate = "Dubai";
+        else if (city?.includes("abu dhabi")) emirate = "Abu Dhabi";
+        else if (city?.includes("sharjah")) emirate = "Sharjah";
+        else if (city?.includes("ajman")) emirate = "Ajman";
+        else if (city?.includes("ras al")) emirate = "Ras Al Khaimah";
+        else if (city?.includes("fujairah")) emirate = "Fujairah";
+        else if (city?.includes("umm al")) emirate = "Umm Al Quwain";
 
         setAddressForm(prev => ({
           ...prev,

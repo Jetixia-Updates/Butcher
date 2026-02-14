@@ -190,7 +190,7 @@ export function AdminLayout({
 
   // Get file icon based on type
   const getFileIcon = (type: string) => {
-    if (type.startsWith("image/")) return <Image className="w-4 h-4" />;
+    if (type?.startsWith("image/")) return <Image className="w-4 h-4" />;
     return <File className="w-4 h-4" />;
   };
 
@@ -209,7 +209,7 @@ export function AdminLayout({
 
   // Check if a notification is an invoice
   const isInvoiceNotification = (notification: Notification) => {
-    return notification.title.includes("TAX Invoice") || notification.title.includes("فاتورة ضريبية");
+    return notification.title?.includes("TAX Invoice") || notification.title?.includes("فاتورة ضريبية");
   };
 
   const handleNotificationClick = (notif: typeof notifications[0]) => {
@@ -250,11 +250,11 @@ export function AdminLayout({
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex overflow-hidden">
+    <div className="h-screen bg-slate-50 flex overflow-hidden">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -262,87 +262,101 @@ export function AdminLayout({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-slate-950 via-[#0f1629] to-slate-950 text-white transform transition-transform duration-300 ease-in-out lg:transform-none flex flex-col border-r border-white/5",
+          "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-[#faf8f5] text-slate-800 transform transition-transform duration-300 ease-in-out lg:transform-none flex flex-col border-r border-slate-200",
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         {/* Logo */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-white/10 flex-shrink-0">
+        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-200/80 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-700 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/20">
+            <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
               <Store className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">{t("admin.title")}</h1>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest">{t("admin.subtitle")}</p>
+              <h1 className="font-bold text-lg text-slate-900">{t("admin.title")}</h1>
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest">{t("admin.subtitle")}</p>
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="lg:hidden p-2 hover:bg-slate-200 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="p-3 space-y-0.5 flex-1 overflow-y-auto scrollbar-thin">
-          {tabConfig.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  onTabChange(tab.id);
-                  setSidebarOpen(false);
-                }}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium transition-all duration-200 group relative",
-                  isActive
-                    ? "bg-gradient-to-r from-red-600/90 to-red-500/80 text-white shadow-lg shadow-red-500/20"
-                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+        <nav className="p-3 space-y-1 flex-1 overflow-y-auto scrollbar-thin">
+          {(() => {
+            // Group tabs into sections
+            const sections: { labelKey?: string; tabs: typeof tabConfig }[] = [
+              { tabs: tabConfig.filter(t => ['dashboard', 'orders'].includes(t.id)) },
+              { labelKey: 'admin.catalog', tabs: tabConfig.filter(t => ['products', 'categories', 'stock', 'suppliers'].includes(t.id)) },
+              { labelKey: 'admin.people', tabs: tabConfig.filter(t => ['users', 'customers', 'delivery'].includes(t.id)) },
+              { labelKey: 'admin.analytics', tabs: tabConfig.filter(t => ['finance', 'payments', 'reports'].includes(t.id)) },
+              { tabs: tabConfig.filter(t => ['promoCodes', 'banners', 'settings'].includes(t.id)) },
+            ];
+            return sections.map((section, sIdx) => (
+              <div key={sIdx} className={sIdx > 0 ? 'mt-4' : ''}>
+                {section.labelKey && (
+                  <p className="px-4 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t(section.labelKey)}</p>
                 )}
-              >
-                {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-red-400 rounded-r-full" />
-                )}
-                <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-white" : "text-slate-500 group-hover:text-slate-300")} />
-                <span className="text-sm">{t(tab.labelKey)}</span>
-                {tab.id === "orders" && orderNotifications > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
-                    {orderNotifications}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+                {section.tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        onTabChange(tab.id);
+                        setSidebarOpen(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium transition-all duration-200 group",
+                        isActive
+                          ? "bg-slate-900 text-white shadow-sm"
+                          : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
+                      )}
+                    >
+                      <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-white" : "text-slate-400 group-hover:text-slate-600")} />
+                      <span className="text-sm">{t(tab.labelKey)}</span>
+                      {tab.id === "orders" && orderNotifications > 0 && (
+                        <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                          {orderNotifications}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ));
+          })()}
         </nav>
 
         {/* User section */}
-        <div className="p-4 border-t border-white/10 flex-shrink-0 mt-auto bg-white/[0.02]">
+        <div className="p-4 border-t border-slate-200/80 flex-shrink-0 mt-auto">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-orange-500 rounded-full flex items-center justify-center ring-2 ring-white/10">
+            <div className="w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center">
               <span className="text-sm font-bold text-white">
                 {user?.firstName?.[0] || "A"}
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm text-white truncate">{user?.firstName} {user?.familyName}</p>
-              <p className="text-[11px] text-slate-500 truncate">{user?.email}</p>
+              <p className="font-medium text-sm text-slate-900 truncate">{user?.firstName} {user?.familyName}</p>
+              <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
             </div>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => navigate("/products")}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs transition-all duration-200"
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-700 transition-all duration-200"
             >
               <Store className="w-3.5 h-3.5" />
               {t("admin.viewStore")}
             </button>
             <button
               onClick={handleLogout}
-              className="flex items-center justify-center gap-2 px-3 py-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/20 text-red-400 rounded-lg text-xs transition-all duration-200"
+              className="flex items-center justify-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-lg text-xs transition-all duration-200"
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
@@ -353,29 +367,29 @@ export function AdminLayout({
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Top header */}
-        <header className="h-14 sm:h-16 bg-slate-900/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-2 sm:px-4 lg:px-6">
+        <header className="h-14 sm:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-2 sm:px-4 lg:px-6">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-1.5 sm:p-2 hover:bg-white/10 rounded-lg flex-shrink-0 text-white"
+              className="lg:hidden p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg flex-shrink-0 text-slate-700"
             >
               <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
-            <h2 className="text-sm sm:text-xl font-bold text-white truncate">
+            <h2 className="text-sm sm:text-xl font-bold text-slate-900 truncate">
               {activeTab === "dashboard" ? t("admin.dashboardOverview") : t(`admin.${activeTab}`)}
             </h2>
           </div>
 
           <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
             {/* Language Switcher */}
-            <div className="flex gap-0.5 items-center bg-white/5 border border-white/10 rounded-lg p-0.5 sm:p-1">
+            <div className="flex gap-0.5 items-center bg-slate-100 border border-slate-200 rounded-lg p-0.5 sm:p-1">
               <button
                 onClick={() => setLanguage("en")}
                 className={cn(
                   "px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200",
                   language === "en"
-                    ? "bg-red-600 text-white shadow-lg shadow-red-500/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/10"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
                 )}
               >
                 E
@@ -385,8 +399,8 @@ export function AdminLayout({
                 className={cn(
                   "px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200",
                   language === "ar"
-                    ? "bg-red-600 text-white shadow-lg shadow-red-500/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/10"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
                 )}
               >
                 ع
@@ -400,9 +414,9 @@ export function AdminLayout({
                   setChatOpen(!chatOpen);
                   setNotificationOpen(false);
                 }}
-                className="relative p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="relative p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
+                <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
                 {chatTotalUnread > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-emerald-500 text-white text-xs font-bold rounded-full px-1 shadow-lg shadow-emerald-500/30">
                     {chatTotalUnread > 99 ? '99+' : chatTotalUnread}
@@ -524,7 +538,7 @@ export function AdminLayout({
                                     <div className={`${msg.text ? "mt-2" : ""} space-y-2`}>
                                       {msg.attachments.map((att) => (
                                         <div key={att.id}>
-                                          {att.type.startsWith("image/") ? (
+                                          {att.type?.startsWith("image/") ? (
                                             <a href={att.url} target="_blank" rel="noopener noreferrer" className="block">
                                               <img
                                                 src={att.url}
@@ -589,6 +603,49 @@ export function AdminLayout({
                                   )}
                                 >
                                   {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
+
+                                  {/* Attachments */}
+                                  {msg.attachments && msg.attachments.length > 0 && (
+                                    <div className={`${msg.text ? "mt-2" : ""} space-y-2`}>
+                                      {msg.attachments.map((att) => (
+                                        <div key={att.id}>
+                                          {att.type?.startsWith("image/") ? (
+                                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="block">
+                                              <img
+                                                src={att.url}
+                                                alt={att.name}
+                                                className="max-w-full rounded-lg max-h-40 object-cover"
+                                              />
+                                            </a>
+                                          ) : (
+                                            <a
+                                              href={att.url}
+                                              download={att.name}
+                                              className={cn(
+                                                "flex items-center gap-2 p-2 rounded-lg transition-colors",
+                                                msg.sender === 'admin'
+                                                  ? "bg-white/20 hover:bg-white/30"
+                                                  : "bg-slate-200 hover:bg-slate-300"
+                                              )}
+                                            >
+                                              {getFileIcon(att.type)}
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-medium truncate">{att.name}</p>
+                                                <p className={cn(
+                                                  "text-xs",
+                                                  msg.sender === 'admin' ? "opacity-70" : "text-slate-500"
+                                                )}>
+                                                  {formatFileSize(att.size)}
+                                                </p>
+                                              </div>
+                                              <Download className="w-4 h-4 flex-shrink-0" />
+                                            </a>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
                                   <p className={cn(
                                     "text-xs mt-1",
                                     msg.sender === 'admin' ? "text-white/70" : "text-slate-400"
@@ -611,7 +668,7 @@ export function AdminLayout({
                           <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 flex flex-wrap gap-2">
                             {adminAttachments.map((att) => (
                               <div key={att.id} className="relative group">
-                                {att.type.startsWith("image/") ? (
+                                {att.type?.startsWith("image/") ? (
                                   <img src={att.url} alt={att.name} className="w-12 h-12 rounded object-cover" />
                                 ) : (
                                   <div className="w-12 h-12 rounded bg-slate-200 flex items-center justify-center">
@@ -678,9 +735,9 @@ export function AdminLayout({
                   setNotificationOpen(!notificationOpen);
                   setChatOpen(false);
                 }}
-                className="relative p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="relative p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1 shadow-lg shadow-red-500/30">
                     {unreadCount > 99 ? '99+' : unreadCount}
@@ -799,7 +856,7 @@ export function AdminLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden overflow-y-auto pb-20 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">{children}</main>
+        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden overflow-y-auto pb-20 bg-slate-50">{children}</main>
       </div>
 
       {/* Invoice Modal */}

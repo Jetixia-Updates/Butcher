@@ -29,11 +29,13 @@ export default function PaymentCardPage() {
       navigate("/login?redirect=/checkout");
     }
   }, [isAuthLoading, isLoggedIn, navigate]);
-  
+
   // Define type for navigation state passed from Checkout
   interface CheckoutState {
     addressId?: string;
     deliveryTimeSlot?: string;
+    deliveryDate?: string;
+    deliveryTime?: string;
     promoCode?: string;
     discountAmount?: number;
     isExpressDelivery?: boolean;
@@ -41,7 +43,7 @@ export default function PaymentCardPage() {
     zoneDeliveryFee?: number;
     driverTip?: number;
   }
-  
+
   // Get all parameters from navigation state (passed from Checkout)
   const checkoutState = (location.state as CheckoutState) || {};
   const addressId = checkoutState.addressId || "";
@@ -52,14 +54,14 @@ export default function PaymentCardPage() {
   const expressDeliveryFee = checkoutState.expressDeliveryFee || 0;
   const zoneDeliveryFee = checkoutState.zoneDeliveryFee || 0;
   const driverTip = checkoutState.driverTip || 0;
-  
+
   // Calculate adjusted values for invoice (rounded to match server calculations)
   // Express delivery replaces zone delivery fee (not added to it)
   const adjustedSubtotal = Math.round((subtotal - discountAmount) * 100) / 100;
   const adjustedVat = Math.round(adjustedSubtotal * 0.05 * 100) / 100;
   const totalDeliveryFee = isExpressDelivery ? expressDeliveryFee : zoneDeliveryFee;
   const adjustedTotal = Math.round((adjustedSubtotal + adjustedVat + totalDeliveryFee + driverTip) * 100) / 100;
-  
+
   // State for delivery address
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
 
@@ -81,7 +83,7 @@ export default function PaymentCardPage() {
   React.useEffect(() => {
     const fetchAddress = async () => {
       if (!addressId || !user?.id) return;
-      
+
       try {
         const response = await deliveryApi.getAddresses(user.id);
         if (response.success && response.data) {
@@ -94,7 +96,7 @@ export default function PaymentCardPage() {
         console.error("Failed to fetch address:", err);
       }
     };
-    
+
     fetchAddress();
   }, [addressId, user?.id]);
 
@@ -286,14 +288,14 @@ export default function PaymentCardPage() {
       if (response.success && response.data) {
         // Add notification for the admin (include order ID for navigation)
         addAdminNotification(createOrderNotification(response.data.orderNumber, "new", response.data.id));
-        
+
         // Add notification for the user (current logged-in user)
         addNotification(createUserOrderNotification(response.data.orderNumber, "placed"));
-        
+
         // Generate TAX invoice using server-calculated values for accuracy
         const invoiceNumber = generateInvoiceNumber(response.data.orderNumber);
         const orderData = response.data;
-        
+
         const invoiceData: InvoiceData = {
           invoiceNumber,
           orderNumber: orderData.orderNumber,
@@ -306,9 +308,9 @@ export default function PaymentCardPage() {
           }),
           customerName: orderData.customerName || selectedAddress?.fullName || formData.cardholderName || t("payment.customer"),
           customerMobile: orderData.customerMobile || selectedAddress?.mobile || user?.mobile || "",
-          customerAddress: orderData.deliveryAddress 
+          customerAddress: orderData.deliveryAddress
             ? `${orderData.deliveryAddress.building}, ${orderData.deliveryAddress.street}, ${orderData.deliveryAddress.area}, ${orderData.deliveryAddress.emirate}`
-            : (selectedAddress 
+            : (selectedAddress
               ? `${selectedAddress.building}, ${selectedAddress.street}, ${selectedAddress.area}, ${selectedAddress.emirate}`
               : formData.billingAddress),
           items: orderData.items.map((item) => ({
@@ -325,6 +327,8 @@ export default function PaymentCardPage() {
           vatAmount: orderData.vatAmount,
           deliveryFee: orderData.deliveryFee > 0 ? orderData.deliveryFee : undefined,
           isExpressDelivery: isExpressDelivery,
+          deliveryDate: checkoutState.deliveryDate,
+          deliveryTime: checkoutState.deliveryTime,
           driverTip: driverTip > 0 ? driverTip : undefined,
           total: orderData.total,
           paymentMethod: "card",
@@ -333,7 +337,7 @@ export default function PaymentCardPage() {
 
         // Send TAX invoice notification to the user
         addNotification(createDetailedInvoiceNotification(invoiceData));
-        
+
         clearBasket();
         alert(
           `${t("payment.paymentSuccess")}\n\nOrder ID: ${response.data.orderNumber}\nInvoice: ${invoiceNumber}\n\n${t("payment.paymentSuccessDesc")}`
@@ -375,11 +379,10 @@ export default function PaymentCardPage() {
         value={formData[name as keyof typeof formData]}
         onChange={handleChange}
         placeholder={placeholder}
-        className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${
-          errors[name]
+        className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${errors[name]
             ? "border-destructive bg-destructive/5"
             : "border-input bg-white focus:border-primary"
-        } text-foreground placeholder-muted-foreground focus:outline-none`}
+          } text-foreground placeholder-muted-foreground focus:outline-none`}
       />
       {errors[name] && (
         <p className="text-destructive text-xs mt-1">{errors[name]}</p>
@@ -496,11 +499,10 @@ export default function PaymentCardPage() {
                           value={formData.cvv}
                           onChange={handleChange}
                           placeholder={t("payment.cvvPlaceholder")}
-                          className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${
-                            errors.cvv
+                          className={`w-full px-4 py-2 rounded-lg border-2 transition-colors ${errors.cvv
                               ? "border-destructive bg-destructive/5"
                               : "border-input bg-white focus:border-primary"
-                          } text-foreground placeholder-muted-foreground focus:outline-none`}
+                            } text-foreground placeholder-muted-foreground focus:outline-none`}
                         />
                         <button
                           type="button"
@@ -530,11 +532,10 @@ export default function PaymentCardPage() {
                       onChange={handleChange}
                       placeholder="Enter your billing address"
                       rows={3}
-                      className={`w-full px-4 py-2 rounded-lg border-2 transition-colors resize-none ${
-                        errors.billingAddress
+                      className={`w-full px-4 py-2 rounded-lg border-2 transition-colors resize-none ${errors.billingAddress
                           ? "border-destructive bg-destructive/5"
                           : "border-input bg-white focus:border-primary"
-                      } text-foreground placeholder-muted-foreground focus:outline-none`}
+                        } text-foreground placeholder-muted-foreground focus:outline-none`}
                     />
                     {errors.billingAddress && (
                       <p className="text-destructive text-xs mt-1">

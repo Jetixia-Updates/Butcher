@@ -92,13 +92,13 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const response = await reviewsApi.getProductReviews(productId);
       if (response.success && response.data) {
         const fetchedReviews = response.data.reviews.map(mapReview);
-        
+
         // Update reviews state
         setReviews((prev) => {
           const otherReviews = prev.filter((r) => r.productId !== productId);
           return [...otherReviews, ...fetchedReviews];
         });
-        
+
         // Update ratings cache
         setProductRatings((prev) => {
           const newMap = new Map(prev);
@@ -130,7 +130,7 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Calculate from local reviews
     const productReviews = reviews.filter((r) => r.productId === productId);
     const totalReviews = productReviews.length;
-    
+
     if (totalReviews === 0) {
       return {
         productId,
@@ -163,6 +163,7 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const response = await reviewsApi.create({
         productId: review.productId,
+        userId: review.userId,
         rating: review.rating,
         title: review.title,
         comment: review.comment,
@@ -170,7 +171,7 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
         images: review.images,
         isVerifiedPurchase: review.isVerifiedPurchase,
       });
-      
+
       if (response.success && response.data) {
         const newReview = mapReview(response.data);
         setReviews((prev) => [newReview, ...prev]);
@@ -211,7 +212,7 @@ export const ReviewsProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const deleteReview = useCallback(async (reviewId: string) => {
     const review = reviews.find((r) => r.id === reviewId);
-    
+
     try {
       await reviewsApi.delete(reviewId);
       setReviews((prev) => prev.filter((r) => r.id !== reviewId));

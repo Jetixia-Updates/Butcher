@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { 
-  Package, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Package,
+  Clock,
+  CheckCircle,
+  XCircle,
   Truck,
-  ChevronRight,
   ChevronDown,
   Download,
   RotateCcw,
   Search,
   Filter,
   MapPin,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from "lucide-react";
 import { useOrders, CustomerOrder } from "@/context/OrdersContext";
 import { useBasket } from "@/context/BasketContext";
@@ -21,6 +21,17 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { PriceDisplay } from "@/components/CurrencySymbol";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function OrdersPage() {
   const navigate = useNavigate();
@@ -33,6 +44,9 @@ export default function OrdersPage() {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [orderToCancel, setOrderToCancel] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthLoading && !isLoggedIn) {
@@ -84,7 +98,7 @@ export default function OrdersPage() {
 
   const filteredOrders = orders.filter((order) => {
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-    const matchesSearch = order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = order.orderNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
     return matchesStatus && matchesSearch;
   });
 
@@ -105,13 +119,30 @@ export default function OrdersPage() {
   };
 
   const handleCancelOrder = async (orderId: string) => {
-    if (window.confirm(t("orders.cancelConfirm"))) {
+    setCancellingId(orderId);
+    try {
       const success = await cancelOrder(orderId);
       if (success) {
-        alert(t("orders.orderCancelled"));
+        toast({
+          title: t("orders.orderCancelled"),
+          description: t("orders.cancelledSuccess"),
+        });
       } else {
-        alert(t("orders.cannotCancel"));
+        toast({
+          title: t("orders.cannotCancel"),
+          description: t("orders.cancelError"),
+          variant: "destructive",
+        });
       }
+    } catch (error) {
+      toast({
+        title: t("orders.error"),
+        description: t("orders.cancelError"),
+        variant: "destructive",
+      });
+    } finally {
+      setCancellingId(null);
+      setOrderToCancel(null);
     }
   };
 
@@ -174,10 +205,10 @@ export default function OrdersPage() {
           </div>
           <div class="info-box">
             <h3>${t("orders.deliveryAddress")}</h3>
-            <p>${order.deliveryAddress ? 
-              `${(order.deliveryAddress as any).building || ''}, ${(order.deliveryAddress as any).street || ''}<br/>
-               ${(order.deliveryAddress as any).area || ''}, ${(order.deliveryAddress as any).emirate || ''}` 
-              : t("invoice.na")}</p>
+            <p>${order.deliveryAddress ?
+        `${(order.deliveryAddress as any).building || ''}, ${(order.deliveryAddress as any).street || ''}<br/>
+               ${(order.deliveryAddress as any).area || ''}, ${(order.deliveryAddress as any).emirate || ''}`
+        : t("invoice.na")}</p>
           </div>
         </div>
         
@@ -230,11 +261,11 @@ export default function OrdersPage() {
         <div class="footer">
           <p>${t("invoice.thankYou")}</p>
           <p style="margin-top: 10px;">${t("invoice.tagline")}</p>
-        </div>
-      </body>
-      </html>
-    `;
-    
+          </div>
+        </body>
+        </html>
+      `;
+
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(printContent);
@@ -459,7 +490,7 @@ export default function OrdersPage() {
                         <div className="p-3 bg-background rounded-lg">
                           <h4 className="font-semibold text-foreground mb-2">{t("orders.paymentMethod")}</h4>
                           <p className="text-sm text-muted-foreground">{t(`payments.${order.paymentMethod === 'bank_transfer' ? 'bankTransfer' : order.paymentMethod}`)}</p>
-                          
+
                           <div className="mt-3 space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">{t("orders.subtotal")}</span>
@@ -514,10 +545,15 @@ export default function OrdersPage() {
                         </button>
                         {["pending", "confirmed"].includes(order.status) && (
                           <button
-                            onClick={() => handleCancelOrder(order.id)}
-                            className="btn-outline text-destructive border-destructive hover:bg-destructive hover:text-white flex items-center gap-2 text-sm"
+                            onClick={() => setOrderToCancel(order.id)}
+                            disabled={cancellingId === order.id}
+                            className="btn-outline text-destructive border-destructive hover:bg-destructive hover:text-white flex items-center gap-2 text-sm disabled:opacity-50"
                           >
-                            <XCircle className="w-4 h-4" />
+                            {cancellingId === order.id ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <XCircle className="w-4 h-4" />
+                            )}
                             {t("orders.cancelOrder")}
                           </button>
                         )}
@@ -530,6 +566,31 @@ export default function OrdersPage() {
           </div>
         )}
       </div>
+
+      <AlertDialog open={!!orderToCancel} onOpenChange={(open) => !open && setOrderToCancel(null)}>
+        <AlertDialogContent className="z-[9999]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              {t("orders.cancelConfirmTitle") || t("orders.cancelOrder")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("orders.cancelConfirm")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!cancellingId}>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => orderToCancel && handleCancelOrder(orderToCancel)}
+              disabled={!!cancellingId}
+            >
+              {cancellingId ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
+              {t("orders.cancelOrder")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

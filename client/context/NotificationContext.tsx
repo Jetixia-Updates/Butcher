@@ -94,11 +94,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Get user ID for notifications
   const getUserId = useCallback(() => {
-    if (isAdmin) {
-      return ADMIN_USER_ID;
-    }
     return user?.id || null;
-  }, [isAdmin, user?.id]);
+  }, [user?.id]);
 
   // Fetch notifications from API
   const fetchNotifications = useCallback(async () => {
@@ -145,10 +142,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
-    // Start polling (30 seconds - reduced frequency to minimize API calls)
+    // Start polling (10 seconds for a more real-time feel)
     pollingIntervalRef.current = setInterval(() => {
       fetchNotifications();
-    }, 30000);
+    }, 10000);
 
     return () => {
       if (pollingIntervalRef.current) {
@@ -578,6 +575,8 @@ export interface InvoiceData {
   deliveryFee?: number; // Total delivery fee (base + express)
   expressDeliveryFee?: number; // Express delivery fee only (legacy, kept for compatibility)
   isExpressDelivery?: boolean; // Whether express delivery was selected
+  deliveryDate?: string;
+  deliveryTime?: string;
   driverTip?: number;
   total: number;
   paymentMethod: "card" | "cod";
@@ -613,7 +612,6 @@ export const formatInvoiceForNotification = (invoice: InvoiceData, language: "en
       breakdownLines.push(`الخصم${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -${Number(invoice.discount).toFixed(2)} د.إ`);
     }
     breakdownLines.push(`ضريبة القيمة المضافة (${invoice.vatRate}%): ${Number(invoice.vatAmount).toFixed(2)} د.إ`);
-    // Use deliveryFee (total) if provided, otherwise fall back to expressDeliveryFee for backward compatibility
     const deliveryFeeAmount = Number(invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0);
     if (deliveryFeeAmount > 0) {
       const deliveryLabel = invoice.isExpressDelivery ? '⚡ توصيل سريع' : '🚚 رسوم التوصيل';
@@ -623,6 +621,11 @@ export const formatInvoiceForNotification = (invoice: InvoiceData, language: "en
       breakdownLines.push(`💚 إكرامية السائق: ${Number(invoice.driverTip).toFixed(2)} د.إ`);
     }
 
+    // Build address section with optional delivery date/time
+    let addressSection = `العميل: ${invoice.customerName}\nالهاتف: ${invoice.customerMobile}\nالعنوان: ${invoice.customerAddress}`;
+    if (invoice.deliveryDate) addressSection += `\nتاريخ التوصيل: ${invoice.deliveryDate}`;
+    if (invoice.deliveryTime) addressSection += `\nوقت التوصيل: ${invoice.deliveryTime}`;
+
     return `
 ${doubleSeparator}
       فاتورة ضريبية
@@ -631,9 +634,7 @@ ${doubleSeparator}
 رقم الطلب: ${invoice.orderNumber}
 التاريخ: ${invoice.date}
 ${separator}
-العميل: ${invoice.customerName}
-الهاتف: ${invoice.customerMobile}
-العنوان: ${invoice.customerAddress}
+${addressSection}
 ${separator}
 المنتجات:
 ${itemsList}
@@ -660,7 +661,6 @@ ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatRef
     breakdownLines.push(`Discount${invoice.discountCode ? ` (${invoice.discountCode})` : ''}: -AED ${Number(invoice.discount).toFixed(2)}`);
   }
   breakdownLines.push(`VAT (${invoice.vatRate}%): AED ${Number(invoice.vatAmount).toFixed(2)}`);
-  // Use deliveryFee (total) if provided, otherwise fall back to expressDeliveryFee for backward compatibility
   const deliveryFeeAmountEn = Number(invoice.deliveryFee ?? invoice.expressDeliveryFee ?? 0);
   if (deliveryFeeAmountEn > 0) {
     const deliveryLabelEn = invoice.isExpressDelivery ? '⚡ Express Delivery' : '🚚 Delivery Fee';
@@ -670,6 +670,11 @@ ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatRef
     breakdownLines.push(`💚 Driver Tip: AED ${Number(invoice.driverTip).toFixed(2)}`);
   }
 
+  // Build address section with optional delivery date/time
+  let addressSectionEn = `Customer: ${invoice.customerName}\nMobile: ${invoice.customerMobile}\nAddress: ${invoice.customerAddress}`;
+  if (invoice.deliveryDate) addressSectionEn += `\nDelivery Date: ${invoice.deliveryDate}`;
+  if (invoice.deliveryTime) addressSectionEn += `\nDelivery Time: ${invoice.deliveryTime}`;
+
   return `
 ${doubleSeparator}
       TAX INVOICE
@@ -678,9 +683,7 @@ Invoice No: ${invoice.invoiceNumber}
 Order No: ${invoice.orderNumber}
 Date: ${invoice.date}
 ${separator}
-Customer: ${invoice.customerName}
-Mobile: ${invoice.customerMobile}
-Address: ${invoice.customerAddress}
+${addressSectionEn}
 ${separator}
 Items:
 ${itemsList}

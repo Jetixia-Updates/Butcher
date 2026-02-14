@@ -54,14 +54,25 @@ interface ChatContextType {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 // Convert API message to ChatMessage format
-const apiToMessage = (msg: any): ChatMessage => ({
-  id: msg.id,
-  text: msg.text,
-  sender: msg.sender,
-  timestamp: msg.createdAt,
-  read: msg.sender === 'admin' ? msg.readByUser : msg.readByAdmin,
-  attachments: msg.attachments,
-});
+const apiToMessage = (msg: any): ChatMessage => {
+  let attachments = msg.attachments;
+  if (typeof attachments === 'string') {
+    try {
+      attachments = JSON.parse(attachments);
+    } catch (e) {
+      attachments = [];
+    }
+  }
+
+  return {
+    id: msg.id,
+    text: msg.text,
+    sender: msg.sender,
+    timestamp: msg.createdAt,
+    read: msg.sender === 'admin' ? msg.readByUser : msg.readByAdmin,
+    attachments: Array.isArray(attachments) ? attachments : [],
+  };
+};
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [allChats, setAllChats] = useState<UserChat[]>([]);
@@ -168,7 +179,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Notify admin
         fetchApi('/chat/notify-admin', {
           method: 'POST',
-          body: JSON.stringify({ userId, userName, message: text }),
+          body: JSON.stringify({
+            userId,
+            userName,
+            message: text,
+            hasAttachments: attachments && attachments.length > 0
+          }),
         }).catch(() => { });
 
         // Refresh to get the real message
@@ -203,7 +219,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Notify user
         fetchApi('/chat/notify-user', {
           method: 'POST',
-          body: JSON.stringify({ userId, message: text }),
+          body: JSON.stringify({
+            userId,
+            message: text,
+            hasAttachments: attachments && attachments.length > 0
+          }),
         }).catch(() => { });
 
         // Refresh chats

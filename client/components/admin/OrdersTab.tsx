@@ -414,9 +414,9 @@ export function OrdersTab({ onNavigate, selectedOrderId, onClearSelection }: Adm
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
-      order.orderNumber.toLowerCase().includes(query) ||
-      order.customerName.toLowerCase().includes(query) ||
-      order.customerMobile.includes(query)
+      order.orderNumber?.toLowerCase().includes(query) ||
+      order.customerName?.toLowerCase().includes(query) ||
+      order.customerMobile?.includes(query)
     );
   });
 

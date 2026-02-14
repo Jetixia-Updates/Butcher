@@ -351,10 +351,10 @@ export function UsersTab({ onNavigate }: AdminTabProps) {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
-      user.firstName.toLowerCase().includes(query) ||
-      user.familyName.toLowerCase().includes(query) ||
-      user.email.toLowerCase().includes(query) ||
-      user.mobile.includes(query)
+      user.firstName?.toLowerCase().includes(query) ||
+      user.familyName?.toLowerCase().includes(query) ||
+      user.email?.toLowerCase().includes(query) ||
+      user.mobile?.includes(query)
     );
   });
 

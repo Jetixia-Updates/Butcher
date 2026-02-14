@@ -327,8 +327,12 @@
     "searchPlaceholder": "Search by order number...",
     "estimatedDelivery": "Estimated Delivery",
     "cancelConfirm": "Are you sure you want to cancel this order?",
+    "cancelConfirmTitle": "Cancel Order",
     "orderCancelled": "Order cancelled successfully",
-    "cannotCancel": "This order cannot be cancelled"
+    "cancelledSuccess": "Your order has been successfully cancelled.",
+    "cannotCancel": "This order cannot be cancelled",
+    "cancelError": "There was an error while cancelling your order. Please try again or contact support.",
+    "error": "Error"
   },
   "profile": {
     "title": "My Profile",
@@ -975,7 +979,10 @@
     "reports": "Reports",
     "settings": "Settings",
     "promoCodes": "Promo Codes",
-    "banners": "Banners"
+    "banners": "Banners",
+    "catalog": "Catalog",
+    "people": "People",
+    "analytics": "Analytics"
   },
   "dashboard": {
     "todayOrders": "Today's Orders",

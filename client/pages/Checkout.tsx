@@ -837,10 +837,20 @@ export default function CheckoutPage() {
     const deliverySlotInfo = isExpressDelivery
       ? (language === "ar" ? "توصيل سريع - خلال 3 ساعات" : "Express Delivery - Within 3 hours")
       : getSelectedDeliverySlotInfo();
+    const deliveryDate = isExpressDelivery
+      ? (language === "ar" ? "اليوم" : "Today")
+      : (selectedDateIndex !== null ? deliveryDates[selectedDateIndex].date.toLocaleDateString(language === "ar" ? "ar-AE" : "en-AE", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : "");
+
+    const deliveryTime = isExpressDelivery
+      ? (language === "ar" ? "توصيل سريع (خلال 3 ساعات)" : "Express (Within 3 hours)")
+      : (selectedTimeSlotId ? (language === "ar" ? deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.labelAr : deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.label) : "");
+
     navigate("/payment/card", {
       state: {
         addressId: selectedAddressId,
         deliveryTimeSlot: deliverySlotInfo,
+        deliveryDate: deliveryDate,
+        deliveryTime: deliveryTime,
         promoCode: promoApplied?.code,
         discountAmount: discountAmount,
         isExpressDelivery: isExpressDelivery,
@@ -1114,6 +1124,12 @@ export default function CheckoutPage() {
           vatAmount: orderData.vatAmount || adjustedVat,
           deliveryFee: (orderData.deliveryFee || deliveryFeeTotal) > 0 ? (orderData.deliveryFee || deliveryFeeTotal) : undefined,
           isExpressDelivery: isExpressDelivery,
+          deliveryDate: isExpressDelivery
+            ? (language === "ar" ? "اليوم" : "Today")
+            : (selectedDateIndex !== null ? deliveryDates[selectedDateIndex].date.toLocaleDateString(language === "ar" ? "ar-AE" : "en-AE", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : undefined),
+          deliveryTime: isExpressDelivery
+            ? (language === "ar" ? "توصيل سريع (خلال 3 ساعات)" : "Express (Within 3 hours)")
+            : (selectedTimeSlotId ? (language === "ar" ? deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.labelAr : deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.label) : undefined),
           driverTip: driverTip > 0 ? driverTip : undefined,
           total: orderData.total || adjustedTotal,
           paymentMethod: "cod",
@@ -1219,15 +1235,15 @@ export default function CheckoutPage() {
                       key={address.id}
                       onClick={() => setSelectedAddressId(address.id)}
                       className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${selectedAddressId === address.id
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
                         }`}
                     >
                       <div className="flex items-start gap-2 sm:gap-3">
                         <div
                           className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${selectedAddressId === address.id
-                              ? "border-primary bg-primary"
-                              : "border-border"
+                            ? "border-primary bg-primary"
+                            : "border-border"
                             }`}
                         >
                           {selectedAddressId === address.id && (
@@ -1345,8 +1361,8 @@ export default function CheckoutPage() {
                             setSelectedTimeSlotId(null); // Reset time slot when date changes
                           }}
                           className={`flex-shrink-0 min-w-[80px] sm:min-w-[100px] p-2 sm:p-3 rounded-xl border-2 transition-all text-center ${selectedDateIndex === index
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "border-border bg-background hover:border-primary/50 text-foreground"
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-background hover:border-primary/50 text-foreground"
                             }`}
                         >
                           <div className="font-semibold text-xs sm:text-sm">
@@ -1372,15 +1388,15 @@ export default function CheckoutPage() {
                           type="button"
                           onClick={() => setSelectedTimeSlotId(slot.id)}
                           className={`p-2.5 sm:p-4 rounded-xl border-2 transition-all text-left ${selectedTimeSlotId === slot.id
-                              ? "border-primary bg-primary/10"
-                              : "border-border bg-background hover:border-primary/50"
+                            ? "border-primary bg-primary/10"
+                            : "border-border bg-background hover:border-primary/50"
                             }`}
                         >
                           <div className="flex items-center gap-2 sm:gap-3">
                             <div
                               className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedTimeSlotId === slot.id
-                                  ? "border-primary bg-primary"
-                                  : "border-border"
+                                ? "border-primary bg-primary"
+                                : "border-border"
                                 }`}
                             >
                               {selectedTimeSlotId === slot.id && (
@@ -1425,15 +1441,15 @@ export default function CheckoutPage() {
                   <div
                     onClick={() => setIsExpressDelivery(!isExpressDelivery)}
                     className={`p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all ${isExpressDelivery
-                        ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
-                        : "border-border hover:border-orange-300"
+                      ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
+                      : "border-border hover:border-orange-300"
                       }`}
                   >
                     <div className="flex items-start gap-3">
                       <div
                         className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${isExpressDelivery
-                            ? "border-orange-500 bg-orange-500"
-                            : "border-border"
+                          ? "border-orange-500 bg-orange-500"
+                          : "border-border"
                           }`}
                       >
                         {isExpressDelivery && (
@@ -1485,8 +1501,8 @@ export default function CheckoutPage() {
                     type="button"
                     onClick={() => setDriverTip(tip)}
                     className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all ${driverTip === tip
-                        ? "bg-primary text-white"
-                        : "bg-muted text-foreground hover:bg-muted/80"
+                      ? "bg-primary text-white"
+                      : "bg-muted text-foreground hover:bg-muted/80"
                       }`}
                   >
                     {tip === 0
@@ -1507,8 +1523,8 @@ export default function CheckoutPage() {
                     }
                   }}
                   className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all ${!tipOptions.includes(driverTip) && driverTip > 0
-                      ? "bg-primary text-white"
-                      : "bg-muted text-foreground hover:bg-muted/80"
+                    ? "bg-primary text-white"
+                    : "bg-muted text-foreground hover:bg-muted/80"
                     }`}
                 >
                   {!tipOptions.includes(driverTip) && driverTip > 0
@@ -1540,15 +1556,15 @@ export default function CheckoutPage() {
                 <div
                   onClick={() => handlePaymentMethodSelect("card")}
                   className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "card"
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
                     }`}
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
                     <div
                       className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${paymentMethod === "card"
-                          ? "border-primary bg-primary"
-                          : "border-border"
+                        ? "border-primary bg-primary"
+                        : "border-border"
                         }`}
                     >
                       {paymentMethod === "card" && (
@@ -1581,15 +1597,15 @@ export default function CheckoutPage() {
                 <div
                   onClick={() => handlePaymentMethodSelect("cod")}
                   className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "cod"
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
                     }`}
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
                     <div
                       className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${paymentMethod === "cod"
-                          ? "border-primary bg-primary"
-                          : "border-border"
+                        ? "border-primary bg-primary"
+                        : "border-border"
                         }`}
                     >
                       {paymentMethod === "cod" && (
@@ -1905,11 +1921,10 @@ function AddressFormModal({
                   key={item.key}
                   type="button"
                   onClick={() => setAddressForm({ ...addressForm, label: item.key })}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    addressForm.label === item.key
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-foreground hover:bg-muted/80"
-                  }`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${addressForm.label === item.key
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-foreground hover:bg-muted/80"
+                    }`}
                 >
                   {item.label}
                 </button>

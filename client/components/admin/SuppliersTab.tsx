@@ -312,14 +312,14 @@ export function SuppliersTab({ onNavigate }: SuppliersTabProps) {
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter((s) => {
       if (filters.status !== "all" && s.status !== filters.status) return false;
-      if (filters.category !== "all" && !s.categories.includes(filters.category)) return false;
+      if (filters.category !== "all" && !s.categories?.includes(filters.category)) return false;
       if (filters.search) {
         const q = filters.search.toLowerCase();
         return (
-          s.name.toLowerCase().includes(q) ||
-          s.code.toLowerCase().includes(q) ||
-          s.email.toLowerCase().includes(q) ||
-          s.phone.includes(filters.search)
+          s.name?.toLowerCase().includes(q) ||
+          s.code?.toLowerCase().includes(q) ||
+          s.email?.toLowerCase().includes(q) ||
+          s.phone?.includes(filters.search)
         );
       }
       return true;

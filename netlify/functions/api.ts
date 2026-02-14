@@ -8,7 +8,7 @@
 import type { Handler, HandlerEvent, HandlerContext, HandlerResponse } from '@netlify/functions';
 import express from 'express';
 import cors from 'cors';
-import { neon, neonConfig } from '@neondatabase/serverless';
+import { neon, neonConfig, NeonQueryFunction } from '@neondatabase/serverless';
 import serverless from 'serverless-http';
 import bcrypt from 'bcryptjs';
 
@@ -21,7 +21,7 @@ neonConfig.fetchConnectionCache = true;
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_GHrRQzwk9E4n@ep-hidden-paper-ajua0bg2-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require';
 
-let sql: ReturnType<typeof neon> | null = null;
+let sql: NeonQueryFunction<false, false> | null = null;
 
 function initDatabase() {
   try {
@@ -102,7 +102,7 @@ function createApp() {
 
   app = express();
   app.use(cors());
-  
+
   // Parse JSON body - serverless-http passes body as a string, not as a stream
   app.use((req, res, next) => {
     // If body is a JSON string, parse it
@@ -114,12 +114,12 @@ function createApp() {
       }
       return next();
     }
-    
+
     // If body is already a proper object, use it
     if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body) && !(req.body.type === 'Buffer')) {
       return next();
     }
-    
+
     // Handle Buffer body from serverless-http
     if (req.body && typeof req.body === 'object' && req.body.type === 'Buffer' && Array.isArray(req.body.data)) {
       const str = Buffer.from(req.body.data).toString('utf8');
@@ -130,11 +130,11 @@ function createApp() {
         // Continue to express.json
       }
     }
-    
+
     // Fallback to express.json for stream bodies
     express.json({ limit: '50mb' })(req, res, next);
   });
-  
+
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // Health check
@@ -184,7 +184,7 @@ function createApp() {
       console.log('[Login] Raw body type:', typeof req.body);
       console.log('[Login] Body:', JSON.stringify(req.body));
       console.log('[Login] Headers:', JSON.stringify(req.headers));
-      
+
       const { username, password } = req.body || {};
 
       if (!username || !password) {
@@ -206,16 +206,16 @@ function createApp() {
       }
 
       const dbUser = rows[0];
-      
+
       if (!dbUser.is_active) {
         return res.status(401).json({ success: false, error: 'Account is deactivated' });
       }
 
       // Compare password using bcrypt (supports both hashed and plain text)
-      const isValidPassword = dbUser.password.startsWith('$2') 
+      const isValidPassword = dbUser.password.startsWith('$2')
         ? await bcrypt.compare(password, dbUser.password)
         : dbUser.password === password;
-      
+
       if (!isValidPassword) {
         return res.status(401).json({ success: false, error: 'Incorrect password' });
       }
@@ -269,7 +269,7 @@ function createApp() {
     try {
       console.log('[Admin Login] Raw body type:', typeof req.body);
       console.log('[Admin Login] Body:', JSON.stringify(req.body));
-      
+
       let { username, password } = req.body || {};
 
       if (!username || !password) {
@@ -295,16 +295,16 @@ function createApp() {
       }
 
       const dbUser = rows[0];
-      
+
       if (!dbUser.is_active) {
         return res.status(401).json({ success: false, error: 'Account is deactivated' });
       }
 
       // Compare password using bcrypt (supports both hashed and plain text)
-      const isValidPassword = dbUser.password.startsWith('$2') 
+      const isValidPassword = dbUser.password.startsWith('$2')
         ? await bcrypt.compare(password, dbUser.password)
         : dbUser.password === password;
-      
+
       if (!isValidPassword) {
         return res.status(401).json({ success: false, error: 'Invalid staff credentials' });
       }
@@ -555,7 +555,7 @@ function createApp() {
         if (typeof badges === 'string') {
           try { badges = JSON.parse(badges); } catch { badges = []; }
         }
-        
+
         return {
           id: p.id,
           name: p.name,
@@ -597,7 +597,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM product_categories ORDER BY sort_order`;
-      
+
       const categories = rows.map((c: any) => ({
         id: c.id,
         nameEn: c.name_en,
@@ -627,7 +627,7 @@ function createApp() {
       // Fetch settings
       const settingsRows = await sql`SELECT * FROM app_settings LIMIT 1`;
       const s = settingsRows.length > 0 ? settingsRows[0] : {};
-      
+
       const settings = {
         vatRate: String(parseFloat(String(s.vat_rate || '0.05'))),
         deliveryFee: String(parseFloat(String(s.delivery_fee || '15'))),
@@ -657,7 +657,7 @@ function createApp() {
       // Fetch banners (with error handling if table doesn't exist)
       let banners: any[] = [];
       try {
-        const bannersRows = await sql`SELECT * FROM banners WHERE enabled = true ORDER BY sort_order`;
+        const bannersRows = await sql`SELECT * FROM banners ORDER BY sort_order`;
         banners = bannersRows.map((b: any) => ({
           id: b.id,
           titleEn: b.title_en,
@@ -679,7 +679,7 @@ function createApp() {
       // Fetch time slots (with error handling if table doesn't exist)
       let timeSlots: any[] = [];
       try {
-        const timeSlotsRows = await sql`SELECT * FROM delivery_time_slots WHERE enabled = true ORDER BY sort_order`;
+        const timeSlotsRows = await sql`SELECT * FROM delivery_time_slots ORDER BY sort_order`;
         timeSlots = timeSlotsRows.map((t: any) => ({
           id: t.id,
           label: t.label,
@@ -698,7 +698,7 @@ function createApp() {
       // Fetch promo codes (with error handling if table doesn't exist)
       let promoCodes: any[] = [];
       try {
-        const promoCodesRows = await sql`SELECT * FROM discount_codes WHERE is_active = true`;
+        const promoCodesRows = await sql`SELECT * FROM discount_codes ORDER BY created_at DESC`;
         promoCodes = promoCodesRows.map((p: any) => ({
           id: p.id,
           code: p.code,
@@ -717,8 +717,8 @@ function createApp() {
         console.log('[Settings] Discount codes table not available');
       }
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: {
           settings,
           banners,
@@ -740,7 +740,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM banners WHERE enabled = true ORDER BY sort_order`;
-      
+
       const banners = rows.map((b: any) => ({
         id: b.id,
         titleEn: b.title_en,
@@ -771,7 +771,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM delivery_zones WHERE is_active = true`;
-      
+
       const zones = rows.map((z: any) => {
         let parsedAreas: string[] = [];
         if (z.areas) {
@@ -808,7 +808,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM delivery_time_slots WHERE enabled = true ORDER BY sort_order`;
-      
+
       const slots = rows.map((s: any) => ({
         id: s.id,
         label: s.label,
@@ -836,7 +836,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM loyalty_tiers ORDER BY sort_order`;
-      
+
       const tiers = rows.map((t: any) => ({
         id: t.id,
         name: t.name,
@@ -907,6 +907,24 @@ function createApp() {
         INSERT INTO sessions (id, user_id, token, expires_at, created_at)
         VALUES (${`session_${Date.now()}`}, ${userId}, ${token}, ${expiresAt}, ${now})
       `;
+
+      // Notify admins about the new registration
+      try {
+        const admins = await sql`SELECT id FROM users WHERE role = 'admin' LIMIT 10`;
+        for (const admin of admins) {
+          await createNotification({
+            userId: admin.id,
+            type: 'system',
+            title: 'New Customer Registered',
+            titleAr: 'عضو جديد مسجل',
+            message: `${firstName} ${familyName} has just registered.`,
+            messageAr: `قام ${firstName} ${familyName} بالتسجيل للتو.`,
+            link: '/admin/customers',
+          });
+        }
+      } catch (notifError) {
+        console.error('[New Registration Notification Error]', notifError);
+      }
 
       res.json({
         success: true,
@@ -1024,7 +1042,7 @@ function createApp() {
       }
 
       const { userId, status } = req.query;
-      
+
       let rows;
       if (userId) {
         rows = await sql`SELECT * FROM orders WHERE user_id = ${userId as string} ORDER BY created_at DESC`;
@@ -1038,8 +1056,8 @@ function createApp() {
 
       // Get order items for each order
       const orders = await Promise.all(rows.map(async (o: any) => {
-        const items = await sql`SELECT * FROM order_items WHERE order_id = ${o.id}`;
-        
+        const items = await sql!`SELECT * FROM order_items WHERE order_id = ${o.id}`;
+
         return {
           id: o.id,
           orderNumber: o.order_number,
@@ -1186,16 +1204,16 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { 
-        userId, 
-        items, 
+      const {
+        userId,
+        items,
         addressId,
-        deliveryAddress, 
+        deliveryAddress,
         deliveryNotes,
-        paymentMethod, 
-        subtotal, 
-        vatAmount, 
-        deliveryFee, 
+        paymentMethod,
+        subtotal,
+        vatAmount,
+        deliveryFee,
         discount,
         discountAmount, // Frontend sends this
         discountCode,
@@ -1271,12 +1289,12 @@ function createApp() {
       // Insert order items
       for (const item of items) {
         const itemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-        
+
         // Fetch product info if needed
         let productName = item.productName || '';
         let productNameAr = item.productNameAr || '';
         let sku = item.sku || '';
-        
+
         if (!productName || !sku) {
           const prodRows = await sql`SELECT name, name_ar, sku FROM products WHERE id = ${item.productId}`;
           if (prodRows[0]) {
@@ -1304,13 +1322,43 @@ function createApp() {
         `;
       }
 
+      // Notify admins and user about the new order
+      try {
+        // 1. Notify user
+        await createNotification({
+          userId: userId || 'guest',
+          type: 'order_placed',
+          title: 'Order Placed Successfully',
+          titleAr: 'تم تقديم الطلب بنجاح',
+          message: `Your order ${orderNumber} has been placed and is pending confirmation.`,
+          messageAr: `تم تقديم طلبك ${orderNumber} وهو في انتظار التأكيد.`,
+          link: '/orders',
+        });
+
+        // 2. Notify admins
+        const admins = await sql`SELECT id FROM users WHERE role = 'admin' LIMIT 10`;
+        for (const admin of admins) {
+          await createNotification({
+            userId: admin.id,
+            type: 'order_placed',
+            title: `New Order: ${orderNumber}`,
+            titleAr: `طلب جديد: ${orderNumber}`,
+            message: `New order from ${customerName} for ${total} AED.`,
+            messageAr: `طلب جديد من ${customerName} بقيمة ${total} درهم.`,
+            link: `/admin/orders`,
+          });
+        }
+      } catch (notifError) {
+        console.error('[New Order Notification Error]', notifError);
+      }
+
       res.json({
         success: true,
-        data: { 
-          id: orderId, 
+        data: {
+          id: orderId,
           orderNumber: orderNumber,
-          status: 'pending', 
-          createdAt: now.toISOString() 
+          status: 'pending',
+          createdAt: now.toISOString()
         },
         message: 'Order created successfully',
       });
@@ -1357,12 +1405,20 @@ function createApp() {
       }
 
       const { userId, unreadOnly } = req.query;
-      
+
       // Table schema: id, user_id, type, channel, title, message, message_ar, status, sent_at, delivered_at, failure_reason, metadata, created_at
       // Valid status: pending, sent, delivered, failed - we use 'delivered' as "read"
       let rows;
       if (userId) {
-        rows = await sql`SELECT * FROM notifications WHERE user_id = ${userId as string} ORDER BY created_at DESC LIMIT 100`;
+        // If the user is an admin, they should also see notifications sent to the literal 'admin' ID
+        const userRows = await sql`SELECT role FROM users WHERE id = ${userId as string}`;
+        const isAdmin = userRows[0]?.role === 'admin';
+
+        if (isAdmin) {
+          rows = await sql`SELECT * FROM notifications WHERE user_id = ${userId as string} OR user_id = 'admin' ORDER BY created_at DESC LIMIT 100`;
+        } else {
+          rows = await sql`SELECT * FROM notifications WHERE user_id = ${userId as string} ORDER BY created_at DESC LIMIT 100`;
+        }
       } else {
         rows = await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100`;
       }
@@ -1409,7 +1465,14 @@ function createApp() {
 
       const { userId } = req.body;
       if (userId) {
-        await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${new Date()} WHERE user_id = ${userId}`;
+        const userRows = await sql`SELECT role FROM users WHERE id = ${userId as string}`;
+        const isAdmin = userRows[0]?.role === 'admin';
+
+        if (isAdmin) {
+          await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${new Date()} WHERE user_id = ${userId} OR user_id = 'admin'`;
+        } else {
+          await sql`UPDATE notifications SET status = 'delivered', delivered_at = ${new Date()} WHERE user_id = ${userId}`;
+        }
       }
 
       res.json({ success: true, message: 'All notifications marked as read' });
@@ -1464,7 +1527,7 @@ function createApp() {
       }
 
       const wallets = await sql`SELECT * FROM wallets WHERE user_id = ${userId}`;
-      
+
       if (wallets.length === 0) {
         return res.json({ success: true, data: { balance: 0, transactions: [] } });
       }
@@ -1508,7 +1571,7 @@ function createApp() {
       }
 
       const wallets = await sql`SELECT * FROM wallets WHERE user_id = ${userId}`;
-      
+
       if (wallets.length === 0) {
         return res.status(404).json({ success: false, error: 'Wallet not found' });
       }
@@ -1556,7 +1619,7 @@ function createApp() {
         `;
         const unreadCount = messages.filter((m: any) => m.sender === 'user' && !m.read_by_admin).length;
         const lastMsg = messages[messages.length - 1];
-        
+
         chats.push({
           userId: user.user_id,
           userName: user.user_name || 'Customer',
@@ -1568,7 +1631,7 @@ function createApp() {
             createdAt: safeDate(m.created_at),
             readByAdmin: m.read_by_admin ?? false,
             readByUser: m.read_by_user ?? false,
-            attachments: m.attachments || [],
+            attachments: safeJson(m.attachments, []),
           })),
           lastMessageAt: lastMsg ? safeDate(lastMsg.created_at) : null,
           unreadCount,
@@ -1591,8 +1654,8 @@ function createApp() {
 
       const { userId, userName, userEmail, text, sender, attachments } = req.body;
 
-      if (!userId || !text) {
-        return res.status(400).json({ success: false, error: 'User ID and text are required' });
+      if (!userId || (!text && (!attachments || attachments.length === 0))) {
+        return res.status(400).json({ success: false, error: 'User ID and either text or attachments are required' });
       }
 
       const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
@@ -1623,23 +1686,23 @@ function createApp() {
         return res.json({ success: true, message: 'Notification skipped (no db)' });
       }
 
-      const { userId, message } = req.body || {};
-      
-      if (!userId || !message) {
-        console.log('[Notify User] Missing userId or message, skipping');
+      const { userId, message, hasAttachments } = req.body || {};
+
+      if (!userId || (!message && !hasAttachments)) {
+        console.log('[Notify User] Missing userId, message or attachments, skipping');
         return res.json({ success: true, message: 'Notification skipped (missing data)' });
       }
 
       const now = new Date();
-      const safeMessage = String(message).substring(0, 500);
+      const displayMessage = message ? String(message).substring(0, 500) : (hasAttachments ? 'Sent an attachment' : 'New message');
       const safeUserId = String(userId).substring(0, 100);
 
       try {
         const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
         const metadataStr = JSON.stringify({ originalType: 'chat' });
         await sql`
-          INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-          VALUES (${notifId}, ${safeUserId}, 'promotional', 'push', 'New message from support', ${safeMessage}, 'sent', ${metadataStr}, ${now})
+          INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
+          VALUES (${notifId}, ${safeUserId}, 'promotional', 'push', 'New message from support', ${displayMessage}, ${displayMessage}, 'sent', ${metadataStr}, ${now})
         `;
         res.json({ success: true, data: { notificationId: notifId } });
       } catch (insertError: any) {
@@ -1660,38 +1723,38 @@ function createApp() {
         return res.json({ success: true, message: 'Notification skipped (no db)' });
       }
 
-      const { userId, userName, message } = req.body || {};
+      const { userId, userName, message, hasAttachments } = req.body || {};
 
-      if (!message) {
-        console.log('[Notify Admin] Missing message, skipping');
+      if (!message && !hasAttachments) {
+        console.log('[Notify Admin] Missing message and attachments, skipping');
         return res.json({ success: true, message: 'Notification skipped (missing data)' });
       }
 
       const now = new Date();
       const safeName = String(userName || 'Customer').substring(0, 100);
       const safeUserId = String(userId || 'unknown').substring(0, 100);
-      const safeMessage = String(message).substring(0, 500);
+      const displayMessage = message ? String(message).substring(0, 500) : (hasAttachments ? 'Sent an attachment' : 'New message');
       const title = safeName ? `New message from ${safeName}` : 'New customer message';
 
       try {
         const admins = await sql`SELECT id FROM users WHERE role = 'admin' LIMIT 10`;
         console.log('[Notify Admin] Found', admins.length, 'admin(s)');
-        
+
         if (admins.length === 0) {
           console.log('[Notify Admin] No admins found, creating notification for fallback admin');
           const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
           const metadataStr = JSON.stringify({ originalType: 'chat', fromUserId: safeUserId });
           await sql`
-            INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-            VALUES (${notifId}, ${'admin'}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}, ${now})
+            INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
+            VALUES (${notifId}, 'admin', 'promotional', 'push', ${title}, ${displayMessage}, ${displayMessage}, 'sent', ${metadataStr}, ${now})
           `;
         } else {
           for (const admin of admins) {
             const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
             const metadataStr = JSON.stringify({ originalType: 'chat', fromUserId: safeUserId });
             await sql`
-              INSERT INTO notifications (id, user_id, type, channel, title, message, status, metadata, created_at)
-              VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${title}, ${safeMessage}, 'sent', ${metadataStr}, ${now})
+              INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
+              VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${title}, ${displayMessage}, ${displayMessage}, 'sent', ${metadataStr}, ${now})
             `;
           }
         }
@@ -1742,7 +1805,7 @@ function createApp() {
         userEmail: m.user_email,
         text: m.text,
         sender: m.sender,
-        attachments: m.attachments || [],
+        attachments: safeJson(m.attachments, []),
         readByAdmin: m.read_by_admin ?? false,
         readByUser: m.read_by_user ?? false,
         createdAt: safeDate(m.created_at),
@@ -1772,7 +1835,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM wishlist WHERE user_id = ${userId as string}`;
-      
+
       const wishlist = rows.map((w: any) => ({
         id: w.id,
         userId: w.user_id,
@@ -1850,7 +1913,7 @@ function createApp() {
       }
 
       const { productId } = req.query;
-      
+
       let rows;
       if (productId) {
         rows = await sql`SELECT * FROM product_reviews WHERE product_id = ${productId as string} AND is_approved = true ORDER BY created_at DESC`;
@@ -1897,6 +1960,24 @@ function createApp() {
         VALUES (${reviewId}, ${productId}, ${userId}, ${userName || 'Anonymous'}, ${rating}, ${comment || ''}, false, ${now})
       `;
 
+      // Notify admins about the new review pending approval
+      try {
+        const admins = await sql`SELECT id FROM users WHERE role = 'admin' LIMIT 10`;
+        for (const admin of admins) {
+          await createNotification({
+            userId: admin.id,
+            type: 'system',
+            title: 'New Review Pending',
+            titleAr: 'مراجعة جديدة في انتظار الموافقة',
+            message: `New ${rating}-star review from ${userName || 'a customer'} needs approval.`,
+            messageAr: `مراجعة جديدة بـ ${rating} نجوم من ${userName || 'عميل'} تحتاج للموافقة.`,
+            link: '/admin/products',
+          });
+        }
+      } catch (notifError) {
+        console.error('[New Review Notification Error]', notifError);
+      }
+
       res.json({ success: true, data: { id: reviewId }, message: 'Review submitted for approval' });
     } catch (error) {
       console.error('[Add Review Error]', error);
@@ -1921,7 +2002,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM loyalty_points WHERE user_id = ${userId as string}`;
-      
+
       if (rows.length === 0) {
         return res.json({ success: true, data: { points: 0, totalEarned: 0, tier: 'Bronze' } });
       }
@@ -1977,7 +2058,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM addresses WHERE user_id = ${userId}`;
-      
+
       const addresses = rows.map((a: any) => ({
         id: a.id,
         userId: a.user_id,
@@ -2014,7 +2095,7 @@ function createApp() {
 
       // Get userId from header (frontend sends via x-user-id or x-customer-id)
       const userId = getUserIdFromHeaders(req) || req.body.userId;
-      
+
       if (!userId) {
         return res.status(401).json({ success: false, error: 'Authentication required' });
       }
@@ -2268,7 +2349,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM discount_codes WHERE code = ${code.toUpperCase()} AND is_active = true`;
-      
+
       if (rows.length === 0) {
         return res.status(404).json({ success: false, error: 'Invalid or expired discount code' });
       }
@@ -2461,7 +2542,7 @@ function createApp() {
       }
 
       const { id } = req.params;
-      
+
       // Soft delete - set is_active to false
       await sql`UPDATE products SET is_active = false, updated_at = ${new Date()} WHERE id = ${id}`;
 
@@ -2967,7 +3048,7 @@ function createApp() {
 
       const now = new Date();
       const stocks = await sql`SELECT * FROM stock WHERE product_id = ${productId}`;
-      
+
       let currentQty = 0;
       if (stocks.length > 0) {
         currentQty = parseFloat(String(stocks[0].quantity || '0'));
@@ -3010,7 +3091,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM delivery_zones ORDER BY name`;
-      
+
       const zones = rows.map((z: any) => {
         let parsedAreas: string[] = [];
         if (z.areas) {
@@ -3117,13 +3198,13 @@ function createApp() {
       res.json({ success: true, message: 'Delivery zone updated successfully' });
     } catch (error) {
       console.error('[Update Zone Error]', error);
-      console.error('[Update Zone Error Details]', { 
+      console.error('[Update Zone Error Details]', {
         message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined 
+        stack: error instanceof Error ? error.stack : undefined
       });
-      res.status(500).json({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to update delivery zone' 
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update delivery zone'
       });
     }
   });
@@ -3163,7 +3244,7 @@ function createApp() {
   }
 
   // Helper: generate unique id
-  const genId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const genId = (prefix: string = 'id') => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   // Helper: create a notification in the `notifications` table (the table that GET /api/notifications reads)
   // Maps app notification types to valid DB enum values and stores extra fields in metadata
@@ -3963,7 +4044,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM banners ORDER BY sort_order`;
-      
+
       const banners = rows.map((b: any) => ({
         id: b.id,
         titleEn: b.title_en,
@@ -4151,7 +4232,7 @@ function createApp() {
       }
 
       const rows = await sql`SELECT * FROM discount_codes ORDER BY created_at DESC`;
-      
+
       const codes = rows.map((c: any) => ({
         id: c.id,
         code: c.code,
@@ -4182,14 +4263,14 @@ function createApp() {
       }
 
       // Accept both frontend field names and backend field names
-      const { 
-        code, type, value, 
+      const {
+        code, type, value,
         minOrderAmount, minimumOrder,
         maxDiscount, maximumDiscount,
         maxUses, usageLimit,
         userLimit,
         expiresAt, validTo, validFrom,
-        isActive 
+        isActive
       } = req.body;
 
       if (!code || !type || value === undefined) {
@@ -4198,7 +4279,7 @@ function createApp() {
 
       const codeId = `promo_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
       const now = new Date();
-      
+
       // Use frontend field names with fallback to backend field names - parse strings to numbers
       const valueNum = parseFloat(String(value)) || 0;
       const minOrder = parseFloat(String(minimumOrder || minOrderAmount || 0)) || 0;
@@ -4230,13 +4311,13 @@ function createApp() {
 
       const { id } = req.params;
       // Accept both frontend field names and backend field names
-      const { 
-        code, type, value, 
+      const {
+        code, type, value,
         minOrderAmount, minimumOrder,
         maxDiscount, maximumDiscount,
         maxUses, usageLimit,
         expiresAt, validTo,
-        isActive 
+        isActive
       } = req.body;
 
       // Use frontend field names with fallback to backend field names
@@ -4314,7 +4395,7 @@ function createApp() {
 
       // Find the promo code (check both promo_codes and discount_codes tables)
       let promoCode = null;
-      
+
       // Try promo_codes table first
       try {
         const promoRows = await sql`
@@ -4472,8 +4553,8 @@ function createApp() {
   // Get supplier stats
   app.get('/api/suppliers/stats', async (req, res) => {
     // Return default stats - suppliers feature not yet implemented
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       data: {
         totalSuppliers: 0,
         activeSuppliers: 0,
@@ -4573,19 +4654,19 @@ function createApp() {
       const now = new Date();
       const today = new Date(now);
       today.setHours(0, 0, 0, 0);
-      
+
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
-      
+
       const weekStart = new Date(today);
       weekStart.setDate(weekStart.getDate() - 7);
-      
+
       const lastWeekStart = new Date(weekStart);
       lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-      
+
       const monthStart = new Date(today);
       monthStart.setDate(monthStart.getDate() - 30);
-      
+
       const lastMonthStart = new Date(monthStart);
       lastMonthStart.setDate(lastMonthStart.getDate() - 30);
 
@@ -4624,7 +4705,7 @@ function createApp() {
 
       // Total customers
       const totalCustomers = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'customer'`;
-      
+
       // New customers (last 7 days)
       const newCustomers = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'customer' AND created_at >= ${weekStart}`;
 
@@ -4666,21 +4747,21 @@ function createApp() {
           todayRevenue: todayRevenueAmount,
           weekRevenue: weekRevenueAmount,
           monthRevenue: monthRevenueAmount,
-          
+
           // Orders
           todayOrders: todayOrdersCount,
           weekOrders: weekOrdersCount,
           monthOrders: monthOrdersCount,
           pendingOrders: parseInt(pendingOrders[0].cnt),
-          
+
           // Customers
           totalCustomers: parseInt(totalCustomers[0].cnt),
           newCustomers: parseInt(newCustomers[0].cnt),
-          
+
           // Metrics
           averageOrderValue,
           lowStockCount: lowStockResult.length,
-          
+
           // Change percentages
           revenueChange: {
             daily: calcChange(todayRevenueAmount, yesterdayRevenueAmount),
@@ -4693,7 +4774,7 @@ function createApp() {
             monthly: calcChange(monthOrdersCount, lastMonthOrdersCount),
           },
           averageOrderValueChange: calcChange(averageOrderValue, prevAverageOrderValue),
-          
+
           // Recent data
           recentOrders: recentOrdersResult.map((o: any) => ({
             id: o.id,
@@ -4813,6 +4894,26 @@ function createApp() {
         }
       }
 
+      // Notify admins if order is cancelled
+      if (status === 'cancelled') {
+        try {
+          const admins = await sql`SELECT id FROM users WHERE role = 'admin' LIMIT 10`;
+          for (const admin of admins) {
+            await createNotification({
+              userId: admin.id,
+              type: 'order_cancelled',
+              title: `Order Cancelled: ${o.order_number}`,
+              titleAr: `تم إلغاء الطلب: ${o.order_number}`,
+              message: `Order ${o.order_number} has been cancelled by the customer.`,
+              messageAr: `تم إلغاء الطلب ${o.order_number} من قبل العميل.`,
+              link: `/admin/orders`,
+            });
+          }
+        } catch (adminError) {
+          console.error('[Admin Notification Error]', adminError);
+        }
+      }
+
       res.json({ success: true, data: order, message: 'Order status updated successfully' });
     } catch (error) {
       console.error('[Update Order Status Error]', error);
@@ -4828,7 +4929,7 @@ function createApp() {
       }
 
       const { id } = req.params;
-      
+
       // Delete order items first
       await sql`DELETE FROM order_items WHERE order_id = ${id}`;
       // Delete order
@@ -5482,7 +5583,7 @@ function createApp() {
       }
 
       const { period = 'today' } = req.query;
-      
+
       // Use database NOW() for date range to avoid clock skew issues
       let intervalDays = 1;
       if (period === 'week') intervalDays = 7;
@@ -5841,7 +5942,14 @@ function createApp() {
         return res.status(400).json({ success: false, error: 'User ID required' });
       }
 
-      await sql`DELETE FROM notifications WHERE user_id = ${userId}`;
+      const userRows = await sql`SELECT role FROM users WHERE id = ${userId as string}`;
+      const isAdmin = userRows[0]?.role === 'admin';
+
+      if (isAdmin) {
+        await sql`DELETE FROM notifications WHERE user_id = ${userId} OR user_id = 'admin'`;
+      } else {
+        await sql`DELETE FROM notifications WHERE user_id = ${userId}`;
+      }
 
       res.json({ success: true, message: 'All notifications deleted' });
     } catch (error) {
@@ -6440,10 +6548,12 @@ function createApp() {
   // Finance: Vendors (sample)
   app.get('/api/finance/vendors', async (req, res) => {
     try {
-      res.json({ success: true, data: [
-        { id: 'v-001', code: 'V-001', name: 'Al Ain Farms', nameAr: 'مزارع العين', email: 'accounts@alainfarms.ae', phone: '+971 4 123 4567', trn: '100123456789003', defaultPaymentTerms: 'net_30', currentBalance: 15000, isActive: true, category: 'supplier' },
-        { id: 'v-002', code: 'V-002', name: 'Emirates Spices', nameAr: 'توابل الإمارات', email: 'billing@emiratesspices.com', phone: '+971 4 987 6543', trn: '100987654321003', defaultPaymentTerms: 'net_15', currentBalance: 5200, isActive: true, category: 'supplier' },
-      ] });
+      res.json({
+        success: true, data: [
+          { id: 'v-001', code: 'V-001', name: 'Al Ain Farms', nameAr: 'مزارع العين', email: 'accounts@alainfarms.ae', phone: '+971 4 123 4567', trn: '100123456789003', defaultPaymentTerms: 'net_30', currentBalance: 15000, isActive: true, category: 'supplier' },
+          { id: 'v-002', code: 'V-002', name: 'Emirates Spices', nameAr: 'توابل الإمارات', email: 'billing@emiratesspices.com', phone: '+971 4 987 6543', trn: '100987654321003', defaultPaymentTerms: 'net_15', currentBalance: 5200, isActive: true, category: 'supplier' },
+        ]
+      });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to get vendors' });
     }
@@ -6472,13 +6582,15 @@ function createApp() {
   // Finance: Cost Centers
   app.get('/api/finance/cost-centers', async (req, res) => {
     try {
-      res.json({ success: true, data: [
-        { id: 'cc-001', code: 'CC-OPS', name: 'Operations', nameAr: 'العمليات', isActive: true },
-        { id: 'cc-002', code: 'CC-ADMIN', name: 'Administration', nameAr: 'الإدارة', isActive: true },
-        { id: 'cc-003', code: 'CC-SALES', name: 'Sales & Marketing', nameAr: 'المبيعات والتسويق', isActive: true },
-        { id: 'cc-004', code: 'CC-DELIVERY', name: 'Delivery', nameAr: 'التوصيل', isActive: true },
-        { id: 'cc-005', code: 'CC-WAREHOUSE', name: 'Warehouse', nameAr: 'المستودع', isActive: true },
-      ] });
+      res.json({
+        success: true, data: [
+          { id: 'cc-001', code: 'CC-OPS', name: 'Operations', nameAr: 'العمليات', isActive: true },
+          { id: 'cc-002', code: 'CC-ADMIN', name: 'Administration', nameAr: 'الإدارة', isActive: true },
+          { id: 'cc-003', code: 'CC-SALES', name: 'Sales & Marketing', nameAr: 'المبيعات والتسويق', isActive: true },
+          { id: 'cc-004', code: 'CC-DELIVERY', name: 'Delivery', nameAr: 'التوصيل', isActive: true },
+          { id: 'cc-005', code: 'CC-WAREHOUSE', name: 'Warehouse', nameAr: 'المستودع', isActive: true },
+        ]
+      });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to get cost centers' });
     }
@@ -6496,10 +6608,12 @@ function createApp() {
   // Finance: Budgets
   app.get('/api/finance/budgets', async (req, res) => {
     try {
-      res.json({ success: true, data: [
-        { id: 'bud-001', name: 'Operations Q1 2026', periodType: 'quarterly', startDate: '2026-01-01', endDate: '2026-03-31', budgetAmount: 50000, spentAmount: 22500, remainingAmount: 27500, percentUsed: 45, alertThreshold: 80, isActive: true },
-        { id: 'bud-002', name: 'Marketing Monthly', periodType: 'monthly', startDate: '2026-01-01', endDate: '2026-01-31', category: 'marketing', budgetAmount: 10000, spentAmount: 7800, remainingAmount: 2200, percentUsed: 78, alertThreshold: 80, isActive: true },
-      ] });
+      res.json({
+        success: true, data: [
+          { id: 'bud-001', name: 'Operations Q1 2026', periodType: 'quarterly', startDate: '2026-01-01', endDate: '2026-03-31', budgetAmount: 50000, spentAmount: 22500, remainingAmount: 27500, percentUsed: 45, alertThreshold: 80, isActive: true },
+          { id: 'bud-002', name: 'Marketing Monthly', periodType: 'monthly', startDate: '2026-01-01', endDate: '2026-01-31', category: 'marketing', budgetAmount: 10000, spentAmount: 7800, remainingAmount: 2200, percentUsed: 78, alertThreshold: 80, isActive: true },
+        ]
+      });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to get budgets' });
     }
@@ -6518,10 +6632,14 @@ function createApp() {
   // Finance: Budget vs Actual
   app.get('/api/finance/budgets/vs-actual', async (req, res) => {
     try {
-      res.json({ success: true, data: { period: req.query.period || 'quarter', summary: { totalBudget: 180000, totalSpent: 38800, totalRemaining: 141200 }, byCategory: [
-        { category: 'marketing', budget: 10000, actual: 7800, variance: 2200, variancePercent: 22 },
-        { category: 'delivery', budget: 10000, actual: 8500, variance: 1500, variancePercent: 15 },
-      ] } });
+      res.json({
+        success: true, data: {
+          period: req.query.period || 'quarter', summary: { totalBudget: 180000, totalSpent: 38800, totalRemaining: 141200 }, byCategory: [
+            { category: 'marketing', budget: 10000, actual: 7800, variance: 2200, variancePercent: 22 },
+            { category: 'delivery', budget: 10000, actual: 8500, variance: 1500, variancePercent: 15 },
+          ]
+        }
+      });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to get budget vs actual' });
     }
@@ -6530,10 +6648,12 @@ function createApp() {
   // Finance: Approval Rules
   app.get('/api/finance/approval-rules', async (req, res) => {
     try {
-      res.json({ success: true, data: [
-        { id: 'rule-001', name: 'Auto-approve small expenses', minAmount: 0, maxAmount: 500, autoApproveBelow: 500, approverLevel: 0, isActive: true },
-        { id: 'rule-002', name: 'Manager approval (500-5000)', minAmount: 500, maxAmount: 5000, approverRole: 'manager', approverLevel: 1, isActive: true },
-      ] });
+      res.json({
+        success: true, data: [
+          { id: 'rule-001', name: 'Auto-approve small expenses', minAmount: 0, maxAmount: 500, autoApproveBelow: 500, approverLevel: 0, isActive: true },
+          { id: 'rule-002', name: 'Manager approval (500-5000)', minAmount: 500, maxAmount: 5000, approverRole: 'manager', approverLevel: 1, isActive: true },
+        ]
+      });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to get approval rules' });
     }
@@ -6570,16 +6690,18 @@ function createApp() {
       const netProfit = operatingProfit - refunds;
       const netProfitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-      res.json({ success: true, data: {
-        period: period as string, startDate: start.toISOString(), endDate: end.toISOString(),
-        revenue: { sales: Math.round(sales * 100) / 100, otherIncome: 0, totalRevenue: Math.round(totalRevenue * 100) / 100 },
-        costOfGoodsSold: { inventoryCost: Math.round(inventoryCost * 100) / 100, supplierPurchases: 0, totalCOGS: Math.round(totalCOGS * 100) / 100 },
-        grossProfit: Math.round(grossProfit * 100) / 100, grossProfitMargin: Math.round(grossProfitMargin * 100) / 100,
-        operatingExpenses, totalOperatingExpenses: Math.round(totalOperatingExpenses * 100) / 100,
-        operatingProfit: Math.round(operatingProfit * 100) / 100,
-        otherExpenses: { vatPaid: 0, refunds: Math.round(refunds * 100) / 100, totalOther: Math.round(refunds * 100) / 100 },
-        netProfit: Math.round(netProfit * 100) / 100, netProfitMargin: Math.round(netProfitMargin * 100) / 100,
-      } });
+      res.json({
+        success: true, data: {
+          period: period as string, startDate: start.toISOString(), endDate: end.toISOString(),
+          revenue: { sales: Math.round(sales * 100) / 100, otherIncome: 0, totalRevenue: Math.round(totalRevenue * 100) / 100 },
+          costOfGoodsSold: { inventoryCost: Math.round(inventoryCost * 100) / 100, supplierPurchases: 0, totalCOGS: Math.round(totalCOGS * 100) / 100 },
+          grossProfit: Math.round(grossProfit * 100) / 100, grossProfitMargin: Math.round(grossProfitMargin * 100) / 100,
+          operatingExpenses, totalOperatingExpenses: Math.round(totalOperatingExpenses * 100) / 100,
+          operatingProfit: Math.round(operatingProfit * 100) / 100,
+          otherExpenses: { vatPaid: 0, refunds: Math.round(refunds * 100) / 100, totalOther: Math.round(refunds * 100) / 100 },
+          netProfit: Math.round(netProfit * 100) / 100, netProfitMargin: Math.round(netProfitMargin * 100) / 100,
+        }
+      });
     } catch (error) {
       console.error('[P&L Report Error]', error);
       res.status(500).json({ success: false, error: 'Failed to generate profit/loss report' });
@@ -6628,14 +6750,16 @@ function createApp() {
         currentDate.setDate(currentDate.getDate() + 1);
       }
 
-      res.json({ success: true, data: {
-        period: period as string, startDate: start.toISOString(), endDate: end.toISOString(),
-        openingBalance: Math.round(openingBalance * 100) / 100, closingBalance: Math.round(closingBalance * 100) / 100,
-        operatingActivities: { cashFromSales: Math.round(cashFromSales * 100) / 100, cashFromCOD: Math.round(cashFromCOD * 100) / 100, cashFromRefunds: Math.round(cashFromRefunds * 100) / 100, cashToSuppliers: Math.round(cashToSuppliers * 100) / 100, cashToExpenses: Math.round(cashToExpenses * 100) / 100, netOperating: Math.round(netOperating * 100) / 100 },
-        investingActivities: { equipmentPurchases: 0, netInvesting: 0 },
-        financingActivities: { ownerDrawings: 0, capitalInjection: 0, netFinancing: 0 },
-        netCashFlow: Math.round(netCashFlow * 100) / 100, dailyCashFlow,
-      } });
+      res.json({
+        success: true, data: {
+          period: period as string, startDate: start.toISOString(), endDate: end.toISOString(),
+          openingBalance: Math.round(openingBalance * 100) / 100, closingBalance: Math.round(closingBalance * 100) / 100,
+          operatingActivities: { cashFromSales: Math.round(cashFromSales * 100) / 100, cashFromCOD: Math.round(cashFromCOD * 100) / 100, cashFromRefunds: Math.round(cashFromRefunds * 100) / 100, cashToSuppliers: Math.round(cashToSuppliers * 100) / 100, cashToExpenses: Math.round(cashToExpenses * 100) / 100, netOperating: Math.round(netOperating * 100) / 100 },
+          investingActivities: { equipmentPurchases: 0, netInvesting: 0 },
+          financingActivities: { ownerDrawings: 0, capitalInjection: 0, netFinancing: 0 },
+          netCashFlow: Math.round(netCashFlow * 100) / 100, dailyCashFlow,
+        }
+      });
     } catch (error) {
       console.error('[Cash Flow Report Error]', error);
       res.status(500).json({ success: false, error: 'Failed to generate cash flow report' });
@@ -6663,13 +6787,15 @@ function createApp() {
         vatAmount: Math.round(parseFloat(String(o.vat_amount || '0')) * 100) / 100, vatRate: 5,
       }));
 
-      res.json({ success: true, data: {
-        period: period as string, startDate: start.toISOString(), endDate: end.toISOString(),
-        salesVAT: { taxableAmount: Math.round(salesTaxableAmount * 100) / 100, vatAmount: Math.round(salesVATAmount * 100) / 100, exemptAmount: 0 },
-        purchasesVAT: { taxableAmount: 0, vatAmount: 0 },
-        vatDue: Math.round(salesVATAmount * 100) / 100, vatRefund: 0, netVAT: Math.round(salesVATAmount * 100) / 100,
-        transactionDetails,
-      } });
+      res.json({
+        success: true, data: {
+          period: period as string, startDate: start.toISOString(), endDate: end.toISOString(),
+          salesVAT: { taxableAmount: Math.round(salesTaxableAmount * 100) / 100, vatAmount: Math.round(salesVATAmount * 100) / 100, exemptAmount: 0 },
+          purchasesVAT: { taxableAmount: 0, vatAmount: 0 },
+          vatDue: Math.round(salesVATAmount * 100) / 100, vatRefund: 0, netVAT: Math.round(salesVATAmount * 100) / 100,
+          transactionDetails,
+        }
+      });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to generate VAT report' });
     }
@@ -6706,13 +6832,15 @@ function createApp() {
       const retainedEarnings = totalRevenue - totalExpensesPaid - (totalRevenue * 0.6);
       const totalEquity = openingCapital + retainedEarnings;
 
-      res.json({ success: true, data: {
-        asOfDate: new Date().toISOString(),
-        assets: { currentAssets: { cashInHand: Math.round(cashInHand * 100) / 100, bankAccounts: Math.round(bankAccounts * 100) / 100, accountsReceivable: Math.round(accountsReceivable * 100) / 100, inventory: Math.round(inventoryValue * 100) / 100, total: Math.round(totalCurrentAssets * 100) / 100 }, fixedAssets: { equipment: 30000, furniture: 10000, vehicles: 10000, total: fixedAssets }, totalAssets: Math.round(totalAssets * 100) / 100 },
-        liabilities: { currentLiabilities: { accountsPayable: Math.round(accountsPayable * 100) / 100, vatPayable: Math.round(totalVAT * 100) / 100, accruedExpenses: 0, total: Math.round(totalCurrentLiabilities * 100) / 100 }, longTermLiabilities: { loans: 0, total: 0 }, totalLiabilities: Math.round(totalLiabilities * 100) / 100 },
-        equity: { openingCapital, retainedEarnings: Math.round(retainedEarnings * 100) / 100, currentYearIncome: Math.round(retainedEarnings * 100) / 100, totalEquity: Math.round(totalEquity * 100) / 100 },
-        balanceCheck: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01,
-      } });
+      res.json({
+        success: true, data: {
+          asOfDate: new Date().toISOString(),
+          assets: { currentAssets: { cashInHand: Math.round(cashInHand * 100) / 100, bankAccounts: Math.round(bankAccounts * 100) / 100, accountsReceivable: Math.round(accountsReceivable * 100) / 100, inventory: Math.round(inventoryValue * 100) / 100, total: Math.round(totalCurrentAssets * 100) / 100 }, fixedAssets: { equipment: 30000, furniture: 10000, vehicles: 10000, total: fixedAssets }, totalAssets: Math.round(totalAssets * 100) / 100 },
+          liabilities: { currentLiabilities: { accountsPayable: Math.round(accountsPayable * 100) / 100, vatPayable: Math.round(totalVAT * 100) / 100, accruedExpenses: 0, total: Math.round(totalCurrentLiabilities * 100) / 100 }, longTermLiabilities: { loans: 0, total: 0 }, totalLiabilities: Math.round(totalLiabilities * 100) / 100 },
+          equity: { openingCapital, retainedEarnings: Math.round(retainedEarnings * 100) / 100, currentYearIncome: Math.round(retainedEarnings * 100) / 100, totalEquity: Math.round(totalEquity * 100) / 100 },
+          balanceCheck: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01,
+        }
+      });
     } catch (error) {
       console.error('[Balance Sheet Error]', error);
       res.status(500).json({ success: false, error: 'Failed to generate balance sheet' });
@@ -6722,29 +6850,31 @@ function createApp() {
   // Finance: Chart of Accounts
   app.get('/api/finance/chart-of-accounts', async (req, res) => {
     try {
-      res.json({ success: true, data: [
-        { code: '1000', name: 'Assets', nameAr: 'الأصول', accountClass: 'asset', isHeader: true },
-        { code: '1100', name: 'Cash & Bank', nameAr: 'النقد والبنوك', accountClass: 'asset' },
-        { code: '1110', name: 'Cash in Hand', nameAr: 'النقد في الصندوق', accountClass: 'asset' },
-        { code: '1120', name: 'Bank Accounts', nameAr: 'الحسابات البنكية', accountClass: 'asset' },
-        { code: '1200', name: 'Accounts Receivable', nameAr: 'الذمم المدينة', accountClass: 'asset' },
-        { code: '1300', name: 'Inventory', nameAr: 'المخزون', accountClass: 'asset' },
-        { code: '1400', name: 'Fixed Assets', nameAr: 'الأصول الثابتة', accountClass: 'asset' },
-        { code: '2000', name: 'Liabilities', nameAr: 'الالتزامات', accountClass: 'liability', isHeader: true },
-        { code: '2100', name: 'Accounts Payable', nameAr: 'الذمم الدائنة', accountClass: 'liability' },
-        { code: '2200', name: 'VAT Payable', nameAr: 'ضريبة القيمة المضافة المستحقة', accountClass: 'liability' },
-        { code: '3000', name: 'Equity', nameAr: 'حقوق الملكية', accountClass: 'equity', isHeader: true },
-        { code: '3100', name: "Owner's Capital", nameAr: 'رأس مال المالك', accountClass: 'equity' },
-        { code: '3200', name: 'Retained Earnings', nameAr: 'الأرباح المحتجزة', accountClass: 'equity' },
-        { code: '4000', name: 'Revenue', nameAr: 'الإيرادات', accountClass: 'revenue', isHeader: true },
-        { code: '4100', name: 'Sales Revenue', nameAr: 'إيرادات المبيعات', accountClass: 'revenue' },
-        { code: '4200', name: 'Delivery Revenue', nameAr: 'إيرادات التوصيل', accountClass: 'revenue' },
-        { code: '5000', name: 'Expenses', nameAr: 'المصروفات', accountClass: 'expense', isHeader: true },
-        { code: '5100', name: 'Cost of Goods Sold', nameAr: 'تكلفة البضاعة المباعة', accountClass: 'expense' },
-        { code: '5200', name: 'Salaries & Wages', nameAr: 'الرواتب والأجور', accountClass: 'expense' },
-        { code: '5300', name: 'Rent Expense', nameAr: 'مصروف الإيجار', accountClass: 'expense' },
-        { code: '5900', name: 'Other Expenses', nameAr: 'مصروفات أخرى', accountClass: 'expense' },
-      ] });
+      res.json({
+        success: true, data: [
+          { code: '1000', name: 'Assets', nameAr: 'الأصول', accountClass: 'asset', isHeader: true },
+          { code: '1100', name: 'Cash & Bank', nameAr: 'النقد والبنوك', accountClass: 'asset' },
+          { code: '1110', name: 'Cash in Hand', nameAr: 'النقد في الصندوق', accountClass: 'asset' },
+          { code: '1120', name: 'Bank Accounts', nameAr: 'الحسابات البنكية', accountClass: 'asset' },
+          { code: '1200', name: 'Accounts Receivable', nameAr: 'الذمم المدينة', accountClass: 'asset' },
+          { code: '1300', name: 'Inventory', nameAr: 'المخزون', accountClass: 'asset' },
+          { code: '1400', name: 'Fixed Assets', nameAr: 'الأصول الثابتة', accountClass: 'asset' },
+          { code: '2000', name: 'Liabilities', nameAr: 'الالتزامات', accountClass: 'liability', isHeader: true },
+          { code: '2100', name: 'Accounts Payable', nameAr: 'الذمم الدائنة', accountClass: 'liability' },
+          { code: '2200', name: 'VAT Payable', nameAr: 'ضريبة القيمة المضافة المستحقة', accountClass: 'liability' },
+          { code: '3000', name: 'Equity', nameAr: 'حقوق الملكية', accountClass: 'equity', isHeader: true },
+          { code: '3100', name: "Owner's Capital", nameAr: 'رأس مال المالك', accountClass: 'equity' },
+          { code: '3200', name: 'Retained Earnings', nameAr: 'الأرباح المحتجزة', accountClass: 'equity' },
+          { code: '4000', name: 'Revenue', nameAr: 'الإيرادات', accountClass: 'revenue', isHeader: true },
+          { code: '4100', name: 'Sales Revenue', nameAr: 'إيرادات المبيعات', accountClass: 'revenue' },
+          { code: '4200', name: 'Delivery Revenue', nameAr: 'إيرادات التوصيل', accountClass: 'revenue' },
+          { code: '5000', name: 'Expenses', nameAr: 'المصروفات', accountClass: 'expense', isHeader: true },
+          { code: '5100', name: 'Cost of Goods Sold', nameAr: 'تكلفة البضاعة المباعة', accountClass: 'expense' },
+          { code: '5200', name: 'Salaries & Wages', nameAr: 'الرواتب والأجور', accountClass: 'expense' },
+          { code: '5300', name: 'Rent Expense', nameAr: 'مصروف الإيجار', accountClass: 'expense' },
+          { code: '5900', name: 'Other Expenses', nameAr: 'مصروفات أخرى', accountClass: 'expense' },
+        ]
+      });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to get chart of accounts' });
     }
@@ -6861,11 +6991,13 @@ function createApp() {
       const ordersRows = await sql`SELECT total, vat_amount FROM orders WHERE created_at >= ${periodStart}::timestamp AND created_at <= ${periodEnd}::timestamp AND status != 'cancelled'`;
       const totalSales = ordersRows.reduce((s: number, o: any) => s + parseFloat(String(o.total || '0')) - parseFloat(String(o.vat_amount || '0')), 0);
       const totalVat = ordersRows.reduce((s: number, o: any) => s + parseFloat(String(o.vat_amount || '0')), 0);
-      res.json({ success: true, data: {
-        id: genId(), periodStart, periodEnd, dueDate: new Date(new Date(periodEnd).getFullYear(), new Date(periodEnd).getMonth() + 1, 28).toISOString(),
-        box1Amount: 0, box1Vat: 0, box2Amount: totalSales, box2Vat: totalVat, box3Amount: 0, box3Vat: 0,
-        totalSalesVat: Math.round(totalVat * 100) / 100, totalPurchasesVat: 0, netVatDue: Math.round(totalVat * 100) / 100, status: 'draft',
-      } });
+      res.json({
+        success: true, data: {
+          id: genId(), periodStart, periodEnd, dueDate: new Date(new Date(periodEnd).getFullYear(), new Date(periodEnd).getMonth() + 1, 28).toISOString(),
+          box1Amount: 0, box1Vat: 0, box2Amount: totalSales, box2Vat: totalVat, box3Amount: 0, box3Vat: 0,
+          totalSalesVat: Math.round(totalVat * 100) / 100, totalPurchasesVat: 0, netVatDue: Math.round(totalVat * 100) / 100, status: 'draft',
+        }
+      });
     } catch (error) {
       res.status(500).json({ success: false, error: 'Failed to create VAT return' });
     }
@@ -6908,7 +7040,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
   if (event.path.startsWith('/.netlify/functions/api')) {
     event.path = event.path.replace('/.netlify/functions/api', '/api');
   }
-  
+
   // Handle /api without trailing slash
   if (event.path === '/api' || event.path === '/.netlify/functions/api') {
     event.path = '/api/ping';

@@ -98,11 +98,13 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
   // Filter notifications for user (exclude admin-only types like stock)
   // Types can be: order, order_placed, order_confirmed, order_delivered, delivery, delivery_in_transit, driver_assigned, payment, system
   const userNotifications = notifications.filter(n => 
-    n.type.startsWith("order") || 
-    n.type.startsWith("delivery") || 
-    n.type.startsWith("driver") || 
-    n.type.startsWith("payment") || 
-    n.type === "system"
+    n.type && (
+      n.type.startsWith("order") || 
+      n.type.startsWith("delivery") || 
+      n.type.startsWith("driver") || 
+      n.type.startsWith("payment") || 
+      n.type === "system"
+    )
   ).slice(0, 10);
 
   const userUnreadCount = userNotifications.filter(n => n.unread).length;
@@ -189,7 +191,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
   // Get file icon based on type
   const getFileIcon = (type: string) => {
-    if (type.startsWith("image/")) return <Image className="w-4 h-4" />;
+    if (type?.startsWith("image/")) return <Image className="w-4 h-4" />;
     return <File className="w-4 h-4" />;
   };
 
@@ -209,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
     markAsRead(notification.id);
     
     // Check if this is a TAX invoice notification (title contains "TAX Invoice" or "فاتورة ضريبية")
-    if (notification.title.includes("TAX Invoice") || notification.title.includes("فاتورة ضريبية")) {
+    if (notification.title?.includes("TAX Invoice") || notification.title?.includes("فاتورة ضريبية")) {
       setSelectedInvoice(notification);
       setShowNotifications(false);
       return;
@@ -239,7 +241,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
   // Check if a notification is an invoice
   const isInvoiceNotification = (notification: Notification) => {
-    return notification.title.includes("TAX Invoice") || notification.title.includes("فاتورة ضريبية");
+    return notification.title?.includes("TAX Invoice") || notification.title?.includes("فاتورة ضريبية");
   };
 
   return (
@@ -350,7 +352,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                                 <div className={`${msg.text ? "mt-2" : ""} space-y-2`}>
                                   {msg.attachments.map((att) => (
                                     <div key={att.id}>
-                                      {att.type.startsWith("image/") ? (
+                                      {att.type?.startsWith("image/") ? (
                                         <a href={att.url} target="_blank" rel="noopener noreferrer" className="block">
                                           <img 
                                             src={att.url} 
@@ -404,7 +406,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                       <div className="px-3 py-2 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex flex-wrap gap-2">
                         {chatAttachments.map((att) => (
                           <div key={att.id} className="relative group">
-                            {att.type.startsWith("image/") ? (
+                            {att.type?.startsWith("image/") ? (
                               <img src={att.url} alt={att.name} className="w-12 h-12 rounded object-cover" />
                             ) : (
                               <div className="w-12 h-12 rounded bg-gray-200 dark:bg-gray-600 flex items-center justify-center">

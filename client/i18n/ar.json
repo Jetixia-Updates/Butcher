@@ -327,8 +327,12 @@
     "searchPlaceholder": "البحث برقم الطلب...",
     "estimatedDelivery": "التوصيل المتوقع",
     "cancelConfirm": "هل أنت متأكد من إلغاء هذا الطلب؟",
+    "cancelConfirmTitle": "إلغاء الطلب",
     "orderCancelled": "تم إلغاء الطلب بنجاح",
-    "cannotCancel": "لا يمكن إلغاء هذا الطلب"
+    "cancelledSuccess": "تم إلغاء طلبك بنجاح.",
+    "cannotCancel": "لا يمكن إلغاء هذا الطلب",
+    "cancelError": "حدث خطأ أثناء إلغاء طلبك. يرجى المحاولة مرة أخرى أو الاتصال بالدعم.",
+    "error": "خطأ"
   },
   "profile": {
     "title": "حسابي",
@@ -975,7 +979,10 @@
     "reports": "التقارير",
     "settings": "الإعدادات",
     "promoCodes": "أكواد الخصم",
-    "banners": "البانرات"
+    "banners": "البانرات",
+    "catalog": "الكتالوج",
+    "people": "الأشخاص",
+    "analytics": "التحليلات"
   },
   "dashboard": {
     "todayOrders": "طلبات اليوم",

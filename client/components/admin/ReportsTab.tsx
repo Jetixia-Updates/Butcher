@@ -28,11 +28,26 @@ import {
   Truck,
   Ban,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
 import { reportsApi, analyticsApi, ordersApi, usersApi } from "@/lib/api";
 import type { SalesReportData, SalesByCategory, SalesByProduct, Order, User as UserType } from "@shared/api";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useLanguage } from "@/context/LanguageContext";
+
+const PIE_COLORS = ["#d4a843", "#3b82f6", "#22c55e", "#ef4444", "#a855f7", "#f59e0b", "#06b6d4", "#ec4899"];
 
 interface AdminTabProps {
   onNavigate?: (tab: string, id?: string) => void;
@@ -572,34 +587,34 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-white">
+          <h3 className="text-lg font-semibold text-slate-900">
             {reportType === "sales" ? t.salesReports : t.customerReports}
           </h3>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-500">
             {reportType === "sales" ? t.comprehensiveAnalytics : t.customerAnalytics}
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={fetchData}
-            className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-300 text-xs sm:text-sm transition-all duration-200"
+            className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 text-xs sm:text-sm transition-all duration-200 shadow-sm"
           >
             <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
             <span className="hidden sm:inline">{t.refresh}</span>
           </button>
           <div className="relative group">
-            <button className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-500 text-xs sm:text-sm transition-all duration-200 shadow-lg shadow-red-500/20">
+            <button className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 text-xs sm:text-sm transition-all duration-200 shadow-sm">
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">{t.export}</span>
             </button>
             <div className={cn(
-              "absolute mt-2 w-40 bg-slate-800 rounded-xl shadow-xl border border-white/10 hidden group-hover:block z-10",
+              "absolute mt-2 w-40 bg-white rounded-xl shadow-xl border border-slate-200 hidden group-hover:block z-10",
               isRTL ? "left-0" : "right-0"
             )}>
               <button
                 onClick={() => handleExport("csv")}
                 className={cn(
-                  "w-full px-4 py-2 text-sm text-slate-300 hover:bg-white/5 rounded-t-xl transition-colors",
+                  "w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-t-xl transition-colors",
                   isRTL ? "text-right" : "text-left"
                 )}
               >
@@ -608,7 +623,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
               <button
                 onClick={() => handleExport("pdf")}
                 className={cn(
-                  "w-full px-4 py-2 text-sm text-slate-300 hover:bg-white/5 rounded-b-xl transition-colors",
+                  "w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-b-xl transition-colors",
                   isRTL ? "text-right" : "text-left"
                 )}
               >
@@ -620,15 +635,15 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
       </div>
 
       {/* Report Type Tabs */}
-      <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-2">
+      <div className="bg-white rounded-2xl border border-slate-200 p-1.5 shadow-sm">
         <div className="flex gap-2">
           <button
             onClick={() => setReportType("sales")}
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200",
               reportType === "sales"
-                ? "bg-red-600 text-white shadow-lg shadow-red-500/20"
-                : "text-slate-400 hover:bg-white/5 hover:text-white"
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             )}
           >
             <BarChart3 className="w-4 h-4" />
@@ -639,8 +654,8 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200",
               reportType === "customers"
-                ? "bg-red-600 text-white shadow-lg shadow-red-500/20"
-                : "text-slate-400 hover:bg-white/5 hover:text-white"
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             )}
           >
             <Users className="w-4 h-4" />
@@ -651,7 +666,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
 
       {/* Period Selector - Only for Sales Report */}
       {reportType === "sales" && (
-        <div className="flex gap-2 bg-slate-800/50 backdrop-blur-sm rounded-xl p-1.5 border border-white/5 overflow-x-auto max-w-full">
+        <div className="flex gap-2 bg-white rounded-xl p-1.5 border border-slate-200 overflow-x-auto max-w-full shadow-sm">
           {(Object.keys(periodLabels) as ReportPeriod[]).map((p) => (
             <button
               key={p}
@@ -659,8 +674,8 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
               className={cn(
                 "px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0",
                 period === p
-                  ? "bg-red-600 text-white shadow-lg shadow-red-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
               )}
             >
               {periodLabels[p]}
@@ -671,7 +686,7 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-500/20 border-t-red-500"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-300 border-t-slate-700"></div>
         </div>
       ) : reportType === "customers" ? (
         <CustomerOrdersReport
@@ -688,205 +703,167 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
         />
       ) : (
         <>
-          {/* Summary Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {/* Summary Stats - 3 cards matching screenshot */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
             <SummaryCard
-              icon={DollarSign}
+              icon={TrendingUp}
               label={t.totalRevenue}
-              value={<span className="flex items-center gap-1"><CurrencySymbol size="md" /> {salesReport?.totalRevenue?.toFixed(2) || "0.00"}</span>}
-              change={12.5}
+              value={<span className="flex items-center gap-1">{salesReport?.totalRevenue?.toLocaleString('en-AE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) || "0.0"} AED</span>}
               color="green"
-              vsPreviousPeriod={t.vsPreviousPeriod}
             />
             <SummaryCard
               icon={ShoppingCart}
               label={t.totalOrders}
               value={salesReport?.totalOrders?.toString() || "0"}
-              change={8.2}
               color="blue"
-              vsPreviousPeriod={t.vsPreviousPeriod}
             />
             <SummaryCard
               icon={Package}
-              label={t.itemsSold}
-              value={salesReport?.itemsSold?.toString() || "0"}
-              change={-3.1}
-              color="purple"
-              vsPreviousPeriod={t.vsPreviousPeriod}
-            />
-            <SummaryCard
-              icon={TrendingUp}
               label={t.avgOrderValue}
-              value={<span className="flex items-center gap-1"><CurrencySymbol size="md" /> {salesReport?.averageOrderValue?.toFixed(2) || "0.00"}</span>}
-              change={5.7}
+              value={<span className="flex items-center gap-1">{Math.round(salesReport?.averageOrderValue || 0)} AED</span>}
               color="orange"
-              vsPreviousPeriod={t.vsPreviousPeriod}
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {/* Top Products */}
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-white text-sm sm:text-base">{t.topSellingProducts}</h4>
-                <BarChart3 className="w-5 h-5 text-slate-500" />
-              </div>
-
-              {topProducts.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  {t.noSalesData}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {topProducts.slice(0, 5).map((product, index) => (
-                    <div
-                      key={product.productId}
-                      className="flex items-center gap-4"
+          {/* Charts Row: Sales Trend (horizontal bar) + Top Products (pie) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Sales Trend - Horizontal Bar Chart by Category */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
+              <h4 className="font-bold text-slate-900 text-base mb-4">{t.salesByCategory}</h4>
+              <div className="h-[320px]">
+                {categorySales.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={categorySales.map(c => ({ name: c.category, sales: c.totalSales }))}
+                      layout="vertical"
+                      margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                     >
-                      <span className="w-6 h-6 rounded-full bg-red-500/10 text-red-400 text-xs font-bold flex items-center justify-center ring-1 ring-red-500/20">
-                        {index + 1}
-                      </span>
-                      <div className="flex-1">
-                        <p className="font-medium text-white">{product.productName}</p>
-                        <div className="flex items-center gap-4 text-sm text-slate-400">
-                          <span>{product.quantity} {t.sold}</span>
-                          <span className="flex items-center gap-1"><CurrencySymbol size="xs" /> {(product.sales || 0).toFixed(2)}</span>
-                        </div>
-                      </div>
-                      <div className="w-24 bg-white/5 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-red-500 to-red-400 h-2 rounded-full"
-                          style={{
-                            width: `${((product.sales || 0) / (topProducts[0]?.sales || 1)) * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        tick={{ fill: '#94a3b8', fontSize: 11 }}
+                        axisLine={{ stroke: '#e2e8f0' }}
+                        tickLine={false}
+                        tickFormatter={(v) => v.toLocaleString()}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        tick={{ fill: '#475569', fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={100}
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [value.toLocaleString() + ' AED', isRTL ? 'المبيعات' : 'Sales']}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Bar dataKey="sales" fill="#d4a843" radius={[0, 4, 4, 0]} barSize={28} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-slate-400 text-sm">{t.noCategoryData}</div>
+                )}
+              </div>
             </div>
 
-            {/* Sales by Category */}
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-white text-sm sm:text-base">{t.salesByCategory}</h4>
-                <PieChart className="w-5 h-5 text-slate-500" />
+            {/* Top Products - Pie Chart */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
+              <h4 className="font-bold text-slate-900 text-base mb-4">{t.topSellingProducts}</h4>
+              <div className="h-[320px]">
+                {topProducts.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsPieChart>
+                      <Pie
+                        data={topProducts.slice(0, 5).map(p => ({ name: p.productName, value: p.quantity }))}
+                        cx="50%"
+                        cy="42%"
+                        outerRadius={90}
+                        innerRadius={0}
+                        paddingAngle={1}
+                        dataKey="value"
+                        label={({ cx, cy, midAngle, outerRadius: or, name }: any) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius = or + 18;
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                          return (
+                            <text x={x} y={y} fill="#64748b" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-[11px]">
+                              {name.length > 20 ? name.slice(0, 20) + '...' : name}
+                            </text>
+                          );
+                        }}
+                        labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
+                      >
+                        {topProducts.slice(0, 5).map((_, index) => (
+                          <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number, name: string) => [`${value} ${t.sold}`, name]}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        align="center"
+                        iconType="circle"
+                        iconSize={8}
+                        formatter={(value: string, entry: any) => {
+                          const item = topProducts.find(p => p.productName === value);
+                          return <span className="text-xs text-slate-600">{value} ({item?.quantity || 0} {t.sold})</span>;
+                        }}
+                        wrapperStyle={{ paddingTop: '12px' }}
+                      />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-slate-400 text-sm">{t.noSalesData}</div>
+                )}
               </div>
-
-              {categorySales.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  {t.noCategoryData}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {categorySales.map((category, index) => {
-                    const colors = [
-                      "bg-red-500",
-                      "bg-blue-500",
-                      "bg-emerald-500",
-                      "bg-amber-500",
-                      "bg-violet-500",
-                      "bg-pink-500",
-                    ];
-                    const totalRevenue = categorySales.reduce(
-                      (sum, c) => sum + (c.totalSales || 0),
-                      0
-                    );
-                    const displayPercentage = category.percentage || (totalRevenue
-                      ? (((category.totalSales || 0) / totalRevenue) * 100).toFixed(1)
-                      : "0");
-
-                    return (
-                      <div key={category.category} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={cn(
-                                "w-3 h-3 rounded-full",
-                                colors[index % colors.length]
-                              )}
-                            />
-                            <span className="text-sm font-medium text-white">
-                              {category.category}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-medium text-white flex items-center justify-end gap-1">
-                              <CurrencySymbol size="xs" /> {(category.totalSales || 0).toFixed(2)}
-                            </span>
-                            <span className="text-xs text-slate-500 ml-2">
-                              ({displayPercentage}%)
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-full bg-white/5 rounded-full h-2">
-                          <div
-                            className={cn(
-                              "h-2 rounded-full",
-                              colors[index % colors.length]
-                            )}
-                            style={{ width: `${displayPercentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Daily Sales Chart Placeholder */}
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4 sm:p-6">
+          {/* Revenue Trend Chart */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4 sm:mb-6">
-              <h4 className="font-semibold text-white text-sm sm:text-base">{t.revenueTrend}</h4>
-              <div className="flex items-center gap-2 text-sm text-slate-400">
+              <h4 className="font-bold text-slate-900 text-base">{t.revenueTrend}</h4>
+              <div className="flex items-center gap-2 text-sm text-slate-500">
                 <Calendar className="w-4 h-4" />
                 {periodLabels[period]}
               </div>
             </div>
 
-            {/* Simplified bar chart visualization */}
-            <div className="h-64 flex items-end justify-between gap-2">
-              {(salesReport?.dailySales || []).slice(-14).map((day, index) => {
-                const maxRevenue = Math.max(
-                  ...(salesReport?.dailySales || []).map((d) => d.revenue || 0)
-                );
-                const height = maxRevenue ? ((day.revenue || 0) / maxRevenue) * 100 : 0;
-
-                return (
-                  <div key={index} className="flex-1 flex flex-col items-center gap-2">
-                    <div
-                      className="w-full bg-gradient-to-t from-red-600/80 to-red-400/60 rounded-t-lg transition-all duration-300 hover:from-red-500 hover:to-red-300/80"
-                      style={{ height: `${Math.max(height, 4)}%` }}
-                      title={`${day.date}: AED ${(day.revenue || 0).toFixed(2)}`}
+            <div className="h-64">
+              {salesReport?.dailySales && salesReport.dailySales.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={salesReport.dailySales.slice(-14).map(d => ({
+                    ...d,
+                    label: new Date(d.date).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' }),
+                  }))} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                    <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={50} />
+                    <Tooltip
+                      formatter={(value: number) => ['AED ' + value.toLocaleString(), isRTL ? 'الإيرادات' : 'Revenue']}
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     />
-                    <span className="text-[10px] text-slate-500 truncate w-full text-center">
-                      {new Date(day.date).toLocaleDateString(isRTL ? "ar-AE" : "en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
-                  </div>
-                );
-              })}
-              {(!salesReport?.dailySales || salesReport.dailySales.length === 0) && (
-                <div className="flex-1 flex items-center justify-center text-slate-500">
-                  {t.noDailySalesData}
-                </div>
+                    <Bar dataKey="revenue" fill="#d4a843" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400 text-sm">{t.noDailySalesData}</div>
               )}
             </div>
           </div>
 
           {/* Detailed Stats Table */}
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden">
-            <div className="p-4 border-b border-white/5">
-              <h4 className="font-semibold text-white">{t.detailedBreakdown}</h4>
+          <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
+            <div className="p-4 border-b border-slate-200">
+              <h4 className="font-bold text-slate-900">{t.detailedBreakdown}</h4>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-slate-900/50">
+                <thead className="bg-slate-50">
                   <tr>
                     <th className={cn(
                       "px-4 py-3 text-xs font-medium text-slate-500 uppercase",
@@ -908,11 +885,11 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
-                  <tr className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-4 py-3 text-sm text-slate-300">{t.grossRevenue}</td>
+                <tbody className="divide-y divide-slate-100">
+                  <tr className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-sm text-slate-700">{t.grossRevenue}</td>
                     <td className={cn(
-                      "px-4 py-3 text-sm font-medium text-white flex items-center gap-1",
+                      "px-4 py-3 text-sm font-medium text-slate-900 flex items-center gap-1",
                       isRTL ? "justify-start" : "justify-end"
                     )}>
                       <CurrencySymbol size="sm" /> {salesReport?.totalRevenue?.toFixed(2) || "0.00"}
@@ -921,10 +898,10 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                       <ChangeIndicator value={12.5} />
                     </td>
                   </tr>
-                  <tr className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-4 py-3 text-sm text-slate-300">{t.totalTaxCollected}</td>
+                  <tr className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-sm text-slate-700">{t.totalTaxCollected}</td>
                     <td className={cn(
-                      "px-4 py-3 text-sm font-medium text-white flex items-center gap-1",
+                      "px-4 py-3 text-sm font-medium text-slate-900 flex items-center gap-1",
                       isRTL ? "justify-start" : "justify-end"
                     )}>
                       <CurrencySymbol size="sm" /> {salesReport?.taxCollected?.toFixed(2) || "0.00"}
@@ -933,10 +910,10 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                       <ChangeIndicator value={8.3} />
                     </td>
                   </tr>
-                  <tr className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-4 py-3 text-sm text-slate-300">{t.totalDiscounts}</td>
+                  <tr className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-sm text-slate-700">{t.totalDiscounts}</td>
                     <td className={cn(
-                      "px-4 py-3 text-sm font-medium text-white flex items-center gap-1",
+                      "px-4 py-3 text-sm font-medium text-slate-900 flex items-center gap-1",
                       isRTL ? "justify-start" : "justify-end"
                     )}>
                       <CurrencySymbol size="sm" /> {salesReport?.totalDiscounts?.toFixed(2) || "0.00"}
@@ -945,10 +922,10 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                       <ChangeIndicator value={-5.2} />
                     </td>
                   </tr>
-                  <tr className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-4 py-3 text-sm text-slate-300">{t.netRevenue}</td>
+                  <tr className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-sm text-slate-700">{t.netRevenue}</td>
                     <td className={cn(
-                      "px-4 py-3 text-sm font-medium text-white flex items-center gap-1",
+                      "px-4 py-3 text-sm font-medium text-slate-900 flex items-center gap-1",
                       isRTL ? "justify-start" : "justify-end"
                     )}>
                       <CurrencySymbol size="sm" />{" "}
@@ -961,10 +938,10 @@ export function ReportsTab({ onNavigate }: AdminTabProps) {
                       <ChangeIndicator value={10.1} />
                     </td>
                   </tr>
-                  <tr className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-4 py-3 text-sm text-slate-300">{t.totalRefunds}</td>
+                  <tr className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-sm text-slate-700">{t.totalRefunds}</td>
                     <td className={cn(
-                      "px-4 py-3 text-sm font-medium text-white flex items-center gap-1",
+                      "px-4 py-3 text-sm font-medium text-slate-900 flex items-center gap-1",
                       isRTL ? "justify-start" : "justify-end"
                     )}>
                       <CurrencySymbol size="sm" /> {salesReport?.totalRefunds?.toFixed(2) || "0.00"}
@@ -987,30 +964,26 @@ function SummaryCard({
   icon: Icon,
   label,
   value,
-  change,
   color,
-  vsPreviousPeriod,
 }: {
   icon: React.ElementType;
   label: string;
   value: React.ReactNode;
-  change: number;
   color: "green" | "blue" | "purple" | "orange";
-  vsPreviousPeriod: string;
 }) {
   const colorClasses = {
-    green: { bg: "bg-emerald-500/10 ring-1 ring-emerald-500/20", text: "text-emerald-400" },
-    blue: { bg: "bg-blue-500/10 ring-1 ring-blue-500/20", text: "text-blue-400" },
-    purple: { bg: "bg-violet-500/10 ring-1 ring-violet-500/20", text: "text-violet-400" },
-    orange: { bg: "bg-amber-500/10 ring-1 ring-amber-500/20", text: "text-amber-400" },
+    green: { bg: "bg-emerald-50", text: "text-emerald-600" },
+    blue: { bg: "bg-blue-50", text: "text-blue-600" },
+    purple: { bg: "bg-violet-50", text: "text-violet-600" },
+    orange: { bg: "bg-amber-50", text: "text-amber-600" },
   };
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-3 sm:p-6 transition-all duration-300 hover:bg-slate-800/80 hover:border-white/10">
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 transition-all duration-200 shadow-sm hover:shadow-md">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-xs sm:text-sm text-slate-400 truncate">{label}</p>
-          <p className="text-base sm:text-2xl font-bold text-white mt-1 truncate">{value}</p>
+          <p className="text-xs sm:text-sm text-slate-500 truncate">{label}</p>
+          <p className="text-xl sm:text-3xl font-bold text-slate-900 mt-2 truncate">{value}</p>
         </div>
         <div
           className={cn(
@@ -1020,9 +993,6 @@ function SummaryCard({
         >
           <Icon className={cn("w-4 h-4 sm:w-6 sm:h-6", colorClasses[color].text)} />
         </div>
-      </div>
-      <div className="mt-3 sm:mt-4">
-        <ChangeIndicator value={change} showLabel labelText={vsPreviousPeriod} />
       </div>
     </div>
   );
@@ -1044,7 +1014,7 @@ function ChangeIndicator({
     <span
       className={cn(
         "inline-flex items-center gap-1 text-sm font-medium",
-        isPositive ? "text-emerald-400" : "text-red-400"
+        isPositive ? "text-emerald-600" : "text-red-500"
       )}
     >
       <Icon className="w-3 h-3" />
@@ -1099,14 +1069,14 @@ function CustomerOrdersReport({
   // Status config for badges
   const getStatusConfig = (status: string) => {
     const configs: Record<string, { color: string; icon: React.ElementType; label: string }> = {
-      pending: { color: "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20", icon: Clock, label: t.pending },
-      processing: { color: "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20", icon: Clock, label: t.processing },
-      confirmed: { color: "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20", icon: CheckCircle, label: t.confirmed },
-      preparing: { color: "bg-orange-500/10 text-orange-400 ring-1 ring-orange-500/20", icon: Package, label: t.preparing },
-      ready: { color: "bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20", icon: Package, label: t.ready },
-      out_for_delivery: { color: "bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20", icon: Truck, label: t.outForDelivery },
-      delivered: { color: "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20", icon: CheckCircle, label: t.delivered },
-      cancelled: { color: "bg-red-500/10 text-red-400 ring-1 ring-red-500/20", icon: Ban, label: t.canceled },
+      pending: { color: "bg-amber-50 text-amber-700 ring-1 ring-amber-200", icon: Clock, label: t.pending },
+      processing: { color: "bg-blue-50 text-blue-700 ring-1 ring-blue-200", icon: Clock, label: t.processing },
+      confirmed: { color: "bg-blue-50 text-blue-700 ring-1 ring-blue-200", icon: CheckCircle, label: t.confirmed },
+      preparing: { color: "bg-orange-50 text-orange-700 ring-1 ring-orange-200", icon: Package, label: t.preparing },
+      ready: { color: "bg-violet-50 text-violet-700 ring-1 ring-violet-200", icon: Package, label: t.ready },
+      out_for_delivery: { color: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", icon: Truck, label: t.outForDelivery },
+      delivered: { color: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200", icon: CheckCircle, label: t.delivered },
+      cancelled: { color: "bg-red-50 text-red-700 ring-1 ring-red-200", icon: Ban, label: t.canceled },
     };
     return configs[status] || configs.pending;
   };
@@ -1115,46 +1085,46 @@ function CustomerOrdersReport({
     <div className="space-y-6">
       {/* Summary Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs sm:text-sm text-slate-400">{t.totalCustomers}</p>
-              <p className="text-xl sm:text-2xl font-bold text-white">{totalCustomers}</p>
+              <p className="text-xs sm:text-sm text-slate-500">{t.totalCustomers}</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900">{totalCustomers}</p>
             </div>
-            <div className="w-10 h-10 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center ring-1 ring-blue-500/20">
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
               <Users className="w-5 h-5" />
             </div>
           </div>
         </div>
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs sm:text-sm text-slate-400">{t.activeCustomers}</p>
-              <p className="text-xl sm:text-2xl font-bold text-white">{activeCustomers}</p>
+              <p className="text-xs sm:text-sm text-slate-500">{t.activeCustomers}</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900">{activeCustomers}</p>
             </div>
-            <div className="w-10 h-10 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center ring-1 ring-emerald-500/20">
+            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
               <User className="w-5 h-5" />
             </div>
           </div>
         </div>
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs sm:text-sm text-slate-400">{t.completedOrdersTotal}</p>
-              <p className="text-xl sm:text-2xl font-bold text-emerald-400">{totalCompleted}</p>
+              <p className="text-xs sm:text-sm text-slate-500">{t.completedOrdersTotal}</p>
+              <p className="text-xl sm:text-2xl font-bold text-emerald-600">{totalCompleted}</p>
             </div>
-            <div className="w-10 h-10 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center ring-1 ring-emerald-500/20">
+            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
               <CheckCircle className="w-5 h-5" />
             </div>
           </div>
         </div>
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs sm:text-sm text-slate-400">{t.canceledOrdersTotal}</p>
-              <p className="text-xl sm:text-2xl font-bold text-red-400">{totalCanceled}</p>
+              <p className="text-xs sm:text-sm text-slate-500">{t.canceledOrdersTotal}</p>
+              <p className="text-xl sm:text-2xl font-bold text-red-500">{totalCanceled}</p>
             </div>
-            <div className="w-10 h-10 bg-red-500/10 text-red-400 rounded-xl flex items-center justify-center ring-1 ring-red-500/20">
+            <div className="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center">
               <XCircle className="w-5 h-5" />
             </div>
           </div>
@@ -1162,11 +1132,11 @@ function CustomerOrdersReport({
       </div>
 
       {/* Search and Filters */}
-      <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 p-4">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
             <Search className={cn(
-              "absolute top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500",
+              "absolute top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400",
               isRTL ? "right-3" : "left-3"
             )} />
             <input
@@ -1175,7 +1145,7 @@ function CustomerOrdersReport({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={cn(
-                "w-full py-2 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-red-500/30 focus:border-red-500/30 outline-none text-white placeholder-slate-500",
+                "w-full py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-400/30 focus:border-slate-400 outline-none text-slate-900 placeholder-slate-400",
                 isRTL ? "pr-10 pl-4" : "pl-10 pr-4"
               )}
             />
@@ -1183,28 +1153,28 @@ function CustomerOrdersReport({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-red-500/30 focus:border-red-500/30 outline-none text-white"
+            className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-400/30 focus:border-slate-400 outline-none text-slate-700"
           >
-            <option value="all" className="bg-slate-800">{t.allStatuses}</option>
-            <option value="pending" className="bg-slate-800">{t.pending}</option>
-            <option value="processing" className="bg-slate-800">{t.processing}</option>
-            <option value="confirmed" className="bg-slate-800">{t.confirmed}</option>
-            <option value="preparing" className="bg-slate-800">{t.preparing}</option>
-            <option value="delivered" className="bg-slate-800">{t.delivered}</option>
-            <option value="cancelled" className="bg-slate-800">{t.canceled}</option>
+            <option value="all">{t.allStatuses}</option>
+            <option value="pending">{t.pending}</option>
+            <option value="processing">{t.processing}</option>
+            <option value="confirmed">{t.confirmed}</option>
+            <option value="preparing">{t.preparing}</option>
+            <option value="delivered">{t.delivered}</option>
+            <option value="cancelled">{t.canceled}</option>
           </select>
         </div>
       </div>
 
       {/* Customer List */}
-      <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
         {filteredCustomers.length === 0 ? (
           <div className="text-center py-12">
-            <Users className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-400">{t.noCustomersFound}</p>
+            <Users className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-500">{t.noCustomersFound}</p>
           </div>
         ) : (
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-slate-100">
             {filteredCustomers.map((customer) => {
               const isExpanded = expandedCustomer === customer.customerId;
               const filteredOrders = statusFilter === "all" 
@@ -1216,47 +1186,47 @@ function CustomerOrdersReport({
                   {/* Customer Row */}
                   <div
                     className={cn(
-                      "p-4 cursor-pointer hover:bg-white/[0.02] transition-colors",
-                      isExpanded && "bg-white/[0.02]"
+                      "p-4 cursor-pointer hover:bg-slate-50 transition-colors",
+                      isExpanded && "bg-slate-50"
                     )}
                     onClick={() => setExpandedCustomer(isExpanded ? null : customer.customerId)}
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-orange-500 rounded-full flex items-center justify-center flex-shrink-0 ring-2 ring-white/10">
+                        <div className="w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center flex-shrink-0">
                           <span className="font-bold text-white text-sm">
                             {customer.customerName[0]}
                           </span>
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-white truncate">{customer.customerName}</p>
-                          <p className="text-xs text-slate-500 truncate">{customer.customerEmail}</p>
+                          <p className="font-medium text-slate-900 truncate">{customer.customerName}</p>
+                          <p className="text-xs text-slate-400 truncate">{customer.customerEmail}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 sm:gap-6 flex-shrink-0">
                         <div className="text-center hidden sm:block">
-                          <p className="text-lg font-bold text-white">{customer.totalOrders}</p>
+                          <p className="text-lg font-bold text-slate-900">{customer.totalOrders}</p>
                           <p className="text-xs text-slate-500">{t.orders}</p>
                         </div>
                         <div className="text-center hidden md:block">
-                          <p className="text-lg font-bold text-emerald-400">{customer.completedOrders}</p>
+                          <p className="text-lg font-bold text-emerald-600">{customer.completedOrders}</p>
                           <p className="text-xs text-slate-500">{t.completed}</p>
                         </div>
                         <div className="text-center hidden md:block">
-                          <p className="text-lg font-bold text-red-400">{customer.canceledOrders}</p>
+                          <p className="text-lg font-bold text-red-500">{customer.canceledOrders}</p>
                           <p className="text-xs text-slate-500">{t.canceled}</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-lg font-bold text-white flex items-center gap-1">
+                          <p className="text-lg font-bold text-slate-900 flex items-center gap-1">
                             <CurrencySymbol size="sm" /> {(customer.totalSpent || 0).toFixed(2)}
                           </p>
                           <p className="text-xs text-slate-500">{t.totalSpent}</p>
                         </div>
-                        <button className="p-2 hover:bg-white/5 rounded-lg transition-colors">
+                        <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                           {isExpanded ? (
-                            <ChevronUp className="w-5 h-5 text-slate-500" />
+                            <ChevronUp className="w-5 h-5 text-slate-400" />
                           ) : (
-                            <ChevronDown className="w-5 h-5 text-slate-500" />
+                            <ChevronDown className="w-5 h-5 text-slate-400" />
                           )}
                         </button>
                       </div>
@@ -1265,8 +1235,8 @@ function CustomerOrdersReport({
 
                   {/* Expanded Orders Table */}
                   {isExpanded && (
-                    <div className="bg-slate-900/50 px-4 pb-4">
-                      <div className="bg-slate-800/80 rounded-xl border border-white/5 overflow-hidden">
+                    <div className="bg-slate-50 px-4 pb-4">
+                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                         {filteredOrders.length === 0 ? (
                           <div className="text-center py-8 text-slate-500">
                             {t.noOrders}
@@ -1274,7 +1244,7 @@ function CustomerOrdersReport({
                         ) : (
                           <div className="overflow-x-auto">
                             <table className="w-full">
-                              <thead className="bg-slate-900/50">
+                              <thead className="bg-slate-50">
                                 <tr>
                                   <th className={cn("px-4 py-2 text-xs font-medium text-slate-500 uppercase", isRTL ? "text-right" : "text-left")}>
                                     {t.orderNumber}
@@ -1294,18 +1264,18 @@ function CustomerOrdersReport({
                                   <th className="px-4 py-2"></th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-white/5">
+                              <tbody className="divide-y divide-slate-100">
                                 {filteredOrders.map((order) => {
                                   const statusConfig = getStatusConfig(order.status);
                                   const StatusIcon = statusConfig.icon;
                                   return (
-                                    <tr key={order.id} className="hover:bg-white/[0.02] transition-colors">
+                                    <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                                       <td className="px-4 py-3">
-                                        <span className="font-mono text-sm text-red-400">
+                                        <span className="font-mono text-sm text-slate-700">
                                           {order.orderNumber || order.id.slice(-8)}
                                         </span>
                                       </td>
-                                      <td className="px-4 py-3 text-sm text-slate-400">
+                                      <td className="px-4 py-3 text-sm text-slate-500">
                                         {new Date(order.createdAt).toLocaleDateString(isRTL ? "ar-AE" : "en-AE", {
                                           year: "numeric",
                                           month: "short",
@@ -1321,10 +1291,10 @@ function CustomerOrdersReport({
                                           {statusConfig.label}
                                         </span>
                                       </td>
-                                      <td className="px-4 py-3 text-sm text-slate-400">
+                                      <td className="px-4 py-3 text-sm text-slate-500">
                                         {order.items?.length || 0} {t.items}
                                       </td>
-                                      <td className={cn("px-4 py-3 text-sm font-medium text-white", isRTL ? "text-left" : "text-right")}>
+                                      <td className={cn("px-4 py-3 text-sm font-medium text-slate-900", isRTL ? "text-left" : "text-right")}>
                                         <span className="flex items-center gap-1 justify-end">
                                           <CurrencySymbol size="xs" /> {(order.total || 0).toFixed(2)}
                                         </span>
@@ -1335,7 +1305,7 @@ function CustomerOrdersReport({
                                             e.stopPropagation();
                                             onNavigate?.("orders", order.id);
                                           }}
-                                          className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
                                           title={t.viewOrders}
                                         >
                                           <Eye className="w-4 h-4" />

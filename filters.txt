@@ -1,0 +1,101 @@
+client/context/ProductsContext.tsx:366:      const validProducts = importedProducts.filter(
+client/context/ChatContext.tsx:253:    return chat.messages.filter(m => m.sender === "admin" && !m.read).length;
+client/context/ChatContext.tsx:260:  const userUnreadCount = userMessages.filter(m => m.sender === 'admin' && !m.read).length;
+client/context/WishlistContext.tsx:114:      setItems((prev) => prev.filter((i) => i.id !== tempItem.id));
+client/context/WishlistContext.tsx:122:    const removedItems = items.filter((item) => item.productId === productId);
+client/context/WishlistContext.tsx:123:    setItems((prev) => prev.filter((item) => item.productId !== productId));
+client/context/ReviewsContext.tsx:98:          const otherReviews = prev.filter((r) => r.productId !== productId);
+client/context/ReviewsContext.tsx:121:      .filter((r) => r.productId === productId)
+client/context/ReviewsContext.tsx:131:    const productReviews = reviews.filter((r) => r.productId === productId);
+client/context/ReviewsContext.tsx:147:      5: productReviews.filter((r) => r.rating === 5).length,
+client/context/ReviewsContext.tsx:148:      4: productReviews.filter((r) => r.rating === 4).length,
+client/context/ReviewsContext.tsx:149:      3: productReviews.filter((r) => r.rating === 3).length,
+client/context/ReviewsContext.tsx:150:      2: productReviews.filter((r) => r.rating === 2).length,
+client/context/ReviewsContext.tsx:151:      1: productReviews.filter((r) => r.rating === 1).length,
+client/context/ReviewsContext.tsx:217:      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+client/context/BasketContext.tsx:147:    setItems((prevItems) => prevItems.filter((item) => item.id !== id));
+client/context/SettingsContext.tsx:422:      setPromoCodes((prev) => prev.filter((code) => code.id !== id));
+client/context/SettingsContext.tsx:489:      setBanners((prev) => prev.filter((banner) => banner.id !== id));
+client/context/SettingsContext.tsx:502:        .filter((b): b is Banner => b !== null);
+client/context/SettingsContext.tsx:541:      setTimeSlots((prev) => prev.filter((slot) => slot.id !== id));
+client/context/NotificationContext.tsx:258:    setNotifications((prev) => prev.filter((n) => n.id !== id));
+client/context/NotificationContext.tsx:285:  const unreadCount = notifications.filter((n) => n.unread).length;
+client/components/ui/chart.tsx:69:  const colorConfig = Object.entries(config).filter(
+client/components/admin/OrdersTab.tsx:413:  const filteredOrders = orders.filter((order) => {
+client/components/admin/SettingsTab.tsx:424:                        const values = e.target.value.split(",").map((v) => parseFloat(v.trim())).filter((v) => !isNaN(v));
+client/components/admin/StockTab.tsx:161:  const filteredStock = stock.filter((item) => {
+client/components/admin/UsersTab.tsx:295:      const staffUsers = usersRes.data.filter((u: UserType) => u.role !== 'customer');
+client/components/admin/UsersTab.tsx:350:  const filteredUsers = users.filter((user) => {
+client/components/admin/SuppliersTab.tsx:313:    return suppliers.filter((s) => {
+client/components/admin/SuppliersTab.tsx:595:    const items = poItems.filter((i) => i.productId && i.quantity > 0 && i.unitCost > 0);
+client/components/admin/SuppliersTab.tsx:1041:              <Input label={t.categoriesComma} value={form.categories.join(", ")} onChange={(v) => setForm((f) => ({ ...f, categories: v.split(",").map((c) => c.trim()).filter(Boolean) }))} />
+client/components/admin/SuppliersTab.tsx:1115:                        onClick={() => setPoItems((arr) => arr.filter((_, i) => i !== idx))}
+client/components/admin/SuppliersTab.tsx:1197:                    .filter(([, qty]) => qty > 0)
+client/components/admin/ProductsTab.tsx:166:  const filteredProducts = products.filter((product) => {
+client/components/admin/ProductsTab.tsx:179:  const availableCount = products.filter((p) => p.available).length;
+client/components/admin/ProductsTab.tsx:180:  const unavailableCount = products.filter((p) => !p.available).length;
+client/components/admin/ProductsTab.tsx:582:    .filter(cat => cat.id !== "Premium")
+client/components/admin/ReportsTab.tsx:256:            const completedOrders = customerOrders.filter(o => o.status === "delivered").length;
+client/components/admin/ReportsTab.tsx:257:            const canceledOrders = customerOrders.filter(o => o.status === "cancelled").length;
+client/components/admin/ReportsTab.tsx:258:            const pendingOrders = customerOrders.filter(o => 
+client/components/admin/ReportsTab.tsx:262:              .filter(o => o.status !== "cancelled")
+client/components/admin/ReportsTab.tsx:1054:  const filteredCustomers = customerStats.filter((customer) => {
+client/components/admin/ReportsTab.tsx:1065:  const activeCustomers = customerStats.filter(c => c.totalOrders > 0).length;
+client/components/admin/ReportsTab.tsx:1182:                : customer.orders.filter(o => o.status === statusFilter);
+client/components/admin/AdminLayout.tsx:181:    setAdminAttachments(prev => prev.filter(att => att.id !== id));
+client/components/admin/AdminLayout.tsx:293:              { tabs: tabConfig.filter(t => ['dashboard', 'orders'].includes(t.id)) },
+client/components/admin/AdminLayout.tsx:294:              { labelKey: 'admin.catalog', tabs: tabConfig.filter(t => ['products', 'categories', 'stock', 'suppliers'].includes(t.id)) },
+client/components/admin/AdminLayout.tsx:295:              { labelKey: 'admin.people', tabs: tabConfig.filter(t => ['users', 'customers', 'delivery'].includes(t.id)) },
+client/components/admin/AdminLayout.tsx:296:              { labelKey: 'admin.analytics', tabs: tabConfig.filter(t => ['finance', 'payments', 'reports'].includes(t.id)) },
+client/components/admin/AdminLayout.tsx:297:              { tabs: tabConfig.filter(t => ['promoCodes', 'banners', 'settings'].includes(t.id)) },
+client/components/admin/PromoCodesTab.tsx:86:  const filteredCodes = promoCodes.filter((code) => {
+client/components/admin/PromoCodesTab.tsx:95:  const activeCount = promoCodes.filter((c) => c.enabled).length;
+client/components/admin/PromoCodesTab.tsx:96:  const inactiveCount = promoCodes.filter((c) => !c.enabled).length;
+client/components/admin/DeliveryTab.tsx:234:        const activeDeliveries = ordersRes.data.filter(order => {
+client/components/admin/DeliveryTab.tsx:960:      areas: formData.areas.split(",").map((a) => a.trim()).filter(Boolean),
+client/components/admin/PaymentsTab.tsx:82:  const filteredPayments = payments.filter(
+client/components/admin/PaymentsTab.tsx:140:      .filter((p) => p.status === "captured")
+client/components/admin/PaymentsTab.tsx:143:    pendingCount: payments.filter((p) => p.status === "pending").length,
+client/components/admin/CustomersTab.tsx:330:          pendingReviews: reviews.filter(r => r.status === "pending").length,
+client/components/admin/CustomersTab.tsx:357:  const filteredCustomers = customers.filter((customer) => {
+client/components/admin/CustomersTab.tsx:367:  const filteredReviews = reviews.filter((review) => {
+client/components/admin/CustomersTab.tsx:463:        setReviews(prev => prev.filter((r) => r.id !== reviewId));
+client/components/admin/CustomersTab.tsx:496:        setCustomers(prev => prev.filter(c => c.id !== userId));
+client/components/admin/CustomersTab.tsx:576:              <p className="text-xl sm:text-2xl font-bold text-slate-900">{reviews.filter(r => r.status === "pending").length}</p>
+client/components/admin/CustomersTab.tsx:608:                {section.id === "reviews" && reviews.filter(r => r.status === "pending").length > 0 && (
+client/components/admin/CustomersTab.tsx:610:                    {reviews.filter(r => r.status === "pending").length}
+client/components/admin/CustomersTab.tsx:989:                      ({reviews.filter(r => r.status === filter).length})
+client/components/admin/BannersTab.tsx:81:  const activeCount = banners.filter((b) => b.enabled).length;
+client/components/admin/BannersTab.tsx:82:  const inactiveCount = banners.filter((b) => !b.enabled).length;
+client/components/admin/FinanceTab.tsx:323:    return state.transactions.filter(
+client/components/ProductCard.tsx:114:        return { ...prev, [type]: current.filter(id => id !== optionId) };
+client/components/ProductCard.tsx:136:    ].filter(Boolean).join(" | ");
+client/components/Header.tsx:100:  const userNotifications = notifications.filter(n => 
+client/components/Header.tsx:108:  const userUnreadCount = userNotifications.filter(n => n.unread).length;
+client/components/Header.tsx:180:    setChatAttachments(prev => prev.filter(att => att.id !== id));
+client/hooks/use-toast.ts:121:        toasts: state.toasts.filter((t) => t.id !== action.toastId),
+client/pages/Deals.tsx:39:      .filter((p) => p.enabled)
+client/pages/Deals.tsx:70:    return products.filter((p) => p.discount && p.discount > 0);
+client/pages/Deals.tsx:76:    if (activeCategory === "flash") return dealsProducts.filter((p) => (p.discount || 0) >= 20);
+client/pages/Deals.tsx:77:    if (activeCategory === "bundle") return dealsProducts.filter((p) => (p.discount || 0) >= 10 && (p.discount || 0) < 20);
+client/pages/Deals.tsx:78:    if (activeCategory === "seasonal") return dealsProducts.filter((p) => ["lamb", "beef"].includes(p.category.toLowerCase()));
+client/pages/Deals.tsx:79:    if (activeCategory === "clearance") return dealsProducts.filter((p) => (p.discount || 0) >= 30);
+client/pages/Home.tsx:54:  const banners = allBanners.filter((b) => b.enabled);
+client/pages/Home.tsx:82:    .filter((p) => p.discount && p.discount > 0)
+client/pages/Checkout.tsx:78:      availableSlots = availableSlots.filter(slot => {
+client/pages/Checkout.tsx:711:          setZones(response.data.filter(z => z.isActive));
+client/pages/Checkout.tsx:992:        const updatedAddresses = addresses.filter(a => a.id !== addressId);
+client/pages/Profile.tsx:332:      setSavedAddresses(prev => prev.filter(addr => addr.id !== addressId));
+client/pages/DriverDashboard.tsx:488:  const completedCount = deliveries.filter((d) => d.status === "delivered").length;
+client/pages/DriverDashboard.tsx:489:  const pendingCount = deliveries.filter((d) => d.status !== "delivered").length;
+client/pages/ProductDetail.tsx:77:    .filter((p) => p.category === product?.category && p.id !== product?.id)
+client/pages/ProductDetail.tsx:111:    }).filter(Boolean);
+client/pages/ProductDetail.tsx:116:    }).filter(Boolean);
+client/pages/ProductDetail.tsx:121:    ].filter(Boolean).join(" | ");
+client/pages/ProductDetail.tsx:366:                              ? prev.filter((id) => id !== option.id)
+client/pages/ProductDetail.tsx:395:                              ? prev.filter((id) => id !== option.id)
+client/pages/Orders.tsx:85:  const filteredOrders = orders.filter((order) => {
+client/pages/Products.tsx:90:        result = result.filter((p) => p.isPremium === true);
+client/pages/Products.tsx:92:        result = result.filter((p) => p.category.toLowerCase() === selectedCategory.toLowerCase());
+client/pages/Products.tsx:99:      result = result.filter((p) => {
+client/pages/Products.tsx:107:    result = result.filter((p) => p.price >= priceRange[0] && p.price <= priceRange[1]);

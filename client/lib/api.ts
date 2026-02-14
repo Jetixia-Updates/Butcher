@@ -1219,6 +1219,7 @@ export const reviewsApi = {
   // Create a review
   create: (data: {
     productId: string;
+    userId: string;
     rating: number;
     title: string;
     comment: string;
