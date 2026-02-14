@@ -1595,6 +1595,22 @@ function createApp() {
     }
   });
 
+  // Ensure required tables and columns exist
+  const runMigrations = async () => {
+    if (!isDatabaseAvailable() || !sql) return;
+    try {
+      console.log('[Migration] Checking chat_messages columns...');
+      // Add order_id column
+      await sql`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS order_id TEXT`;
+      // Add read_by_driver column
+      await sql`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS read_by_driver BOOLEAN DEFAULT false`;
+      console.log('[Migration] chat_messages columns ensured');
+    } catch (err) {
+      console.error('[Migration] Failed to run migrations:', err);
+    }
+  };
+  runMigrations();
+
   // =====================================================
   // CHAT API
   // =====================================================
@@ -1608,22 +1624,35 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const usersRows = await sql`
-        SELECT DISTINCT user_id, user_name, user_email FROM chat_messages
-      `;
+      const { orderId } = req.query;
+
+      let usersRows;
+      if (orderId) {
+        usersRows = await sql`
+          SELECT DISTINCT user_id, user_name, user_email, order_id FROM chat_messages WHERE order_id = ${orderId as string}
+        `;
+      } else {
+        usersRows = await sql`
+          SELECT DISTINCT user_id, user_name, user_email, order_id FROM chat_messages
+        `;
+      }
 
       const chats = [];
-      for (const user of usersRows) {
+      for (const row of usersRows) {
         const messages = await sql`
-          SELECT * FROM chat_messages WHERE user_id = ${user.user_id} ORDER BY created_at ASC
+          SELECT * FROM chat_messages 
+          WHERE user_id = ${row.user_id} 
+          AND (order_id = ${row.order_id} OR (order_id IS NULL AND ${row.order_id} IS NULL))
+          ORDER BY created_at ASC
         `;
-        const unreadCount = messages.filter((m: any) => m.sender === 'user' && !m.read_by_admin).length;
+        const unreadCount = messages.filter((m: any) => m.sender !== 'admin' && !m.read_by_admin).length;
         const lastMsg = messages[messages.length - 1];
 
         chats.push({
-          userId: user.user_id,
-          userName: user.user_name || 'Customer',
-          userEmail: user.user_email || '',
+          userId: row.user_id,
+          userName: row.user_name || 'Customer',
+          userEmail: row.user_email || '',
+          orderId: row.order_id,
           messages: messages.map((m: any) => ({
             id: m.id,
             text: m.text,
@@ -1631,7 +1660,9 @@ function createApp() {
             createdAt: safeDate(m.created_at),
             readByAdmin: m.read_by_admin ?? false,
             readByUser: m.read_by_user ?? false,
+            readByDriver: m.read_by_driver ?? false,
             attachments: safeJson(m.attachments, []),
+            orderId: m.order_id,
           })),
           lastMessageAt: lastMsg ? safeDate(lastMsg.created_at) : null,
           unreadCount,
@@ -1652,7 +1683,7 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const { userId, userName, userEmail, text, sender, attachments } = req.body;
+      const { userId, userName, userEmail, text, sender, attachments, orderId } = req.body;
 
       if (!userId || (!text && (!attachments || attachments.length === 0))) {
         return res.status(400).json({ success: false, error: 'User ID and either text or attachments are required' });
@@ -1663,13 +1694,36 @@ function createApp() {
       const senderType = sender || 'user';
 
       await sql`
-        INSERT INTO chat_messages (id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, created_at)
-        VALUES (${msgId}, ${userId}, ${userName || null}, ${userEmail || null}, ${text}, ${senderType}, ${JSON.stringify(attachments || [])}, ${senderType === 'admin'}, ${senderType === 'user'}, ${now})
+        INSERT INTO chat_messages (id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, read_by_driver, created_at, order_id)
+        VALUES (
+          ${msgId}, 
+          ${userId}, 
+          ${userName || null}, 
+          ${userEmail || null}, 
+          ${text}, 
+          ${senderType}, 
+          ${JSON.stringify(attachments || [])}, 
+          ${senderType === 'admin'}, 
+          ${senderType === 'user'}, 
+          ${senderType === 'delivery'}, 
+          ${now},
+          ${orderId || null}
+        )
       `;
 
       res.json({
         success: true,
-        data: { id: msgId, userId, sender: senderType, text, readByAdmin: senderType === 'admin', readByUser: senderType === 'user', createdAt: now.toISOString() },
+        data: {
+          id: msgId,
+          userId,
+          sender: senderType,
+          text,
+          readByAdmin: senderType === 'admin',
+          readByUser: senderType === 'user',
+          readByDriver: senderType === 'delivery',
+          createdAt: now.toISOString(),
+          orderId: orderId || null
+        },
         message: 'Message sent successfully',
       });
     } catch (error) {
@@ -1699,7 +1753,8 @@ function createApp() {
 
       try {
         const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-        const metadataStr = JSON.stringify({ originalType: 'chat' });
+        const { orderId } = req.body || {};
+        const metadataStr = JSON.stringify({ originalType: 'chat', orderId });
         await sql`
           INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
           VALUES (${notifId}, ${safeUserId}, 'promotional', 'push', 'New message from support', ${displayMessage}, ${displayMessage}, 'sent', ${metadataStr}, ${now})
@@ -1743,18 +1798,20 @@ function createApp() {
         if (admins.length === 0) {
           console.log('[Notify Admin] No admins found, creating notification for fallback admin');
           const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-          const metadataStr = JSON.stringify({ originalType: 'chat', fromUserId: safeUserId });
+          const msg = `New message from ${userName || 'Customer'}${orderId ? ' regarding Order #' + orderId : ''}`;
+          const metadataStr = JSON.stringify({ originalType: 'chat', userId, orderId });
           await sql`
             INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
-            VALUES (${notifId}, 'admin', 'promotional', 'push', ${title}, ${displayMessage}, ${displayMessage}, 'sent', ${metadataStr}, ${now})
+            VALUES (${notifId}, 'admin', 'promotional', 'push', 'New Chat Message', ${msg}, ${msg}, 'sent', ${metadataStr}, ${now})
           `;
         } else {
           for (const admin of admins) {
             const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
-            const metadataStr = JSON.stringify({ originalType: 'chat', fromUserId: safeUserId });
+            const msg = `New message from ${userName || 'Customer'}${orderId ? ' regarding Order #' + orderId : ''}`;
+            const metadataStr = JSON.stringify({ originalType: 'chat', userId, orderId });
             await sql`
               INSERT INTO notifications (id, user_id, type, channel, title, message, message_ar, status, metadata, created_at)
-              VALUES (${notifId}, ${admin.id}, 'promotional', 'push', ${title}, ${displayMessage}, ${displayMessage}, 'sent', ${metadataStr}, ${now})
+              VALUES (${notifId}, ${admin.id}, 'promotional', 'push', 'New Chat Message', ${msg}, ${msg}, 'sent', ${metadataStr}, ${now})
             `;
           }
         }
@@ -1788,7 +1845,7 @@ function createApp() {
   });
 
   // Get Chat Messages (catch-all :userId - MUST be after specific routes)
-  // Table schema: id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, created_at
+  // Table schema: id, user_id, user_name, user_email, text, sender, attachments, read_by_admin, read_by_user, created_at, order_id, read_by_driver
   app.get('/api/chat/:userId', async (req, res) => {
     try {
       if (!isDatabaseAvailable() || !sql) {
@@ -1796,7 +1853,22 @@ function createApp() {
       }
 
       const { userId } = req.params;
-      const rows = await sql`SELECT * FROM chat_messages WHERE user_id = ${userId} ORDER BY created_at ASC`;
+      const { orderId } = req.query;
+
+      let rows;
+      if (orderId) {
+        rows = await sql`
+          SELECT * FROM chat_messages 
+          WHERE user_id = ${userId} AND order_id = ${orderId as string} 
+          ORDER BY created_at ASC
+        `;
+      } else {
+        rows = await sql`
+          SELECT * FROM chat_messages 
+          WHERE user_id = ${userId} AND order_id IS NULL
+          ORDER BY created_at ASC
+        `;
+      }
 
       const messages = rows.map((m: any) => ({
         id: m.id,
@@ -1808,7 +1880,9 @@ function createApp() {
         attachments: safeJson(m.attachments, []),
         readByAdmin: m.read_by_admin ?? false,
         readByUser: m.read_by_user ?? false,
+        readByDriver: m.read_by_driver ?? false,
         createdAt: safeDate(m.created_at),
+        orderId: m.order_id,
       }));
 
       res.json({ success: true, data: messages });

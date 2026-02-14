@@ -12,11 +12,14 @@ import {
   ChefHat,
   User,
   Navigation,
-  RefreshCw
+  RefreshCw,
+  X,
+  Send
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useOrders } from "@/context/OrdersContext";
 import { useAuth } from "@/context/AuthContext";
+import { useOrderChat, ChatAttachment } from "@/context/ChatContext";
 import { cn } from "@/lib/utils";
 import { deliveryApi } from "@/lib/api";
 import L from "leaflet";
@@ -96,9 +99,31 @@ export default function TrackOrderPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tracking, setTracking] = useState<TrackingInfo | null>(null);
   const [countdown, setCountdown] = useState<string>("");
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
+  const chatMessagesRef = useRef<HTMLDivElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
 
   // Find order
   const order = orders.find(o => o.orderNumber === orderNumber);
+
+  // Use order chat hook
+  const { messages: chatMessages, sendMessage: sendOrderChat, markAsRead: markChatAsRead, unreadCount: chatUnreadCount } = useOrderChat(order?.id, user?.id);
+
+  // Mark as read when chat opens
+  useEffect(() => {
+    if (isChatOpen && chatUnreadCount > 0) {
+      markChatAsRead();
+    }
+  }, [isChatOpen, chatUnreadCount, markChatAsRead]);
+
+  // Scroll to bottom
+  useEffect(() => {
+    if (chatMessagesRef.current && isChatOpen) {
+      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+    }
+  }, [chatMessages, isChatOpen]);
 
   // Fetch real tracking data from API
   const fetchTrackingData = useCallback(async () => {
@@ -147,9 +172,9 @@ export default function TrackOrderPage() {
           driver: {
             name: apiTracking.driverName,
             phone: apiTracking.driverMobile,
-            rating: apiTracking.driverRating || 0,
-            vehicleType: apiTracking.vehicleType || '',
-            vehiclePlate: apiTracking.vehiclePlate || '',
+            rating: 4.8, // Fallback
+            vehicleType: "Motorcycle", // Fallback
+            vehiclePlate: "D-12345", // Fallback
           },
           estimatedArrival: apiTracking.estimatedArrival,
           currentLocation: undefined, // Would come from real-time tracking
@@ -310,6 +335,13 @@ export default function TrackOrderPage() {
     };
   }, [tracking?.currentLocation]);
 
+  const handleSend = () => {
+    if (!chatMessage.trim() || !user) return;
+    const userName = `${user.firstName || ""} ${user.familyName || ""}`.trim() || "Customer";
+    sendOrderChat(userName, user.email || "", chatMessage.trim());
+    setChatMessage("");
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await fetchTrackingData();
@@ -441,8 +473,16 @@ export default function TrackOrderPage() {
                 >
                   <Phone className="w-5 h-5" />
                 </a>
-                <button className="p-3 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors">
+                <button
+                  onClick={() => setIsChatOpen(true)}
+                  className="p-3 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors relative"
+                >
                   <MessageCircle className="w-5 h-5" />
+                  {chatUnreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center border-2 border-white">
+                      {chatUnreadCount}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -549,6 +589,105 @@ export default function TrackOrderPage() {
           </div>
         </div>
       </div>
+      {/* Chat Modal */}
+      {isChatOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white dark:bg-gray-800 w-full max-w-lg h-[80vh] sm:h-[600px] sm:rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+            {/* Header */}
+            <div className="px-6 py-4 bg-primary text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <User className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold">{tracking?.driver?.name || t("trackOrder.yourDriver")}</h3>
+                  <p className="text-xs text-white/80">{t("trackOrder.liveChat")}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsChatOpen(false)}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div
+              ref={chatMessagesRef}
+              className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-gray-900"
+            >
+              {chatMessages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                  <div className="w-16 h-16 bg-slate-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                    <MessageCircle className="w-8 h-8 opacity-20" />
+                  </div>
+                  <p className="text-sm">{t("trackOrder.startChat")}</p>
+                </div>
+              ) : (
+                chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={cn(
+                      "flex flex-col",
+                      msg.sender === "user" ? "items-end" : "items-start"
+                    )}
+                  >
+                    <div className={cn(
+                      "max-w-[85%] rounded-2xl px-4 py-2 text-sm shadow-sm",
+                      msg.sender === "user"
+                        ? "bg-primary text-white rounded-tr-none"
+                        : "bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 rounded-tl-none border border-slate-100 dark:border-gray-700"
+                    )}>
+                      {msg.text}
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {msg.attachments.map(att => (
+                            <div key={att.id} className="bg-white/10 p-2 rounded flex items-center gap-2">
+                              {att.type.startsWith("image/") ? (
+                                <img src={att.url} className="w-full rounded" />
+                              ) : (
+                                <span className="truncate">{att.name}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 px-1">
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Input */}
+            <div className="p-4 bg-white dark:bg-gray-800 border-t border-slate-100 dark:border-gray-700">
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-gray-900 rounded-full px-4 py-2 border border-slate-200 dark:border-gray-700 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+                <input
+                  type="text"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  placeholder={t("trackOrder.typeMessage")}
+                  className="flex-1 bg-transparent border-none outline-none text-sm dark:text-white"
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!chatMessage.trim()}
+                  className="p-1.5 bg-primary text-white rounded-full disabled:opacity-50 transition-all hover:scale-105 active:scale-95 shadow-lg"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// Add these to lucide-react imports at the top
+// X, MessageCircle, Send

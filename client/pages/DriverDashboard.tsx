@@ -22,10 +22,14 @@ import {
   FileSignature,
   Bell,
   X,
+  MessageCircle,
+  Send,
+  Paperclip,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useNotifications, createUserOrderNotification, createUserDeliveryNotification, formatRelativeTime } from "@/context/NotificationContext";
+import { useOrderChat, ChatAttachment } from "@/context/ChatContext";
 import { cn } from "@/lib/utils";
 import { CurrencySymbol } from "@/components/CurrencySymbol";
 import { useToast } from "@/hooks/use-toast";
@@ -104,6 +108,9 @@ const translations = {
     noNotifications: "No notifications",
     markAllRead: "Mark all read",
     newDeliveryAssigned: "New Delivery Assigned",
+    chat: "Chat",
+    typeMessage: "Type a message...",
+    send: "Send",
   },
   ar: {
     driverDashboard: "لوحة تحكم السائق",
@@ -152,6 +159,9 @@ const translations = {
     noNotifications: "لا توجد إشعارات",
     markAllRead: "تحديد الكل كمقروء",
     newDeliveryAssigned: "توصيل جديد",
+    chat: "المحادثة",
+    typeMessage: "اكتب رسالة...",
+    send: "إرسال",
   },
 };
 
@@ -180,6 +190,9 @@ export default function DriverDashboardPage() {
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [loginError, setLoginError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
+  const [activeChatOrder, setActiveChatOrder] = useState<DeliveryOrder | null>(null);
+  const [chatMessage, setChatMessage] = useState("");
+  const chatMessagesRef = React.useRef<HTMLDivElement>(null);
 
   // Check if user is a driver
   const isDriver = user?.role === "delivery";
@@ -746,6 +759,20 @@ export default function DriverDashboardPage() {
                       </div>
                     </div>
 
+                    {/* Items & Chat */}
+                    <div className="px-4 py-2 flex items-center justify-between bg-slate-50/50">
+                      <p className="text-xs text-slate-500">
+                        {delivery.items.length} {t.items}
+                      </p>
+                      <button
+                        onClick={() => setActiveChatOrder(delivery)}
+                        className="flex items-center gap-1 text-sm text-primary font-medium hover:underline"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        {t.chat}
+                      </button>
+                    </div>
+
                     {/* Action Button */}
                     {!isCompleted && nextStatus && (
                       <div className="p-4">
@@ -798,6 +825,16 @@ export default function DriverDashboardPage() {
         )}
       </div>
 
+      {/* Chat Modal */}
+      {activeChatOrder && (
+        <DriverChatModal
+          order={activeChatOrder}
+          onClose={() => setActiveChatOrder(null)}
+          t={t}
+          isRTL={isRTL}
+        />
+      )}
+
       {/* Confirmation Modal */}
       {showConfirmModal && selectedDelivery && (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-[9999] p-4">
@@ -847,6 +884,114 @@ export default function DriverDashboardPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Driver Chat Modal Component
+function DriverChatModal({ order, onClose, t, isRTL }: { order: DeliveryOrder; onClose: () => void; t: any; isRTL: boolean }) {
+  const { user } = useAuth();
+  // Pass 'delivery' as senderType to useOrderChat
+  const { messages, sendMessage, markAsRead, unreadCount } = useOrderChat(order.orderId, order.customerId, 'delivery');
+  const [msg, setMsg] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (unreadCount > 0) markAsRead();
+  }, [unreadCount, markAsRead]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = () => {
+    if (!msg.trim()) return;
+    sendMessage(`${user?.firstName || 'Driver'} (Delivery)`, user?.email || "", msg);
+    setMsg("");
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white dark:bg-gray-800 w-full max-w-lg h-[80vh] sm:h-[600px] sm:rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+        {/* Header */}
+        <div className="px-6 py-4 bg-primary text-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+              <User className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold">{order.customerName}</h3>
+              <p className="text-xs text-white/80">Order #{order.orderNumber}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-gray-900"
+        >
+          {messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400">
+              <div className="w-16 h-16 bg-slate-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                <MessageCircle className="w-8 h-8 opacity-20" />
+              </div>
+              <p className="text-sm">{t.chat}</p>
+            </div>
+          ) : (
+            messages.map((m) => (
+              <div
+                key={m.id}
+                className={cn(
+                  "flex flex-col",
+                  m.sender === "delivery" ? "items-end" : "items-start"
+                )}
+              >
+                <div className={cn(
+                  "max-w-[85%] rounded-2xl px-4 py-2 text-sm shadow-sm",
+                  m.sender === "delivery"
+                    ? "bg-primary text-white rounded-tr-none"
+                    : "bg-white dark:bg-gray-700 text-slate-900 dark:text-gray-100 rounded-tl-none border border-slate-100 dark:border-gray-600 shadow-sm"
+                )}>
+                  {m.text}
+                </div>
+                <span className="text-[10px] text-slate-400 mt-1 px-1">
+                  {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="p-4 bg-white dark:bg-gray-800 border-t border-slate-100 dark:border-gray-700">
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-gray-900 rounded-full px-4 py-2 border border-slate-200 dark:border-gray-700 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+            <input
+              type="text"
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder={t.typeMessage}
+              className="flex-1 bg-transparent border-none outline-none text-sm dark:text-white"
+            />
+            <button
+              onClick={handleSend}
+              disabled={!msg.trim()}
+              className="p-1.5 bg-primary text-white rounded-full disabled:opacity-50 transition-all hover:scale-105 active:scale-95 shadow-lg"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

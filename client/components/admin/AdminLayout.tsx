@@ -197,7 +197,7 @@ export function AdminLayout({
   // Handle sending admin message
   const handleSendAdminMessage = () => {
     if ((!adminMessage.trim() && adminAttachments.length === 0) || !selectedChatUserId) return;
-    sendAdminMessage(selectedChatUserId, adminMessage.trim(), adminAttachments.length > 0 ? adminAttachments : undefined);
+    sendAdminMessage(selectedChatUserId, adminMessage.trim(), adminAttachments.length > 0 ? adminAttachments : undefined, selectedChat?.orderId);
     setAdminMessage("");
     setAdminAttachments([]);
   };
@@ -529,7 +529,9 @@ export function AdminLayout({
                                     "max-w-[80%] rounded-lg p-3",
                                     msg.sender === 'admin'
                                       ? "bg-primary text-white ml-auto rounded-br-none"
-                                      : "bg-slate-100 text-slate-900 rounded-bl-none"
+                                      : msg.sender === 'delivery'
+                                        ? "bg-blue-600 text-white ml-auto rounded-br-none"
+                                        : "bg-slate-100 text-slate-900 rounded-bl-none"
                                   )}
                                 >
                                   {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
@@ -599,7 +601,9 @@ export function AdminLayout({
                                     "max-w-[80%] rounded-lg p-3",
                                     msg.sender === 'admin'
                                       ? "bg-primary text-white ml-auto rounded-br-none"
-                                      : "bg-slate-100 text-slate-900 rounded-bl-none"
+                                      : msg.sender === 'delivery'
+                                        ? "bg-blue-600 text-white ml-auto rounded-br-none"
+                                        : "bg-slate-100 text-slate-900 rounded-bl-none"
                                   )}
                                 >
                                   {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}

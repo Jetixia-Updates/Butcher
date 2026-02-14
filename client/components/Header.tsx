@@ -31,7 +31,7 @@ const useDarkMode = () => {
     } else {
       root.classList.remove("dark");
     }
-    
+
     // Update Capacitor status bar if on native app
     if (Capacitor.isNativePlatform()) {
       StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(console.error);
@@ -58,7 +58,7 @@ const getNotificationIcon = (type: string, title?: string) => {
   if (title && (title.includes("TAX Invoice") || title.includes("فاتورة ضريبية"))) {
     return <FileText className="w-4 h-4 text-emerald-500" />;
   }
-  
+
   switch (type) {
     case "order":
       return <Package className="w-4 h-4 text-blue-500" />;
@@ -79,7 +79,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAllNotifications } = useNotifications();
   const { items: wishlistItems } = useWishlist();
   const { isDark, toggleDarkMode } = useDarkMode();
-  
+
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Notification | null>(null);
   const [showChat, setShowChat] = useState(false);
@@ -97,12 +97,12 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
   // Filter notifications for user (exclude admin-only types like stock)
   // Types can be: order, order_placed, order_confirmed, order_delivered, delivery, delivery_in_transit, driver_assigned, payment, system
-  const userNotifications = notifications.filter(n => 
+  const userNotifications = notifications.filter(n =>
     n.type && (
-      n.type.startsWith("order") || 
-      n.type.startsWith("delivery") || 
-      n.type.startsWith("driver") || 
-      n.type.startsWith("payment") || 
+      n.type.startsWith("order") ||
+      n.type.startsWith("delivery") ||
+      n.type.startsWith("driver") ||
+      n.type.startsWith("payment") ||
       n.type === "system"
     )
   ).slice(0, 10);
@@ -151,7 +151,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
     if (!files) return;
 
     const newAttachments: ChatAttachment[] = [];
-    
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       // Convert file to base64 data URL
@@ -160,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
         reader.onload = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
       });
-      
+
       newAttachments.push({
         id: `att_${Date.now()}_${i}`,
         name: file.name,
@@ -169,7 +169,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
         url: dataUrl,
       });
     }
-    
+
     setChatAttachments(prev => [...prev, ...newAttachments]);
     // Reset file input
     if (fileInputRef.current) {
@@ -201,7 +201,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
     const userName = `${user.firstName || ""} ${user.familyName || ""}`.trim() || "Customer";
     const userEmail = user.email || "";
-    
+
     sendChatMessage(userName, userEmail, newMessage.trim(), chatAttachments.length > 0 ? chatAttachments : undefined);
     setNewMessage("");
     setChatAttachments([]);
@@ -209,18 +209,18 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
 
   const handleNotificationClick = (notification: Notification) => {
     markAsRead(notification.id);
-    
+
     // Check if this is a TAX invoice notification (title contains "TAX Invoice" or "فاتورة ضريبية")
     if (notification.title?.includes("TAX Invoice") || notification.title?.includes("فاتورة ضريبية")) {
       setSelectedInvoice(notification);
       setShowNotifications(false);
       return;
     }
-    
+
     if (notification.link) {
       // Sanitize old/invalid links - redirect to base page instead of non-existent detail pages
       let targetLink = notification.link;
-      
+
       // Fix: /orders/order_xxx -> /orders (order detail page doesn't exist)
       if (targetLink.startsWith("/orders/")) {
         targetLink = "/orders";
@@ -233,7 +233,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
       if (targetLink === "/admin") {
         targetLink = "/admin/dashboard";
       }
-      
+
       navigate(targetLink);
     }
     setShowNotifications(false);
@@ -322,7 +322,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                     </div>
 
                     {/* Chat Messages */}
-                    <div 
+                    <div
                       ref={chatMessagesRef}
                       className="h-64 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900"
                     >
@@ -340,11 +340,12 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                             className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
                           >
                             <div
-                              className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                                msg.sender === "user"
+                              className={`max-w-[80%] rounded-2xl px-4 py-2 ${msg.sender === "user"
                                   ? "bg-primary text-white rounded-br-md"
-                                  : "bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600 rounded-bl-md"
-                              }`}
+                                  : msg.sender === "delivery"
+                                    ? "bg-blue-600 text-white rounded-bl-md"
+                                    : "bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600 rounded-bl-md"
+                                }`}
                             >
                               {msg.text && <p className="text-sm">{msg.text}</p>}
                               {/* Attachments */}
@@ -354,21 +355,20 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                                     <div key={att.id}>
                                       {att.type?.startsWith("image/") ? (
                                         <a href={att.url} target="_blank" rel="noopener noreferrer" className="block">
-                                          <img 
-                                            src={att.url} 
-                                            alt={att.name} 
+                                          <img
+                                            src={att.url}
+                                            alt={att.name}
                                             className="max-w-full rounded-lg max-h-40 object-cover"
                                           />
                                         </a>
                                       ) : (
-                                        <a 
-                                          href={att.url} 
+                                        <a
+                                          href={att.url}
                                           download={att.name}
-                                          className={`flex items-center gap-2 p-2 rounded-lg ${
-                                            msg.sender === "user" 
-                                              ? "bg-white/20 hover:bg-white/30" 
+                                          className={`flex items-center gap-2 p-2 rounded-lg ${msg.sender === "user"
+                                              ? "bg-white/20 hover:bg-white/30"
                                               : "bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500"
-                                          } transition-colors`}
+                                            } transition-colors`}
                                         >
                                           {getFileIcon(att.type)}
                                           <div className="flex-1 min-w-0">
@@ -384,9 +384,8 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                                   ))}
                                 </div>
                               )}
-                              <p className={`text-xs mt-1 ${
-                                msg.sender === "user" ? "text-white/70" : "text-gray-400 dark:text-gray-500"
-                              }`}>
+                              <p className={`text-xs mt-1 ${msg.sender === "user" ? "text-white/70" : "text-gray-400 dark:text-gray-500"
+                                }`}>
                                 {(() => {
                                   const d = new Date(msg.timestamp);
                                   return isNaN(d.getTime()) ? "-" : d.toLocaleTimeString(language === "ar" ? "ar-AE" : "en-US", {
@@ -511,9 +510,8 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                         userNotifications.map((notification) => (
                           <div
                             key={notification.id}
-                            className={`flex items-start gap-3 px-4 py-3 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
-                              notification.unread ? "bg-blue-50/50 dark:bg-blue-900/20" : ""
-                            }`}
+                            className={`flex items-start gap-3 px-4 py-3 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${notification.unread ? "bg-blue-50/50 dark:bg-blue-900/20" : ""
+                              }`}
                             onClick={() => handleNotificationClick(notification)}
                           >
                             <div className="flex-shrink-0 mt-1">
@@ -535,7 +533,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                                 </button>
                               </div>
                               <p className="text-xs text-gray-600 dark:text-gray-200 mt-0.5 line-clamp-2">
-                                {isInvoiceNotification(notification) 
+                                {isInvoiceNotification(notification)
                                   ? t("header.clickToViewInvoice")
                                   : (language === "ar" ? notification.messageAr : notification.message)
                                 }
@@ -690,7 +688,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                           </span>
                         )}
                       </Link>
-                      
+
                       {isAdmin && (
                         <>
                           <div className="border-t border-gray-100 dark:border-gray-600 my-2" />
@@ -707,7 +705,7 @@ export const Header: React.FC<HeaderProps> = ({ showBasketIcon = true }) => {
                           </Link>
                         </>
                       )}
-                      
+
                       <div className="border-t border-gray-100 dark:border-gray-600 my-2" />
                       <button
                         onClick={() => {
