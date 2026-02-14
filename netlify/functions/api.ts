@@ -1778,7 +1778,7 @@ function createApp() {
         return res.json({ success: true, message: 'Notification skipped (no db)' });
       }
 
-      const { userId, userName, message, hasAttachments } = req.body || {};
+      const { userId, userName, message, hasAttachments, orderId } = req.body || {};
 
       if (!message && !hasAttachments) {
         console.log('[Notify Admin] Missing message and attachments, skipping');
@@ -5082,7 +5082,23 @@ function createApp() {
         VALUES (${notificationId}, ${userId || null}, ${mappedType}, ${mappedChannel}, ${title || titleAr || ''}, ${message || ''}, ${messageAr || null}, 'sent', ${JSON.stringify(metadata)}, ${now})
       `;
 
-      res.json({ success: true, data: { id: notificationId }, message: 'Notification created successfully' });
+      // Return the full notification object so the client can update its state
+      const createdNotification = {
+        id: notificationId,
+        userId: userId || null,
+        type: type || 'general',
+        title: title || titleAr || '',
+        titleAr: titleAr || title || '',
+        message: message || '',
+        messageAr: messageAr || message || '',
+        link: link || null,
+        linkTab: linkTab || null,
+        linkId: linkId || null,
+        unread: true,
+        createdAt: now.toISOString(),
+      };
+
+      res.json({ success: true, data: createdNotification, message: 'Notification created successfully' });
     } catch (error) {
       console.error('[Create Notification Error]', error);
       res.status(500).json({ success: false, error: 'Failed to create notification' });
@@ -6011,7 +6027,9 @@ function createApp() {
         return res.status(500).json({ success: false, error: 'Database not available' });
       }
 
-      const userId = getUserIdFromHeaders(req);
+      // Support userId from query params (client sends DELETE /api/notifications?userId=xxx)
+      // as well as from x-user-id / x-customer-id headers
+      const userId = (req.query.userId as string) || getUserIdFromHeaders(req);
       if (!userId) {
         return res.status(400).json({ success: false, error: 'User ID required' });
       }
