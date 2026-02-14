@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./AuthContext";
 import { notificationsApi, InAppNotification } from "@/lib/api";
+import { safeISOString, safeDate } from "@/lib/utils";
 
 // Allow any notification type string for flexibility with server-side generated types
 export type NotificationType = string;
@@ -37,8 +38,6 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 // Admin user ID constant for admin notifications
 const ADMIN_USER_ID = "admin";
-
-import { safeISOString, safeDate } from "@/lib/utils";
 
 // Helper to generate unique ID (for local fallback)
 const generateId = () => `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
