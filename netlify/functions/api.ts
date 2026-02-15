@@ -1626,25 +1626,61 @@ function createApp() {
 
       const { orderId } = req.query;
 
+      // Check if order_id column exists (migration may not have run yet)
+      let hasOrderIdColumn = true;
+      try {
+        await sql`SELECT order_id FROM chat_messages LIMIT 0`;
+      } catch {
+        hasOrderIdColumn = false;
+        console.log('[Chat] order_id column not yet available, using basic grouping');
+      }
+
       let usersRows;
-      if (orderId) {
+      if (hasOrderIdColumn && orderId) {
         usersRows = await sql`
-          SELECT DISTINCT user_id, user_name, user_email, order_id FROM chat_messages WHERE order_id = ${orderId as string}
+          SELECT DISTINCT ON (user_id, order_id) user_id, user_name, user_email, order_id 
+          FROM chat_messages 
+          WHERE order_id = ${orderId as string}
+          ORDER BY user_id, order_id
+        `;
+      } else if (hasOrderIdColumn) {
+        usersRows = await sql`
+          SELECT DISTINCT ON (user_id, order_id) user_id, user_name, user_email, order_id 
+          FROM chat_messages 
+          ORDER BY user_id, order_id
         `;
       } else {
         usersRows = await sql`
-          SELECT DISTINCT user_id, user_name, user_email, order_id FROM chat_messages
+          SELECT DISTINCT ON (user_id) user_id, user_name, user_email
+          FROM chat_messages 
+          ORDER BY user_id
         `;
       }
 
       const chats = [];
       for (const row of usersRows) {
-        const messages = await sql`
-          SELECT * FROM chat_messages 
-          WHERE user_id = ${row.user_id} 
-          AND (order_id = ${row.order_id} OR (order_id IS NULL AND ${row.order_id} IS NULL))
-          ORDER BY created_at ASC
-        `;
+        let messages;
+        if (hasOrderIdColumn && row.order_id) {
+          messages = await sql`
+            SELECT * FROM chat_messages 
+            WHERE user_id = ${row.user_id} 
+            AND order_id = ${row.order_id}
+            ORDER BY created_at ASC
+          `;
+        } else if (hasOrderIdColumn) {
+          messages = await sql`
+            SELECT * FROM chat_messages 
+            WHERE user_id = ${row.user_id} 
+            AND order_id IS NULL
+            ORDER BY created_at ASC
+          `;
+        } else {
+          messages = await sql`
+            SELECT * FROM chat_messages 
+            WHERE user_id = ${row.user_id}
+            ORDER BY created_at ASC
+          `;
+        }
         const unreadCount = messages.filter((m: any) => m.sender !== 'admin' && !m.read_by_admin).length;
         const lastMsg = messages[messages.length - 1];
 
@@ -1652,7 +1688,7 @@ function createApp() {
           userId: row.user_id,
           userName: row.user_name || 'Customer',
           userEmail: row.user_email || '',
-          orderId: row.order_id,
+          orderId: row.order_id || null,
           messages: messages.map((m: any) => ({
             id: m.id,
             text: m.text,
@@ -1662,7 +1698,7 @@ function createApp() {
             readByUser: m.read_by_user ?? false,
             readByDriver: m.read_by_driver ?? false,
             attachments: safeJson(m.attachments, []),
-            orderId: m.order_id,
+            orderId: m.order_id || null,
           })),
           lastMessageAt: lastMsg ? safeDate(lastMsg.created_at) : null,
           unreadCount,
@@ -1670,8 +1706,8 @@ function createApp() {
       }
 
       res.json({ success: true, data: chats });
-    } catch (error) {
-      console.error('[Get All Chats Error]', error);
+    } catch (error: any) {
+      console.error('[Get All Chats Error]', error?.message || error);
       res.status(500).json({ success: false, error: 'Failed to fetch chats' });
     }
   });
