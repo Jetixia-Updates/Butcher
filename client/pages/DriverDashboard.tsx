@@ -3,7 +3,7 @@
  * Allows delivery drivers to view and manage their assigned deliveries
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Truck,
@@ -222,6 +222,7 @@ export default function DriverDashboardPage() {
           id: tracking.id,
           orderId: tracking.orderId,
           orderNumber: tracking.orderNumber,
+          customerId: tracking.userId || "",
           status: tracking.status,
           customerName: tracking.customerName || "Customer",
           customerMobile: tracking.customerMobile || "",

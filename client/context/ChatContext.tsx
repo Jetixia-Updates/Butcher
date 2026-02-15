@@ -196,6 +196,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }),
         }).catch(() => { });
 
+        // If a driver sent this message, also notify the customer
+        if (senderType === 'delivery') {
+          fetchApi('/chat/notify-user', {
+            method: 'POST',
+            body: JSON.stringify({
+              userId,
+              message: text,
+              orderId,
+              hasAttachments: attachments && attachments.length > 0
+            }),
+          }).catch(() => { });
+        }
+
         // Refresh to get the real message
         loadUserMessages(userId, orderId);
       }

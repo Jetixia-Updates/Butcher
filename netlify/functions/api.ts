@@ -1871,7 +1871,14 @@ function createApp() {
       }
 
       const { userId } = req.params;
-      await sql`UPDATE chat_messages SET read_by_admin = true WHERE user_id = ${userId} AND sender = 'user'`;
+      const { orderId } = req.body || {};
+
+      // Mark messages from both 'user' and 'delivery' senders as read by admin
+      if (orderId) {
+        await sql`UPDATE chat_messages SET read_by_admin = true WHERE user_id = ${userId} AND sender IN ('user', 'delivery') AND order_id = ${orderId}`;
+      } else {
+        await sql`UPDATE chat_messages SET read_by_admin = true WHERE user_id = ${userId} AND sender IN ('user', 'delivery') AND order_id IS NULL`;
+      }
 
       res.json({ success: true, message: 'Messages marked as read' });
     } catch (error) {
@@ -6115,7 +6122,14 @@ function createApp() {
       }
 
       const { userId } = req.params;
-      await sql`UPDATE chat_messages SET read_by_user = true WHERE user_id = ${userId} AND sender = 'admin'`;
+      const { orderId } = req.body || {};
+
+      // Mark messages from both 'admin' and 'delivery' senders as read by user
+      if (orderId) {
+        await sql`UPDATE chat_messages SET read_by_user = true WHERE user_id = ${userId} AND sender IN ('admin', 'delivery') AND order_id = ${orderId}`;
+      } else {
+        await sql`UPDATE chat_messages SET read_by_user = true WHERE user_id = ${userId} AND sender IN ('admin', 'delivery') AND order_id IS NULL`;
+      }
 
       res.json({ success: true, message: 'Messages marked as read' });
     } catch (error) {
