@@ -84,6 +84,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Use refs so the polling interval always reads the latest values
+  const currentUserIdRef = useRef<string | null>(null);
+  const currentOrderIdRef = useRef<string | null>(null);
+
   // Fetch all chats for admin
   const refreshChats = useCallback(async (orderId?: string) => {
     try {
@@ -110,7 +114,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Fetch messages for a specific user
   const loadUserMessages = useCallback(async (userId: string, orderId?: string) => {
     setCurrentUserId(userId);
-    setCurrentOrderId(orderId || null);
+    setCurrentOrderId(orderId ?? null);
+    currentUserIdRef.current = userId;
+    currentOrderIdRef.current = orderId ?? null;
     try {
       const query = orderId ? `?orderId=${orderId}` : '';
       const data = await fetchApi<any[]>(`/chat/${userId}${query}`);
@@ -131,7 +137,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Both admin and current user should poll if logged in
     if (!isLoggedIn) return;
 
-    // Use a ref to track if we've already fetched to avoid duplicates on re-render
     let isMounted = true;
 
     // Initial fetch
@@ -139,8 +144,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (authIsAdmin && isMounted) {
         await refreshChats();
       }
-      if (currentUserId && isMounted) {
-        await loadUserMessages(currentUserId);
+      const uid = currentUserIdRef.current;
+      const oid = currentOrderIdRef.current;
+      if (uid && isMounted) {
+        await loadUserMessages(uid, oid || undefined);
       }
     };
     doInitialFetch();
@@ -150,16 +157,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (authIsAdmin) {
         refreshChats();
       }
-      if (currentUserId) {
-        loadUserMessages(currentUserId);
+      // Always read the LATEST userId and orderId from refs (not stale closure values)
+      const uid = currentUserIdRef.current;
+      const oid = currentOrderIdRef.current;
+      if (uid) {
+        loadUserMessages(uid, oid || undefined);
       }
-    }, 15000); // Increased to 15 seconds
+    }, 15000);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [refreshChats, loadUserMessages, currentUserId, authIsAdmin, isLoggedIn]);
+  }, [refreshChats, loadUserMessages, authIsAdmin, isLoggedIn]);
 
   // Send message from user to admin
   const sendUserMessage = useCallback(async (userId: string, userName: string, userEmail: string, text: string, attachments?: ChatAttachment[], orderId?: string, senderType: "user" | "delivery" = "user") => {
