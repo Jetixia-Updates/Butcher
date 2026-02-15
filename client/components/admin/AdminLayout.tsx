@@ -110,6 +110,7 @@ export function AdminLayout({
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
+  const [selectedChatOrderId, setSelectedChatOrderId] = useState<string | null>(null);
   const [adminMessage, setAdminMessage] = useState("");
   const [adminAttachments, setAdminAttachments] = useState<ChatAttachment[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<Notification | null>(null);
@@ -126,8 +127,8 @@ export function AdminLayout({
     loadUserMessages
   } = useAdminChat();
 
-  // Get selected chat
-  const selectedChat = chats.find(c => c.userId === selectedChatUserId);
+  // Get selected chat - match by both userId and orderId
+  const selectedChat = chats.find(c => c.userId === selectedChatUserId && (c.orderId || null) === (selectedChatOrderId || null));
 
   // Scroll to bottom when messages change or chat is opened
   useEffect(() => {
@@ -139,12 +140,12 @@ export function AdminLayout({
   // Mark messages as read and start targeted polling when a chat is selected
   useEffect(() => {
     if (selectedChatUserId) {
-      loadUserMessages(selectedChatUserId);
+      loadUserMessages(selectedChatUserId, selectedChatOrderId || undefined);
       if (selectedChat && selectedChat.unreadCount > 0) {
-        markChatAsRead(selectedChatUserId);
+        markChatAsRead(selectedChatUserId, selectedChatOrderId || undefined);
       }
     }
-  }, [selectedChatUserId, selectedChat?.unreadCount, markChatAsRead, loadUserMessages]);
+  }, [selectedChatUserId, selectedChatOrderId, selectedChat?.unreadCount, markChatAsRead, loadUserMessages]);
 
   // Handle file selection for admin chat
   const handleAdminFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,7 +198,7 @@ export function AdminLayout({
   // Handle sending admin message
   const handleSendAdminMessage = () => {
     if ((!adminMessage.trim() && adminAttachments.length === 0) || !selectedChatUserId) return;
-    sendAdminMessage(selectedChatUserId, adminMessage.trim(), adminAttachments.length > 0 ? adminAttachments : undefined, selectedChat?.orderId);
+    sendAdminMessage(selectedChatUserId, adminMessage.trim(), adminAttachments.length > 0 ? adminAttachments : undefined, selectedChatOrderId || undefined);
     setAdminMessage("");
     setAdminAttachments([]);
   };
@@ -432,13 +433,14 @@ export function AdminLayout({
                     onClick={() => {
                       setChatOpen(false);
                       setSelectedChatUserId(null);
+                      setSelectedChatOrderId(null);
                     }}
                   />
                   <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} top-full mt-2 w-80 sm:w-[450px] bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden`}>
                     <div className="p-3 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
                       {selectedChatUserId && (
                         <button
-                          onClick={() => setSelectedChatUserId(null)}
+                          onClick={() => { setSelectedChatUserId(null); setSelectedChatOrderId(null); }}
                           className="p-1 hover:bg-slate-200 rounded transition-colors"
                         >
                           <ChevronLeft className={`w-5 h-5 ${language === 'ar' ? 'rotate-180' : ''}`} />
@@ -462,8 +464,8 @@ export function AdminLayout({
                             .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
                             .map((chat) => (
                               <button
-                                key={chat.userId}
-                                onClick={() => setSelectedChatUserId(chat.userId)}
+                                key={`${chat.userId}_${chat.orderId || 'general'}`}
+                                onClick={() => { setSelectedChatUserId(chat.userId); setSelectedChatOrderId(chat.orderId || null); }}
                                 className={cn(
                                   "w-full p-4 border-b border-slate-100 hover:bg-slate-50 transition-colors text-left",
                                   chat.unreadCount > 0 && "bg-green-50/50"
@@ -477,7 +479,14 @@ export function AdminLayout({
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between">
-                                      <p className="font-medium text-slate-900 truncate">{chat.userName}</p>
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <p className="font-medium text-slate-900 truncate">{chat.userName}</p>
+                                        {chat.orderId && (
+                                          <span className="flex-shrink-0 text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
+                                            #{chat.orderId.slice(-6)}
+                                          </span>
+                                        )}
+                                      </div>
                                       {chat.unreadCount > 0 && (
                                         <span className="flex-shrink-0 bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                                           {chat.unreadCount}
@@ -485,7 +494,7 @@ export function AdminLayout({
                                       )}
                                     </div>
                                     <p className="text-sm text-slate-500 truncate">
-                                      {chat.messages[0]?.text || ''}
+                                      {chat.messages[chat.messages.length - 1]?.text || ''}
                                     </p>
                                     <p className="text-xs text-slate-400 mt-1">
                                       {(() => {
