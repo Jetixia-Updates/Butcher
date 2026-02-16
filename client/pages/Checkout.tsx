@@ -1167,207 +1167,41 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Check if Payment Request API is supported
-    if (!window.PaymentRequest) {
-      setError(language === "ar" ? "المحفظة الرقمية غير مدعومة على هذا المتصفح" : "Digital wallet not supported on this browser");
-      return;
-    }
+    // For now, redirect to card payment page with digital wallet info
+    // Full Payment Request API integration requires merchant account setup
+    const methodName = method === "apple_pay" ? "Apple Pay" : "Google Pay";
+    alert(
+      language === "ar"
+        ? `${methodName} قيد الإعداد. سيتم توجيهك إلى صفحة الدفع.`
+        : `${methodName} is being set up. You'll be redirected to the payment page.`
+    );
 
-    setIsProcessing(true);
-    setError(null);
-
+    // Redirect to card payment with the digital wallet method stored
     const deliverySlotInfo = isExpressDelivery
       ? (language === "ar" ? "توصيل سريع - خلال 3 ساعات" : "Express Delivery - Within 3 hours")
       : getSelectedDeliverySlotInfo();
-    const deliveryNotes = `Preferred Delivery Time: ${deliverySlotInfo}`;
+    const deliveryDate = isExpressDelivery
+      ? (language === "ar" ? "اليوم" : "Today")
+      : (selectedDateIndex !== null ? deliveryDates[selectedDateIndex].date.toLocaleDateString(language === "ar" ? "ar-AE" : "en-AE", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : "");
+    const deliveryTime = isExpressDelivery
+      ? (language === "ar" ? "توصيل سريع (خلال 3 ساعات)" : "Express (Within 3 hours)")
+      : (selectedTimeSlotId ? (language === "ar" ? deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.labelAr : deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.label) : "");
 
-    try {
-      // Build payment request
-      const supportedPaymentMethods = [
-        {
-          supportedMethods: method === "apple_pay" ? "https://apple.com/apple-pay" : "https://google.com/pay",
-          data: {
-            merchantIdentifier: method === "apple_pay" ? "merchant.com.butcher" : undefined,
-            merchantId: method === "google_pay" ? "BCR2DN4T4S5J4L7B" : undefined,
-            merchantName: "Butcher Shop",
-            supportedNetworks: ["visa", "mastercard", "amex"],
-            countryCode: "AE",
-            currencyCode: "AED",
-          },
-        },
-      ];
-
-      const paymentDetails = {
-        total: {
-          label: language === "ar" ? "الإجمالي" : "Total",
-          amount: {
-            currency: "AED",
-            value: adjustedTotal.toFixed(2),
-          },
-        },
-        displayItems: [
-          {
-            label: language === "ar" ? "الإجمالي الجزئي" : "Subtotal",
-            amount: {
-              currency: "AED",
-              value: adjustedSubtotal.toFixed(2),
-            },
-          },
-          ...(discountAmount > 0 ? [{
-            label: language === "ar" ? "الخصم" : "Discount",
-            amount: {
-              currency: "AED",
-              value: `-${discountAmount.toFixed(2)}`,
-            },
-          }] : []),
-          {
-            label: language === "ar" ? "الضريبة (5%)" : "VAT (5%)",
-            amount: {
-              currency: "AED",
-              value: adjustedVat.toFixed(2),
-            },
-          },
-          {
-            label: language === "ar" ? "رسوم التوصيل" : "Delivery Fee",
-            amount: {
-              currency: "AED",
-              value: deliveryFeeTotal.toFixed(2),
-            },
-          },
-          ...(driverTip > 0 ? [{
-            label: language === "ar" ? "إكرامية السائق" : "Driver Tip",
-            amount: {
-              currency: "AED",
-              value: driverTip.toFixed(2),
-            },
-          }] : []),
-        ],
-      };
-
-      const request = new PaymentRequest(supportedPaymentMethods, paymentDetails);
-
-      // Show payment sheet
-      const paymentResponse = await request.show();
-
-      // Process payment (in production, send to payment gateway)
-      console.log("Payment response:", paymentResponse);
-
-      // Create order in backend
-      const response = await ordersApi.create({
-        userId: user?.id || "",
-        items: items.map((item) => {
-          let productId = item.productId;
-          if (!productId) {
-            const timestampMatch = item.id.match(/^(.+)_(\d{13,})$/);
-            if (timestampMatch) {
-              productId = timestampMatch[1];
-            } else {
-              productId = item.id;
-            }
-          }
-          return {
-            productId,
-            quantity: item.quantity,
-            unitPrice: item.price,
-            notes: item.notes,
-          };
-        }),
+    navigate("/payment/card", {
+      state: {
         addressId: selectedAddressId,
-        deliveryAddress: selectedAddress ? {
-          fullName: selectedAddress.fullName,
-          mobile: selectedAddress.mobile,
-          emirate: selectedAddress.emirate,
-          area: selectedAddress.area,
-          street: selectedAddress.street,
-          building: selectedAddress.building,
-          floor: selectedAddress.floor,
-          apartment: selectedAddress.apartment,
-          latitude: selectedAddress.latitude,
-          longitude: selectedAddress.longitude,
-        } : undefined,
-        paymentMethod: method,
-        deliveryNotes: deliveryNotes,
-        discountCode: promoApplied?.code,
+        deliveryTimeSlot: deliverySlotInfo,
+        deliveryDate: deliveryDate,
+        deliveryTime: deliveryTime,
+        promoCode: promoApplied?.code,
         discountAmount: discountAmount,
-        deliveryFee: deliveryFeeTotal,
         isExpressDelivery: isExpressDelivery,
+        expressDeliveryFee: isExpressDelivery ? expressDeliveryFee : 0,
+        zoneDeliveryFee: zoneDeliveryFee,
         driverTip: driverTip,
-        subtotal: adjustedSubtotal,
-        vatAmount: adjustedVat,
-        total: adjustedTotal,
-      });
-
-      if (response.success && response.data) {
-        // Complete payment
-        await paymentResponse.complete("success");
-
-        // Generate invoice
-        const invoiceNumber = generateInvoiceNumber(response.data.orderNumber);
-        const orderData = response.data;
-
-        const invoiceData: InvoiceData = {
-          invoiceNumber,
-          orderNumber: orderData.orderNumber,
-          date: new Date().toLocaleDateString("en-AE", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          customerName: orderData.customerName || selectedAddress?.fullName || "Customer",
-          customerMobile: orderData.customerMobile || selectedAddress?.mobile || user?.mobile || "",
-          customerAddress: orderData.deliveryAddress
-            ? `${orderData.deliveryAddress.building}, ${orderData.deliveryAddress.street}, ${orderData.deliveryAddress.area}, ${orderData.deliveryAddress.emirate}`
-            : (selectedAddress
-              ? `${selectedAddress.building}, ${selectedAddress.street}, ${selectedAddress.area}, ${selectedAddress.emirate}`
-              : ""),
-          items: items.map((item) => ({
-            name: item.name,
-            nameAr: item.nameAr,
-            quantity: item.quantity,
-            unitPrice: item.price,
-            totalPrice: item.price * item.quantity,
-          })),
-          subtotal: orderData.subtotal || adjustedSubtotal,
-          discount: (orderData.discount || discountAmount) > 0 ? (orderData.discount || discountAmount) : undefined,
-          discountCode: orderData.discountCode || promoApplied?.code,
-          vatRate: 5,
-          vatAmount: orderData.vatAmount || adjustedVat,
-          deliveryFee: (orderData.deliveryFee || deliveryFeeTotal) > 0 ? (orderData.deliveryFee || deliveryFeeTotal) : undefined,
-          isExpressDelivery: isExpressDelivery,
-          deliveryDate: isExpressDelivery
-            ? (language === "ar" ? "اليوم" : "Today")
-            : (selectedDateIndex !== null ? deliveryDates[selectedDateIndex].date.toLocaleDateString(language === "ar" ? "ar-AE" : "en-AE", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : undefined),
-          deliveryTime: isExpressDelivery
-            ? (language === "ar" ? "توصيل سريع (خلال 3 ساعات)" : "Express (Within 3 hours)")
-            : (selectedTimeSlotId ? (language === "ar" ? deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.labelAr : deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.label) : undefined),
-          driverTip: driverTip > 0 ? driverTip : undefined,
-          total: orderData.total || adjustedTotal,
-          paymentMethod: method === "apple_pay" ? "apple_pay" : "google_pay",
-        };
-
-        addNotification(createDetailedInvoiceNotification(invoiceData));
-
-        clearBasket();
-        alert(
-          `Order ${response.data.orderNumber} placed successfully! Payment confirmed via ${method === "apple_pay" ? "Apple Pay" : "Google Pay"}.\n\nYour TAX invoice (${invoiceNumber}) has been sent to your notifications.`
-        );
-        navigate("/products");
-      } else {
-        await paymentResponse.complete("fail");
-        setError(response.error || "Failed to create order. Please try again.");
+        paymentMethod: method, // Pass the digital wallet method
       }
-    } catch (err: any) {
-      console.error(`${method} payment error:`, err);
-      if (err.name === "AbortError") {
-        setError(language === "ar" ? "تم إلغاء الدفع" : "Payment cancelled");
-      } else {
-        setError(err?.message || "Payment failed. Please try again.");
-      }
-    }
-
-    setIsProcessing(false);
+    });
   };
 
   const handleApplePayment = () => handleDigitalWalletPayment("apple_pay");
