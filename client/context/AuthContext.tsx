@@ -222,7 +222,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setAuthToken(null);
     setUser(null);
     localStorage.removeItem("user");
-    localStorage.removeItem("basket");
+    // Note: We don't clear the basket on logout so customers can continue shopping
+    // The basket will persist across login/logout sessions
   };
 
   const register = async (newUser: Omit<User, "id"> & {
