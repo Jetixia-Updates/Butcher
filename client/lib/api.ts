@@ -386,7 +386,7 @@ export const ordersApi = {
       latitude?: number;
       longitude?: number;
     };
-    paymentMethod: "card" | "cod" | "bank_transfer";
+    paymentMethod: "card" | "cod" | "bank_transfer" | "apple_pay" | "google_pay";
     deliveryNotes?: string;
     discountCode?: string;
     discountAmount?: number;

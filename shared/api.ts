@@ -324,7 +324,7 @@ export interface Order {
   // Status
   status: OrderStatus;
   paymentStatus: PaymentStatus;
-  paymentMethod: "card" | "cod" | "bank_transfer";
+  paymentMethod: "card" | "cod" | "bank_transfer" | "apple_pay" | "google_pay";
   
   // Delivery
   addressId: string;
@@ -374,7 +374,7 @@ export interface CreateOrderRequest {
     latitude?: number;
     longitude?: number;
   };
-  paymentMethod: "card" | "cod" | "bank_transfer";
+  paymentMethod: "card" | "cod" | "bank_transfer" | "apple_pay" | "google_pay";
   deliveryNotes?: string;
   discountCode?: string;
   discountAmount?: number; // Promo code discount amount

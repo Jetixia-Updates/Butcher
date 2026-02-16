@@ -29,7 +29,7 @@ export const orderStatusEnum = pgEnum("order_status", [
 export const paymentStatusEnum = pgEnum("payment_status", [
   "pending", "authorized", "captured", "failed", "refunded", "partially_refunded"
 ]);
-export const paymentMethodEnum = pgEnum("payment_method", ["card", "cod", "bank_transfer"]);
+export const paymentMethodEnum = pgEnum("payment_method", ["card", "cod", "bank_transfer", "apple_pay", "google_pay"]);
 export const currencyEnum = pgEnum("currency", ["AED", "USD", "EUR"]);
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["in", "out", "adjustment", "reserved", "released"]);
 export const deliveryTrackingStatusEnum = pgEnum("delivery_tracking_status", [

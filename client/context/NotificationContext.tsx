@@ -578,7 +578,7 @@ export interface InvoiceData {
   deliveryTime?: string;
   driverTip?: number;
   total: number;
-  paymentMethod: "card" | "cod";
+  paymentMethod: "card" | "cod" | "bank_transfer" | "apple_pay" | "google_pay";
   vatReference?: string;
 }
 
@@ -598,6 +598,29 @@ export const generateInvoiceNumber = (orderNumber: string): string => {
 export const formatInvoiceForNotification = (invoice: InvoiceData, language: "en" | "ar" = "en"): string => {
   const separator = "─".repeat(30);
   const doubleSeparator = "═".repeat(30);
+
+  // Helper to format payment method
+  const getPaymentMethodLabel = (method: string, lang: "en" | "ar"): string => {
+    if (lang === "ar") {
+      switch (method) {
+        case "card": return "بطاقة ائتمان";
+        case "cod": return "الدفع عند الاستلام";
+        case "bank_transfer": return "تحويل بنكي";
+        case "apple_pay": return "Apple Pay";
+        case "google_pay": return "Google Pay";
+        default: return method;
+      }
+    } else {
+      switch (method) {
+        case "card": return "Credit Card";
+        case "cod": return "Cash on Delivery";
+        case "bank_transfer": return "Bank Transfer";
+        case "apple_pay": return "Apple Pay";
+        case "google_pay": return "Google Pay";
+        default: return method;
+      }
+    }
+  };
 
   if (language === "ar") {
     const itemsList = invoice.items.map(item =>
@@ -642,7 +665,7 @@ ${breakdownLines.join('\n')}
 ${doubleSeparator}
 الإجمالي: ${Number(invoice.total).toFixed(2)} د.إ
 ${doubleSeparator}
-طريقة الدفع: ${invoice.paymentMethod === 'card' ? 'بطاقة ائتمان' : 'الدفع عند الاستلام'}
+طريقة الدفع: ${getPaymentMethodLabel(invoice.paymentMethod, "ar")}
 ${invoice.vatReference ? `رقم التسجيل الضريبي: ${invoice.vatReference}` : ''}
 
 شكراً لتسوقكم معنا!
@@ -691,7 +714,7 @@ ${breakdownLines.join('\n')}
 ${doubleSeparator}
 TOTAL: AED ${Number(invoice.total).toFixed(2)}
 ${doubleSeparator}
-Payment Method: ${invoice.paymentMethod === 'card' ? 'Credit Card' : 'Cash on Delivery'}
+Payment Method: ${getPaymentMethodLabel(invoice.paymentMethod, "en")}
 ${invoice.vatReference ? `VAT Reference: ${invoice.vatReference}` : ''}
 
 Thank you for shopping with us!

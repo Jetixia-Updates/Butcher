@@ -26,7 +26,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-type PaymentMethod = "card" | "cod" | null;
+type PaymentMethod = "card" | "cod" | "apple_pay" | "google_pay" | null;
 
 // Delivery time slot types
 interface TimeSlot {
@@ -1155,6 +1155,224 @@ export default function CheckoutPage() {
     setIsProcessing(false);
   };
 
+  // Apple Pay / Google Pay handler using Payment Request API
+  const handleDigitalWalletPayment = async (method: "apple_pay" | "google_pay") => {
+    if (!selectedAddressId) {
+      setError(language === "ar" ? "يرجى اختيار عنوان التوصيل" : "Please select or add a delivery address");
+      return;
+    }
+
+    if (!isExpressDelivery && !selectedTimeSlotId) {
+      setError(language === "ar" ? "يرجى اختيار موعد التوصيل المفضل" : "Please select a preferred delivery time slot");
+      return;
+    }
+
+    // Check if Payment Request API is supported
+    if (!window.PaymentRequest) {
+      setError(language === "ar" ? "المحفظة الرقمية غير مدعومة على هذا المتصفح" : "Digital wallet not supported on this browser");
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    const deliverySlotInfo = isExpressDelivery
+      ? (language === "ar" ? "توصيل سريع - خلال 3 ساعات" : "Express Delivery - Within 3 hours")
+      : getSelectedDeliverySlotInfo();
+    const deliveryNotes = `Preferred Delivery Time: ${deliverySlotInfo}`;
+
+    try {
+      // Build payment request
+      const supportedPaymentMethods = [
+        {
+          supportedMethods: method === "apple_pay" ? "https://apple.com/apple-pay" : "https://google.com/pay",
+          data: {
+            merchantIdentifier: method === "apple_pay" ? "merchant.com.butcher" : undefined,
+            merchantId: method === "google_pay" ? "BCR2DN4T4S5J4L7B" : undefined,
+            merchantName: "Butcher Shop",
+            supportedNetworks: ["visa", "mastercard", "amex"],
+            countryCode: "AE",
+            currencyCode: "AED",
+          },
+        },
+      ];
+
+      const paymentDetails = {
+        total: {
+          label: language === "ar" ? "الإجمالي" : "Total",
+          amount: {
+            currency: "AED",
+            value: adjustedTotal.toFixed(2),
+          },
+        },
+        displayItems: [
+          {
+            label: language === "ar" ? "الإجمالي الجزئي" : "Subtotal",
+            amount: {
+              currency: "AED",
+              value: adjustedSubtotal.toFixed(2),
+            },
+          },
+          ...(discountAmount > 0 ? [{
+            label: language === "ar" ? "الخصم" : "Discount",
+            amount: {
+              currency: "AED",
+              value: `-${discountAmount.toFixed(2)}`,
+            },
+          }] : []),
+          {
+            label: language === "ar" ? "الضريبة (5%)" : "VAT (5%)",
+            amount: {
+              currency: "AED",
+              value: adjustedVat.toFixed(2),
+            },
+          },
+          {
+            label: language === "ar" ? "رسوم التوصيل" : "Delivery Fee",
+            amount: {
+              currency: "AED",
+              value: deliveryFeeTotal.toFixed(2),
+            },
+          },
+          ...(driverTip > 0 ? [{
+            label: language === "ar" ? "إكرامية السائق" : "Driver Tip",
+            amount: {
+              currency: "AED",
+              value: driverTip.toFixed(2),
+            },
+          }] : []),
+        ],
+      };
+
+      const request = new PaymentRequest(supportedPaymentMethods, paymentDetails);
+
+      // Show payment sheet
+      const paymentResponse = await request.show();
+
+      // Process payment (in production, send to payment gateway)
+      console.log("Payment response:", paymentResponse);
+
+      // Create order in backend
+      const response = await ordersApi.create({
+        userId: user?.id || "",
+        items: items.map((item) => {
+          let productId = item.productId;
+          if (!productId) {
+            const timestampMatch = item.id.match(/^(.+)_(\d{13,})$/);
+            if (timestampMatch) {
+              productId = timestampMatch[1];
+            } else {
+              productId = item.id;
+            }
+          }
+          return {
+            productId,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            notes: item.notes,
+          };
+        }),
+        addressId: selectedAddressId,
+        deliveryAddress: selectedAddress ? {
+          fullName: selectedAddress.fullName,
+          mobile: selectedAddress.mobile,
+          emirate: selectedAddress.emirate,
+          area: selectedAddress.area,
+          street: selectedAddress.street,
+          building: selectedAddress.building,
+          floor: selectedAddress.floor,
+          apartment: selectedAddress.apartment,
+          latitude: selectedAddress.latitude,
+          longitude: selectedAddress.longitude,
+        } : undefined,
+        paymentMethod: method,
+        deliveryNotes: deliveryNotes,
+        discountCode: promoApplied?.code,
+        discountAmount: discountAmount,
+        deliveryFee: deliveryFeeTotal,
+        isExpressDelivery: isExpressDelivery,
+        driverTip: driverTip,
+        subtotal: adjustedSubtotal,
+        vatAmount: adjustedVat,
+        total: adjustedTotal,
+      });
+
+      if (response.success && response.data) {
+        // Complete payment
+        await paymentResponse.complete("success");
+
+        // Generate invoice
+        const invoiceNumber = generateInvoiceNumber(response.data.orderNumber);
+        const orderData = response.data;
+
+        const invoiceData: InvoiceData = {
+          invoiceNumber,
+          orderNumber: orderData.orderNumber,
+          date: new Date().toLocaleDateString("en-AE", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          customerName: orderData.customerName || selectedAddress?.fullName || "Customer",
+          customerMobile: orderData.customerMobile || selectedAddress?.mobile || user?.mobile || "",
+          customerAddress: orderData.deliveryAddress
+            ? `${orderData.deliveryAddress.building}, ${orderData.deliveryAddress.street}, ${orderData.deliveryAddress.area}, ${orderData.deliveryAddress.emirate}`
+            : (selectedAddress
+              ? `${selectedAddress.building}, ${selectedAddress.street}, ${selectedAddress.area}, ${selectedAddress.emirate}`
+              : ""),
+          items: items.map((item) => ({
+            name: item.name,
+            nameAr: item.nameAr,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            totalPrice: item.price * item.quantity,
+          })),
+          subtotal: orderData.subtotal || adjustedSubtotal,
+          discount: (orderData.discount || discountAmount) > 0 ? (orderData.discount || discountAmount) : undefined,
+          discountCode: orderData.discountCode || promoApplied?.code,
+          vatRate: 5,
+          vatAmount: orderData.vatAmount || adjustedVat,
+          deliveryFee: (orderData.deliveryFee || deliveryFeeTotal) > 0 ? (orderData.deliveryFee || deliveryFeeTotal) : undefined,
+          isExpressDelivery: isExpressDelivery,
+          deliveryDate: isExpressDelivery
+            ? (language === "ar" ? "اليوم" : "Today")
+            : (selectedDateIndex !== null ? deliveryDates[selectedDateIndex].date.toLocaleDateString(language === "ar" ? "ar-AE" : "en-AE", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : undefined),
+          deliveryTime: isExpressDelivery
+            ? (language === "ar" ? "توصيل سريع (خلال 3 ساعات)" : "Express (Within 3 hours)")
+            : (selectedTimeSlotId ? (language === "ar" ? deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.labelAr : deliveryDates[selectedDateIndex!]?.slots.find(s => s.id === selectedTimeSlotId)?.label) : undefined),
+          driverTip: driverTip > 0 ? driverTip : undefined,
+          total: orderData.total || adjustedTotal,
+          paymentMethod: method === "apple_pay" ? "apple_pay" : "google_pay",
+        };
+
+        addNotification(createDetailedInvoiceNotification(invoiceData));
+
+        clearBasket();
+        alert(
+          `Order ${response.data.orderNumber} placed successfully! Payment confirmed via ${method === "apple_pay" ? "Apple Pay" : "Google Pay"}.\n\nYour TAX invoice (${invoiceNumber}) has been sent to your notifications.`
+        );
+        navigate("/products");
+      } else {
+        await paymentResponse.complete("fail");
+        setError(response.error || "Failed to create order. Please try again.");
+      }
+    } catch (err: any) {
+      console.error(`${method} payment error:`, err);
+      if (err.name === "AbortError") {
+        setError(language === "ar" ? "تم إلغاء الدفع" : "Payment cancelled");
+      } else {
+        setError(err?.message || "Payment failed. Please try again.");
+      }
+    }
+
+    setIsProcessing(false);
+  };
+
+  const handleApplePayment = () => handleDigitalWalletPayment("apple_pay");
+  const handleGooglePayment = () => handleDigitalWalletPayment("google_pay");
+
   return (
     <div className="py-6 sm:py-12 px-3 sm:px-4" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="max-w-7xl mx-auto">
@@ -1633,6 +1851,88 @@ export default function CheckoutPage() {
                     <div className="text-xl sm:text-2xl">💵</div>
                   </div>
                 </div>
+
+                {/* Apple Pay Option */}
+                <div
+                  onClick={() => handlePaymentMethodSelect("apple_pay")}
+                  className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "apple_pay"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                    }`}
+                >
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div
+                      className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${paymentMethod === "apple_pay"
+                        ? "border-primary bg-primary"
+                        : "border-border"
+                        }`}
+                    >
+                      {paymentMethod === "apple_pay" && (
+                        <svg
+                          className="w-2 h-2 sm:w-3 sm:h-3 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground text-sm sm:text-base">
+                        Apple Pay
+                      </h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
+                        {isRTL ? 'ادفع بسرعة وأمان باستخدام Apple Pay' : 'Pay quickly and securely with Apple Pay'}
+                      </p>
+                    </div>
+                    <div className="text-xl sm:text-2xl"></div>
+                  </div>
+                </div>
+
+                {/* Google Pay Option */}
+                <div
+                  onClick={() => handlePaymentMethodSelect("google_pay")}
+                  className={`p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "google_pay"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                    }`}
+                >
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div
+                      className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-1 ${paymentMethod === "google_pay"
+                        ? "border-primary bg-primary"
+                        : "border-border"
+                        }`}
+                    >
+                      {paymentMethod === "google_pay" && (
+                        <svg
+                          className="w-2 h-2 sm:w-3 sm:h-3 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground text-sm sm:text-base">
+                        Google Pay
+                      </h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
+                        {isRTL ? 'ادفع بسرعة وأمان باستخدام Google Pay' : 'Pay quickly and securely with Google Pay'}
+                      </p>
+                    </div>
+                    <div className="text-xl sm:text-2xl">🔵</div>
+                  </div>
+                </div>
               </div>
 
               {/* Payment Button */}
@@ -1641,6 +1941,10 @@ export default function CheckoutPage() {
                   onClick={
                     paymentMethod === "card"
                       ? handleCardPayment
+                      : paymentMethod === "apple_pay"
+                      ? handleApplePayment
+                      : paymentMethod === "google_pay"
+                      ? handleGooglePayment
                       : handleCODPayment
                   }
                   disabled={isProcessing || !selectedAddressId || (!isExpressDelivery && !selectedTimeSlotId)}
@@ -1654,6 +1958,10 @@ export default function CheckoutPage() {
                         ? (language === "ar" ? "اختر موعد التوصيل" : "Select a Delivery Time")
                         : paymentMethod === "card"
                           ? (language === "ar" ? "المتابعة للدفع" : "Continue to Payment")
+                          : paymentMethod === "apple_pay"
+                          ? (language === "ar" ? "الدفع باستخدام Apple Pay" : "Pay with Apple Pay")
+                          : paymentMethod === "google_pay"
+                          ? (language === "ar" ? "الدفع باستخدام Google Pay" : "Pay with Google Pay")
                           : (language === "ar" ? "تأكيد الطلب" : "Confirm Order")}
                 </button>
               )}

@@ -8,6 +8,13 @@
       "when": 1771237575386,
       "tag": "0000_parallel_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771247597295,
+      "tag": "0001_oval_sunspot",
+      "breakpoints": true
     }
   ]
 }
