@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { calculateVAT } from "@/utils/vat";
+import { useAuth } from "./AuthContext";
 
 export interface BasketItem {
   id: string; // Unique basket item key (for local basket management)
@@ -40,14 +41,39 @@ const BasketContext = createContext<BasketContextType | undefined>(undefined);
 export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const { user } = useAuth();
   const [items, setItems] = useState<BasketItem[]>([]);
   const [subtotal, setSubtotal] = useState(0);
   const [vat, setVat] = useState(0);
   const [total, setTotal] = useState(0);
 
-  // Load basket from localStorage on mount
+  // Get user-specific basket key
+  const getBasketKey = () => {
+    return user?.id ? `basket_${user.id}` : "basket_guest";
+  };
+
+  // One-time migration: Move old generic "basket" to "basket_guest" if it exists
   useEffect(() => {
-    const savedBasket = localStorage.getItem("basket");
+    const oldBasket = localStorage.getItem("basket");
+    const guestBasket = localStorage.getItem("basket_guest");
+
+    // If old basket exists and guest basket doesn't, migrate it
+    if (oldBasket && !guestBasket) {
+      try {
+        localStorage.setItem("basket_guest", oldBasket);
+        localStorage.removeItem("basket"); // Clean up old key
+        console.log("Migrated old basket to user-specific storage");
+      } catch (error) {
+        console.error("Failed to migrate basket:", error);
+      }
+    }
+  }, []); // Run only once on mount
+
+  // Load basket from localStorage when user changes
+  useEffect(() => {
+    const basketKey = getBasketKey();
+    const savedBasket = localStorage.getItem(basketKey);
+
     if (savedBasket) {
       try {
         const parsedItems: BasketItem[] = JSON.parse(savedBasket);
@@ -67,9 +93,13 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
         setItems(migratedItems);
       } catch (error) {
         console.error("Failed to parse basket from localStorage:", error);
+        setItems([]);
       }
+    } else {
+      // No saved basket for this user, start with empty basket
+      setItems([]);
     }
-  }, []);
+  }, [user?.id]); // Re-load basket when user changes
 
   // Helper to check if a string is a base64 data URL
   const isBase64Image = (str: string | undefined): boolean => {
@@ -98,10 +128,11 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
     setVat(newVat);
     setTotal(newTotal);
 
+    const basketKey = getBasketKey();
     try {
       // Strip base64 images before saving to avoid quota exceeded errors
       const storageItems = prepareForStorage(items);
-      localStorage.setItem("basket", JSON.stringify(storageItems));
+      localStorage.setItem(basketKey, JSON.stringify(storageItems));
     } catch (err) {
       console.error("Failed to save basket to localStorage:", err);
       // If still failing, try saving without images at all
@@ -110,13 +141,13 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
           ...item,
           image: undefined,
         }));
-        localStorage.setItem("basket", JSON.stringify(minimalItems));
+        localStorage.setItem(basketKey, JSON.stringify(minimalItems));
       } catch {
         // Last resort - clear and don't persist
         console.error("localStorage is full, basket will not persist");
       }
     }
-  }, [items]);
+  }, [items, user?.id]); // Also depend on user?.id to re-save when user changes
 
   const addItem = (item: BasketItem) => {
     setItems((prevItems) => {
@@ -161,11 +192,13 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const clearBasket = () => {
     setItems([]);
-    localStorage.removeItem("basket");
+    const basketKey = getBasketKey();
+    localStorage.removeItem(basketKey);
   };
 
   const getSavedBaskets = (): SavedBasket[] => {
-    const saved = localStorage.getItem("savedBaskets");
+    const savedBasketsKey = user?.id ? `savedBaskets_${user.id}` : "savedBaskets_guest";
+    const saved = localStorage.getItem(savedBasketsKey);
     return saved ? JSON.parse(saved) : [];
   };
 
@@ -181,7 +214,8 @@ export const BasketProvider: React.FC<{ children: React.ReactNode }> = ({
     };
     savedBaskets.push(newSavedBasket);
     try {
-      localStorage.setItem("savedBaskets", JSON.stringify(savedBaskets));
+      const savedBasketsKey = user?.id ? `savedBaskets_${user.id}` : "savedBaskets_guest";
+      localStorage.setItem(savedBasketsKey, JSON.stringify(savedBaskets));
     } catch (err) {
       console.error("Failed to save basket:", err);
     }
