@@ -91,6 +91,52 @@ const EMAIL_TEMPLATES: Record<NotificationType, { subject: { en: string; ar: str
     subject: { en: "{subject}", ar: "{subjectAr}" },
     body: { en: "{message}", ar: "{messageAr}" },
   },
+  customer_welcome: {
+    subject: {
+      en: "Welcome to Butcher - Fresh Meat Delivered! 🥩",
+      ar: "مرحباً بك في الجزار - لحوم طازجة توصل لباب منزلك! 🥩"
+    },
+    body: {
+      en: `
+        <h2>Welcome to Butcher!</h2>
+        <p>Thank you for joining us! We're excited to bring premium quality fresh meat right to your doorstep.</p>
+        <div style="background: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; text-align: center;">
+          <h3 style="color: #C41E3A; margin-top: 0;">Special Welcome Offer!</h3>
+          <p style="font-size: 18px; margin: 10px 0;">Use promo code <strong style="font-size: 24px; color: #C41E3A;">WELCOME10</strong></p>
+          <p>Get <strong>10% OFF</strong> on your first order!</p>
+        </div>
+        <p><strong>Why choose Butcher?</strong></p>
+        <ul>
+          <li>Premium quality fresh meat</li>
+          <li>Expert butchers with years of experience</li>
+          <li>Fast delivery across UAE</li>
+          <li>Halal certified products</li>
+        </ul>
+        <p style="text-align: center; margin-top: 30px;">
+          <a href="https://butcher.ae" style="background: #C41E3A; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Start Shopping</a>
+        </p>
+      `,
+      ar: `
+        <h2 dir="rtl">مرحباً بك في الجزار!</h2>
+        <p dir="rtl">شكراً لانضمامك إلينا! نحن متحمسون لتوصيل أجود أنواع اللحوم الطازجة إلى باب منزلك.</p>
+        <div style="background: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; text-align: center;" dir="rtl">
+          <h3 style="color: #C41E3A; margin-top: 0;">عرض ترحيبي خاص!</h3>
+          <p style="font-size: 18px; margin: 10px 0;">استخدم الرمز الترويجي <strong style="font-size: 24px; color: #C41E3A;">WELCOME10</strong></p>
+          <p>احصل على خصم <strong>10%</strong> على طلبك الأول!</p>
+        </div>
+        <p dir="rtl"><strong>لماذا تختار الجزار؟</strong></p>
+        <ul dir="rtl">
+          <li>لحوم طازجة عالية الجودة</li>
+          <li>جزارون خبراء بسنوات من الخبرة</li>
+          <li>توصيل سريع في جميع أنحاء الإمارات</li>
+          <li>منتجات حلال معتمدة</li>
+        </ul>
+        <p style="text-align: center; margin-top: 30px;">
+          <a href="https://butcher.ae" style="background: #C41E3A; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">ابدأ التسوق</a>
+        </p>
+      `,
+    },
+  },
 };
 
 function replaceTemplateVars(template: string, data: Record<string, unknown>): string {
@@ -243,4 +289,277 @@ export async function sendRefundEmail(order: Order, amount: number): Promise<Not
 
 export async function sendLowStockAlertEmail(adminEmail: string, productName: string, quantity: number, threshold: number): Promise<Notification> {
   return sendEmail(adminEmail, "low_stock", { productName, quantity, threshold }, "en");
+}
+
+export async function sendWelcomeEmail(
+  email: string,
+  userId: string,
+  language: "en" | "ar" = "en"
+): Promise<Notification> {
+  return sendEmail(email, "customer_welcome", { userId }, language);
+}
+
+/**
+ * Send invoice email for an order
+ * This function generates and sends a professional invoice email with order details
+ */
+export async function sendInvoiceEmail(
+  customerEmail: string,
+  order: {
+    id: string;
+    orderNumber: string;
+    userId: string;
+    customerName: string;
+    customerMobile: string;
+    subtotal: number;
+    discount: number;
+    vatAmount: number;
+    deliveryFee: number;
+    total: number;
+    paymentMethod: string;
+    deliveryAddress?: any;
+    createdAt?: Date | string;
+  },
+  items: Array<{
+    productName: string;
+    productNameAr?: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }>,
+  language: "en" | "ar" = "en"
+): Promise<Notification> {
+  const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${order.orderNumber.replace('ORD-', '')}`;
+  const shopTRN = "100567890123456"; // UAE TRN format
+  const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
+
+  // Format items list
+  const itemsListHTML = items.map(item => `
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">${language === 'ar' && item.productNameAr ? item.productNameAr : item.productName}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">AED ${item.unitPrice.toFixed(2)}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;"><strong>AED ${item.totalPrice.toFixed(2)}</strong></td>
+    </tr>
+  `).join('');
+
+  const addressText = order.deliveryAddress
+    ? `${order.deliveryAddress.building || ''}, ${order.deliveryAddress.street || ''}, ${order.deliveryAddress.area || ''}, ${order.deliveryAddress.emirate || ''}`
+    : 'N/A';
+
+  const subject = language === 'ar'
+    ? `فاتورة ضريبية #${invoiceNumber} - طلبك ${order.orderNumber}`
+    : `Tax Invoice #${invoiceNumber} - Order ${order.orderNumber}`;
+
+  const emailBody = language === 'ar' ? `
+    <div style="background: #f8f9fa; padding: 30px; border-radius: 10px; margin: 20px 0;">
+      <h2 style="color: #C41E3A; text-align: center; margin-top: 0;" dir="rtl">📄 فاتورة ضريبية</h2>
+      <div style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" dir="rtl">
+        <div style="border-bottom: 2px solid #C41E3A; padding-bottom: 15px; margin-bottom: 20px;">
+          <h1 style="color: #C41E3A; margin: 0;">🥩 جزاري</h1>
+          <p style="margin: 5px 0; color: #666;">الرقم الضريبي: ${shopTRN}</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 5px 0;"><strong>رقم الفاتورة:</strong></td>
+              <td style="padding: 5px 0; text-align: left;">${invoiceNumber}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0;"><strong>رقم الطلب:</strong></td>
+              <td style="padding: 5px 0; text-align: left;">${order.orderNumber}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0;"><strong>التاريخ:</strong></td>
+              <td style="padding: 5px 0; text-align: left;">${orderDate.toLocaleDateString('ar-AE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0; color: #333;">الفاتورة إلى:</h3>
+          <p style="margin: 5px 0;"><strong>العميل:</strong> ${order.customerName}</p>
+          <p style="margin: 5px 0;"><strong>الهاتف:</strong> ${order.customerMobile}</p>
+          <p style="margin: 5px 0;"><strong>العنوان:</strong> ${addressText}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <thead>
+            <tr style="background: #C41E3A; color: white;">
+              <th style="padding: 12px 8px; text-align: right;">المنتج</th>
+              <th style="padding: 12px 8px; text-align: center;">الكمية</th>
+              <th style="padding: 12px 8px; text-align: right;">السعر</th>
+              <th style="padding: 12px 8px; text-align: right;">الإجمالي</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsListHTML}
+          </tbody>
+        </table>
+
+        <div style="border-top: 2px solid #eee; padding-top: 15px; margin-top: 20px;">
+          <table style="width: 100%; max-width: 300px; margin-left: auto;">
+            <tr>
+              <td style="padding: 5px 0;">الإجمالي الجزئي:</td>
+              <td style="padding: 5px 0; text-align: left;"><strong>AED ${order.subtotal.toFixed(2)}</strong></td>
+            </tr>
+            ${order.discount > 0 ? `
+            <tr style="color: #28a745;">
+              <td style="padding: 5px 0;">الخصم (-):</td>
+              <td style="padding: 5px 0; text-align: left;"><strong>AED ${order.discount.toFixed(2)}</strong></td>
+            </tr>
+            ` : ''}
+            <tr>
+              <td style="padding: 5px 0;">الضريبة (5%):</td>
+              <td style="padding: 5px 0; text-align: left;"><strong>AED ${order.vatAmount.toFixed(2)}</strong></td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0;">رسوم التوصيل:</td>
+              <td style="padding: 5px 0; text-align: left;"><strong>AED ${order.deliveryFee.toFixed(2)}</strong></td>
+            </tr>
+            <tr style="border-top: 2px solid #C41E3A; font-size: 18px;">
+              <td style="padding: 10px 0;"><strong>الإجمالي:</strong></td>
+              <td style="padding: 10px 0; text-align: left;"><strong style="color: #C41E3A;">AED ${order.total.toFixed(2)}</strong></td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 20px; text-align: center;">
+          <p style="margin: 5px 0;"><strong>طريقة الدفع:</strong> ${order.paymentMethod === 'card' ? 'بطاقة ائتمان' : order.paymentMethod === 'bank_transfer' ? 'تحويل بنكي' : 'الدفع عند الاستلام'}</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+          <p style="color: #666; margin: 5px 0;">شكراً لتسوقك معنا!</p>
+          <p style="color: #999; font-size: 12px; margin: 5px 0;">هذه فاتورة إلكترونية ولا تحتاج إلى ختم أو توقيع</p>
+        </div>
+      </div>
+    </div>
+  ` : `
+    <div style="background: #f8f9fa; padding: 30px; border-radius: 10px; margin: 20px 0;">
+      <h2 style="color: #C41E3A; text-align: center; margin-top: 0;">📄 Tax Invoice</h2>
+      <div style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="border-bottom: 2px solid #C41E3A; padding-bottom: 15px; margin-bottom: 20px;">
+          <h1 style="color: #C41E3A; margin: 0;">🥩 Butcher</h1>
+          <p style="margin: 5px 0; color: #666;">TRN: ${shopTRN}</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 5px 0; width: 40%;"><strong>Invoice Number:</strong></td>
+              <td style="padding: 5px 0;">${invoiceNumber}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0;"><strong>Order Number:</strong></td>
+              <td style="padding: 5px 0;">${order.orderNumber}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0;"><strong>Date:</strong></td>
+              <td style="padding: 5px 0;">${orderDate.toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0; color: #333;">Bill To:</h3>
+          <p style="margin: 5px 0;"><strong>Customer:</strong> ${order.customerName}</p>
+          <p style="margin: 5px 0;"><strong>Mobile:</strong> ${order.customerMobile}</p>
+          <p style="margin: 5px 0;"><strong>Address:</strong> ${addressText}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <thead>
+            <tr style="background: #C41E3A; color: white;">
+              <th style="padding: 12px 8px; text-align: left;">Product</th>
+              <th style="padding: 12px 8px; text-align: center;">Qty</th>
+              <th style="padding: 12px 8px; text-align: right;">Price</th>
+              <th style="padding: 12px 8px; text-align: right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsListHTML}
+          </tbody>
+        </table>
+
+        <div style="border-top: 2px solid #eee; padding-top: 15px; margin-top: 20px;">
+          <table style="width: 100%; max-width: 300px; margin-left: auto;">
+            <tr>
+              <td style="padding: 5px 0;">Subtotal:</td>
+              <td style="padding: 5px 0; text-align: right;"><strong>AED ${order.subtotal.toFixed(2)}</strong></td>
+            </tr>
+            ${order.discount > 0 ? `
+            <tr style="color: #28a745;">
+              <td style="padding: 5px 0;">Discount (-):</td>
+              <td style="padding: 5px 0; text-align: right;"><strong>AED ${order.discount.toFixed(2)}</strong></td>
+            </tr>
+            ` : ''}
+            <tr>
+              <td style="padding: 5px 0;">VAT (5%):</td>
+              <td style="padding: 5px 0; text-align: right;"><strong>AED ${order.vatAmount.toFixed(2)}</strong></td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0;">Delivery Fee:</td>
+              <td style="padding: 5px 0; text-align: right;"><strong>AED ${order.deliveryFee.toFixed(2)}</strong></td>
+            </tr>
+            <tr style="border-top: 2px solid #C41E3A; font-size: 18px;">
+              <td style="padding: 10px 0;"><strong>Total:</strong></td>
+              <td style="padding: 10px 0; text-align: right;"><strong style="color: #C41E3A;">AED ${order.total.toFixed(2)}</strong></td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 20px; text-align: center;">
+          <p style="margin: 5px 0;"><strong>Payment Method:</strong> ${order.paymentMethod === 'card' ? 'Credit Card' : order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : 'Cash on Delivery'}</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+          <p style="color: #666; margin: 5px 0;">Thank you for your purchase!</p>
+          <p style="color: #999; font-size: 12px; margin: 5px 0;">This is an electronic invoice and does not require a stamp or signature</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const fullHtml = wrapEmailInTemplate(emailBody, language);
+
+  // Send email via gateway
+  const result = await sendEmailViaGateway({
+    to: customerEmail,
+    subject,
+    body: fullHtml,
+  });
+
+  const notifId = generateId("notif");
+  const status = result.success ? "sent" : "failed";
+  const sentAt = result.success ? new Date() : null;
+  const failureReason = result.error || null;
+
+  // Store in notifications table
+  await db.insert(notifications).values({
+    id: notifId,
+    userId: order.userId,
+    type: "payment_received", // Using existing type for invoice
+    channel: "email",
+    title: subject,
+    message: subject,
+    status,
+    sentAt,
+    failureReason,
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, invoiceNumber },
+  });
+
+  return {
+    id: notifId,
+    userId: order.userId,
+    type: "payment_received",
+    channel: "email",
+    title: subject,
+    message: subject,
+    status,
+    sentAt: sentAt?.toISOString(),
+    failureReason,
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, invoiceNumber },
+    createdAt: new Date().toISOString(),
+  };
 }

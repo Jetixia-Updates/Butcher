@@ -39,7 +39,7 @@ export const discountTypeEnum = pgEnum("discount_type", ["percentage", "fixed"])
 export const notificationTypeEnum = pgEnum("notification_type", [
   "order_placed", "order_confirmed", "order_processing", "order_ready",
   "order_shipped", "order_delivered", "order_cancelled", "payment_received",
-  "payment_failed", "refund_processed", "low_stock", "promotional"
+  "payment_failed", "refund_processed", "low_stock", "promotional", "customer_welcome"
 ]);
 export const notificationChannelEnum = pgEnum("notification_channel", ["sms", "email", "push"]);
 export const notificationStatusEnum = pgEnum("notification_status", ["pending", "sent", "delivered", "failed"]);

@@ -9,6 +9,7 @@ import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import type { Order, OrderItem, ApiResponse, PaginatedResponse } from "../../shared/api";
 import { db, orders, orderItems, products, users, addresses, discountCodes, deliveryZones, stock, payments, inAppNotifications } from "../db/connection";
 import { getInAppNotificationContent } from "../services/notifications";
+import { sendInvoiceEmail } from "../services/email";
 
 const router = Router();
 
@@ -690,6 +691,47 @@ const createOrder: RequestHandler = async (req, res) => {
     } catch (notifError) {
       console.error(`[Order Notification] Failed to create admin notification:`, notifError);
     }
+
+    // === SEND INVOICE EMAIL ===
+    // Send invoice email to customer - don't block order creation if email fails
+    try {
+      const userPrefs = customer.preferences as { language?: "en" | "ar"; emailNotifications?: boolean } || {};
+      const shouldSendEmail = userPrefs.emailNotifications !== false;
+
+      if (shouldSendEmail && customer.email && !customer.email.includes('guest-')) {
+        const language = userPrefs.language || "en";
+
+        await sendInvoiceEmail(
+          customer.email,
+          {
+            id: orderId,
+            orderNumber,
+            userId,
+            customerName: `${customer.firstName} ${customer.familyName}`,
+            customerMobile: customer.mobile,
+            subtotal: parseFloat(String(subtotal)),
+            discount: parseFloat(String(discount)),
+            vatAmount: parseFloat(String(vatAmount)),
+            deliveryFee: parseFloat(String(deliveryFee)),
+            total: parseFloat(String(total)),
+            paymentMethod,
+            deliveryAddress: deliveryAddressData,
+            createdAt: new Date(),
+          },
+          apiItems,
+          language
+        );
+
+        console.log(`[Invoice Email] ✅ Invoice email sent to ${customer.email} for order ${orderNumber}`);
+      } else {
+        console.log(`[Invoice Email] ⏭️ Skipped - email notifications disabled or guest user`);
+      }
+    } catch (emailError) {
+      console.error(`[Invoice Email] ❌ Failed to send invoice email:`, emailError);
+      // Continue - don't block order creation if email fails
+    }
+    // === END INVOICE EMAIL ===
+
     // === END SERVER-SIDE NOTIFICATIONS ===
 
     const response: ApiResponse<Order> = {

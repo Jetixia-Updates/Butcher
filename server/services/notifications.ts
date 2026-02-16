@@ -5,7 +5,7 @@
  */
 
 import type { NotificationType, NotificationChannel, Order, Notification } from "../../shared/api";
-import { db, notifications, users } from "../db/connection";
+import { db, notifications, users, inAppNotifications, generateId } from "../db/connection";
 import { eq, desc, sql } from "drizzle-orm";
 import {
   sendSMS,
@@ -17,6 +17,7 @@ import {
   sendOrderCancelledSMS,
   sendPaymentReceivedSMS,
   sendLowStockAlertSMS,
+  sendWelcomeSMS,
 } from "./sms";
 import {
   sendEmail,
@@ -27,6 +28,7 @@ import {
   sendPaymentReceivedEmail,
   sendRefundEmail,
   sendLowStockAlertEmail,
+  sendWelcomeEmail,
 } from "./email";
 
 export interface NotificationResult {
@@ -312,4 +314,94 @@ export function getInAppNotificationContent(
 
   return notifications[status] || null;
 }
+
+// Create in-app welcome notification for new customers
+async function createWelcomeInAppNotification(userId: string): Promise<void> {
+  const notificationId = generateId("notif");
+
+  await db.insert(inAppNotifications).values({
+    id: notificationId,
+    userId: userId,
+    type: "system",
+    title: "Welcome to Butcher!",
+    titleAr: "مرحباً بك في الجزار!",
+    message: "Welcome to Butcher! Please use WELCOME10 in the promocode at your 1st checkout to avail 10% discount",
+    messageAr: "مرحباً بك في الجزار! استخدم الرمز WELCOME10 عند أول عملية شراء للحصول على خصم 10%",
+    link: "/products",
+    linkTab: "products",
+    unread: true,
+  });
+}
+
+/**
+ * Send welcome notifications to a new customer across all channels
+ * Respects user preferences for SMS and Email
+ * In-app notification is always sent
+ */
+export async function sendWelcomeNotifications(customer: {
+  id: string;
+  email: string;
+  mobile: string;
+  preferences?: {
+    language?: "en" | "ar";
+    emailNotifications?: boolean;
+    smsNotifications?: boolean;
+  };
+}): Promise<{
+  sms?: Notification;
+  email?: Notification;
+  inApp?: boolean;
+}> {
+  const result: {
+    sms?: Notification;
+    email?: Notification;
+    inApp?: boolean;
+  } = {};
+
+  const language = customer.preferences?.language || "en";
+  const promises: Promise<void>[] = [];
+
+  // Always send in-app notification (no preference check)
+  promises.push(
+    createWelcomeInAppNotification(customer.id)
+      .then(() => { result.inApp = true; })
+      .catch(err => {
+        console.error("Failed to create in-app welcome notification:", err);
+      })
+  );
+
+  // Send SMS if user has SMS notifications enabled
+  if (customer.preferences?.smsNotifications !== false) {
+    promises.push(
+      sendWelcomeSMS(customer.mobile, customer.id, language)
+        .then(notification => { result.sms = notification; })
+        .catch(err => {
+          console.error("Failed to send welcome SMS:", err);
+        })
+    );
+  }
+
+  // Send Email if user has email notifications enabled
+  if (customer.preferences?.emailNotifications !== false) {
+    promises.push(
+      sendWelcomeEmail(customer.email, customer.id, language)
+        .then(notification => { result.email = notification; })
+        .catch(err => {
+          console.error("Failed to send welcome email:", err);
+        })
+    );
+  }
+
+  // Wait for all notifications to complete
+  await Promise.all(promises);
+
+  console.log(`📬 Sent welcome notifications to ${customer.email}:`, {
+    sms: result.sms?.status,
+    email: result.email?.status,
+    inApp: result.inApp,
+  });
+
+  return result;
+}
+
 

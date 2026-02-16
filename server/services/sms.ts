@@ -58,6 +58,10 @@ const SMS_TEMPLATES: Record<NotificationType, { en: string; ar: string }> = {
     en: "{message}",
     ar: "{messageAr}",
   },
+  customer_welcome: {
+    en: "Welcome to Butcher! 🥩 Use code WELCOME10 at checkout for 10% off your first order. Shop now: https://butcher.ae",
+    ar: "مرحباً بك في الجزار! 🥩 استخدم الرمز WELCOME10 عند الطلب للحصول على خصم 10% على طلبك الأول. تسوق الآن: https://butcher.ae",
+  },
 };
 
 // Template variable replacer
@@ -221,4 +225,12 @@ export async function sendPaymentReceivedSMS(order: Order): Promise<Notification
 
 export async function sendLowStockAlertSMS(adminMobile: string, productName: string, quantity: number): Promise<Notification> {
   return sendSMS(adminMobile, "low_stock", { productName, quantity }, "en");
+}
+
+export async function sendWelcomeSMS(
+  mobile: string,
+  userId: string,
+  language: "en" | "ar" = "en"
+): Promise<Notification> {
+  return sendSMS(mobile, "customer_welcome", { userId }, language);
 }

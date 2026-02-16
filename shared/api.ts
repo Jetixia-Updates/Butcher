@@ -473,7 +473,8 @@ export type NotificationType =
   | "payment_failed"
   | "refund_processed"
   | "low_stock"
-  | "promotional";
+  | "promotional"
+  | "customer_welcome";
 
 export type NotificationChannel = "sms" | "email" | "push";
 

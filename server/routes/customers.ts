@@ -9,6 +9,7 @@ import { z } from "zod";
 import { eq, and, or, ilike, desc, sql } from "drizzle-orm";
 import type { ApiResponse, PaginatedResponse } from "../../shared/api";
 import { db, users, sessions, addresses } from "../db/connection";
+import { sendWelcomeNotifications } from "../services/notifications";
 
 const router = Router();
 
@@ -252,6 +253,19 @@ const registerCustomer: RequestHandler = async (req, res) => {
       token,
       expiresAt,
     });
+
+    // Send welcome notifications - don't block registration if they fail
+    try {
+      await sendWelcomeNotifications({
+        id: newCustomer.id,
+        email: newCustomer.email,
+        mobile: newCustomer.mobile,
+        preferences: newCustomer.preferences,
+      });
+    } catch (error) {
+      console.error("Error sending welcome notifications:", error);
+      // Continue with registration - notifications are non-critical
+    }
 
     const response: ApiResponse<CustomerLoginResponse> = {
       success: true,
