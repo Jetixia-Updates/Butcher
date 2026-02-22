@@ -27,7 +27,7 @@ export const calculateVAT = (
  * Format price in UAE Dirham with proper decimal places
  */
 export const formatPrice = (price: number): string => {
-  return `₫ ${price.toFixed(2)}`;
+  return `AED ${price.toFixed(2)}`;
 };
 
 /**
