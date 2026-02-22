@@ -6,7 +6,7 @@ import { useBasket } from "@/context/BasketContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useNotifications, createOrderNotification, createUserOrderNotification, createDetailedInvoiceNotification, generateInvoiceNumber, type InvoiceData } from "@/context/NotificationContext";
-import { formatPrice } from "@/utils/vat";
+import { PriceDisplay } from "@/components/CurrencySymbol";
 import {
   isValidCardNumber,
   isValidCVV,
@@ -579,7 +579,7 @@ export default function PaymentCardPage() {
                   >
                     {isProcessing
                       ? t("payment.processing")
-                      : `${t("payment.completePayment")} ${formatPrice(adjustedTotal)}`}
+                      : <>{t("payment.completePayment")} <PriceDisplay price={adjustedTotal} /></>}
                   </button>
 
                   {/* Back Link */}
@@ -612,7 +612,7 @@ export default function PaymentCardPage() {
                         {item.name} x {item.quantity}
                       </span>
                       <span className="font-semibold whitespace-nowrap">
-                        {formatPrice(item.price * item.quantity)}
+                        <PriceDisplay price={item.price * item.quantity} />
                       </span>
                     </div>
                   ))}
@@ -622,20 +622,20 @@ export default function PaymentCardPage() {
                 <div className="space-y-2 sm:space-y-3">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground">{t("payment.subtotal")}</span>
-                    <span className="font-semibold">{formatPrice(subtotal)}</span>
+                    <span className="font-semibold"><PriceDisplay price={subtotal} /></span>
                   </div>
                   {discountAmount > 0 && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-green-600">{t("payment.discount")}</span>
                       <span className="font-semibold text-green-600">
-                        -{formatPrice(discountAmount)}
+                        -<PriceDisplay price={discountAmount} />
                       </span>
                     </div>
                   )}
                   <div className="flex justify-between items-center bg-secondary/10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 text-sm">
                     <span className="text-muted-foreground">{t("payment.vat")}</span>
                     <span className="font-semibold text-secondary">
-                      {formatPrice(adjustedVat)}
+                      <PriceDisplay price={adjustedVat} />
                     </span>
                   </div>
                   {/* Show either zone delivery fee OR express delivery fee, not both */}
@@ -643,14 +643,14 @@ export default function PaymentCardPage() {
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-orange-600">{t("payment.expressDelivery")}</span>
                       <span className="font-semibold text-orange-600">
-                        +{formatPrice(expressDeliveryFee)}
+                        +<PriceDisplay price={expressDeliveryFee} />
                       </span>
                     </div>
                   ) : zoneDeliveryFee > 0 ? (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground">{t("payment.deliveryFee")}</span>
                       <span className="font-semibold">
-                        +{formatPrice(zoneDeliveryFee)}
+                        +<PriceDisplay price={zoneDeliveryFee} />
                       </span>
                     </div>
                   ) : null}
@@ -658,7 +658,7 @@ export default function PaymentCardPage() {
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-green-600">{t("payment.driverTip")}</span>
                       <span className="font-semibold text-green-600">
-                        +{formatPrice(driverTip)}
+                        +<PriceDisplay price={driverTip} />
                       </span>
                     </div>
                   )}
@@ -667,7 +667,7 @@ export default function PaymentCardPage() {
                       {t("payment.total")}
                     </span>
                     <span className="text-xl sm:text-2xl font-bold text-primary">
-                      {formatPrice(adjustedTotal)}
+                      <PriceDisplay price={adjustedTotal} />
                     </span>
                   </div>
                 </div>
