@@ -579,7 +579,7 @@ export default function PaymentCardPage() {
                   >
                     {isProcessing
                       ? t("payment.processing")
-                      : <>{t("payment.completePayment")} <PriceDisplay price={adjustedTotal} /></>}
+                      : <>{t("payment.completePayment")} <PriceDisplay price={adjustedTotal} size="lg" /></>}
                   </button>
 
                   {/* Back Link */}
@@ -667,7 +667,7 @@ export default function PaymentCardPage() {
                       {t("payment.total")}
                     </span>
                     <span className="text-xl sm:text-2xl font-bold text-primary">
-                      <PriceDisplay price={adjustedTotal} />
+                      <PriceDisplay price={adjustedTotal} size="lg" />
                     </span>
                   </div>
                 </div>
